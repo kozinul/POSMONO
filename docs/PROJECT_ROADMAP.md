@@ -19,7 +19,6 @@
 | **Backend** | Node.js + Express.js + TypeScript |
 | **Database** | MongoDB |
 | **Infrastructure** | Docker · Redis · pnpm monorepo |
-| **Est. MVP Completion** | Q3 2026 |
 
 ### Long-Term Roadmap
 
@@ -30,7 +29,7 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 
 ---
 
-## SECTION 2 — DEVELOPMENT PHASES
+## SECTION 2 — MASTER ROADMAP
 
 ### PHASE A — Foundation Setup `[x]`
 
@@ -42,7 +41,7 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | Backend folder structure (DDD layers) | `[x]` |
 | Frontend folder structure (feature-based) | `[x]` |
 | TypeScript strict config | `[x]` |
-| ESLint + Prettier | `[x]` |
+| ESLint + Prettier setup | `[x]` |
 
 **Completion:** 100%
 
@@ -53,28 +52,21 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | Task | Status |
 |------|--------|
 | Authentication & JWT | `[x]` |
-| Refresh token + session management | `[x]` |
-| Logout + current user endpoint | `[x]` |
 | Tenant system (multi-tenant isolation) | `[x]` |
-| Tenant CRUD + settings API | `[x]` |
 | RBAC (roles & permissions) | `[x]` |
 | Event bus (in-process) | `[x]` |
-| Domain entities (all modules) | `[x]` |
-| MongoDB schemas + indexes | `[x]` |
-| Repositories (User, Product, Order, Tenant) | `[x]` |
-| Application use cases | `[~]` |
-| HTTP routes & controllers | `[~]` |
-| Product catalog (CRUD + categories + barcode) | `[x]` |
-| Category management | `[x]` |
-| Order module | `[~]` |
-| Payment module (Midtrans) | `[~]` |
-| Inventory module | `[~]` |
+| Product catalog module | `[x]` |
+| Category module | `[x]` |
+| SKU / variant system | `[x]` |
+| Inventory module | `[x]` |
+| Stock movement & adjustment | `[x]` |
 | POS cart engine | `[~]` |
-| Checkout & order processing | `[ ]` |
+| Checkout / order processing | `[ ]` |
+| Payment handling (cash) | `[ ]` |
 | Receipt generation | `[ ]` |
 | Basic reporting | `[ ]` |
 
-**Completion:** ~55%
+**Completion:** ~70%
 
 ---
 
@@ -83,19 +75,18 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | Task | Status |
 |------|--------|
 | Project scaffolding (Vite + React Router) | `[x]` |
-| Login page (functional) | `[x]` |
-| Dashboard layout + sidebar | `[x]` |
-| Auth store + API client | `[x]` |
-| POS page (cart UI) | `[~]` |
-| Product management UI | `[ ]` |
-| Order management UI | `[ ]` |
-| Inventory management UI | `[ ]` |
+| Login page | `[x]` |
+| Dashboard layout | `[x]` |
+| Product management UI | `[x]` |
+| Category management UI | `[x]` |
+| Inventory management UI | `[x]` |
+| POS page (cart UI) | `[x]` |
 | Checkout flow UI | `[ ]` |
 | Receipt view | `[ ]` |
 | Reports page | `[ ]` |
-| Settings page | `[ ]` |
+| Settings page | `[x]` |
 
-**Completion:** ~30%
+**Completion:** ~60%
 
 ---
 
@@ -119,7 +110,7 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | Task | Status |
 |------|--------|
 | Cash payment flow | `[ ]` |
-| Midtrans payment integration | `[ ]` |
+| Transfer confirmation (manual) | `[ ]` |
 | Payment reconciliation | `[ ]` |
 | Invoice generation | `[ ]` |
 
@@ -144,8 +135,8 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 
 | Task | Status |
 |------|--------|
-| Unit tests (backend domain) | `[ ]` |
-| Integration tests (API) | `[ ]` |
+| Unit tests (backend) | `[ ]` |
+| Integration tests | `[ ]` |
 | E2E tests (critical paths) | `[ ]` |
 | Load testing | `[ ]` |
 
@@ -157,7 +148,7 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 
 | Task | Status |
 |------|--------|
-| Production Dockerfile | `[x]` |
+| Production Dockerfile | `[~]` |
 | CI/CD pipeline | `[ ]` |
 | VPS / cloud provisioning | `[ ]` |
 | SSL & domain setup | `[ ]` |
@@ -169,7 +160,7 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 
 ---
 
-## SECTION 3 — WEEKLY PROGRESS CHECKLIST
+## SECTION 3 — WEEKLY DEVELOPMENT CHECKLIST
 
 ### WEEK 1 — Foundation `[x]`
 
@@ -219,16 +210,6 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 - `[ ]` Add/remove items
 - `[ ]` Quantity adjustment
 
-### WEEK 5 — POS Cart + Catalog API `[~]`
-
-- `[x]` Product CRUD API (create, read, update, delete)
-- `[x]` Category CRUD API
-- `[x]` Product search + filtering
-- `[x]` Barcode field
-- `[ ]` Cart engine (backend)
-- `[x]` POS page layout
-- `[ ]` Cart state (frontend)
-
 ### WEEK 6 — Checkout & Payment
 
 - `[ ]` Order creation
@@ -240,7 +221,7 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 ### WEEK 7 — Reports
 
 - `[ ]` Daily sales report
-- `[ ]` Report UI
+- `[ ]]` Report UI
 - `[ ]` Dashboard metrics
 
 ### WEEK 8 — Testing & Polish
@@ -264,13 +245,10 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 
 | Feature | Status |
 |---------|--------|
-| Authentication (login, logout, refresh) | `[x]` |
-| Session management (refresh tokens) | `[x]` |
-| Current user API (`/auth/me`) | `[x]` |
+| Authentication (register, login, logout) | `[x]` |
 | Tenant management (multi-tenant) | `[x]` |
-| Tenant settings API | `[x]` |
 | User & role management (RBAC) | `[x]` |
-| Product management (CRUD + SKU + barcode) | `[x]` |
+| Product management (CRUD + SKU) | `[x]` |
 | Category management | `[x]` |
 | Inventory management | `[x]` |
 | Stock movement tracking | `[x]` |
@@ -280,35 +258,197 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | Receipt printing (thermal) | `[ ]` |
 | Basic reporting (daily sales) | `[ ]` |
 | Dashboard (summary cards) | `[x]` |
-| Settings page | `[ ]` |
+| Settings page | `[x]` |
 | Bug fixing & polish | `[ ]` |
 | **MVP Ready** | **`[ ]`** |
 
 ---
 
-## SECTION 5 — FUTURE FEATURES (NOT MVP)
+## SECTION 5 — FUTURE FEATURES (DO NOT BUILD YET)
 
-> ⚠️ **DO NOT BUILD** until MVP is live with real users.
+> ⚠️ **NOT MVP** — Do not implement until MVP is live with real users.
 
-| Feature | Priority | Notes |
-|---------|----------|-------|
-| `[ ]` Restaurant module | LOW | Kitchen printer, table management, online ordering |
-| `[ ]` Villa / hospitality module | LOW | Reservation calendar, check-in/out, housekeeping |
-| `[ ]` Mobile app (Capacitor) | LOW | Wraps existing frontend for mobile install |
-| `[ ]` Desktop app (Electron) | LOW | Offline-first desktop POS |
-| `[ ]` Offline sync | LOW | Local-first with background sync |
-| `[ ]` Bluetooth printer | LOW | ESC/POS over Bluetooth |
-| `[ ]` Barcode scanner | LOW | Hardware scanner integration |
-| `[ ]` Payment gateway (QRIS, GoPay) | MEDIUM | Digital payments |
-| `[ ]` Multi-currency | LOW | For tourism/hospitality |
-| `[ ]` AI automation | LOW | Auto-stock reorder, sales prediction |
-| `[ ]` Plugin runtime | LOW | 3rd-party plugin system |
-| `[ ]` Public API | LOW | For integrations |
-| `[ ]` Marketplace | LOW | Plugin store |
+| Feature | Notes |
+|---------|-------|
+| `[ ]` Restaurant module | Kitchen printer, table management, online ordering |
+| `[ ]` Villa / hospitality module | Reservation calendar, check-in/out, housekeeping |
+| `[ ]` Mobile app (Capacitor) | Wraps existing frontend for mobile install |
+| `[ ]` Desktop app (Electron) | Offline-first desktop POS |
+| `[ ]` Offline sync | Local-first with background sync when online |
+| `[ ]` Bluetooth printer | ESC/POS over Bluetooth |
+| `[ ]` Barcode scanner | Hardware scanner integration |
+| `[ ]` Payment gateway | QRIS, GoPay, OVO, bank transfer |
+| `[ ]` Multi-currency | For tourism/hospitality |
+| `[ ]` AI automation | Auto-stock reorder, sales prediction |
+| `[ ]` Plugin runtime | 3rd-party plugin system |
+| `[ ]` Marketplace | Plugin store |
+
+**Rule:** If it's not in the MVP checklist, do not build it.
 
 ---
 
-## SECTION 6 — MILESTONES
+## SECTION 6 — CURRENT ARCHITECTURE STATUS
+
+| Design | Status |
+|--------|--------|
+| System architecture (overview) | `[x]` |
+| DDD tactical design (entities, aggregates, repos) | `[x]` |
+| Database schema design (MongoDB collections) | `[x]` |
+| API design (RESTful routes) | `[x]` |
+| Authentication & JWT design | `[x]` |
+| RBAC / permission design | `[x]` |
+| Event bus / domain events | `[x]` |
+| Infrastructure (Docker, networking) | `[x]` |
+| Transaction engine design | `[x]` |
+| Offline sync architecture | `[ ]` |
+| Printer architecture | `[ ]` |
+| Plugin architecture | `[ ]` |
+| Deployment architecture | `[ ]` |
+
+---
+
+## SECTION 7 — CURRENT BLOCKERS
+
+### Blocker 1
+
+| Field | Value |
+|-------|-------|
+| **Problem** | Printer integration strategy not finalized — USB thermal vs Bluetooth vs cloud (e.g., QZ Tray, WebUSB, ESC/POS over network). |
+| **Possible Solutions** | 1) WebUSB for browser-based direct printing, 2) QZ Tray app for reliable thermal, 3) Network printer proxy via local server. |
+| **Priority** | Medium |
+| **Deadline** | Before MVP launch (Week 8) |
+| **Status** | Researching |
+
+### Blocker 2
+
+| Field | Value |
+|-------|-------|
+| **Problem** | Tenant middleware needs centralized schema — user scoping via `tenantId` is currently ad-hoc in some services. |
+| **Possible Solutions** | 1) Extract tenant context into a shared middleware that injects `tenantId` into every request, 2) Create tenant-scoped Mongo connection pool. |
+| **Priority** | High |
+| **Deadline** | This week |
+| **Status** | In progress |
+
+### Blocker 3
+
+| Field | Value |
+|-------|-------|
+| **Problem** | No CI/CD pipeline — manual deployment is fragile and time-consuming. |
+| **Possible Solutions** | 1) GitHub Actions for build + deploy, 2) Docker Hub + watchtower on VPS. |
+| **Priority** | Low (needed before pilot) |
+| **Deadline** | Before Week 9 |
+| **Status** | Not started |
+
+---
+
+## SECTION 8 — DAILY ENGINEERING LOG
+
+### Template
+
+```markdown
+### DATE: YYYY-MM-DD
+
+**Today I worked on:**
+*
+
+**Problems found:**
+*
+
+**Next task:**
+*
+
+**Notes / decisions:**
+*
+```
+
+### Entries
+
+### DATE: 2026-06-30
+
+**Today I worked on:**
+
+- Docker environment (MongoDB + Redis)
+- Monorepo structure (pnpm, turbo, shared package)
+- Backend DDD folder structure
+- Frontend Vite + React Router setup
+- Project roadmap creation
+
+**Problems found:**
+
+- `node_modules` mount had wrong permissions — fixed with `chown`
+- `.turbo/cache` permission issue — fixed with `chown`
+- `msgpackr-extract` native build failed on first attempt, rebuilt successfully
+
+**Next task:**
+
+- Complete POS cart engine (backend)
+- Wire up cart state on frontend
+- Checkout flow
+
+---
+
+## SECTION 9 — TECHNICAL DEBT TRACKER
+
+| Debt | Priority | Created | Notes |
+|------|----------|---------|-------|
+| `[ ]` Refactor auth middleware to be tenant-aware | High | WIP | Currently ad-hoc tenant scoping |
+| `[ ]` Improve inventory service performance | Medium | - | Needs MongoDB index audit |
+| `[ ]` Standardize error response format | Medium | - | Some endpoints return inconsistent shapes |
+| `[ ]` Add request validation (Zod) | Medium | - | Critical before pilot |
+| `[ ]]` Optimize MongoDB indexes | Low | - | Run explain() on slow queries |
+| `[ ]` Better error boundary on frontend | Low | - | Currently bare React error boundary |
+| `[ ]` Add logging service (structured logs) | Low | - | `console.log` in some places |
+| `[ ]` Write API documentation | Low | - | Needs OpenAPI/Swagger |
+
+---
+
+## SECTION 10 — PERSONAL RULES
+
+> **Rules for solo development discipline.**
+
+### Rule 1 — No non-MVP features
+
+If it's not on the MVP checklist, do not build it. No restaurant module, no mobile app, no AI. Focus.
+
+### Rule 2 — Ship first, polish later
+
+Working software > perfect software. Get a working feature into production, then iterate.
+
+### Rule 3 — No premature refactoring
+
+If it works and isn't blocking progress, leave it alone. Refactor only when the code actively hurts development speed.
+
+### Rule 4 — One thing at a time
+
+Solo founder = single-threaded. Finish one module before starting the next. No context switching.
+
+### Rule 5 — Validate with real users early
+
+Don't build in the dark. Get a pilot customer on the MVP as soon as possible. Real feedback > assumptions.
+
+### Rule 6 — Write tests for critical paths only
+
+Unit test the core domain logic. Skip tests for CRUD boilerplate. Time is the scarcest resource.
+
+### Rule 7 — Document decisions, not code
+
+Write down why you chose something (ADR). Don't waste time on code comments — the code should be self-documenting.
+
+### Rule 8 — Commit daily
+
+Even if it's a small change. Daily commits create momentum and a safety net.
+
+### Rule 9 — No feature creep during bug fixing
+
+When fixing a bug, fix only the bug. Do not "improve" or "restructure" while debugging.
+
+### Rule 10 — Sleep on big decisions
+
+Architecture changes, tech swaps, pricing — never decide the same day. Sleep on it and review with fresh eyes.
+
+---
+
+## SECTION 11 — SUCCESS METRICS
 
 | Milestone | Status | Target Date |
 |-----------|--------|-------------|
@@ -325,3 +465,4 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 ---
 
 *Last updated: 2026-06-30*
+*Updated daily during development.*
