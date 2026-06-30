@@ -1,0 +1,165 @@
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { Order } from '../Order';
+import { validOrderInput } from '../../../../../tests/fixtures/ordering.fixtures';
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+describe('Order', () => {
+  describe('create', () => {
+    it('creates an order with draft status', () => {
+      const order = Order.create(validOrderInput);
+
+      const data = order.serialize();
+      expect(data.status).toBe('draft');
+      expect(data.paymentStatus).toBe('pending');
+      expect(data.orderNumber).toMatch(/^ORD-/);
+      expect(data.tenantId).toBe('tenant-test-1');
+      expect(data.total).toBe(50000);
+      expect(data.paidAt).toBeNull();
+    });
+
+    it('generates a unique order number', () => {
+      vi.useFakeTimers();
+      const order1 = Order.create(validOrderInput);
+      vi.advanceTimersByTime(1000);
+      const order2 = Order.create(validOrderInput);
+
+      expect(order1.serialize().orderNumber).not.toBe(order2.serialize().orderNumber);
+    });
+
+    it('emits ordering.order.created domain event', () => {
+      const order = Order.create(validOrderInput);
+
+      const events = order.domainEvents;
+      expect(events).toHaveLength(1);
+      expect(events[0].eventName).toBe('ordering.order.created');
+      expect(events[0].aggregateId).toBe(order.id.toValue());
+      expect(events[0].aggregateType).toBe('Order');
+      expect(events[0].tenantId).toBe('tenant-test-1');
+      expect(events[0].payload.total).toBe(50000);
+      expect(events[0].payload.items).toHaveLength(1);
+    });
+
+    it('clears events after clearEvents()', () => {
+      const order = Order.create(validOrderInput);
+      order.clearEvents();
+      expect(order.domainEvents).toHaveLength(0);
+    });
+  });
+
+  describe('confirm', () => {
+    it('transitions from draft to confirmed', () => {
+      const order = Order.create(validOrderInput);
+      order.confirm();
+
+      expect(order.serialize().status).toBe('confirmed');
+    });
+
+    it('throws if order is not in draft status', () => {
+      const order = Order.create(validOrderInput);
+      order.confirm();
+
+      expect(() => order.confirm()).toThrow('Only draft orders can be confirmed');
+    });
+
+    it('emits ordering.order.confirmed event', () => {
+      const order = Order.create(validOrderInput);
+      order.clearEvents();
+      order.confirm();
+
+      const events = order.domainEvents;
+      expect(events).toHaveLength(1);
+      expect(events[0].eventName).toBe('ordering.order.confirmed');
+    });
+  });
+
+  describe('markPaid', () => {
+    it('sets status to paid and paymentStatus to completed', () => {
+      const order = Order.create(validOrderInput);
+      order.markPaid();
+
+      const data = order.serialize();
+      expect(data.status).toBe('paid');
+      expect(data.paymentStatus).toBe('completed');
+      expect(data.paidAt).not.toBeNull();
+      expect(data.paidAt).toBeInstanceOf(Date);
+    });
+  });
+
+  describe('markPaymentFailed', () => {
+    it('sets paymentStatus to failed', () => {
+      const order = Order.create(validOrderInput);
+      order.markPaymentFailed();
+
+      expect(order.serialize().paymentStatus).toBe('failed');
+    });
+  });
+
+  describe('cancel', () => {
+    it('transitions from draft to cancelled', () => {
+      const order = Order.create(validOrderInput);
+      order.cancel('Customer changed mind');
+
+      expect(order.serialize().status).toBe('cancelled');
+    });
+
+    it('throws if order is already paid', () => {
+      const order = Order.create(validOrderInput);
+      order.markPaid();
+
+      expect(() => order.cancel('test')).toThrow('Cannot cancel a paid/refunded order');
+    });
+
+    it('throws if order is already refunded', () => {
+      const order = Order.create(validOrderInput);
+      order.markPaid();
+
+      expect(() => order.cancel('test')).toThrow('Cannot cancel a paid/refunded order');
+    });
+
+    it('emits ordering.order.cancelled event with reason', () => {
+      const order = Order.create(validOrderInput);
+      order.clearEvents();
+      order.cancel('Out of stock');
+
+      const events = order.domainEvents;
+      expect(events).toHaveLength(1);
+      expect(events[0].eventName).toBe('ordering.order.cancelled');
+      expect(events[0].payload.reason).toBe('Out of stock');
+    });
+  });
+
+  describe('serialize', () => {
+    it('returns all order properties', () => {
+      const order = Order.create(validOrderInput);
+      const data = order.serialize();
+
+      expect(data).toHaveProperty('id');
+      expect(data).toHaveProperty('tenantId');
+      expect(data).toHaveProperty('orderNumber');
+      expect(data).toHaveProperty('status');
+      expect(data).toHaveProperty('items');
+      expect(data).toHaveProperty('subtotal');
+      expect(data).toHaveProperty('discount');
+      expect(data).toHaveProperty('tax');
+      expect(data).toHaveProperty('total');
+      expect(data).toHaveProperty('paymentStatus');
+      expect(data).toHaveProperty('cashierId');
+      expect(data).toHaveProperty('source');
+      expect(data).toHaveProperty('createdAt');
+      expect(data).toHaveProperty('updatedAt');
+    });
+  });
+
+  describe('hydrate', () => {
+    it('restores an order from persisted data', () => {
+      const order = Order.create(validOrderInput);
+      const data = order.serialize();
+      const restored = Order.hydrate(data);
+
+      expect(restored.serialize()).toEqual(data);
+    });
+  });
+});
