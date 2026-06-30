@@ -78,4 +78,20 @@ export class MongoShiftRepository {
     const docs = await this.model.find({ tenantId }).sort({ openedAt: -1 }).exec();
     return docs.map((d: ShiftDoc) => this.toDomain(d));
   }
+
+  async findByDate(tenantId: string, date: string): Promise<Shift[]> {
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const docs = await this.model
+      .find({
+        tenantId,
+        openedAt: { $gte: startOfDay, $lte: endOfDay },
+      })
+      .sort({ openedAt: -1 })
+      .exec();
+    return docs.map((d: ShiftDoc) => this.toDomain(d));
+  }
 }

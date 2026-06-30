@@ -24,9 +24,11 @@ export class PaymentController extends BaseController {
       ...parsed.data,
     });
 
+    const paymentData = result.payment.serialize();
+    const orderData = result.order.serialize();
     this.ok(res, {
-      payment: result.payment.serialize(),
-      order: result.order.serialize(),
+      payment: { ...paymentData, change: paymentData.amount - orderData.total },
+      order: orderData,
     });
   }
 

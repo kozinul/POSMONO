@@ -31,9 +31,9 @@ export class CategoryService {
     return category;
   }
 
-  async update(id: string, input: UpdateCategoryInput): Promise<Category> {
+  async update(id: string, tenantId: string, input: UpdateCategoryInput): Promise<Category> {
     const category = await this.categoryRepository.findById(id);
-    if (!category) {
+    if (!category || category.serialize().tenantId !== tenantId) {
       throw new NotFoundError('Category');
     }
 
@@ -46,9 +46,9 @@ export class CategoryService {
     return this.categoryRepository.findByTenant(tenantId);
   }
 
-  async delete(id: string): Promise<void> {
+  async delete(id: string, tenantId: string): Promise<void> {
     const category = await this.categoryRepository.findById(id);
-    if (!category) {
+    if (!category || category.serialize().tenantId !== tenantId) {
       throw new NotFoundError('Category');
     }
     await this.categoryRepository.delete(id);

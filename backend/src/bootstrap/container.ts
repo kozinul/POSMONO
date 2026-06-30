@@ -57,6 +57,8 @@ import { PaymentSchema } from '../core/payment/infrastructure/persistence/schema
 import { MongoPaymentRepository } from '../core/payment/infrastructure/persistence/MongoPaymentRepository';
 import { PaymentService } from '../core/payment/application/services/PaymentService';
 import { PaymentController } from '../core/payment/interfaces/http/controllers/PaymentController';
+import { ReportService } from '../core/reporting/application/services/ReportService';
+import { ReportController } from '../core/reporting/interfaces/http/controllers/ReportController';
 
 export type DIContainer = ReturnType<typeof buildContainer>;
 
@@ -320,6 +322,20 @@ export function buildContainer() {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
         paymentService: container.resolve('paymentService'),
+      }),
+    }),
+    reportService: asClass(ReportService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        orderRepository: container.resolve('orderRepository'),
+        shiftRepository: container.resolve('shiftRepository'),
+        paymentService: container.resolve('paymentService'),
+      }),
+    }),
+    reportController: asClass(ReportController, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        reportService: container.resolve('reportService'),
       }),
     }),
   });

@@ -1,0 +1,46 @@
+services:
+  app:
+    image: node:20
+    container_name: posmono-dev
+    working_dir: /workspace
+    command: sleep infinity
+    ports:
+      - "3000:3000"
+      - "5173:5173"
+    volumes:
+      - .:/workspace
+      - /workspace/node_modules
+      - /workspace/backend/node_modules
+      - /workspace/frontend/node_modules
+      - ~/.cache/mongodb-binaries:/root/.cache/mongodb-binaries
+    environment:
+      - NODE_ENV=development
+    networks:
+      - posmono
+
+  mongodb:
+    image: mongo:7
+    container_name: posmono-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - posmono
+
+  redis:
+    image: redis:7-alpine
+    container_name: posmono-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - posmono
+
+volumes:
+  mongodb_data:
+
+networks:
+  posmono:
+    driver: bridge

@@ -23,6 +23,7 @@ export function authenticate(req: Request, _res: Response, next: NextFunction): 
     req.userId = decoded.sub;
     req.tenantId = decoded.tenant;
     req.userRole = decoded.role;
+    req.userPermissions = [];
     next();
   } catch {
     throw new UnauthorizedError('Invalid or expired token');

@@ -59,7 +59,7 @@ export class ProductService {
 
   async update(id: string, tenantId: string, input: UpdateProductInput): Promise<Product> {
     const product = await this.productRepository.findById(id);
-    if (!product) {
+    if (!product || product.serialize().tenantId !== tenantId) {
       throw new NotFoundError('Product');
     }
 
@@ -75,9 +75,9 @@ export class ProductService {
     return product;
   }
 
-  async getById(id: string): Promise<Product> {
+  async getById(id: string, tenantId: string): Promise<Product> {
     const product = await this.productRepository.findById(id);
-    if (!product) {
+    if (!product || product.serialize().tenantId !== tenantId) {
       throw new NotFoundError('Product');
     }
     return product;
@@ -88,7 +88,7 @@ export class ProductService {
   }
 
   async delete(id: string, tenantId: string): Promise<void> {
-    const product = await this.getById(id);
+    const product = await this.getById(id, tenantId);
     product.update({ isActive: false });
     await this.productRepository.save(product);
   }

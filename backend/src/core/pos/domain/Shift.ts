@@ -78,6 +78,9 @@ export class Shift extends AggregateRoot<ShiftId> {
   }
 
   close(expectedTotal: number, actualTotal: number): void {
+    if (this.status === 'closed') {
+      throw new Error('Shift is already closed');
+    }
     this.status = 'closed';
     this.closingBalance = actualTotal;
     this.expectedTotal = expectedTotal;

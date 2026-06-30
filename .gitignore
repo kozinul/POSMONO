@@ -7,3 +7,7 @@ dist/
 coverage/
 .turbo/
 .cache/
+home/
+.xdg/
+test123/
+.vscode/

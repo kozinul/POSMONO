@@ -12,6 +12,7 @@ import { createPermissionRoutes } from '../core/identity/interfaces/http/routes/
 import { createOrderRoutes } from '../core/ordering/interfaces/http/routes/order.routes';
 import { createShiftRoutes } from '../core/pos/interfaces/http/routes/shift.routes';
 import { createPaymentRoutes } from '../core/payment/interfaces/http/routes/payment.routes';
+import { createReportRoutes } from '../core/reporting/interfaces/http/routes/report.routes';
 
 export function registerRoutes(app: Express, container: DIContainer): void {
   app.get('/health', (_req, res) => {
@@ -53,4 +54,7 @@ export function registerRoutes(app: Express, container: DIContainer): void {
 
   const paymentController = container.resolve('paymentController');
   app.use('/api/payments', createPaymentRoutes(paymentController));
+
+  const reportController = container.resolve('reportController');
+  app.use('/api/reports', createReportRoutes(reportController));
 }

@@ -86,12 +86,17 @@ export class MongoOrderRepository {
     return this.toDomain(doc);
   }
 
-  async findByTenant(tenantId: string, filter?: { status?: string; page?: number; limit?: number }): Promise<{ orders: Order[]; total: number }> {
+  async findByTenant(tenantId: string, filter?: { status?: string; dateFrom?: string; dateTo?: string; page?: number; limit?: number }): Promise<{ orders: Order[]; total: number }> {
     const query: any = { tenantId };
     if (filter?.status) query.status = filter.status;
+    if (filter?.dateFrom || filter?.dateTo) {
+      query.createdAt = {};
+      if (filter?.dateFrom) query.createdAt.$gte = new Date(filter.dateFrom);
+      if (filter?.dateTo) query.createdAt.$lte = new Date(filter.dateTo);
+    }
 
     const page = filter?.page || 1;
-    const limit = filter?.limit || 50;
+    const limit = Math.min(filter?.limit || 50, 100);
     const skip = (page - 1) * limit;
 
     const [docs, total] = await Promise.all([
@@ -102,6 +107,94 @@ export class MongoOrderRepository {
     return {
       orders: docs.map((d: OrderDoc) => this.toDomain(d)),
       total,
+    };
+  }
+
+  async getDailySales(tenantId: string, date: string): Promise<{
+    totalOrders: number;
+    totalRevenue: number;
+    totalItems: number;
+    paymentBreakdown: Record<string, number>;
+  }> {
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const match = {
+      tenantId,
+      createdAt: { $gte: startOfDay, $lte: endOfDay },
+      status: 'paid',
+    };
+
+    const [aggregation] = await this.model.aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: null,
+          totalOrders: { $sum: 1 },
+          totalRevenue: { $sum: '$total' },
+          totalItems: { $sum: { $sum: '$items.quantity' } },
+        },
+      },
+    ]);
+
+    const paymentBreakdown = await this.model.aggregate([
+      { $match: { ...match, paymentStatus: 'completed' } },
+      {
+        $group: {
+          _id: '$paymentStatus',
+          total: { $sum: '$total' },
+        },
+      },
+    ]);
+
+    return {
+      totalOrders: aggregation?.totalOrders || 0,
+      totalRevenue: aggregation?.totalRevenue || 0,
+      totalItems: aggregation?.totalItems || 0,
+      paymentBreakdown: { cash: (paymentBreakdown[0]?.total || 0) },
+    };
+  }
+
+  async getSummary(tenantId: string): Promise<{
+    todayRevenue: number;
+    todayOrders: number;
+    pendingOrders: number;
+    lowStockCount: number;
+  }> {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const [todayAgg] = await this.model.aggregate([
+      {
+        $match: {
+          tenantId,
+          createdAt: { $gte: startOfDay, $lte: endOfDay },
+          status: 'paid',
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalRevenue: { $sum: '$total' },
+          totalOrders: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const pendingCount = await this.model.countDocuments({
+      tenantId,
+      status: { $in: ['draft', 'confirmed'] },
+    });
+
+    return {
+      todayRevenue: todayAgg?.totalRevenue || 0,
+      todayOrders: todayAgg?.totalOrders || 0,
+      pendingOrders: pendingCount,
+      lowStockCount: 0,
     };
   }
 }

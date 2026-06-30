@@ -21,6 +21,23 @@ services:
     volumes:
       - redis_data:/data
 
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: posmono-app
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+      - '5173:5173'
+    environment:
+      NODE_ENV: development
+      MONGO_URI: mongodb://mongodb:27017/posmono
+      JWT_SECRET: dev-secret-change-in-production
+    depends_on:
+      - mongodb
+      - redis
+
   mongo-express:
     image: mongo-express:1
     container_name: posmono-mongo-express

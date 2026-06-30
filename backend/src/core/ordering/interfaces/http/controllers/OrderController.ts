@@ -47,9 +47,12 @@ export class OrderController extends BaseController {
   }
 
   async list(req: Request, res: Response): Promise<void> {
-    const { status, page, limit } = req.query;
+    const { status, page, limit, dateFrom, dateTo } = req.query;
+
     const result = await this.orderRepository.findByTenant(req.tenantId, {
-      status: status as string,
+      status: status as string | undefined,
+      dateFrom: dateFrom as string | undefined,
+      dateTo: dateTo as string | undefined,
       page: page ? parseInt(page as string) : undefined,
       limit: limit ? parseInt(limit as string) : undefined,
     });

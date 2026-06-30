@@ -1,5 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../@shared/hooks/useAuth';
+import { ErrorBoundary } from '../@shared/components/ErrorBoundary';
 import clsx from 'clsx';
 
 const navigation = [
@@ -8,56 +9,63 @@ const navigation = [
   { name: 'Orders', href: '/orders' },
   { name: 'Products', href: '/products' },
   { name: 'Inventory', href: '/inventory' },
+  { name: 'Reports', href: '/reports' },
+  { name: 'Shifts', href: '/shifts' },
   { name: 'Settings', href: '/settings' },
 ];
 
 export function DashboardLayout() {
   const location = useLocation();
   const { user, logout } = useAuthStore();
+  const isPOSPage = location.pathname === '/pos';
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex">
-              <div className="flex-shrink-0 flex items-center">
-                <Link to="/dashboard" className="text-xl font-bold text-primary-600">
-                  POSMono
+    <div className="h-screen flex flex-col overflow-hidden">
+      <header className="blue-primary text-white h-16 flex items-center justify-between px-6 shrink-0 shadow-md z-10">
+        <div className="flex items-center gap-8">
+          <Link to="/dashboard" className="text-xl font-semibold tracking-tight">
+            Cabang Kuta
+          </Link>
+          {!isPOSPage && (
+            <nav className="flex items-center gap-1">
+              {navigation.map((item) => (
+                <Link
+                  key={item.href}
+                  to={item.href}
+                  className={clsx(
+                    'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
+                    location.pathname.startsWith(item.href)
+                      ? 'bg-white/20 text-white'
+                      : 'text-white/80 hover:text-white hover:bg-white/10',
+                  )}
+                >
+                  {item.name}
                 </Link>
-              </div>
-              <div className="ml-6 flex space-x-4">
-                {navigation.map((item) => (
-                  <Link
-                    key={item.href}
-                    to={item.href}
-                    className={clsx(
-                      'inline-flex items-center px-3 py-2 text-sm font-medium rounded-md',
-                      location.pathname.startsWith(item.href)
-                        ? 'text-primary-700 bg-primary-50'
-                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50',
-                    )}
-                  >
-                    {item.name}
-                  </Link>
-                ))}
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-500">{user?.displayName}</span>
-              <button
-                onClick={logout}
-                className="text-sm text-gray-500 hover:text-gray-700"
-              >
-                Logout
-              </button>
-            </div>
-          </div>
+              ))}
+            </nav>
+          )}
         </div>
-      </nav>
+        <div className="flex items-center gap-4">
+          <div className="status-pill">
+            <span className="w-2.5 h-2.5 bg-[#28A745] rounded-full" />
+            Ter-sinkron
+          </div>
+          {user && (
+            <span className="text-sm text-white/80">{user.displayName}</span>
+          )}
+          <button
+            onClick={logout}
+            className="text-sm text-white/70 hover:text-white transition-colors"
+          >
+            Logout
+          </button>
+        </div>
+      </header>
 
-      <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-        <Outlet />
+      <main className={clsx('flex-1 flex', isPOSPage ? 'overflow-hidden' : 'overflow-y-auto max-w-7xl mx-auto p-6 w-full')}>
+        <ErrorBoundary>
+          <Outlet />
+        </ErrorBoundary>
       </main>
     </div>
   );

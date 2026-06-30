@@ -4,6 +4,38 @@
 
 @layer base {
   body {
-    @apply bg-gray-50 text-gray-900 antialiased;
+    @apply bg-[#F3F4F6] text-gray-900 antialiased;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
   }
+}
+
+@layer components {
+  .status-pill {
+    @apply bg-[#E6F4EA] text-[#1E7E34] px-4 py-1.5 rounded-full flex items-center gap-2 text-sm font-medium;
+  }
+
+  .blue-primary {
+    background-color: #2176D2;
+  }
+}
+
+.product-card {
+  transition: transform 0.1s ease;
+}
+
+.product-card:active {
+  transform: scale(0.98);
+}
+
+.order-list-container::-webkit-scrollbar {
+  width: 4px;
+}
+
+.order-list-container::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.order-list-container::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 10px;
 }

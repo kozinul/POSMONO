@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../../../@shared/services/api';
 import { useAuthStore } from '../../../@shared/hooks/useAuth';
 
@@ -6,19 +7,25 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const setUser = useAuthStore((s) => s.setUser);
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
+    setIsLoading(true);
     try {
-      const { data } = await api.post('/auth/login', { email, password });
+      const { data } = await api.post('/auth/login', { email: email.trim(), password });
       localStorage.setItem('accessToken', data.data.accessToken);
       localStorage.setItem('refreshToken', data.data.refreshToken);
       localStorage.setItem('tenantId', data.data.tenant.id);
       setUser(data.data.user);
-      window.location.href = '/dashboard';
-    } catch {
-      setError('Invalid credentials');
+      navigate('/dashboard');
+    } catch (err: any) {
+      setError(err?.response?.data?.error?.message || 'Invalid credentials');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -47,9 +54,10 @@ export default function LoginPage() {
       </div>
       <button
         type="submit"
-        className="w-full py-2 px-4 bg-primary-600 text-white rounded-md hover:bg-primary-700"
+        disabled={isLoading}
+        className="w-full py-2 px-4 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50"
       >
-        Sign in
+        {isLoading ? 'Signing in...' : 'Sign in'}
       </button>
     </form>
   );

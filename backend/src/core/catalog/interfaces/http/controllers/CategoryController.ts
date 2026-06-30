@@ -37,7 +37,7 @@ export class CategoryController extends BaseController {
       throw new ValidationError('Invalid input');
     }
 
-    const category = await this.categoryService.update(req.params.id, parsed.data);
+    const category = await this.categoryService.update(req.params.id, req.tenantId, parsed.data);
     this.ok(res, category.serialize());
   }
 
@@ -47,7 +47,7 @@ export class CategoryController extends BaseController {
   }
 
   async delete(req: Request, res: Response): Promise<void> {
-    await this.categoryService.delete(req.params.id);
+    await this.categoryService.delete(req.params.id, req.tenantId);
     this.noContent(res);
   }
 }

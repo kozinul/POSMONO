@@ -60,13 +60,13 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | SKU / variant system | `[x]` |
 | Inventory module | `[x]` |
 | Stock movement & adjustment | `[x]` |
-| POS cart engine | `[~]` |
-| Checkout / order processing | `[ ]` |
-| Payment handling (cash) | `[ ]` |
-| Receipt generation | `[ ]` |
-| Basic reporting | `[ ]` |
+| POS cart engine | `[x]` |
+| Checkout / order processing | `[x]` |
+| Payment handling (cash) | `[x]` |
+| Receipt generation | `[x]` |
+| Basic reporting | `[x]` |
 
-**Completion:** ~70%
+**Completion:** ~95%
 
 ---
 
@@ -81,12 +81,13 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | Category management UI | `[x]` |
 | Inventory management UI | `[x]` |
 | POS page (cart UI) | `[x]` |
-| Checkout flow UI | `[ ]` |
-| Receipt view | `[ ]` |
-| Reports page | `[ ]` |
+| Checkout flow UI | `[x]` |
+| Receipt view | `[x]` |
+| Reports page | `[x]` |
 | Settings page | `[x]` |
+| Shift management UI | `[x]` |
 
-**Completion:** ~60%
+**Completion:** ~90%
 
 ---
 
@@ -94,14 +95,14 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 
 | Task | Status |
 |------|--------|
-| Cart state management | `[ ]` |
+| Cart state management | `[x]` |
 | Barcode scanning | `[ ]` |
 | Discount & promo engine | `[ ]` |
-| Tax calculation | `[ ]` |
+| Tax calculation | `[x]` |
 | Split bill | `[ ]` |
 | Hold / recall order | `[ ]` |
 
-**Completion:** 0%
+**Completion:** ~35%
 
 ---
 
@@ -109,12 +110,12 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 
 | Task | Status |
 |------|--------|
-| Cash payment flow | `[ ]` |
+| Cash payment flow | `[x]` |
 | Transfer confirmation (manual) | `[ ]` |
 | Payment reconciliation | `[ ]` |
 | Invoice generation | `[ ]` |
 
-**Completion:** 0%
+**Completion:** ~25%
 
 ---
 
@@ -122,12 +123,12 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 
 | Task | Status |
 |------|--------|
-| Daily sales report | `[ ]` |
+| Daily sales report | `[x]` |
 | Product performance | `[ ]` |
 | Inventory summary | `[ ]` |
 | Profit & loss simple | `[ ]` |
 
-**Completion:** 0%
+**Completion:** ~25%
 
 ---
 
@@ -135,12 +136,15 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 
 | Task | Status |
 |------|--------|
-| Unit tests (backend) | `[ ]` |
+| Unit tests (backend) | `[x]` |
+| Service tests (mocked repos) | `[x]` |
+| Repository tests (mongodb-memory-server) | `[x]` |
+| API tests (Supertest) | `[x]` |
 | Integration tests | `[ ]` |
 | E2E tests (critical paths) | `[ ]` |
 | Load testing | `[ ]` |
 
-**Completion:** 0%
+**Completion:** ~75%
 
 ---
 
@@ -201,32 +205,37 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 - `[x]` Inventory UI
 - `[x]` Stock history UI
 
-### WEEK 5 — POS Cart `[~]`
+### WEEK 5 — POS Cart `[x]`
 
-- `[ ]` Cart engine (backend)
+- `[x]` Cart engine (backend)
 - `[x]` POS page layout
 - `[x]` Product search
-- `[ ]` Cart state (frontend)
-- `[ ]` Add/remove items
-- `[ ]` Quantity adjustment
+- `[x]` Cart state (frontend)
+- `[x]` Add/remove items
+- `[x]` Quantity adjustment
 
-### WEEK 6 — Checkout & Payment
+### WEEK 6 — Checkout & Payment `[x]`
 
-- `[ ]` Order creation
-- `[ ]` Checkout flow
-- `[ ]` Cash payment
-- `[ ]` Receipt generation
-- `[ ]` Order history
+- `[x]` Order creation
+- `[x]` Checkout flow
+- `[x]` Cash payment
+- `[x]` Receipt generation
+- `[x]` Order history
 
-### WEEK 7 — Reports
+### WEEK 7 — Reports `[x]`
 
-- `[ ]` Daily sales report
-- `[ ]]` Report UI
-- `[ ]` Dashboard metrics
+- `[x]` Daily sales report
+- `[x]` Report UI
+- `[x]` Dashboard metrics
+- `[x]` Shift management UI
 
-### WEEK 8 — Testing & Polish
+### WEEK 8 — Testing & Polish `[~]`
 
-- `[ ]` Backend unit tests
+- `[x]` Backend unit tests (Layer 1: 93 tests)
+- `[x]` Backend service tests (Layer 2: 45 tests)
+- `[x]` Repository tests (Layer 3: 27 tests)
+- `[x]` API tests (Layer 4: 20 tests)
+- `[ ]` Integration tests (Layer 5)
 - `[ ]` Frontend smoke test
 - `[ ]` Bug fixing
 - `[ ]` UI polish
@@ -252,12 +261,13 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | Category management | `[x]` |
 | Inventory management | `[x]` |
 | Stock movement tracking | `[x]` |
-| POS cart (add/remove/qty) | `[~]` |
-| Checkout & order processing | `[ ]` |
-| Cash payment | `[ ]` |
-| Receipt printing (thermal) | `[ ]` |
-| Basic reporting (daily sales) | `[ ]` |
-| Dashboard (summary cards) | `[x]` |
+| POS cart (add/remove/qty) | `[x]` |
+| Checkout & order processing | `[x]` |
+| Cash payment | `[x]` |
+| Receipt printing (thermal) | `[~]` |
+| Basic reporting (daily sales) | `[x]` |
+| Shift management (open/close register) | `[x]` |
+| Dashboard (summary cards + recent orders) | `[x]` |
 | Settings page | `[x]` |
 | Bug fixing & polish | `[ ]` |
 | **MVP Ready** | **`[ ]`** |
@@ -327,7 +337,7 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | **Possible Solutions** | 1) Extract tenant context into a shared middleware that injects `tenantId` into every request, 2) Create tenant-scoped Mongo connection pool. |
 | **Priority** | High |
 | **Deadline** | This week |
-| **Status** | In progress |
+| **Status** | Resolved — `tenantId` is now injected via `authenticate` middleware + `X-Tenant-Id` header |
 
 ### Blocker 3
 
@@ -391,14 +401,14 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 
 | Debt | Priority | Created | Notes |
 |------|----------|---------|-------|
-| `[ ]` Refactor auth middleware to be tenant-aware | High | WIP | Currently ad-hoc tenant scoping |
+| `[x]` Refactor auth middleware to be tenant-aware | High | Done | tenantId injected via authenticate middleware + X-Tenant-Id header |
 | `[ ]` Improve inventory service performance | Medium | - | Needs MongoDB index audit |
 | `[ ]` Standardize error response format | Medium | - | Some endpoints return inconsistent shapes |
 | `[ ]` Add request validation (Zod) | Medium | - | Critical before pilot |
 | `[ ]]` Optimize MongoDB indexes | Low | - | Run explain() on slow queries |
 | `[ ]` Better error boundary on frontend | Low | - | Currently bare React error boundary |
 | `[ ]` Add logging service (structured logs) | Low | - | `console.log` in some places |
-| `[ ]` Write API documentation | Low | - | Needs OpenAPI/Swagger |
+| `[x]` Write API documentation | Low | Done | `docs/API_REFERENCE.md` covers 52 endpoints |
 
 ---
 
@@ -464,5 +474,5 @@ Architecture changes, tech swaps, pricing — never decide the same day. Sleep o
 
 ---
 
-*Last updated: 2026-06-30*
+*Last updated: 2026-07-06 (session 2)*
 *Updated daily during development.*

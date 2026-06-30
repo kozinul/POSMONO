@@ -34,7 +34,7 @@ export class ProductController extends BaseController {
   }
 
   async getById(req: Request, res: Response): Promise<void> {
-    const product = await this.productService.getById(req.params.id);
+    const product = await this.productService.getById(req.params.id, req.tenantId);
     this.ok(res, product.serialize());
   }
 

@@ -1,34 +1,163 @@
+import { useState } from 'react';
 import { usePOSStore } from '../store/posStore';
+import { useProducts, useCategories } from '../hooks/useProducts';
+import { ProductCard } from '../components/ProductCard';
+import { CartItemRow } from '../components/CartItemRow';
+import { PaymentModal } from '../components/PaymentModal';
+import { ReceiptDisplay } from '../components/ReceiptDisplay';
 
 export default function PosPage() {
-  const { items, total, addItem, removeItem, clearCart } = usePOSStore();
+  const {
+    items,
+    subtotal,
+    tax,
+    total,
+    itemCount,
+    paymentModalOpen,
+    receipt,
+    openPaymentModal,
+  } = usePOSStore();
+
+  const [search, setSearch] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
+  const { data: products = [], isLoading } = useProducts(
+    search || undefined,
+    selectedCategory ?? undefined,
+  );
+  const { data: categories = [] } = useCategories();
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] gap-4">
-      <div className="flex-1 bg-white rounded-lg shadow p-4 overflow-y-auto">
-        <h2 className="text-lg font-semibold mb-4">Products</h2>
-        <p className="text-gray-500">Product grid will be populated from catalog.</p>
-      </div>
-      <div className="w-96 bg-white rounded-lg shadow p-4 flex flex-col">
-        <h2 className="text-lg font-semibold mb-4">Cart</h2>
-        <div className="flex-1 overflow-y-auto space-y-2">
-          {items.map((item) => (
-            <div key={item.productId} className="flex justify-between p-2 bg-gray-50 rounded">
-              <span>{item.name}</span>
-              <span>Rp {item.price}</span>
+    <div className="flex-1 flex overflow-hidden">
+      {/* Left: Product Catalog */}
+      <section className="flex-1 flex flex-col p-6 overflow-y-auto">
+        <div className="space-y-6 mb-6">
+          {/* Search */}
+          <div className="relative max-w-2xl">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+              </svg>
             </div>
-          ))}
-        </div>
-        <div className="border-t pt-4 mt-4">
-          <div className="flex justify-between text-lg font-bold">
-            <span>Total</span>
-            <span>Rp {total.toLocaleString('id-ID')}</span>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="block w-full pl-11 pr-12 py-3 bg-white border border-gray-200 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Cari Produk / Scan Barcode"
+              type="text"
+            />
+            <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+              <svg className="h-6 w-6 text-[#2176D2]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M7 8h10M7 12h10M7 16h10" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
           </div>
-          <button className="w-full mt-4 py-2 px-4 bg-primary-600 text-white rounded-md hover:bg-primary-700">
-            Pay
-          </button>
+
+          {/* Category Filter */}
+          <div className="flex gap-3 flex-wrap">
+            <button
+              onClick={() => setSelectedCategory(null)}
+              className={`px-8 py-2 rounded-full font-medium transition-colors ${
+                !selectedCategory
+                  ? 'blue-primary text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              Semua
+            </button>
+            {categories.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`px-8 py-2 rounded-full font-medium transition-colors ${
+                  selectedCategory === cat.id
+                    ? 'blue-primary text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                {cat.name}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+
+        {/* Product Grid */}
+        {isLoading ? (
+          <div className="flex items-center justify-center flex-1">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {products.map((product) => (
+              <ProductCard
+                key={product.id}
+                id={product.id}
+                name={product.name}
+                price={product.basePrice}
+                imageUrl={product.imageUrls?.[0] || ''}
+                stock={15}
+                isOutOfStock={false}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Right: Cart Sidebar */}
+      <aside className="w-[400px] bg-white border-l border-gray-200 flex flex-col shadow-xl z-20">
+        <div className="p-6 border-b border-gray-100 flex justify-between items-center shrink-0">
+          <h2 className="text-lg font-bold text-gray-800">Local State</h2>
+          <span className="text-gray-400 font-medium">Pesanan #0001</span>
+        </div>
+
+        <div className="flex-1 overflow-y-auto order-list-container p-6 space-y-6">
+          {items.length === 0 ? (
+            <p className="text-gray-400 text-center mt-8">Belum ada item</p>
+          ) : (
+            items.map((item) => (
+              <div key={item.productId}>
+                <CartItemRow item={item} />
+                <div className="border-t border-gray-100 mt-6" />
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="p-6 bg-white border-t border-gray-100 shrink-0 space-y-4">
+          <div className="space-y-2">
+            <div className="flex justify-between text-gray-700">
+              <span>Subtotal:</span>
+              <span>Rp. {subtotal.toLocaleString('id-ID')}</span>
+            </div>
+            <div className="flex justify-between text-gray-700">
+              <span>Pajak (10%):</span>
+              <span>Rp. {tax.toLocaleString('id-ID')}</span>
+            </div>
+          </div>
+          <div className="flex justify-between items-end pt-4">
+            <span className="text-2xl font-bold text-gray-800">Total:</span>
+            <span className="text-3xl font-extrabold text-gray-900">
+              Rp. {total.toLocaleString('id-ID')}
+            </span>
+          </div>
+          <div className="flex gap-4 pt-4">
+            <button className="flex-1 bg-[#9E9E9E] text-white py-4 rounded-xl font-bold hover:bg-gray-500 transition-colors">
+              Hold
+            </button>
+            <button
+              onClick={openPaymentModal}
+              disabled={items.length === 0}
+              className="flex-[2] blue-primary text-white py-4 rounded-xl font-bold hover:opacity-90 transition-opacity uppercase tracking-wide disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Proses Pembayaran
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      {paymentModalOpen && <PaymentModal />}
+      {receipt && <ReceiptDisplay />}
     </div>
   );
 }

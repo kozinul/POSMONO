@@ -91,7 +91,7 @@ export class MongoProductRepository {
     }
 
     const page = options?.page || 1;
-    const limit = options?.limit || 50;
+    const limit = Math.min(options?.limit || 50, 100);
     const skip = (page - 1) * limit;
 
     const [docs, total] = await Promise.all([
