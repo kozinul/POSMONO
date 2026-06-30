@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ..:/workspace:cached
+      - node_modules:/workspace/node_modules
+      - pnpm_store:/home/node/.local/share/pnpm/store
+      - turbo_cache:/workspace/.turbo
+    command: sleep infinity
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      MONGO_URI: mongodb://mongodb:27017
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: dev-secret-change-in-production
+      JWT_EXPIRES_IN: 8h
+      MIDTRANS_SERVER_KEY: ''
+      MIDTRANS_CLIENT_KEY: ''
+      MIDTRANS_IS_PRODUCTION: 'false'
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - posmono-network
+
+  mongodb:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: posmono_local
+    networks:
+      - posmono-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh --quiet
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    networks:
+      - posmono-network
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    profiles:
+      - with-redis
+
+volumes:
+  mongodb_data:
+  redis_data:
+  node_modules:
+  pnpm_store:
+  turbo_cache:
+
+networks:
+  posmono-network:
+    driver: bridge

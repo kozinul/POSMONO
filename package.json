@@ -1,0 +1,25 @@
+{
+  "name": "posmono",
+  "version": "0.1.0",
+  "private": true,
+  "description": "POSMono — Modular Business Operating System",
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:setup": "pnpm install && pnpm --filter @posmono/shared run build",
+    "build": "turbo run build",
+    "test": "turbo run test -- --passWithNoTests",
+    "lint": "turbo run lint",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
+    "clean": "turbo run clean",
+    "reset": "pnpm run clean && rm -rf node_modules && pnpm install"
+  },
+  "devDependencies": {
+    "prettier": "^3.2.0",
+    "turbo": "^2.0.0",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "packageManager": "pnpm@9.0.0"
+}
