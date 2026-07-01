@@ -1,9 +1,6 @@
 import { useState } from 'react';
 import { useDailyReport, useSalesReport } from '../../orders/hooks/useOrders';
-
-function formatCurrency(amount: number) {
-  return `Rp ${amount.toLocaleString('id-ID')}`;
-}
+import { formatCurrency } from '../../../@shared/utils/format';
 
 export default function ReportPage() {
   const today = new Date().toISOString().split('T')[0];

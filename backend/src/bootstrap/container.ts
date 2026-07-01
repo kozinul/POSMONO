@@ -63,7 +63,7 @@ import { ReportController } from '../core/reporting/interfaces/http/controllers/
 export type DIContainer = ReturnType<typeof buildContainer>;
 
 export function buildContainer() {
-  const container = createContainer();
+  const container = createContainer({ injectionMode: 'CLASSIC' });
 
   const systemConnection = mongoose.createConnection(env.MONGO_URI);
 
@@ -132,15 +132,6 @@ export function buildContainer() {
         tenantRepository: container.resolve('tenantRepository'),
       }),
     }),
-    authService: asClass(AuthService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        userRepository: container.resolve('userRepository'),
-        tokenService: container.resolve('tokenService'),
-        passwordService: container.resolve('passwordService'),
-        sessionService: container.resolve('sessionService'),
-      }),
-    }),
     roleRepository: asClass(MongoRoleRepository, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
@@ -160,6 +151,17 @@ export function buildContainer() {
         passwordService: container.resolve('passwordService'),
       }),
     }),
+  });
+
+  const authService = new AuthService(
+    container.resolve('userRepository'),
+    container.resolve('tokenService'),
+    container.resolve('passwordService'),
+    container.resolve('sessionService'),
+  );
+
+  container.register({
+    authService: asValue(authService),
     authController: asClass(AuthController, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({

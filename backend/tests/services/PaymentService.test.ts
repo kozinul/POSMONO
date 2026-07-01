@@ -1,25 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PaymentService } from '../../src/core/payment/application/services/PaymentService';
-import { Order } from '../../src/core/ordering/domain/Order';
-import { NotFoundError, ValidationError } from '../../src/@shared/infrastructure/error/AppError';
+import { ValidationError } from '../../src/@shared/infrastructure/error/AppError';
 
 const TENANT_ID = 'tenant-test-1';
-
-function createOrder() {
-  return Order.create({
-    tenantId: TENANT_ID,
-    items: [{ productId: 'p1', productName: 'Nasi Goreng', quantity: 2, unitPrice: 25000, totalPrice: 50000, variantId: null, modifiers: [], tax: { rate: 0, amount: 0 } }],
-    subtotal: 50000,
-    discount: 0,
-    tax: 0,
-    total: 50000,
-    customerId: null,
-    cashierId: 'cashier-1',
-    notes: '',
-    source: 'pos',
-    metadata: {},
-  });
-}
 
 function createMockRepo() {
   return { save: vi.fn(), findById: vi.fn(), findByOrder: vi.fn(), findByTenant: vi.fn() };
@@ -28,6 +11,15 @@ function createMockRepo() {
 function createMockEventBus() {
   return { publish: vi.fn() };
 }
+
+const validInput = {
+  tenantId: TENANT_ID,
+  cashierId: 'cashier-1',
+  items: [
+    { productId: 'p1', quantity: 2, unitPrice: 25000 },
+  ],
+  amountPaid: 55000,
+};
 
 describe('PaymentService', () => {
   let paymentRepo: ReturnType<typeof createMockRepo>;
@@ -43,138 +35,87 @@ describe('PaymentService', () => {
   });
 
   describe('payCash', () => {
-    it('completes payment for a valid order', async () => {
-      const order = createOrder();
-      orderRepo.findById.mockResolvedValue(order);
+    it('completes payment and creates order', async () => {
+      const result = await service.payCash(validInput);
 
-      const result = await service.payCash({
-        tenantId: TENANT_ID,
-        orderId: order.id.toValue(),
-        amount: 50000,
-        cashierId: 'cashier-1',
-      });
+      const orderData = result.order.serialize();
+      expect(orderData.status).toBe('paid');
+      expect(orderData.paymentStatus).toBe('completed');
+      expect(orderData.subtotal).toBe(50000);
+      expect(orderData.tax).toBe(5000);
+      expect(orderData.total).toBe(55000);
+      expect(orderData.discount).toBe(0);
 
       expect(result.payment.serialize().status).toBe('completed');
-      expect(result.order.serialize().status).toBe('paid');
-      expect(result.order.serialize().paymentStatus).toBe('completed');
+      expect(result.payment.serialize().orderId).toBe(orderData.id);
       expect(paymentRepo.save).toHaveBeenCalledTimes(1);
       expect(orderRepo.save).toHaveBeenCalledTimes(1);
     });
 
     it('generates a reference number starting with CASH-', async () => {
-      const order = createOrder();
-      orderRepo.findById.mockResolvedValue(order);
-
-      const result = await service.payCash({
-        tenantId: TENANT_ID,
-        orderId: order.id.toValue(),
-        amount: 50000,
-        cashierId: 'cashier-1',
-      });
-
+      const result = await service.payCash(validInput);
       expect(result.payment.serialize().referenceNumber).toMatch(/^CASH-/);
     });
 
     it('publishes both payment and order domain events', async () => {
-      const order = createOrder();
-      orderRepo.findById.mockResolvedValue(order);
-
-      await service.payCash({
-        tenantId: TENANT_ID,
-        orderId: order.id.toValue(),
-        amount: 50000,
-        cashierId: 'cashier-1',
-      });
+      await service.payCash(validInput);
 
       const paymentEvents = eventBus.publish.mock.calls.filter(
         (call: any) => call[0].eventName === 'payment.transaction.completed',
       );
       expect(paymentEvents).toHaveLength(1);
+
+      const orderEvents = eventBus.publish.mock.calls.filter(
+        (call: any) => call[0].eventName === 'ordering.order.created',
+      );
+      expect(orderEvents).toHaveLength(1);
     });
 
     it('calculates change when amount exceeds total', async () => {
-      const order = createOrder();
-      orderRepo.findById.mockResolvedValue(order);
-
       const result = await service.payCash({
-        tenantId: TENANT_ID,
-        orderId: order.id.toValue(),
-        amount: 100000,
-        cashierId: 'cashier-1',
+        ...validInput,
+        amountPaid: 100000,
       });
 
       const change = result.payment.serialize().amount - result.order.serialize().total;
-      expect(change).toBe(50000);
+      expect(change).toBe(45000);
     });
 
-    it('throws NotFoundError when order does not exist', async () => {
-      orderRepo.findById.mockResolvedValue(null);
+    it('applies nominal discount', async () => {
+      const result = await service.payCash({
+        ...validInput,
+        discount: 5000,
+        discountType: 'nominal',
+      });
 
-      await expect(
-        service.payCash({ tenantId: TENANT_ID, orderId: 'nonexistent', amount: 50000, cashierId: 'cashier-1' }),
-      ).rejects.toThrow(NotFoundError);
+      const orderData = result.order.serialize();
+      expect(orderData.subtotal).toBe(50000);
+      expect(orderData.discount).toBe(5000);
+      expect(orderData.total).toBe(50000);
     });
 
-    it('throws NotFoundError for cross-tenant order access', async () => {
-      const order = createOrder();
-      orderRepo.findById.mockResolvedValue(order);
+    it('applies percentage discount', async () => {
+      const result = await service.payCash({
+        ...validInput,
+        discount: 10,
+        discountType: 'percentage',
+      });
 
-      await expect(
-        service.payCash({ tenantId: 'other-tenant', orderId: order.id.toValue(), amount: 50000, cashierId: 'cashier-1' }),
-      ).rejects.toThrow(NotFoundError);
-    });
-
-    it('throws ValidationError when order is already paid', async () => {
-      const order = createOrder();
-      order.markPaid();
-      orderRepo.findById.mockResolvedValue(order);
-
-      await expect(
-        service.payCash({ tenantId: TENANT_ID, orderId: order.id.toValue(), amount: 50000, cashierId: 'cashier-1' }),
-      ).rejects.toThrow(ValidationError);
-    });
-
-    it('throws ValidationError when order is cancelled', async () => {
-      const order = createOrder();
-      order.cancel('test');
-      orderRepo.findById.mockResolvedValue(order);
-
-      await expect(
-        service.payCash({ tenantId: TENANT_ID, orderId: order.id.toValue(), amount: 50000, cashierId: 'cashier-1' }),
-      ).rejects.toThrow(ValidationError);
+      const orderData = result.order.serialize();
+      expect(orderData.subtotal).toBe(50000);
+      expect(orderData.discount).toBe(5000);
+      expect(orderData.total).toBe(50000);
     });
 
     it('throws ValidationError when amount is insufficient', async () => {
-      const order = createOrder();
-      orderRepo.findById.mockResolvedValue(order);
-
       await expect(
-        service.payCash({ tenantId: TENANT_ID, orderId: order.id.toValue(), amount: 100, cashierId: 'cashier-1' }),
+        service.payCash({ ...validInput, amountPaid: 100 }),
       ).rejects.toThrow(ValidationError);
     });
 
-    it('throws PaymentNotFound when orderId is from other tenant', async () => {
-      const order = createOrder();
-      orderRepo.findById.mockResolvedValue(order);
-
-      await expect(
-        service.payCash({ tenantId: 'wrong-tenant', orderId: order.id.toValue(), amount: 50000, cashierId: 'cashier-1' }),
-      ).rejects.toThrow(NotFoundError);
-    });
-
     it('preserves payment metadata with cashierId', async () => {
-      const order = createOrder();
-      orderRepo.findById.mockResolvedValue(order);
-      const cashierId = 'cashier-abc-123';
-
-      const result = await service.payCash({
-        tenantId: TENANT_ID,
-        orderId: order.id.toValue(),
-        amount: 50000,
-        cashierId,
-      });
-
-      expect(result.payment.serialize().metadata).toEqual({ cashierId });
+      const result = await service.payCash(validInput);
+      expect(result.payment.serialize().metadata).toHaveProperty('cashierId', 'cashier-1');
     });
   });
 

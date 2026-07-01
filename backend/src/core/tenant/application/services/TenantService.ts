@@ -28,7 +28,7 @@ export class TenantService {
       businessType: input.businessType as ITenant['businessType'],
       modules: [input.businessType],
       databaseName: `posmono_${input.slug}`,
-      config: { timezone: 'Asia/Jakarta', currency: 'IDR', locale: 'id' },
+      config: { timezone: 'Asia/Jakarta', currency: 'IDR', locale: 'id', taxRate: 0.1, serviceChargeRate: 0 },
       billingEmail: input.billingEmail,
     });
 

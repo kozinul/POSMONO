@@ -15,11 +15,17 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     setIsLoading(true);
+
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('tenantId');
+
     try {
       const { data } = await api.post('/auth/login', { email: email.trim(), password });
       localStorage.setItem('accessToken', data.data.accessToken);
       localStorage.setItem('refreshToken', data.data.refreshToken);
-      localStorage.setItem('tenantId', data.data.tenant.id);
+      const tokenPayload = JSON.parse(atob(data.data.accessToken.split('.')[1]));
+      localStorage.setItem('tenantId', tokenPayload.tenant);
       setUser(data.data.user);
       navigate('/dashboard');
     } catch (err: any) {

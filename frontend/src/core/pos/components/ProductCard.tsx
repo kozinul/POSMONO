@@ -5,11 +5,11 @@ interface ProductCardProps {
   name: string;
   price: number;
   imageUrl: string;
-  stock: number;
+  stock?: number;
   isOutOfStock?: boolean;
 }
 
-export function ProductCard({ id, name, price, imageUrl, stock, isOutOfStock }: ProductCardProps) {
+export function ProductCard({ id, name, price, imageUrl, stock = 0, isOutOfStock = false }: ProductCardProps) {
   const addItem = usePOSStore((s) => s.addItem);
 
   return (
@@ -33,7 +33,7 @@ export function ProductCard({ id, name, price, imageUrl, stock, isOutOfStock }: 
       <div className="p-4 flex flex-col flex-1">
         <h3 className="font-bold text-gray-800 truncate">{name}</h3>
         <p className="text-gray-900 mt-1">
-          Rp. {price.toLocaleString('id-ID')}
+          Rp {price.toLocaleString('id-ID')}
         </p>
         <div className="mt-auto pt-4 flex items-center justify-between">
           <span className={`text-xs ${isOutOfStock ? 'text-red-500 font-medium' : 'text-gray-500'}`}>

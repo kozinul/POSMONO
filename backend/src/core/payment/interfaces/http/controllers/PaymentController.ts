@@ -5,8 +5,14 @@ import { z } from 'zod';
 import { ValidationError } from '../../../../../@shared/infrastructure/error/AppError';
 
 const payCashSchema = z.object({
-  orderId: z.string().min(1),
-  amount: z.number().positive(),
+  items: z.array(z.object({
+    productId: z.string().min(1),
+    quantity: z.number().int().positive(),
+    unitPrice: z.number().nonnegative(),
+  })).min(1),
+  amountPaid: z.number().positive(),
+  discount: z.number().nonnegative().default(0),
+  discountType: z.enum(['percentage', 'nominal']).optional(),
 });
 
 export class PaymentController extends BaseController {

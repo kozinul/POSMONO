@@ -1,9 +1,6 @@
 import { useState } from 'react';
 import { useShifts, useOpenShift, useOpenShiftMutation, useCloseShiftMutation } from '../hooks/useShift';
-
-function formatCurrency(amount: number) {
-  return `Rp ${amount.toLocaleString('id-ID')}`;
-}
+import { formatCurrency } from '../../../@shared/utils/format';
 
 function ShiftModal({ isOpen, onClose, onOpen, isPending }: { isOpen: boolean; onClose: () => void; onOpen: (balance: number) => void; isPending: boolean }) {
   const [balance, setBalance] = useState(0);

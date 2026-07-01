@@ -35,12 +35,12 @@ async function fetchProducts(search?: string, categoryId?: string): Promise<Prod
   const params = new URLSearchParams({ limit: '100' });
   if (search) params.set('search', search);
   if (categoryId) params.set('categoryId', categoryId);
-  const res = await api.get<ProductsResponse>(`/api/products?${params}`);
+  const res = await api.get<ProductsResponse>(`/products?${params}`);
   return res.data.data;
 }
 
 async function fetchCategories(): Promise<Category[]> {
-  const res = await api.get<CategoriesResponse>('/api/categories');
+  const res = await api.get<CategoriesResponse>('/categories');
   return res.data.data;
 }
 

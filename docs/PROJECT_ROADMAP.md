@@ -132,7 +132,7 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 
 ---
 
-### PHASE G — Testing & QA `[ ]`
+### PHASE G — Testing & QA `[~]`
 
 | Task | Status |
 |------|--------|
@@ -140,27 +140,28 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | Service tests (mocked repos) | `[x]` |
 | Repository tests (mongodb-memory-server) | `[x]` |
 | API tests (Supertest) | `[x]` |
-| Integration tests | `[ ]` |
+| Integration tests | `[x]` |
+| Frontend smoke tests | `[x]` |
 | E2E tests (critical paths) | `[ ]` |
 | Load testing | `[ ]` |
 
-**Completion:** ~75%
+**Completion:** ~85%
 
 ---
 
-### PHASE H — MVP Deployment `[ ]`
+### PHASE H — MVP Deployment `[~]`
 
 | Task | Status |
 |------|--------|
-| Production Dockerfile | `[~]` |
-| CI/CD pipeline | `[ ]` |
+| Production Dockerfile | `[x]` |
+| CI/CD pipeline | `[x]` |
 | VPS / cloud provisioning | `[ ]` |
 | SSL & domain setup | `[ ]` |
 | First tenant onboarding | `[ ]` |
 | Monitoring (logs, errors) | `[ ]` |
 | Backup strategy | `[ ]` |
 
-**Completion:** ~5%
+**Completion:** ~30%
 
 ---
 
@@ -229,20 +230,20 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 - `[x]` Dashboard metrics
 - `[x]` Shift management UI
 
-### WEEK 8 — Testing & Polish `[~]`
+### WEEK 8 — Testing & Polish `[x]`
 
 - `[x]` Backend unit tests (Layer 1: 93 tests)
-- `[x]` Backend service tests (Layer 2: 45 tests)
-- `[x]` Repository tests (Layer 3: 27 tests)
+- `[x]` Backend service tests (Layer 2: 85 tests)
+- `[x]` Repository tests (Layer 3: 66 tests)
 - `[x]` API tests (Layer 4: 20 tests)
-- `[ ]` Integration tests (Layer 5)
-- `[ ]` Frontend smoke test
-- `[ ]` Bug fixing
-- `[ ]` UI polish
+- `[x]` Integration tests (Layer 5: 24 tests)
+- `[x]` Frontend smoke test (11 tests)
+- `[x]` Bug fixing
+- `[x]` UI polish
 
 ### WEEK 9 — MVP Launch Prep
 
-- `[ ]` Production build
+- `[x]` Production build (Dockerfile + compose.prod.yml)
 - `[ ]` Deploy to VPS
 - `[ ]` Domain + SSL
 - `[ ]` Pilot tenant onboarding
@@ -269,7 +270,7 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | Shift management (open/close register) | `[x]` |
 | Dashboard (summary cards + recent orders) | `[x]` |
 | Settings page | `[x]` |
-| Bug fixing & polish | `[ ]` |
+| Bug fixing & polish | `[x]` |
 | **MVP Ready** | **`[ ]`** |
 
 ---

@@ -24,7 +24,7 @@ export function DashboardLayout() {
       <header className="blue-primary text-white h-16 flex items-center justify-between px-6 shrink-0 shadow-md z-10">
         <div className="flex items-center gap-8">
           <Link to="/dashboard" className="text-xl font-semibold tracking-tight">
-            Cabang Kuta
+            POSMono
           </Link>
           {!isPOSPage && (
             <nav className="flex items-center gap-1">
@@ -46,10 +46,6 @@ export function DashboardLayout() {
           )}
         </div>
         <div className="flex items-center gap-4">
-          <div className="status-pill">
-            <span className="w-2.5 h-2.5 bg-[#28A745] rounded-full" />
-            Ter-sinkron
-          </div>
           {user && (
             <span className="text-sm text-white/80">{user.displayName}</span>
           )}

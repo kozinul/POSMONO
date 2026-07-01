@@ -26,6 +26,8 @@ export interface TenantConfig {
   timezone: string;
   currency: string;
   locale: string;
+  taxRate: number;
+  serviceChargeRate: number;
 }
 
 export class Tenant extends AggregateRoot<TenantId> {

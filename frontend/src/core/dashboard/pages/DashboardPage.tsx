@@ -1,12 +1,11 @@
 import { useDashboardSummary } from '../../orders/hooks/useOrders';
+import { useTenant } from '../../../@shared/hooks/useTenant';
 import { Link } from 'react-router-dom';
-
-function formatCurrency(amount: number) {
-  return `Rp ${amount.toLocaleString('id-ID')}`;
-}
+import { formatCurrency } from '../../../@shared/utils/format';
 
 export default function DashboardPage() {
   const { data: summary, isLoading, isError, refetch } = useDashboardSummary();
+  const { data: tenant } = useTenant();
 
   if (isLoading) {
     return (
@@ -43,7 +42,10 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Dashboard</h1>
+      <div className="flex items-baseline gap-3 mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+        {tenant && <span className="text-sm text-gray-500">{tenant.name}</span>}
+      </div>
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-sm font-medium text-gray-500">Today's Revenue</h3>

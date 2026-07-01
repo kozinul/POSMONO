@@ -15,17 +15,21 @@
 
 ---
 
-## MVP Features (BUILD NOW)
+## MVP Features (Status)
 
-> These are actively being built. See `PROJECT_ROADMAP.md` for status.
+> See `PROJECT_ROADMAP.md` for detailed status.
 
-- `[ ]` POS cart engine
-- `[ ]` Checkout & order processing
-- `[ ]` Cash payment
-- `[ ]` Receipt printing
-- `[ ]` Basic reporting (daily sales)
-- `[ ]` Bug fixing & polish
-- `[ ]` MVP deployment
+- `[x]` POS cart engine
+- `[x]` Checkout & order processing
+- `[x]` Cash payment
+- `[x]` Basic reporting (daily sales)
+- `[x]` Bug fixing & polish
+- `[~]` Receipt printing *(WIP — thermal integration pending)*
+- `[~]` MVP deployment
+- `[ ]` Barcode scanning
+- `[ ]` Discount & promo engine
+- `[ ]` Split bill
+- `[ ]` Hold / recall order
 
 ---
 

@@ -117,7 +117,7 @@ Good momentum. Three modules wired in one session. The pattern is consistent now
 
 ---
 
-### DATE: 2026-06-30 (session 2)
+### DATE: 2026-07-01 (session 2)
 
 **Today I worked on:**
 
@@ -447,3 +447,128 @@ STEP 8 is feature-complete. The app now has a proper reporting section with dail
 **Notes:**
 
 185 tests across all 4 testing layers. The only remaining test layer is Layer 5 (full integration flow). The ARM64 MongoDB workaround is documented for future CI setup.
+
+---
+
+### DATE: 2026-07-06 (session 3)
+
+**Today I worked on:**
+
+- Fixed dev environment — created `src/dev.ts` with `mongodb-memory-server` for Docker-less development
+- Fixed Vite config — added `host: true` so frontend accessible from host browser
+- Fixed Awilix container — changed `injectionMode` from `PROXY` to `CLASSIC` (default proxy mode caused `Could not resolve 'execute'` on all controller methods)
+- Fixed seed data — tenant ID changed to `dev-tenant` to match tenant middleware default
+- Fixed login page — clear localStorage before login, extract `tenantId` from JWT payload (response doesn't include `tenant` field)
+- Split container registrations into two `register()` calls to avoid circular resolution at registration time
+
+**Problems encountered:**
+
+- Awilix v10 default `PROXY` injection mode wraps resolved instances, intercepting ALL property access via container resolution — breaks every controller method call
+- `container.resolve()` inside a `register()` block can't find dependencies registered in the same call
+- Frontend login expected `data.data.tenant.id` in response but backend doesn't return tenant info
+- MongoDB in-memory seed writes to `posmono_system` while app connects to default database — fixed by running seed inline before app boot
+
+**What I completed:**
+
+- `GET /health` — working
+- `POST /api/auth/login` — working (admin@demo.com / admin123)
+- Frontend accessible at `http://localhost:5173`
+- No Docker required for development
+
+**What I learned:**
+
+- Awilix `injector` + `PROXY` mode creates a proxy that intercepts ALL property access — not just constructor injection
+- `MongoMemoryServer` on ARM64 needs version 7.3.4 with Ubuntu 22.04 binary URL
+- Vite dev server defaults to `localhost` only — need `host: true` for devcontainer port forwarding
+- Splitting `container.register()` into multiple calls is the cleanest way to handle inter-dependent registrations
+
+**Tomorrow priority:**
+
+- Layer 5: Integration tests
+- OR barcode scanning & discount engine
+
+**Productivity score:** 8
+
+**Notes:**
+
+Spent most of the session debugging Awilix proxy behavior. Dev environment now works without Docker — in-memory MongoDB with auto-seed. Frontend-backend integration verified end-to-end.
+
+---
+
+### DATE: 2026-07-07
+
+**Today I worked on:**
+
+- WEEK 8 — Testing & Polish (complete)
+- Layer 5 Integration: Created `tenant-isolation.test.ts` — 11 tests covering cross-tenant isolation for orders, payments, shifts, products, and inventory
+- Layer 2 Service tests: Created `TenantService.test.ts` (10), `ProductService.test.ts` (14), `InventoryService.test.ts` (16)
+- Layer 3 Repository tests: Created `MongoUserRepository.test.ts` (10), `MongoTenantRepository.test.ts` (8), `MongoProductRepository.test.ts` (12), `MongoStockRepository.test.ts` (9)
+- Frontend smoke test: Created `posStore.test.ts` (11 tests) — cart logic, tax, payment flow
+- UI Polish: Extracted shared `formatCurrency` utility, fixed `Rp`/`Rp.` inconsistency across all POS components, added error state to PosPage, removed hardcoded values (stock, "Local State", "Pesanan #0001")
+- Updated all docs: TEST_PROGRESS.md, PROJECT_ROADMAP.md, DAILY_LOG.md, BACKLOG.md
+
+**Problems encountered:**
+
+- Tenant.create() and Product.create() need all fields including `modules` and `imageUrls` — fixed test fixtures
+- SKU unique index caused duplicate key errors in product repository tests — fixed with unique SKUs per test
+- Frontend ProductCard had hardcoded `stock={15}` prop — made optional with default
+
+**What I completed:**
+
+- 90 new tests across 8 new test files
+- Total: 299 tests (28 backend + 1 frontend), 0 failures
+- Frontend build + PWA service worker compiles clean
+- All `Rp` formatting now consistent across the app
+
+**Tomorrow priority:**
+
+- WEEK 9 — MVP Deployment: production build, VPS deploy, domain + SSL, pilot tenant onboarding
+
+**Productivity score:** 10
+
+**Notes:**
+
+Week 8 is fully wrapped. The test suite grew from 198 to 299 tests (+51% increase). The frontend is polished with consistent currency formatting and proper error states. Ready for deployment.
+
+---
+
+### DATE: 2026-07-07
+
+**Today I worked on:**
+
+- Fixed PWA service worker in dev mode (disabled VitePWA plugin except in production)
+- Fixed double `/api` prefix in axios calls (baseURL + hooks both had `/api`)
+- Created `placeholder.svg` for missing product images
+- Added service worker auto-unregistration on app load
+- Updated production `docker/Dockerfile` to build frontend
+- Updated `server.ts` to serve frontend static files in production
+- Created `docker/docker-compose.prod.yml`
+- Created `.github/workflows/ci.yml` (test + lint + Docker build/push)
+- Created `backend/.env.example`
+
+**Problems encountered:**
+
+- `file:///` protocol error from stale PWA service worker — fixed by unregistering SW + disabling PWA in dev
+- Double `/api` prefix in `useProducts.ts` and `PaymentModal.tsx` — caused 404s on all API calls
+- `placeholder.svg` missing — hardcoded image URLs from API returned 404 in browser
+- `docker/Dockerfile` didn't build frontend — fixed by adding `frontend/package.json` to deps stage and `frontend/dist` to runner
+
+**What I completed:**
+
+- PWA/dev mode cleanup
+- API URL normalization
+- Production Docker setup
+- CI/CD pipeline
+- 299/299 tests passing
+
+**Tomorrow priority:**
+
+- Deploy to VPS (DigitalOcean / any provider)
+- Set up domain + SSL (Caddy or nginx)
+- Seed first tenant + pilot onboarding
+
+**Productivity score:** 9
+
+**Notes:**
+
+Moved from Week 8 (Testing & Polish) into Week 9 (MVP Launch Prep). The production deployment setup is now ready: single Docker image serves backend + frontend, CI pipeline runs tests and builds on push. Next session is actual VPS deployment.

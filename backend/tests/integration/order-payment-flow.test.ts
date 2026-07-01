@@ -2,22 +2,12 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import request from 'supertest';
 import { setupTestDb, teardownTestDb, clearCollections } from '../helpers/db';
 import { buildIntegrationApp, IntegrationTestContext } from '../helpers/integration';
-import { generateTestToken } from '../helpers/auth';
 
-const orderPayload = {
+const payCashPayload = {
   items: [
-    {
-      productId: 'prod-1',
-      productName: 'Nasi Goreng',
-      quantity: 2,
-      unitPrice: 25000,
-      totalPrice: 50000,
-      modifiers: [],
-      tax: { rate: 0.11, amount: 5500 },
-    },
+    { productId: 'prod-1', quantity: 2, unitPrice: 25000 },
   ],
-  notes: 'test order',
-  source: 'pos',
+  amountPaid: 55500,
 };
 
 describe('Integration: Order-to-Payment Flow', () => {
@@ -36,27 +26,21 @@ describe('Integration: Order-to-Payment Flow', () => {
     await clearCollections();
   });
 
-  describe('Full flow: create order → pay cash', () => {
-    it('should create an order, pay cash, and reflect paid status', async () => {
-      const createRes = await request(ctx.app)
-        .post('/api/orders')
-        .set('Authorization', `Bearer ${ctx.token}`)
-        .send(orderPayload);
-
-      expect(createRes.status).toBe(201);
-      expect(createRes.body.data.items).toHaveLength(1);
-      const orderId = createRes.body.data.id;
-
+  describe('Full flow: pay cash (creates order + payment)', () => {
+    it('should create order and process payment', async () => {
       const payRes = await request(ctx.app)
         .post('/api/payments/pay-cash')
         .set('Authorization', `Bearer ${ctx.token}`)
-        .send({ orderId, amount: 55500 });
+        .send(payCashPayload);
 
       expect(payRes.status).toBe(200);
       expect(payRes.body.data.payment.amount).toBe(55500);
       expect(payRes.body.data.payment.method).toBe('cash');
       expect(payRes.body.data.order.status).toBe('paid');
+      expect(payRes.body.data.order.subtotal).toBe(50000);
+      expect(payRes.body.data.order.total).toBe(55000);
 
+      const orderId = payRes.body.data.order.id;
       const getRes = await request(ctx.app)
         .get(`/api/orders/${orderId}`)
         .set('Authorization', `Bearer ${ctx.token}`);
@@ -66,73 +50,56 @@ describe('Integration: Order-to-Payment Flow', () => {
     });
 
     it('should return change when payment exceeds total', async () => {
-      const createRes = await request(ctx.app)
-        .post('/api/orders')
-        .set('Authorization', `Bearer ${ctx.token}`)
-        .send(orderPayload);
-
-      const orderId = createRes.body.data.id;
-
       const payRes = await request(ctx.app)
         .post('/api/payments/pay-cash')
         .set('Authorization', `Bearer ${ctx.token}`)
-        .send({ orderId, amount: 100000 });
+        .send({ ...payCashPayload, amountPaid: 100000 });
 
       expect(payRes.status).toBe(200);
-      expect(payRes.body.data.payment.change).toBe(44500);
+      expect(payRes.body.data.payment.change).toBe(45000);
       expect(payRes.body.data.payment.amount).toBe(100000);
     });
 
-    it('should reject payment less than total', async () => {
-      const createRes = await request(ctx.app)
-        .post('/api/orders')
-        .set('Authorization', `Bearer ${ctx.token}`)
-        .send(orderPayload);
-
-      const orderId = createRes.body.data.id;
-
+    it('should apply nominal discount', async () => {
       const payRes = await request(ctx.app)
         .post('/api/payments/pay-cash')
         .set('Authorization', `Bearer ${ctx.token}`)
-        .send({ orderId, amount: 100 });
+        .send({ ...payCashPayload, discount: 5000, discountType: 'nominal' });
 
-      expect(payRes.status).toBe(400);
-      expect(payRes.body.error.message).toMatch(/insufficient/i);
+      expect(payRes.status).toBe(200);
+      expect(payRes.body.data.order.subtotal).toBe(50000);
+      expect(payRes.body.data.order.discount).toBe(5000);
+      expect(payRes.body.data.order.total).toBe(50000);
     });
 
-    it('should reject double payment', async () => {
-      const createRes = await request(ctx.app)
-        .post('/api/orders')
-        .set('Authorization', `Bearer ${ctx.token}`)
-        .send(orderPayload);
-
-      const orderId = createRes.body.data.id;
-
-      await request(ctx.app)
-        .post('/api/payments/pay-cash')
-        .set('Authorization', `Bearer ${ctx.token}`)
-        .send({ orderId, amount: 55500 });
-
+    it('should apply percentage discount', async () => {
       const payRes = await request(ctx.app)
         .post('/api/payments/pay-cash')
         .set('Authorization', `Bearer ${ctx.token}`)
-        .send({ orderId, amount: 55500 });
+        .send({ ...payCashPayload, discount: 10, discountType: 'percentage' });
+
+      expect(payRes.status).toBe(200);
+      expect(payRes.body.data.order.subtotal).toBe(50000);
+      expect(payRes.body.data.order.discount).toBe(5000);
+      expect(payRes.body.data.order.total).toBe(50000);
+    });
+
+    it('should reject payment less than total', async () => {
+      const payRes = await request(ctx.app)
+        .post('/api/payments/pay-cash')
+        .set('Authorization', `Bearer ${ctx.token}`)
+        .send({ ...payCashPayload, amountPaid: 100 });
 
       expect(payRes.status).toBe(400);
     });
 
     it('should list payments for an order', async () => {
-      const createRes = await request(ctx.app)
-        .post('/api/orders')
-        .set('Authorization', `Bearer ${ctx.token}`)
-        .send(orderPayload);
-
-      const orderId = createRes.body.data.id;
-
-      await request(ctx.app)
+      const payRes = await request(ctx.app)
         .post('/api/payments/pay-cash')
         .set('Authorization', `Bearer ${ctx.token}`)
-        .send({ orderId, amount: 55500 });
+        .send(payCashPayload);
+
+      const orderId = payRes.body.data.order.id;
 
       const listRes = await request(ctx.app)
         .get(`/api/payments/${orderId}`)
@@ -143,89 +110,13 @@ describe('Integration: Order-to-Payment Flow', () => {
     });
   });
 
-  describe('Tenant isolation', () => {
-    it('should not allow tenant A to access tenant B order', async () => {
-      const createRes = await request(ctx.app)
-        .post('/api/orders')
-        .set('Authorization', `Bearer ${ctx.token}`)
-        .send(orderPayload);
-
-      const orderId = createRes.body.data.id;
-
-      const otherToken = generateTestToken({ sub: 'other-user', tenant: 'other-tenant' });
-
-      const getRes = await request(ctx.app)
-        .get(`/api/orders/${orderId}`)
-        .set('Authorization', `Bearer ${otherToken}`);
-
-      expect(getRes.status).toBe(400);
-    });
-
-    it('should not allow tenant A to pay tenant B order', async () => {
-      const otherToken = generateTestToken({ sub: 'other-user', tenant: 'other-tenant' });
-
-      const createRes = await request(ctx.app)
-        .post('/api/orders')
-        .set('Authorization', `Bearer ${otherToken}`)
-        .send(orderPayload);
-
-      const orderId = createRes.body.data.id;
-
-      const payRes = await request(ctx.app)
-        .post('/api/payments/pay-cash')
-        .set('Authorization', `Bearer ${ctx.token}`)
-        .send({ orderId, amount: 55500 });
-
-      expect(payRes.status).toBe(404);
-    });
-
-    it('should not allow tenant A to see tenant B payment', async () => {
-      const otherToken = generateTestToken({ sub: 'other-user', tenant: 'other-tenant' });
-
-      const createRes = await request(ctx.app)
-        .post('/api/orders')
-        .set('Authorization', `Bearer ${otherToken}`)
-        .send(orderPayload);
-
-      const orderId = createRes.body.data.id;
-
-      await request(ctx.app)
-        .post('/api/payments/pay-cash')
-        .set('Authorization', `Bearer ${otherToken}`)
-        .send({ orderId, amount: 55500 });
-
-      const listRes = await request(ctx.app)
-        .get(`/api/payments/${orderId}`)
-        .set('Authorization', `Bearer ${ctx.token}`);
-
-      expect(listRes.status).toBe(400);
-    });
-  });
-
   describe('Validation & auth', () => {
-    it('should reject create order without auth', async () => {
-      const res = await request(ctx.app)
-        .post('/api/orders')
-        .send(orderPayload);
-
-      expect(res.status).toBe(401);
-    });
-
     it('should reject pay cash without auth', async () => {
       const res = await request(ctx.app)
         .post('/api/payments/pay-cash')
-        .send({ orderId: 'none', amount: 1000 });
+        .send({ items: [{ productId: 'p1', quantity: 1, unitPrice: 10000 }], amountPaid: 10000 });
 
       expect(res.status).toBe(401);
-    });
-
-    it('should reject create order with empty items', async () => {
-      const res = await request(ctx.app)
-        .post('/api/orders')
-        .set('Authorization', `Bearer ${ctx.token}`)
-        .send({ items: [] });
-
-      expect(res.status).toBe(400);
     });
 
     it('should reject pay cash with missing fields', async () => {
@@ -237,11 +128,20 @@ describe('Integration: Order-to-Payment Flow', () => {
       expect(res.status).toBe(400);
     });
 
-    it('should reject pay cash with zero amount', async () => {
+    it('should reject pay cash with empty items', async () => {
       const res = await request(ctx.app)
         .post('/api/payments/pay-cash')
         .set('Authorization', `Bearer ${ctx.token}`)
-        .send({ orderId: 'some-id', amount: 0 });
+        .send({ items: [], amountPaid: 1000 });
+
+      expect(res.status).toBe(400);
+    });
+
+    it('should reject pay cash with zero amountPaid', async () => {
+      const res = await request(ctx.app)
+        .post('/api/payments/pay-cash')
+        .set('Authorization', `Bearer ${ctx.token}`)
+        .send({ items: [{ productId: 'p1', quantity: 1, unitPrice: 10000 }], amountPaid: 0 });
 
       expect(res.status).toBe(400);
     });

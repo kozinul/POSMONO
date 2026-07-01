@@ -21,7 +21,7 @@ export function CartItemRow({ item }: CartItemRowProps) {
         </div>
         <div className="flex items-center gap-3 shrink-0 ml-4">
           <span className="font-medium text-gray-800">
-            Rp. {(item.price * item.quantity).toLocaleString('id-ID')}
+            Rp {(item.price * item.quantity).toLocaleString('id-ID')}
           </span>
           <div className="flex items-center gap-1">
             <button

@@ -11,6 +11,9 @@ export default function PosPage() {
     items,
     subtotal,
     tax,
+    discount,
+    discountType,
+    discountAmount,
     total,
     itemCount,
     paymentModalOpen,
@@ -21,11 +24,11 @@ export default function PosPage() {
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
-  const { data: products = [], isLoading } = useProducts(
+  const { data: products = [], isLoading, isError } = useProducts(
     search || undefined,
     selectedCategory ?? undefined,
   );
-  const { data: categories = [] } = useCategories();
+  const { data: categories = [], isError: categoriesError } = useCategories();
 
   return (
     <div className="flex-1 flex overflow-hidden">
@@ -87,6 +90,10 @@ export default function PosPage() {
           <div className="flex items-center justify-center flex-1">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
           </div>
+        ) : isError || categoriesError ? (
+          <div className="flex items-center justify-center flex-1">
+            <p className="text-red-500 font-medium">Gagal memuat data. Silakan coba lagi.</p>
+          </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {products.map((product) => (
@@ -96,8 +103,6 @@ export default function PosPage() {
                 name={product.name}
                 price={product.basePrice}
                 imageUrl={product.imageUrls?.[0] || ''}
-                stock={15}
-                isOutOfStock={false}
               />
             ))}
           </div>
@@ -107,8 +112,8 @@ export default function PosPage() {
       {/* Right: Cart Sidebar */}
       <aside className="w-[400px] bg-white border-l border-gray-200 flex flex-col shadow-xl z-20">
         <div className="p-6 border-b border-gray-100 flex justify-between items-center shrink-0">
-          <h2 className="text-lg font-bold text-gray-800">Local State</h2>
-          <span className="text-gray-400 font-medium">Pesanan #0001</span>
+          <h2 className="text-lg font-bold text-gray-800">Pesanan Baru</h2>
+          <span className="text-gray-400 font-medium">{items.length} item</span>
         </div>
 
         <div className="flex-1 overflow-y-auto order-list-container p-6 space-y-6">
@@ -128,17 +133,23 @@ export default function PosPage() {
           <div className="space-y-2">
             <div className="flex justify-between text-gray-700">
               <span>Subtotal:</span>
-              <span>Rp. {subtotal.toLocaleString('id-ID')}</span>
+              <span>Rp {subtotal.toLocaleString('id-ID')}</span>
             </div>
             <div className="flex justify-between text-gray-700">
               <span>Pajak (10%):</span>
-              <span>Rp. {tax.toLocaleString('id-ID')}</span>
+              <span>Rp {tax.toLocaleString('id-ID')}</span>
             </div>
+            {discountAmount > 0 && (
+              <div className="flex justify-between text-green-600">
+                <span>Diskon {discountType === 'percentage' ? `(${discount}%)` : ''}:</span>
+                <span>- Rp {discountAmount.toLocaleString('id-ID')}</span>
+              </div>
+            )}
           </div>
           <div className="flex justify-between items-end pt-4">
             <span className="text-2xl font-bold text-gray-800">Total:</span>
             <span className="text-3xl font-extrabold text-gray-900">
-              Rp. {total.toLocaleString('id-ID')}
+              Rp {total.toLocaleString('id-ID')}
             </span>
           </div>
           <div className="flex gap-4 pt-4">

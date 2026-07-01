@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { calculateDiscount } from '@shared/utils/money';
 
 export interface CartItem {
   productId: string;
@@ -22,6 +23,9 @@ interface POSState {
   itemCount: number;
   subtotal: number;
   tax: number;
+  discount: number;
+  discountType: 'percentage' | 'nominal';
+  discountAmount: number;
   total: number;
   paymentModalOpen: boolean;
   paymentState: PaymentState;
@@ -31,6 +35,7 @@ interface POSState {
   removeItem: (productId: string) => void;
   updateQuantity: (productId: string, delta: number) => void;
   setItemNotes: (productId: string, notes: string) => void;
+  setDiscount: (value: number, type: 'percentage' | 'nominal') => void;
   clearCart: () => void;
 
   openPaymentModal: () => void;
@@ -42,11 +47,13 @@ interface POSState {
 
 const TAX_RATE = 0.1;
 
-function derive(items: CartItem[]) {
+function derive(items: CartItem[], discount = 0, discountType: 'percentage' | 'nominal' = 'nominal') {
   const itemCount = items.reduce((s, i) => s + i.quantity, 0);
   const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
   const tax = Math.round(subtotal * TAX_RATE);
-  return { items, itemCount, subtotal, tax, total: subtotal + tax };
+  const discountAmount = calculateDiscount(subtotal, discount, discountType === 'percentage');
+  const total = Math.max(0, subtotal + tax - discountAmount);
+  return { items, itemCount, subtotal, tax, discount, discountType, discountAmount, total };
 }
 
 export const usePOSStore = create<POSState>((set) => ({
@@ -54,6 +61,9 @@ export const usePOSStore = create<POSState>((set) => ({
   itemCount: 0,
   subtotal: 0,
   tax: 0,
+  discount: 0,
+  discountType: 'nominal',
+  discountAmount: 0,
   total: 0,
   paymentModalOpen: false,
   paymentState: 'idle',
@@ -67,13 +77,15 @@ export const usePOSStore = create<POSState>((set) => ({
           state.items.map((i) =>
             i.productId === item.productId ? { ...i, quantity: i.quantity + 1 } : i,
           ),
+          state.discount,
+          state.discountType,
         );
       }
-      return derive([...state.items, { ...item, quantity: 1 }]);
+      return derive([...state.items, { ...item, quantity: 1 }], state.discount, state.discountType);
     }),
 
   removeItem: (productId) =>
-    set((state) => derive(state.items.filter((i) => i.productId !== productId))),
+    set((state) => derive(state.items.filter((i) => i.productId !== productId), state.discount, state.discountType)),
 
   updateQuantity: (productId, delta) =>
     set((state) =>
@@ -83,6 +95,8 @@ export const usePOSStore = create<POSState>((set) => ({
             i.productId === productId ? { ...i, quantity: Math.max(0, i.quantity + delta) } : i,
           )
           .filter((i) => i.quantity > 0),
+        state.discount,
+        state.discountType,
       ),
     ),
 
@@ -94,8 +108,15 @@ export const usePOSStore = create<POSState>((set) => ({
       ),
     })),
 
+  setDiscount: (value, type) =>
+    set((state) => derive(state.items, value, type)),
+
   clearCart: () =>
-    set({ items: [], itemCount: 0, subtotal: 0, tax: 0, total: 0, receipt: null, paymentState: 'idle' }),
+    set({
+      items: [], itemCount: 0, subtotal: 0, tax: 0,
+      discount: 0, discountType: 'nominal', discountAmount: 0, total: 0,
+      receipt: null, paymentState: 'idle',
+    }),
 
   openPaymentModal: () => set({ paymentModalOpen: true }),
   closePaymentModal: () => set({ paymentModalOpen: false, paymentState: 'idle' }),

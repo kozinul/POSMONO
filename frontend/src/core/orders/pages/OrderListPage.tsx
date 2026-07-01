@@ -1,10 +1,7 @@
 import { useState } from 'react';
 import { useOrders } from '../hooks/useOrders';
 import { Link } from 'react-router-dom';
-
-function formatCurrency(amount: number) {
-  return `Rp ${amount.toLocaleString('id-ID')}`;
-}
+import { formatCurrency } from '../../../@shared/utils/format';
 
 const statusColors: Record<string, string> = {
   draft: 'bg-gray-100 text-gray-800',
