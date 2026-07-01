@@ -7,7 +7,7 @@ const payCashPayload = {
   items: [
     { productId: 'prod-1', quantity: 2, unitPrice: 25000 },
   ],
-  amountPaid: 55500,
+  amountPaid: 60000,
 };
 
 describe('Integration: Order-to-Payment Flow', () => {
@@ -34,11 +34,11 @@ describe('Integration: Order-to-Payment Flow', () => {
         .send(payCashPayload);
 
       expect(payRes.status).toBe(200);
-      expect(payRes.body.data.payment.amount).toBe(55500);
+      expect(payRes.body.data.payment.amount).toBe(60000);
       expect(payRes.body.data.payment.method).toBe('cash');
       expect(payRes.body.data.order.status).toBe('paid');
       expect(payRes.body.data.order.subtotal).toBe(50000);
-      expect(payRes.body.data.order.total).toBe(55000);
+      expect(payRes.body.data.order.total).toBe(55500);
 
       const orderId = payRes.body.data.order.id;
       const getRes = await request(ctx.app)
@@ -56,7 +56,7 @@ describe('Integration: Order-to-Payment Flow', () => {
         .send({ ...payCashPayload, amountPaid: 100000 });
 
       expect(payRes.status).toBe(200);
-      expect(payRes.body.data.payment.change).toBe(45000);
+      expect(payRes.body.data.payment.change).toBe(44500);
       expect(payRes.body.data.payment.amount).toBe(100000);
     });
 
@@ -69,7 +69,7 @@ describe('Integration: Order-to-Payment Flow', () => {
       expect(payRes.status).toBe(200);
       expect(payRes.body.data.order.subtotal).toBe(50000);
       expect(payRes.body.data.order.discount).toBe(5000);
-      expect(payRes.body.data.order.total).toBe(50000);
+      expect(payRes.body.data.order.total).toBe(49950);
     });
 
     it('should apply percentage discount', async () => {
@@ -81,14 +81,14 @@ describe('Integration: Order-to-Payment Flow', () => {
       expect(payRes.status).toBe(200);
       expect(payRes.body.data.order.subtotal).toBe(50000);
       expect(payRes.body.data.order.discount).toBe(5000);
-      expect(payRes.body.data.order.total).toBe(50000);
+      expect(payRes.body.data.order.total).toBe(49950);
     });
 
     it('should reject payment less than total', async () => {
       const payRes = await request(ctx.app)
         .post('/api/payments/pay-cash')
         .set('Authorization', `Bearer ${ctx.token}`)
-        .send({ ...payCashPayload, amountPaid: 100 });
+        .send({ ...payCashPayload, amountPaid: 10000 });
 
       expect(payRes.status).toBe(400);
     });

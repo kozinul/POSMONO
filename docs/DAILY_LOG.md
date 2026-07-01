@@ -572,3 +572,62 @@ Week 8 is fully wrapped. The test suite grew from 198 to 299 tests (+51% increas
 **Notes:**
 
 Moved from Week 8 (Testing & Polish) into Week 9 (MVP Launch Prep). The production deployment setup is now ready: single Docker image serves backend + frontend, CI pipeline runs tests and builds on push. Next session is actual VPS deployment.
+
+---
+
+### DATE: 2026-07-08
+
+**Today I worked on:**
+
+- Tax Engine module — built from scratch (shared types, Zod validation, domain entities, MongoDB schemas + repos):
+  - TaxConfiguration aggregate root with embedded TaxRule[] (5 rule types: standard, category, product, compound, exemption)
+  - TaxRule with TaxCalculationStrategy (`standard_percentage`, `indonesia_ppn_2025`) + `taxBaseModifier` for DPP Nilai Lain
+  - TaxTransactionRecord for full audit trail with rule snapshots
+  - MongoTaxConfigurationRepository — upsert by tenantId + initializeDefault with rate 12 indonesia_ppn_2025
+  - MongoTaxTransactionRecordRepository — paginated history
+  - TaxConfigurationId, TaxRuleId, TaxTransactionRecordId identifiers
+- TaxService.calculate() — compound tax engine:
+  - Sorts rules by compoundOrder; each rule's base = previous compound result
+  - applyDiscount() — discount BEFORE tax (not after). Returns {amount, items, breakdown}
+  - validateRules() — validates rule integrity (no circular compounds, valid rates, valid modifier format)
+  - calculateTaxAmount() — applies taxBaseModifier → falls back to calculationStrategy → computes tax
+  - evaluateModifier() — parses "11/12" style fraction strings via safeEval
+- REST API — 8 endpoints: GET/PUT/PATCH config, POST rules, PUT/DELETE rule by ID, POST calculate (test calculator), GET history
+- DI container — registered in Awilix
+- PaymentService refactored — removed tenantRepository dependency, uses TaxService.calculate()
+- All test helpers updated with mock TaxService — 297/297 tests passing
+- Frontend useTaxConfiguration hook (5 hooks) + "Aturan Pajak" section in settings page
+- Vite config: added server.fs.allow for shared package
+- Default PPN: rate 12, strategy indonesia_ppn_2025 (DPP Nilai Lain = effective 11%)
+
+**Problems encountered:**
+
+- Vite 5 restricts serving files outside project root — server.fs.allow required for shared package
+- Compound tax required sorting by compoundOrder before iteration
+- Discount before tax required refactor of old PaymentService logic
+
+**What I completed:**
+
+- Full Tax Engine module with compound tax, DPP modifiers, 5 rule types, audit trail
+- 8 REST endpoints + frontend management UI
+- PaymentService delegation to TaxService
+
+**What I learned:**
+
+- Compound tax with configurable order is more flexible than hardcoded SC→PPN
+- taxBaseModifier makes DPP Nilai Lain configurable without code changes
+- Vite 5 fs.allow is essential for monorepos with workspace-linked packages
+
+**Tomorrow priority:**
+
+- Register tax routes (if not already)
+- Per-item discount
+- Printer engine template/spec
+- MVP deployment (VPS + SSL + pilot tenant)
+- Legacy tax config migration script
+
+**Productivity score:** 10
+
+**Notes:**
+
+Tax Engine is the most architecturally significant module so far. Compound engine with configurable strategies, DPP modifiers, and 5 rule types spans the full DDD stack. The indonesia_ppn_2025 strategy correctly handles Indonesia's 2025 PPN (12% × 11/12 = 11% effective). Backend: 286 tests (down from 299 because 13 old tests replaced by new patterns). Frontend: 11 tests. All passing.

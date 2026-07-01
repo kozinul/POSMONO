@@ -1,5 +1,7 @@
+import { useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../../@shared/services/api';
+import { usePOSStore } from '../store/posStore';
 
 interface Product {
   id: string;
@@ -44,12 +46,41 @@ async function fetchCategories(): Promise<Category[]> {
   return res.data.data;
 }
 
+async function fetchProductByBarcode(barcode: string): Promise<Product | null> {
+  try {
+    const res = await api.get<{ success: boolean; data: Product }>(`/products/by-barcode/${encodeURIComponent(barcode)}`);
+    return res.data.data;
+  } catch {
+    return null;
+  }
+}
+
 export function useProducts(search?: string, categoryId?: string) {
   return useQuery({
     queryKey: ['products', search, categoryId],
     queryFn: () => fetchProducts(search, categoryId),
     staleTime: 15_000,
   });
+}
+
+export function useBarcodeLookup() {
+  const addItem = usePOSStore((s) => s.addItem);
+
+  const lookupBarcode = useCallback(async (barcode: string) => {
+    const product = await fetchProductByBarcode(barcode);
+    if (product) {
+      addItem({
+        productId: product.id,
+        name: product.name,
+        price: product.basePrice,
+        imageUrl: product.imageUrls?.[0],
+      });
+      return product;
+    }
+    return null;
+  }, [addItem]);
+
+  return { lookupBarcode };
 }
 
 export function useCategories() {

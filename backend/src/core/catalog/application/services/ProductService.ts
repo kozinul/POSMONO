@@ -83,6 +83,13 @@ export class ProductService {
     return product;
   }
 
+  async findByBarcode(tenantId: string, barcode: string): Promise<Product> {
+    if (!barcode) throw new NotFoundError('Product');
+    const product = await this.productRepository.findByBarcode(tenantId, barcode);
+    if (!product) throw new NotFoundError('Product');
+    return product;
+  }
+
   async list(tenantId: string, options?: ListProductsOptions): Promise<{ products: Product[]; total: number }> {
     return this.productRepository.findByTenant(tenantId, options);
   }

@@ -6,7 +6,7 @@ import { ConflictError, NotFoundError } from '../../src/@shared/infrastructure/e
 const TENANT_ID = 'tenant-test-1';
 
 function createMockRepo() {
-  return { save: vi.fn(), findById: vi.fn(), findBySku: vi.fn(), findByTenant: vi.fn(), delete: vi.fn() };
+  return { save: vi.fn(), findById: vi.fn(), findBySku: vi.fn(), findByBarcode: vi.fn(), findByTenant: vi.fn(), delete: vi.fn() };
 }
 
 const validInput = {
@@ -193,6 +193,37 @@ describe('ProductService', () => {
       repo.findById.mockResolvedValue(product);
 
       await expect(service.delete(product.id.toValue(), 'other-tenant')).rejects.toThrow(NotFoundError);
+    });
+  });
+
+  describe('findByBarcode', () => {
+    it('returns product when barcode matches in tenant', async () => {
+      const product = Product.create({ ...validInput, barcode: '8991234567890' });
+      repo.findByBarcode.mockResolvedValue(product);
+
+      const result = await service.findByBarcode(TENANT_ID, '8991234567890');
+
+      expect(result.serialize().barcode).toBe('8991234567890');
+      expect(repo.findByBarcode).toHaveBeenCalledWith(TENANT_ID, '8991234567890');
+    });
+
+    it('throws NotFoundError when barcode not found', async () => {
+      repo.findByBarcode.mockResolvedValue(null);
+
+      await expect(service.findByBarcode(TENANT_ID, '0000000000000')).rejects.toThrow(NotFoundError);
+    });
+
+    it('throws NotFoundError for empty barcode', async () => {
+      await expect(service.findByBarcode(TENANT_ID, '')).rejects.toThrow(NotFoundError);
+      expect(repo.findByBarcode).not.toHaveBeenCalled();
+    });
+
+    it('respects tenant isolation', async () => {
+      const product = Product.create({ ...validInput, barcode: '8991234567890' });
+      repo.findByBarcode.mockResolvedValue(null);
+
+      await expect(service.findByBarcode('other-tenant', '8991234567890')).rejects.toThrow(NotFoundError);
+      expect(repo.findByBarcode).toHaveBeenCalledWith('other-tenant', '8991234567890');
     });
   });
 });

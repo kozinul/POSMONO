@@ -34,16 +34,34 @@ export class TenantController extends BaseController {
 
   async getCurrent(req: Request, res: Response): Promise<void> {
     const tenant = await this.tenantService.getById(req.tenantId);
+    const data = tenant.serialize();
 
     this.ok(res, {
-      id: tenant.id.toValue(),
-      name: tenant.serialize().name,
-      slug: tenant.serialize().slug,
-      businessType: tenant.serialize().businessType,
-      status: tenant.serialize().status,
-      plan: tenant.serialize().plan,
+      id: data.id,
+      name: data.name,
+      slug: data.slug,
+      businessType: data.businessType,
+      businessCategory: data.businessCategory,
+      address: data.address,
+      phone: data.phone,
+      status: data.status,
+      plan: data.plan,
       config: tenant.configValue,
-      modules: tenant.serialize().modules,
+      modules: data.modules,
+    });
+  }
+
+  async updateProfile(req: Request, res: Response): Promise<void> {
+    const { name, businessCategory, address, phone } = req.body;
+    const tenant = await this.tenantService.updateProfile(req.tenantId, { name, businessCategory, address, phone });
+    const data = tenant.serialize();
+
+    this.ok(res, {
+      id: data.id,
+      name: data.name,
+      businessCategory: data.businessCategory,
+      address: data.address,
+      phone: data.phone,
     });
   }
 

@@ -151,7 +151,6 @@ async function main() {
 
   await mongoose.connect(uri);
   await seedData();
-  await mongoose.disconnect();
 
   const { createServer } = await import('./bootstrap/server');
   const { buildContainer } = await import('./bootstrap/container');

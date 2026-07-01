@@ -10,6 +10,7 @@ export function createTenantRoutes(tenantController: TenantController): Router {
   router.post('/', authenticate, asyncHandler(tenantController.create.bind(tenantController)));
   router.get('/current', authenticate, asyncHandler(tenantController.getCurrent.bind(tenantController)));
   router.patch('/current/settings', authenticate, asyncHandler(tenantController.updateSettings.bind(tenantController)));
+  router.patch('/current/profile', authenticate, asyncHandler(tenantController.updateProfile.bind(tenantController)));
 
   return router;
 }

@@ -79,6 +79,13 @@ export class MongoProductRepository {
     return this.toDomain(doc);
   }
 
+  async findByBarcode(tenantId: string, barcode: string): Promise<Product | null> {
+    if (!barcode) return null;
+    const doc = await this.model.findOne({ tenantId, barcode }).exec();
+    if (!doc) return null;
+    return this.toDomain(doc);
+  }
+
   async findByTenant(tenantId: string, options?: { page?: number; limit?: number; categoryId?: string; search?: string }): Promise<{ products: Product[]; total: number }> {
     const filter: any = { tenantId };
     if (options?.categoryId) filter.categoryId = options.categoryId;

@@ -26,7 +26,7 @@
 - `[x]` Bug fixing & polish
 - `[~]` Receipt printing *(WIP — thermal integration pending)*
 - `[~]` MVP deployment
-- `[ ]` Barcode scanning
+- `[x]` Barcode scanning
 - `[ ]` Discount & promo engine
 - `[ ]` Split bill
 - `[ ]` Hold / recall order

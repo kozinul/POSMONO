@@ -15,6 +15,16 @@ export const updateTenantConfigSchema = z.object({
   timezone: z.string().optional(),
   currency: z.string().optional(),
   locale: z.string().optional(),
+  taxRate: z.number().min(0).max(1).optional(),
+  taxName: z.string().optional(),
+  ppnEnabled: z.boolean().optional(),
+  ppnRate: z.number().min(0).max(1).optional(),
+  serviceChargeEnabled: z.boolean().optional(),
+  serviceChargeRate: z.number().min(0).max(1).optional(),
+  serviceChargeName: z.string().optional(),
+  discountMaxPercent: z.number().min(0).max(100).optional(),
+  discountMaxNominal: z.number().min(0).optional(),
+  receiptFooter: z.string().optional(),
 });
 
 export type CreateTenantInput = z.infer<typeof createTenantSchema>;

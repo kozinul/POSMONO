@@ -9,6 +9,9 @@ export interface Tenant {
   plan: string;
   status: TenantStatus;
   businessType: BusinessType;
+  businessCategory: string;
+  address: string;
+  phone: string;
   modules: string[];
   databaseName: string;
   config: TenantConfig;
@@ -24,7 +27,15 @@ export interface TenantConfig {
   currency: string;
   locale: string;
   taxRate: number;
+  taxName: string;
+  ppnEnabled: boolean;
+  ppnRate: number;
+  serviceChargeEnabled: boolean;
   serviceChargeRate: number;
+  serviceChargeName: string;
+  discountMaxPercent: number;
+  discountMaxNominal: number;
+  receiptFooter: string;
 }
 
 export interface Subscription {

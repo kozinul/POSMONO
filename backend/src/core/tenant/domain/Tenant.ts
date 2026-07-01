@@ -12,6 +12,9 @@ export interface ITenant {
   plan: string;
   status: TenantStatus;
   businessType: BusinessType;
+  businessCategory: string;
+  address: string;
+  phone: string;
   modules: string[];
   databaseName: string;
   config: TenantConfig;
@@ -27,7 +30,15 @@ export interface TenantConfig {
   currency: string;
   locale: string;
   taxRate: number;
+  taxName: string;
+  ppnEnabled: boolean;
+  ppnRate: number;
+  serviceChargeEnabled: boolean;
   serviceChargeRate: number;
+  serviceChargeName: string;
+  discountMaxPercent: number;
+  discountMaxNominal: number;
+  receiptFooter: string;
 }
 
 export class Tenant extends AggregateRoot<TenantId> {
@@ -38,6 +49,9 @@ export class Tenant extends AggregateRoot<TenantId> {
   private plan: string;
   private status: TenantStatus;
   private businessType: BusinessType;
+  private businessCategory: string;
+  private address: string;
+  private phone: string;
   private modules: string[];
   private databaseName: string;
   private config: TenantConfig;
@@ -54,6 +68,9 @@ export class Tenant extends AggregateRoot<TenantId> {
     this.plan = props.plan;
     this.status = props.status;
     this.businessType = props.businessType;
+    this.businessCategory = props.businessCategory || '';
+    this.address = props.address || '';
+    this.phone = props.phone || '';
     this.modules = [...props.modules];
     this.databaseName = props.databaseName;
     this.config = { ...props.config };
@@ -62,10 +79,13 @@ export class Tenant extends AggregateRoot<TenantId> {
     this.updatedAt = props.updatedAt;
   }
 
-  static create(props: Omit<ITenant, 'id' | 'createdAt' | 'updatedAt'>): Tenant {
+  static create(props: Omit<ITenant, 'id' | 'createdAt' | 'updatedAt' | 'businessCategory' | 'address' | 'phone'>): Tenant {
     const tenant = new Tenant({
       ...props,
       id: new TenantId().toValue(),
+      businessCategory: '',
+      address: '',
+      phone: '',
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -102,6 +122,9 @@ export class Tenant extends AggregateRoot<TenantId> {
       plan: this.plan,
       status: this.status,
       businessType: this.businessType,
+      businessCategory: this.businessCategory,
+      address: this.address,
+      phone: this.phone,
       modules: [...this.modules],
       databaseName: this.databaseName,
       config: { ...this.config },
@@ -109,6 +132,14 @@ export class Tenant extends AggregateRoot<TenantId> {
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
     };
+  }
+
+  updateProfile(data: { name?: string; businessCategory?: string; address?: string; phone?: string }): void {
+    if (data.name !== undefined) this.name = data.name;
+    if (data.businessCategory !== undefined) this.businessCategory = data.businessCategory;
+    if (data.address !== undefined) this.address = data.address;
+    if (data.phone !== undefined) this.phone = data.phone;
+    this.updatedAt = new Date();
   }
 
   isActive(): boolean {

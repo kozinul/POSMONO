@@ -3,7 +3,12 @@ import { usePOSStore } from '../../src/core/pos/store/posStore';
 
 describe('POS Store', () => {
   beforeEach(() => {
-    usePOSStore.setState({ items: [], itemCount: 0, subtotal: 0, tax: 0, total: 0, paymentModalOpen: false, paymentState: 'idle', receipt: null });
+    usePOSStore.setState({ items: [], itemCount: 0, subtotal: 0, serviceCharge: 0, tax: 0, discount: 0, discountType: 'nominal', discountAmount: 0, total: 0, paymentModalOpen: false, paymentState: 'idle', receipt: null });
+    usePOSStore.getState().setTaxConfig({
+      ppnEnabled: true, ppnRate: 0.1,
+      serviceChargeEnabled: false, serviceChargeRate: 0,
+      serviceChargeName: 'Service Charge', taxName: 'PPN', taxRate: 0.1,
+    });
   });
 
   const sampleItem = { productId: 'p1', name: 'Kopi Gula Aren', price: 25000, imageUrl: '' };

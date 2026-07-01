@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { usePOSStore } from '../store/posStore';
-import { useProducts, useCategories } from '../hooks/useProducts';
+import { useProducts, useCategories, useBarcodeLookup } from '../hooks/useProducts';
+import { useTenant } from '../../../@shared/hooks/useTenant';
 import { ProductCard } from '../components/ProductCard';
 import { CartItemRow } from '../components/CartItemRow';
 import { PaymentModal } from '../components/PaymentModal';
@@ -10,19 +11,74 @@ export default function PosPage() {
   const {
     items,
     subtotal,
+    serviceCharge,
+    serviceChargeName,
     tax,
+    taxName,
     discount,
     discountType,
     discountAmount,
     total,
-    itemCount,
     paymentModalOpen,
     receipt,
     openPaymentModal,
+    setTaxConfig,
   } = usePOSStore();
+
+  const { data: tenant } = useTenant();
+
+  useEffect(() => {
+    if (tenant?.config) {
+      setTaxConfig({
+        ppnEnabled: tenant.config.ppnEnabled,
+        ppnRate: tenant.config.ppnRate,
+        serviceChargeEnabled: tenant.config.serviceChargeEnabled,
+        serviceChargeRate: tenant.config.serviceChargeRate,
+        serviceChargeName: tenant.config.serviceChargeName,
+        taxName: tenant.config.taxName,
+        taxRate: tenant.config.taxRate,
+      });
+    }
+  }, [tenant, setTaxConfig]);
 
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const barcodeBuffer = useRef('');
+  const barcodeTimer = useRef<ReturnType<typeof setTimeout>>();
+
+  const { lookupBarcode } = useBarcodeLookup();
+
+  const handleBarcodeInput = useCallback(async (barcode: string) => {
+    const product = await lookupBarcode(barcode);
+    if (product) {
+      searchRef.current?.blur();
+    }
+  }, [lookupBarcode]);
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (document.activeElement === searchRef.current) return;
+
+      if (e.key === 'Enter' && barcodeBuffer.current.length >= 3) {
+        const code = barcodeBuffer.current;
+        barcodeBuffer.current = '';
+        handleBarcodeInput(code);
+        return;
+      }
+
+      if (e.key.length === 1) {
+        barcodeBuffer.current += e.key;
+        clearTimeout(barcodeTimer.current);
+        barcodeTimer.current = setTimeout(() => {
+          barcodeBuffer.current = '';
+        }, 100);
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleBarcodeInput]);
 
   const { data: products = [], isLoading, isError } = useProducts(
     search || undefined,
@@ -43,6 +99,7 @@ export default function PosPage() {
               </svg>
             </div>
             <input
+              ref={searchRef}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="block w-full pl-11 pr-12 py-3 bg-white border border-gray-200 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
@@ -135,8 +192,14 @@ export default function PosPage() {
               <span>Subtotal:</span>
               <span>Rp {subtotal.toLocaleString('id-ID')}</span>
             </div>
+            {serviceCharge > 0 && (
+              <div className="flex justify-between text-gray-700">
+                <span>{serviceChargeName}:</span>
+                <span>Rp {serviceCharge.toLocaleString('id-ID')}</span>
+              </div>
+            )}
             <div className="flex justify-between text-gray-700">
-              <span>Pajak (10%):</span>
+              <span>{taxName}:</span>
               <span>Rp {tax.toLocaleString('id-ID')}</span>
             </div>
             {discountAmount > 0 && (

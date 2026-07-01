@@ -2,12 +2,13 @@ import { v4 as uuidv4 } from 'uuid';
 import { NotFoundError, ValidationError } from '../../../../@shared/infrastructure/error/AppError';
 import { Payment, PaymentMethod } from '../../domain/Payment';
 import { Order, IOrderItem } from '../../../ordering/domain/Order';
-import { calculateDiscount, calculateTotal } from '@posmono/shared';
 
 export class PaymentService {
   constructor(
     private readonly paymentRepository: any,
     private readonly orderRepository: any,
+    private readonly tenantRepository: any,
+    private readonly taxService: any,
     private readonly eventBus: any,
   ) {}
 
@@ -20,11 +21,22 @@ export class PaymentService {
     discountType?: 'percentage' | 'nominal';
   }): Promise<{ payment: Payment; order: any }> {
     const discountValue = input.discount ?? 0;
-    const isPercentage = input.discountType === 'percentage';
-    const subtotal = input.items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-    const discountAmount = calculateDiscount(subtotal, discountValue, isPercentage);
-    const tax = Math.round(subtotal * 0.1);
-    const total = calculateTotal(subtotal, tax, discountAmount);
+
+    const taxResult = await this.taxService.calculate({
+      tenantId: input.tenantId,
+      items: input.items.map((item) => ({
+        productId: item.productId,
+        productName: '',
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        categoryId: '',
+      })),
+      discount: discountValue,
+      discountType: input.discountType ?? 'nominal',
+      customerTags: [],
+    });
+
+    const total = taxResult.grandTotal;
 
     const orderItems: IOrderItem[] = input.items.map((item) => ({
       productId: item.productId,
@@ -34,21 +46,26 @@ export class PaymentService {
       unitPrice: item.unitPrice,
       totalPrice: item.unitPrice * item.quantity,
       modifiers: [],
-      tax: { rate: 0.1, amount: Math.round(item.unitPrice * item.quantity * 0.1) },
+      tax: { rate: 0, amount: 0 },
     }));
 
     const order = Order.create({
       tenantId: input.tenantId,
       items: orderItems,
-      subtotal,
-      discount: discountAmount,
-      tax,
+      subtotal: taxResult.subtotal,
+      discount: taxResult.discountAmount,
+      tax: taxResult.totalTax,
       total,
       customerId: null,
       cashierId: input.cashierId,
       notes: '',
       source: 'pos',
-      metadata: { discountType: input.discountType, discountValue },
+      metadata: {
+        discountType: input.discountType,
+        discountValue,
+        serviceCharge: taxResult.serviceCharge,
+        taxBreakdown: taxResult.taxes,
+      },
     });
 
     order.confirm();
@@ -64,7 +81,7 @@ export class PaymentService {
       status: 'pending',
       method: 'cash' as PaymentMethod,
       referenceNumber: `CASH-${uuidv4().replace(/-/g, '').substring(0, 12).toUpperCase()}`,
-      metadata: { cashierId: input.cashierId, discountAmount },
+      metadata: { cashierId: input.cashierId, discountAmount: taxResult.discountAmount },
       paidAt: null,
     });
 

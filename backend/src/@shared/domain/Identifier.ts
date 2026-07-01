@@ -30,3 +30,6 @@ export class RoleId extends Identifier {}
 export class StockId extends Identifier {}
 export class WarehouseId extends Identifier {}
 export class StockMovementId extends Identifier {}
+export class TaxConfigurationId extends Identifier {}
+export class TaxRuleId extends Identifier {}
+export class TaxTransactionRecordId extends Identifier {}

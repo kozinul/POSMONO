@@ -38,6 +38,11 @@ export class ProductController extends BaseController {
     this.ok(res, product.serialize());
   }
 
+  async findByBarcode(req: Request, res: Response): Promise<void> {
+    const product = await this.productService.findByBarcode(req.tenantId, req.params.barcode);
+    this.ok(res, product.serialize());
+  }
+
   async list(req: Request, res: Response): Promise<void> {
     const { page, limit, categoryId, search } = req.query;
     const result = await this.productService.list(req.tenantId, {

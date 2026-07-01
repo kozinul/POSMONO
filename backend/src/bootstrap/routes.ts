@@ -13,6 +13,7 @@ import { createOrderRoutes } from '../core/ordering/interfaces/http/routes/order
 import { createShiftRoutes } from '../core/pos/interfaces/http/routes/shift.routes';
 import { createPaymentRoutes } from '../core/payment/interfaces/http/routes/payment.routes';
 import { createReportRoutes } from '../core/reporting/interfaces/http/routes/report.routes';
+import { createTaxRoutes } from '../core/tax/interfaces/http/routes/tax.routes';
 
 export function registerRoutes(app: Express, container: DIContainer): void {
   app.get('/health', (_req, res) => {
@@ -57,4 +58,7 @@ export function registerRoutes(app: Express, container: DIContainer): void {
 
   const reportController = container.resolve('reportController');
   app.use('/api/reports', createReportRoutes(reportController));
+
+  const taxController = container.resolve('taxController');
+  app.use('/api/tax', createTaxRoutes(taxController));
 }

@@ -23,6 +23,8 @@ export * from './validation/schemas/auth-schemas';
 export * from './validation/schemas/product-schemas';
 export * from './validation/schemas/order-schemas';
 export * from './validation/schemas/tenant-schemas';
+export * from './validation/schemas/tax-schemas';
+export * from './types/domain/tax';
 export * from './utils/money';
 export * from './utils/date';
 export * from './utils/string';

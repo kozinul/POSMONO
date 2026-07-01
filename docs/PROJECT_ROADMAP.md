@@ -91,18 +91,22 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 
 ---
 
-### PHASE D — POS Engine `[ ]`
+### PHASE D — POS Engine `[~]`
 
 | Task | Status |
 |------|--------|
 | Cart state management | `[x]` |
-| Barcode scanning | `[ ]` |
+| Barcode scanning | `[x]` |
 | Discount & promo engine | `[ ]` |
-| Tax calculation | `[x]` |
+| Tax calculation engine | `[x]` |
+| DPP Nilai Lain (Indonesia PPN 12%) | `[x]` |
+| Compound tax (Service Charge + PPN) | `[x]` |
+| Category-based & product-based tax | `[x]` |
+| Tax exemption rules | `[x]` |
 | Split bill | `[ ]` |
 | Hold / recall order | `[ ]` |
 
-**Completion:** ~35%
+**Completion:** ~60%
 
 ---
 
@@ -475,5 +479,5 @@ Architecture changes, tech swaps, pricing — never decide the same day. Sleep o
 
 ---
 
-*Last updated: 2026-07-06 (session 2)*
+*Last updated: 2026-07-08*
 *Updated daily during development.*

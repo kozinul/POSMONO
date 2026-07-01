@@ -67,7 +67,25 @@ describe('Integration: Tenant Isolation', () => {
     const stockMovementRepo = { save: async () => {}, findByTenant: async () => ({ movements: [], total: 0 }) };
 
     const createOrderService = new CreateOrderService(orderRepo, eventBus);
-    const paymentService = new PaymentService(paymentRepo, orderRepo, eventBus);
+    const taxService = {
+      calculate: async (input: any) => {
+        const subtotal = input.items.reduce((s: number, i: any) => s + i.quantity * i.unitPrice, 0);
+        const discount = input.discount ?? 0;
+        const isPercentage = input.discountType === 'percentage';
+        const discountAmount = isPercentage
+          ? Math.round(subtotal * Math.min(discount, 100) / 100)
+          : Math.min(discount, subtotal);
+        const taxableAmount = subtotal - discountAmount;
+        const ppn = Math.round(taxableAmount * 0.11);
+        return {
+          subtotal, discount, discountType: input.discountType ?? 'nominal', discountAmount,
+          taxableAmount,
+          taxes: [{ name: 'PPN', type: 'percentage', rate: 11, baseAmount: taxableAmount, amount: ppn, compoundOrder: 0 }],
+          totalTax: ppn, serviceCharge: 0, grandTotal: taxableAmount + ppn, pricingMode: 'exclusive',
+        };
+      },
+    };
+    const paymentService = new PaymentService(paymentRepo, orderRepo, null as any, taxService as any, eventBus);
     const shiftService = new ShiftService(shiftRepo);
     const productService = new ProductService(productRepo);
     const inventoryService = new InventoryService(stockRepo, stockMovementRepo);
@@ -153,7 +171,7 @@ describe('Integration: Tenant Isolation', () => {
       const payRes = await request(app)
         .post('/api/payments/pay-cash')
         .set('Authorization', `Bearer ${tokenA}`)
-        .send({ items: [{ productId: 'p1', quantity: 1, unitPrice: 10000 }], amountPaid: 11000 });
+        .send({ items: [{ productId: 'p1', quantity: 1, unitPrice: 10000 }], amountPaid: 15000 });
 
       expect(payRes.status).toBe(200);
       const orderId = payRes.body.data.order.id;
@@ -169,7 +187,7 @@ describe('Integration: Tenant Isolation', () => {
       const payRes = await request(app)
         .post('/api/payments/pay-cash')
         .set('Authorization', `Bearer ${tokenA}`)
-        .send({ items: [{ productId: 'p1', quantity: 1, unitPrice: 10000 }], amountPaid: 11000 });
+        .send({ items: [{ productId: 'p1', quantity: 1, unitPrice: 10000 }], amountPaid: 15000 });
 
       const orderId = payRes.body.data.order.id;
 

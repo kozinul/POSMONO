@@ -59,13 +59,19 @@ import { PaymentService } from '../core/payment/application/services/PaymentServ
 import { PaymentController } from '../core/payment/interfaces/http/controllers/PaymentController';
 import { ReportService } from '../core/reporting/application/services/ReportService';
 import { ReportController } from '../core/reporting/interfaces/http/controllers/ReportController';
+import { TaxConfigurationSchema } from '../core/tax/infrastructure/persistence/schemas/TaxConfigurationSchema';
+import { TaxTransactionRecordSchema } from '../core/tax/infrastructure/persistence/schemas/TaxTransactionRecordSchema';
+import { MongoTaxConfigurationRepository } from '../core/tax/infrastructure/persistence/repositories/MongoTaxConfigurationRepository';
+import { MongoTaxTransactionRecordRepository } from '../core/tax/infrastructure/persistence/repositories/MongoTaxTransactionRecordRepository';
+import { TaxService } from '../core/tax/application/services/TaxService';
+import { TaxController } from '../core/tax/interfaces/http/controllers/TaxController';
 
 export type DIContainer = ReturnType<typeof buildContainer>;
 
 export function buildContainer() {
   const container = createContainer({ injectionMode: 'CLASSIC' });
 
-  const systemConnection = mongoose.createConnection(env.MONGO_URI);
+  const systemConnection = mongoose.connection;
 
   const UserModel = systemConnection.model('User', UserSchema);
   const RoleModel = systemConnection.model('Role', RoleSchema);
@@ -79,6 +85,8 @@ export function buildContainer() {
   const OrderModel = systemConnection.model('Order', OrderSchema);
   const ShiftModel = systemConnection.model('Shift', ShiftSchema);
   const PaymentModel = systemConnection.model('Payment', PaymentSchema);
+  const TaxConfigurationModel = systemConnection.model('TaxConfiguration', TaxConfigurationSchema);
+  const TaxTransactionRecordModel = systemConnection.model('TaxTransactionRecord', TaxTransactionRecordSchema);
 
   const eventBus = new EventBus();
 
@@ -102,6 +110,8 @@ export function buildContainer() {
     orderModel: asValue(OrderModel),
     shiftModel: asValue(ShiftModel),
     paymentModel: asValue(PaymentModel),
+    taxConfigurationModel: asValue(TaxConfigurationModel),
+    taxTransactionRecordModel: asValue(TaxTransactionRecordModel),
     userRepository: asClass(MongoUserRepository, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
@@ -317,6 +327,8 @@ export function buildContainer() {
       injector: () => ({
         paymentRepository: container.resolve('paymentRepository'),
         orderRepository: container.resolve('orderRepository'),
+        tenantRepository: container.resolve('tenantRepository'),
+        taxService: container.resolve('taxService'),
         eventBus: container.resolve('eventBus'),
       }),
     }),
@@ -324,6 +336,28 @@ export function buildContainer() {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
         paymentService: container.resolve('paymentService'),
+      }),
+    }),
+    taxConfigurationRepository: asClass(MongoTaxConfigurationRepository, {
+      lifetime: Lifetime.SINGLETON,
+    }),
+    taxTransactionRecordRepository: asClass(MongoTaxTransactionRecordRepository, {
+      lifetime: Lifetime.SINGLETON,
+    }),
+    taxService: asClass(TaxService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        configRepo: container.resolve('taxConfigurationRepository'),
+        recordRepo: container.resolve('taxTransactionRecordRepository'),
+        engineConfig: undefined,
+      }),
+    }),
+    taxController: asClass(TaxController, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        taxService: container.resolve('taxService'),
+        configRepo: container.resolve('taxConfigurationRepository'),
+        recordRepo: container.resolve('taxTransactionRecordRepository'),
       }),
     }),
     reportService: asClass(ReportService, {

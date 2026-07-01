@@ -28,7 +28,14 @@ export class TenantService {
       businessType: input.businessType as ITenant['businessType'],
       modules: [input.businessType],
       databaseName: `posmono_${input.slug}`,
-      config: { timezone: 'Asia/Jakarta', currency: 'IDR', locale: 'id', taxRate: 0.1, serviceChargeRate: 0 },
+      config: {
+        timezone: 'Asia/Jakarta', currency: 'IDR', locale: 'id',
+        taxRate: 0.1, taxName: 'PPN',
+        ppnEnabled: true, ppnRate: 0.11,
+        serviceChargeEnabled: false, serviceChargeRate: 0, serviceChargeName: 'Service Charge',
+        discountMaxPercent: 100, discountMaxNominal: 1_000_000,
+        receiptFooter: 'Terima kasih telah berbelanja',
+      },
       billingEmail: input.billingEmail,
     });
 
@@ -51,6 +58,13 @@ export class TenantService {
   async updateConfig(id: string, config: Partial<TenantConfig>): Promise<Tenant> {
     const tenant = await this.getById(id);
     tenant.updateConfig(config);
+    await this.tenantRepository.save(tenant);
+    return tenant;
+  }
+
+  async updateProfile(id: string, data: { name?: string; businessCategory?: string; address?: string; phone?: string }): Promise<Tenant> {
+    const tenant = await this.getById(id);
+    tenant.updateProfile(data);
     await this.tenantRepository.save(tenant);
     return tenant;
   }

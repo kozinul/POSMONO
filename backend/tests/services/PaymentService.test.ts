@@ -12,26 +12,55 @@ function createMockEventBus() {
   return { publish: vi.fn() };
 }
 
+function createMockTaxService() {
+  return {
+    calculate: vi.fn().mockImplementation((input: any) => {
+      const subtotal = input.items.reduce((s: number, i: any) => s + i.quantity * i.unitPrice, 0);
+      const discountValue = input.discount ?? 0;
+      const isPercentage = input.discountType === 'percentage';
+      const discountAmount = isPercentage
+        ? Math.round(subtotal * Math.min(discountValue, 100) / 100)
+        : Math.min(discountValue, subtotal);
+      const taxableAmount = subtotal - discountAmount;
+      const ppn = Math.round(taxableAmount * 0.11);
+      return {
+        subtotal,
+        discount: discountValue,
+        discountType: input.discountType ?? 'nominal',
+        discountAmount,
+        taxableAmount,
+        taxes: [{ name: 'PPN', type: 'percentage', rate: 11, baseAmount: taxableAmount, amount: ppn, compoundOrder: 0 }],
+        totalTax: ppn,
+        serviceCharge: 0,
+        grandTotal: taxableAmount + ppn,
+        pricingMode: 'exclusive',
+      };
+    }),
+  };
+}
+
 const validInput = {
   tenantId: TENANT_ID,
   cashierId: 'cashier-1',
   items: [
     { productId: 'p1', quantity: 2, unitPrice: 25000 },
   ],
-  amountPaid: 55000,
+  amountPaid: 55500,
 };
 
 describe('PaymentService', () => {
   let paymentRepo: ReturnType<typeof createMockRepo>;
   let orderRepo: ReturnType<typeof createMockRepo>;
+  let taxService: ReturnType<typeof createMockTaxService>;
   let eventBus: ReturnType<typeof createMockEventBus>;
   let service: PaymentService;
 
   beforeEach(() => {
     paymentRepo = createMockRepo();
     orderRepo = createMockRepo();
+    taxService = createMockTaxService();
     eventBus = createMockEventBus();
-    service = new PaymentService(paymentRepo, orderRepo, eventBus);
+    service = new PaymentService(paymentRepo, orderRepo, null as any, taxService as any, eventBus);
   });
 
   describe('payCash', () => {
@@ -42,8 +71,8 @@ describe('PaymentService', () => {
       expect(orderData.status).toBe('paid');
       expect(orderData.paymentStatus).toBe('completed');
       expect(orderData.subtotal).toBe(50000);
-      expect(orderData.tax).toBe(5000);
-      expect(orderData.total).toBe(55000);
+      expect(orderData.tax).toBe(5500);
+      expect(orderData.total).toBe(55500);
       expect(orderData.discount).toBe(0);
 
       expect(result.payment.serialize().status).toBe('completed');
@@ -78,7 +107,7 @@ describe('PaymentService', () => {
       });
 
       const change = result.payment.serialize().amount - result.order.serialize().total;
-      expect(change).toBe(45000);
+      expect(change).toBe(44500);
     });
 
     it('applies nominal discount', async () => {
@@ -91,7 +120,7 @@ describe('PaymentService', () => {
       const orderData = result.order.serialize();
       expect(orderData.subtotal).toBe(50000);
       expect(orderData.discount).toBe(5000);
-      expect(orderData.total).toBe(50000);
+      expect(orderData.total).toBe(49950);
     });
 
     it('applies percentage discount', async () => {
@@ -104,12 +133,12 @@ describe('PaymentService', () => {
       const orderData = result.order.serialize();
       expect(orderData.subtotal).toBe(50000);
       expect(orderData.discount).toBe(5000);
-      expect(orderData.total).toBe(50000);
+      expect(orderData.total).toBe(49950);
     });
 
     it('throws ValidationError when amount is insufficient', async () => {
       await expect(
-        service.payCash({ ...validInput, amountPaid: 100 }),
+        service.payCash({ ...validInput, amountPaid: 10000 }),
       ).rejects.toThrow(ValidationError);
     });
 

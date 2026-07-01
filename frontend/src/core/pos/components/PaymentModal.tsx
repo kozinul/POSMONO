@@ -3,7 +3,7 @@ import { usePOSStore } from '../store/posStore';
 import { api } from '../../../@shared/services/api';
 
 export function PaymentModal() {
-  const { items, subtotal, tax, discount, discountType, discountAmount, total, paymentState, setDiscount, setPaymentState, setReceipt, closePaymentModal, clearCart } =
+  const { items, subtotal, serviceCharge, serviceChargeName, tax, taxName, discount, discountType, discountAmount, total, paymentState, setDiscount, setPaymentState, setReceipt, closePaymentModal, clearCart } =
     usePOSStore();
   const [amountPaid, setAmountPaid] = useState('');
   const [discountInput, setDiscountInput] = useState('');
@@ -69,8 +69,14 @@ export function PaymentModal() {
               <span>Subtotal</span>
               <span>Rp {subtotal.toLocaleString('id-ID')}</span>
             </div>
+            {serviceCharge > 0 && (
+              <div className="flex justify-between text-gray-600">
+                <span>{serviceChargeName} ({Math.round((serviceCharge / subtotal) * 100)}%)</span>
+                <span>Rp {serviceCharge.toLocaleString('id-ID')}</span>
+              </div>
+            )}
             <div className="flex justify-between text-gray-600">
-              <span>Pajak (10%)</span>
+              <span>{taxName}</span>
               <span>Rp {tax.toLocaleString('id-ID')}</span>
             </div>
             {discountAmount > 0 && (
