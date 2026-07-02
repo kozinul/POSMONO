@@ -1,85 +1,73 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import { Schema } from 'mongoose';
 
-export interface ITaxConfigurationDocument extends Document {
-  tenantId: string;
-  taxEnabled: boolean;
-  pricingMode: string;
-  countryCode: string;
-  currency: string;
-  rules: ITaxRuleEmbedded[];
-  version: number;
-  metadata: Record<string, unknown>;
-  createdAt: Date;
-  updatedAt: Date;
-}
+const ModifierConfigSchema = new Schema({
+  numerator: { type: Number },
+  denominator: { type: Number },
+  multiplier: { type: Number },
+  deduction: { type: Number },
+}, { _id: false });
 
-export interface ITaxRuleEmbedded {
-  name: string;
-  type: string;
-  rate: number;
-  compoundOrder: number;
-  calculationStrategy: string;
-  taxBaseModifier: string | null;
-  applyTo: string;
-  categoryIds: string[];
-  productIds: string[];
-  exemptProductIds: string[];
-  exemptCustomerTags: string[];
-  isActive: boolean;
-  metadata: Record<string, unknown>;
-}
-
-const TaxRuleEmbeddedSchema = new Schema<ITaxRuleEmbedded>(
-  {
-    name: { type: String, required: true },
-    type: {
-      type: String,
-      enum: ['percentage', 'compound', 'category_based', 'product_based', 'exemption'],
-      required: true,
-    },
-    rate: { type: Number, required: true, min: 0, max: 100 },
-    compoundOrder: { type: Number, default: 0 },
-    calculationStrategy: {
-      type: String,
-      enum: ['standard_percentage', 'indonesia_ppn_2025', 'compound'],
-      default: 'standard_percentage',
-    },
-    taxBaseModifier: { type: String, default: null },
-    applyTo: {
-      type: String,
-      enum: ['all', 'categories', 'products', 'exempt'],
-      default: 'all',
-    },
+const TaxRuleSchema = new Schema({
+  id: { type: String, required: true },
+  name: { type: String, required: true },
+  taxType: { type: String, required: true, enum: ['vat', 'withholding', 'service_charge', 'custom', 'exemption'] },
+  scope: {
+    type: { type: String, required: true, enum: ['all', 'category', 'product', 'outlet', 'transaction_type', 'customer', 'service_type'] },
+    entityId: { type: String, default: '' },
+    entityName: { type: String, default: '' },
+  },
+  policy: {
+    type: { type: String, required: true, enum: ['rate', 'amount', 'percentage_of_base', 'formula'] },
+    value: { type: Number, required: true },
+    roundingMode: { type: String, default: 'round', enum: ['round', 'floor', 'ceil'] },
+    precision: { type: Number, default: 2 },
+  },
+  modifier: {
+    type: { type: String, enum: ['none', 'fraction', 'multiplier', 'fixed_deduction'] },
+    config: { type: ModifierConfigSchema },
+  },
+  priority: { type: Number, required: true },
+  isActive: { type: Boolean, default: true },
+  effectiveDate: { type: Date, required: true },
+  expiresAt: { type: Date },
+  conditions: {
+    amountOperator: { type: String, enum: ['greater_than', 'less_than', 'equals', 'greater_or_equal', 'less_or_equal'] },
+    amountThreshold: { type: Number },
     categoryIds: [{ type: String }],
     productIds: [{ type: String }],
-    exemptProductIds: [{ type: String }],
-    exemptCustomerTags: [{ type: String }],
-    isActive: { type: Boolean, default: true },
-    metadata: { type: Schema.Types.Mixed, default: {} },
+    customerTypes: [{ type: String }],
   },
-  { _id: true },
-);
+  metadata: { type: Schema.Types.Mixed },
+}, { _id: false });
 
-const TaxConfigurationSchema = new Schema<ITaxConfigurationDocument>(
+const TaxVersionSchema = new Schema({
+  id: { type: String, required: true },
+  versionNumber: { type: Number, required: true },
+  effectiveDate: { type: Date, required: true },
+  rules: [TaxRuleSchema],
+  status: { type: String, required: true, enum: ['draft', 'active', 'deprecated'] },
+  createdAt: { type: Date, required: true },
+  deprecatedAt: { type: Date },
+}, { _id: false });
+
+export const TaxConfigurationSchema = new Schema(
   {
-    tenantId: { type: String, required: true, unique: true, index: true },
+    id: { type: String, required: true },
+    tenantId: { type: String, required: true, index: true },
     taxEnabled: { type: Boolean, default: true },
-    pricingMode: {
-      type: String,
-      enum: ['inclusive', 'exclusive'],
-      default: 'exclusive',
-    },
+    pricingMode: { type: String, default: 'exclusive', enum: ['inclusive', 'exclusive'] },
     countryCode: { type: String, default: 'ID' },
     currency: { type: String, default: 'IDR' },
-    rules: [TaxRuleEmbeddedSchema],
-    version: { type: Number, default: 1 },
-    metadata: { type: Schema.Types.Mixed, default: {} },
+    activeVersionId: { type: String },
+    versions: [TaxVersionSchema],
+    metadata: { type: Schema.Types.Mixed },
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now },
   },
-  { timestamps: true },
+  {
+    _id: false,
+    collection: 'taxconfigurations',
+  },
 );
 
-export { TaxConfigurationSchema };
-export const TaxConfigurationModel = mongoose.model<ITaxConfigurationDocument>(
-  'TaxConfiguration',
-  TaxConfigurationSchema,
-);
+TaxConfigurationSchema.index({ tenantId: 1 }, { unique: true });

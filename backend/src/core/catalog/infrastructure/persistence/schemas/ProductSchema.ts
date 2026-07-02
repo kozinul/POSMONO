@@ -10,6 +10,7 @@ export const ProductSchema = new Schema(
     description: { type: String, default: '' },
     categoryId: { type: String, required: true },
     basePrice: { type: Number, required: true },
+    pricingProfileId: { type: String },
     imageUrls: { type: [String], default: [] },
     tags: { type: [String], default: [] },
     isActive: { type: Boolean, default: true },

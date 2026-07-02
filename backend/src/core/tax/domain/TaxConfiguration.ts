@@ -1,163 +1,192 @@
-import { AggregateRoot } from '../../../@shared/domain/AggregateRoot';
-import { TaxConfigurationId } from '../../../@shared/domain/Identifier';
-import { TaxRule, ITaxRule, TaxRuleType } from './TaxRule';
+"use strict";
 
-export type TaxPricingMode = 'inclusive' | 'exclusive';
+import { TaxRule, ITaxRule } from './TaxRule';
+
+export type PricingMode = 'inclusive' | 'exclusive';
+export type TaxVersionStatus = 'draft' | 'active' | 'deprecated';
+
+export interface ITaxVersion {
+  id: string;
+  versionNumber: number;
+  effectiveDate: Date;
+  rules: ITaxRule[];
+  status: TaxVersionStatus;
+  createdAt: Date;
+  deprecatedAt?: Date;
+}
 
 export interface ITaxConfiguration {
   id: string;
   tenantId: string;
   taxEnabled: boolean;
-  pricingMode: TaxPricingMode;
+  pricingMode: PricingMode;
   countryCode: string;
   currency: string;
-  rules: ITaxRule[];
-  version: number;
-  metadata: Record<string, unknown>;
+  activeVersionId: string;
+  versions: ITaxVersion[];
+  metadata?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
 }
 
-export class TaxConfiguration extends AggregateRoot<TaxConfigurationId> {
-  private tenantId: string;
-  private taxEnabled: boolean;
-  private pricingMode: TaxPricingMode;
-  private countryCode: string;
-  private currency: string;
-  private rules: TaxRule[];
-  private version: number;
-  private metadata: Record<string, unknown>;
-  private createdAt: Date;
-  private updatedAt: Date;
+export class TaxConfiguration {
+  private constructor(private data: ITaxConfiguration) {}
 
-  private constructor(props: ITaxConfiguration) {
-    super(new TaxConfigurationId(props.id));
-    this.tenantId = props.tenantId;
-    this.taxEnabled = props.taxEnabled;
-    this.pricingMode = props.pricingMode;
-    this.countryCode = props.countryCode;
-    this.currency = props.currency;
-    this.rules = (props.rules || []).map((r) => TaxRule.hydrate(r));
-    this.version = props.version;
-    this.metadata = { ...props.metadata };
-    this.createdAt = props.createdAt;
-    this.updatedAt = props.updatedAt;
-  }
+  static create(data: Omit<ITaxConfiguration, 'id' | 'createdAt' | 'updatedAt'>): TaxConfiguration {
+    const now = new Date();
+    const id = `taxcfg_${data.tenantId}_${now.getTime()}`;
 
-  static create(props: Omit<ITaxConfiguration, 'id' | 'createdAt' | 'updatedAt' | 'version' | 'rules'> & { rules?: ITaxRule[] }): TaxConfiguration {
+    const hasActiveVersion = data.versions.some((v) => v.status === 'active');
+    const versions = hasActiveVersion
+      ? data.versions
+      : [
+          {
+            id: `v1_${now.getTime()}`,
+            versionNumber: 1,
+            effectiveDate: now,
+            rules: [],
+            status: 'active' as TaxVersionStatus,
+            createdAt: now,
+          },
+        ];
+
     return new TaxConfiguration({
-      ...props,
-      id: new TaxConfigurationId().toValue(),
-      rules: props.rules || [],
-      version: 1,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      id,
+      tenantId: data.tenantId,
+      taxEnabled: data.taxEnabled ?? true,
+      pricingMode: data.pricingMode ?? 'exclusive',
+      countryCode: data.countryCode ?? 'ID',
+      currency: data.currency ?? 'IDR',
+      activeVersionId: data.activeVersionId || versions[0].id,
+      versions,
+      metadata: data.metadata,
+      createdAt: now,
+      updatedAt: now,
     });
   }
 
-  static hydrate(props: ITaxConfiguration): TaxConfiguration {
-    return new TaxConfiguration(props);
+  static hydrate(data: ITaxConfiguration): TaxConfiguration {
+    return new TaxConfiguration(data);
   }
+
+  // --- State ---
 
   isTaxEnabled(): boolean {
-    return this.taxEnabled;
-  }
-
-  getPricingMode(): TaxPricingMode {
-    return this.pricingMode;
-  }
-
-  getCountryCode(): string {
-    return this.countryCode;
-  }
-
-  getCurrency(): string {
-    return this.currency;
-  }
-
-  getActiveRules(): TaxRule[] {
-    return this.rules.filter((r) => r.serialize().isActive);
-  }
-
-  getCompoundRules(): TaxRule[] {
-    return this.getActiveRules()
-      .filter((r) => r.isCompound())
-      .sort((a, b) => a.serialize().compoundOrder - b.serialize().compoundOrder);
-  }
-
-  getSimpleRules(): TaxRule[] {
-    return this.getActiveRules().filter((r) => !r.isCompound());
-  }
-
-  getRulesAppliedTo(productId: string, categoryId: string, customerTags: string[]): TaxRule[] {
-    return this.getActiveRules().filter((r) => r.appliesTo(productId, categoryId, customerTags));
+    return this.data.taxEnabled;
   }
 
   enable(): void {
-    this.taxEnabled = true;
+    this.data.taxEnabled = true;
     this.touch();
   }
 
   disable(): void {
-    this.taxEnabled = false;
+    this.data.taxEnabled = false;
     this.touch();
   }
 
-  setPricingMode(mode: TaxPricingMode): void {
-    this.pricingMode = mode;
+  getPricingMode(): PricingMode {
+    return this.data.pricingMode;
+  }
+
+  setPricingMode(mode: PricingMode): void {
+    this.data.pricingMode = mode;
     this.touch();
   }
 
-  setCountryCode(code: string): void {
-    this.countryCode = code;
+  getCountryCode(): string {
+    return this.data.countryCode;
+  }
+
+  getCurrency(): string {
+    return this.data.currency;
+  }
+
+  // --- Versions ---
+
+  getActiveVersion(): ITaxVersion {
+    const v = this.data.versions.find((v) => v.id === this.data.activeVersionId);
+    if (!v) throw new Error(`Active version ${this.data.activeVersionId} not found`);
+    return v;
+  }
+
+  getActiveRules(): TaxRule[] {
+    return this.getActiveVersion().rules.map((r) => TaxRule.create(r));
+  }
+
+  getAllVersions(): ITaxVersion[] {
+    return [...this.data.versions];
+  }
+
+  addVersion(effectiveDate: Date, description?: string): ITaxVersion {
+    const lastVersion = this.data.versions[this.data.versions.length - 1];
+    const newVersion: ITaxVersion = {
+      id: `v${(lastVersion?.versionNumber ?? 0) + 1}_${Date.now()}`,
+      versionNumber: (lastVersion?.versionNumber ?? 0) + 1,
+      effectiveDate,
+      rules: lastVersion ? [...lastVersion.rules] : [],
+      status: 'draft',
+      createdAt: new Date(),
+    };
+    this.data.versions.push(newVersion);
+    this.touch();
+    return newVersion;
+  }
+
+  activateVersion(versionId: string): void {
+    const idx = this.data.versions.findIndex((v) => v.id === versionId);
+    if (idx === -1) throw new Error(`Version ${versionId} not found`);
+
+    this.data.versions.forEach((v) => {
+      if (v.status === 'active') {
+        v.status = 'deprecated';
+        v.deprecatedAt = new Date();
+      }
+    });
+
+    this.data.versions[idx].status = 'active';
+    this.data.activeVersionId = versionId;
     this.touch();
   }
 
-  setCurrency(currency: string): void {
-    this.currency = currency;
-    this.touch();
-  }
+  // --- Rules ---
 
   addRule(rule: TaxRule): void {
-    this.rules.push(rule);
-    this.bumpVersion();
+    const version = this.getActiveVersion();
+    const idx = this.data.versions.findIndex((v) => v.id === version.id);
+    this.data.versions[idx] = {
+      ...version,
+      rules: [...version.rules, rule.serialize()],
+    };
+    this.touch();
   }
 
   removeRule(ruleId: string): void {
-    this.rules = this.rules.filter((r) => r.id.toValue() !== ruleId);
-    this.bumpVersion();
-  }
-
-  updateRule(ruleId: string, partial: Partial<ITaxRule>): void {
-    const idx = this.rules.findIndex((r) => r.id.toValue() === ruleId);
-    if (idx === -1) throw new Error(`TaxRule not found: ${ruleId}`);
-    const existing = this.rules[idx].serialize();
-    this.rules[idx] = TaxRule.hydrate({ ...existing, ...partial });
-    this.bumpVersion();
-  }
-
-  private bumpVersion(): void {
-    this.version++;
+    const version = this.getActiveVersion();
+    const idx = this.data.versions.findIndex((v) => v.id === version.id);
+    this.data.versions[idx] = {
+      ...version,
+      rules: version.rules.filter((r) => r.id !== ruleId),
+    };
     this.touch();
   }
 
-  private touch(): void {
-    this.updatedAt = new Date();
+  updateRule(ruleId: string, partial: Partial<ITaxRule>): void {
+    const version = this.getActiveVersion();
+    const vIdx = this.data.versions.findIndex((v) => v.id === version.id);
+    this.data.versions[vIdx].rules = version.rules.map((r) =>
+      r.id === ruleId ? { ...r, ...partial } : r,
+    );
+    this.touch();
   }
 
+  // --- Serialization ---
+
   serialize(): ITaxConfiguration {
-    return {
-      id: this._id.toValue(),
-      tenantId: this.tenantId,
-      taxEnabled: this.taxEnabled,
-      pricingMode: this.pricingMode,
-      countryCode: this.countryCode,
-      currency: this.currency,
-      rules: this.rules.map((r) => r.serialize()),
-      version: this.version,
-      metadata: { ...this.metadata },
-      createdAt: this.createdAt,
-      updatedAt: this.updatedAt,
-    };
+    return { ...this.data, metadata: this.data.metadata ? { ...this.data.metadata } : undefined };
+  }
+
+  private touch(): void {
+    this.data.updatedAt = new Date();
   }
 }

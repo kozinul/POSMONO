@@ -9,6 +9,7 @@ interface CreateProductInput {
   description?: string;
   categoryId: string;
   basePrice: number;
+  pricingProfileId?: string;
   tags?: string[];
 }
 
@@ -19,6 +20,7 @@ interface UpdateProductInput {
   description?: string;
   categoryId?: string;
   basePrice?: number;
+  pricingProfileId?: string;
   tags?: string[];
   isActive?: boolean;
 }
@@ -47,6 +49,7 @@ export class ProductService {
       description: input.description || '',
       categoryId: input.categoryId,
       basePrice: input.basePrice,
+      pricingProfileId: input.pricingProfileId,
       imageUrls: [],
       tags: input.tags || [],
       isActive: true,

@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTenant, useUpdateSettings, useUpdateProfile } from '../../../@shared/hooks/useTenant';
-import { useTaxConfiguration, useAddTaxRule, useDeleteTaxRule, useCalculateTax } from '../../../@shared/hooks/useTaxConfiguration';
+import { useTaxConfiguration, useUpdateTaxConfiguration, useAddTaxRule, useDeleteTaxRule, useCalculateTax } from '../../../@shared/hooks/useTaxConfiguration';
+import type { IModifierConfig } from '../../../@shared/hooks/useTaxConfiguration';
+import { usePricingProfiles, useCreatePricingProfile, useUpdatePricingProfile, useDeletePricingProfile } from '../../../@shared/hooks/usePricingProfile';
 
 const sections = [
   {
@@ -16,7 +18,7 @@ const sections = [
   {
     id: 'tax',
     label: 'Pajak & Service',
-    keywords: 'ppn pajak service charge biaya pelayanan tarif',
+    keywords: 'ppn pajak service charge biaya pelayanan tarif pricing mode inclusive exclusive',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
         <path d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" strokeLinecap="round" strokeLinejoin="round" />
@@ -45,6 +47,17 @@ const sections = [
     ),
   },
   {
+    id: 'pricing-profiles',
+    label: 'Profil Harga',
+    keywords: 'pricing profile tax rules group pajak kategori produk aturan harga grouping',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+        <path d="M9.568 3.563a2.25 2.25 0 014.864 0l.22 1.1a2.25 2.25 0 001.85 1.635l1.118.163a2.25 2.25 0 011.315 3.896l-.778.695a2.25 2.25 0 00-.715 2.121l.183.929a2.25 2.25 0 01-2.263 2.706l-1.076-.088a2.25 2.25 0 00-1.956 1.078l-.556.932a2.25 2.25 0 01-4.008 0l-.556-.932a2.25 2.25 0 00-1.956-1.078l-1.076.088a2.25 2.25 0 01-2.263-2.706l.183-.929a2.25 2.25 0 00-.715-2.121l-.778-.695a2.25 2.25 0 011.315-3.896l1.118-.163a2.25 2.25 0 001.85-1.635l.22-1.1z" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M15 9l-6 6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  {
     id: 'receipt',
     label: 'Struk & Cetak',
     keywords: 'footer struk receipt pesan cetak printer',
@@ -55,6 +68,12 @@ const sections = [
     ),
   },
 ];
+
+function getActiveRules(taxConfig: { versions: Array<{ id: string; rules: Array<any> }>; activeVersionId: string } | undefined) {
+  if (!taxConfig) return [];
+  const activeVer = taxConfig.versions.find((v) => v.id === taxConfig.activeVersionId);
+  return activeVer?.rules ?? [];
+}
 
 export default function GeneralSettingsPage() {
   const { data: tenant, isLoading } = useTenant();
@@ -68,11 +87,19 @@ export default function GeneralSettingsPage() {
   const [businessCategory, setBusinessCategory] = useState('');
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
-  const [ppnEnabled, setPpnEnabled] = useState(true);
+
+  // Tax config state (from new tax module)
+  const [taxEnabled, setTaxEnabled] = useState(true);
+  const [pricingMode, setPricingMode] = useState<'inclusive' | 'exclusive'>('exclusive');
+  const [ppnEnabled, setPpnEnabled] = useState(false);
   const [ppnRate, setPpnRate] = useState(11);
+  const [ppnModifierType, setPpnModifierType] = useState<'none' | 'fraction' | 'multiplier' | 'fixed_deduction'>('fraction');
+  const [ppnModifierNumerator, setPpnModifierNumerator] = useState(11);
+  const [ppnModifierDenominator, setPpnModifierDenominator] = useState(12);
   const [serviceChargeEnabled, setServiceChargeEnabled] = useState(false);
   const [serviceChargeRate, setServiceChargeRate] = useState(5);
   const [serviceChargeName, setServiceChargeName] = useState('Service Charge');
+
   const [discountMaxPercent, setDiscountMaxPercent] = useState(100);
   const [discountMaxNominal, setDiscountMaxNominal] = useState(1_000_000);
   const [receiptFooter, setReceiptFooter] = useState('');
@@ -81,27 +108,64 @@ export default function GeneralSettingsPage() {
   const [saved, setSaved] = useState(false);
 
   const { data: taxConfig, isLoading: taxLoading } = useTaxConfiguration();
+  const updateTaxConfig = useUpdateTaxConfiguration();
   const addRule = useAddTaxRule();
   const deleteRule = useDeleteTaxRule();
   const calcTax = useCalculateTax();
 
-  const [newRuleName, setNewRuleName] = useState('');
-  const [newRuleType, setNewRuleType] = useState<'percentage' | 'compound' | 'exemption'>('percentage');
-  const [newRuleRate, setNewRuleRate] = useState(0);
   const [calcResult, setCalcResult] = useState<string | null>(null);
   const [addingRule, setAddingRule] = useState(false);
 
+  const [newRuleName, setNewRuleName] = useState('');
+  const [newRuleTaxType, setNewRuleTaxType] = useState<'vat' | 'service_charge' | 'withholding' | 'custom' | 'exemption'>('vat');
+  const [newRuleRate, setNewRuleRate] = useState(0);
+  const [calcMode, setCalcMode] = useState<'standard' | 'custom'>('standard');
+  const [modifierType, setModifierType] = useState<'none' | 'fraction' | 'multiplier' | 'fixed_deduction'>('none');
+  const [modifierNumerator, setModifierNumerator] = useState(11);
+  const [modifierDenominator, setModifierDenominator] = useState(12);
+  const [modifierMultiplier, setModifierMultiplier] = useState(0.8);
+  const [modifierDeduction, setModifierDeduction] = useState(0);
+
+  const { data: pricingProfiles, isLoading: profilesLoading } = usePricingProfiles();
+  const createProfile = useCreatePricingProfile();
+  const updatePricingProfile = useUpdatePricingProfile();
+  const deletePricingProfile = useDeletePricingProfile();
+  const [profileForm, setProfileForm] = useState<{ name: string; description: string; taxRuleIds: string[]; isDefault: boolean } | null>(null);
+  const [profileSaving, setProfileSaving] = useState(false);
+
+  const activeRules = useMemo(() => getActiveRules(taxConfig), [taxConfig]);
+
+  // Init state from taxConfig
+  useEffect(() => {
+    if (!taxConfig) return;
+    setTaxEnabled(taxConfig.taxEnabled);
+    setPricingMode(taxConfig.pricingMode);
+    const vatRule = activeRules.find((r) => r.taxType === 'vat');
+    setPpnEnabled(!!vatRule);
+    if (vatRule) {
+      setPpnRate(vatRule.policy.value);
+      const m = vatRule.modifier;
+      if (m) {
+        setPpnModifierType(m.type);
+        if (m.config?.numerator) setPpnModifierNumerator(m.config.numerator);
+        if (m.config?.denominator) setPpnModifierDenominator(m.config.denominator);
+      }
+    }
+    const scRule = activeRules.find((r) => r.taxType === 'service_charge');
+    setServiceChargeEnabled(!!scRule);
+    if (scRule) {
+      setServiceChargeRate(scRule.policy.value);
+      setServiceChargeName(scRule.name);
+    }
+  }, [taxConfig, activeRules]);
+
+  // Init tenant profile
   useEffect(() => {
     if (!tenant) return;
     setName(tenant.name || '');
     setBusinessCategory(tenant.businessCategory || '');
     setAddress(tenant.address || '');
     setPhone(tenant.phone || '');
-    setPpnEnabled(tenant.config.ppnEnabled);
-    setPpnRate(Math.round((tenant.config.ppnRate || 0) * 100));
-    setServiceChargeEnabled(tenant.config.serviceChargeEnabled);
-    setServiceChargeRate(Math.round((tenant.config.serviceChargeRate || 0) * 100));
-    setServiceChargeName(tenant.config.serviceChargeName || 'Service Charge');
     setDiscountMaxPercent(tenant.config.discountMaxPercent ?? 100);
     setDiscountMaxNominal(tenant.config.discountMaxNominal ?? 1_000_000);
     setReceiptFooter(tenant.config.receiptFooter || '');
@@ -127,19 +191,79 @@ export default function GeneralSettingsPage() {
     setSaving(true);
     setSaved(false);
     try {
-      await Promise.all([
+      const promises: Promise<any>[] = [
         updateProfile.mutateAsync({ name, businessCategory, address, phone }),
         updateSettings.mutateAsync({
-          ppnEnabled,
-          ppnRate: ppnRate / 100,
-          serviceChargeEnabled,
-          serviceChargeRate: serviceChargeRate / 100,
-          serviceChargeName,
           discountMaxPercent,
           discountMaxNominal,
           receiptFooter,
         }),
-      ]);
+        updateTaxConfig.mutateAsync({ taxEnabled, pricingMode }),
+      ];
+
+      const existingVat = activeRules.find((r) => r.taxType === 'vat');
+      const existingSc = activeRules.find((r) => r.taxType === 'service_charge');
+
+      // Sync PPN: create if enabled & missing, delete if disabled & exists
+      if (taxEnabled && ppnEnabled && ppnRate > 0 && !existingVat) {
+        const modifier: IModifierConfig | undefined = ppnModifierType === 'none'
+          ? undefined
+          : {
+              type: ppnModifierType,
+              config: ppnModifierType === 'fraction'
+                ? { numerator: ppnModifierNumerator, denominator: ppnModifierDenominator }
+                : ppnModifierType === 'multiplier'
+                  ? { multiplier: 0.8 }
+                  : { deduction: 0 },
+            };
+        promises.push(
+          addRule.mutateAsync({
+            id: `rule_vat_${Date.now()}`,
+            name: `PPN ${ppnRate}%`,
+            taxType: 'vat',
+            priority: 10,
+            scope: { type: 'all', entityId: '', entityName: 'Semua' },
+            policy: {
+              type: 'percentage_of_base',
+              value: ppnRate,
+              roundingMode: 'round',
+              precision: 2,
+            },
+            modifier,
+            isActive: true,
+            effectiveDate: new Date().toISOString(),
+          }),
+        );
+      }
+      if ((!taxEnabled || !ppnEnabled) && existingVat) {
+        promises.push(deleteRule.mutateAsync(existingVat.id));
+      }
+
+      // Sync SC: create if enabled & missing, delete if disabled & exists
+      if (taxEnabled && serviceChargeEnabled && serviceChargeRate > 0 && !existingSc) {
+        promises.push(
+          addRule.mutateAsync({
+            id: `rule_sc_${Date.now()}`,
+            name: serviceChargeName || 'Service Charge',
+            taxType: 'service_charge',
+            priority: 5,
+            scope: { type: 'all', entityId: '', entityName: 'Semua' },
+            policy: {
+              type: 'rate',
+              value: serviceChargeRate,
+              roundingMode: 'round',
+              precision: 2,
+            },
+            isActive: true,
+            effectiveDate: new Date().toISOString(),
+          }),
+        );
+      }
+      if ((!taxEnabled || !serviceChargeEnabled) && existingSc) {
+        promises.push(deleteRule.mutateAsync(existingSc.id));
+      }
+
+      await Promise.all(promises);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } finally {
@@ -282,6 +406,46 @@ export default function GeneralSettingsPage() {
                   <p className="text-sm text-gray-400 mt-0.5">Aturan perpajakan dan service charge sesuai Indonesia</p>
                 </div>
                 <div className="px-6 py-5 space-y-5">
+                  {/* Tax Enabled */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-gray-800">Aktifkan Pajak</p>
+                      <p className="text-sm text-gray-400">Hitung pajak otomatis untuk setiap transaksi</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={taxEnabled}
+                        onChange={(e) => setTaxEnabled(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600" />
+                    </label>
+                  </div>
+
+                  <div className="border-t border-gray-100" />
+
+                  {/* Pricing Mode */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-1.5">Mode Harga</label>
+                    <select
+                      value={pricingMode}
+                      onChange={(e) => setPricingMode(e.target.value as 'inclusive' | 'exclusive')}
+                      className="block w-full max-w-xs px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                    >
+                      <option value="exclusive">Exclusive (Pajak + harga = total)</option>
+                      <option value="inclusive">Inclusive (Harga sudah termasuk pajak)</option>
+                    </select>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {pricingMode === 'exclusive'
+                        ? 'Pajak ditambahkan di atas harga barang'
+                        : 'Harga barang sudah termasuk pajak (hanya service charge ditambahkan)'}
+                    </p>
+                  </div>
+
+                  <div className="border-t border-gray-100" />
+
+                  {/* PPN */}
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium text-gray-800">PPN (Pajak Pertambahan Nilai)</p>
@@ -291,29 +455,74 @@ export default function GeneralSettingsPage() {
                       <input
                         type="checkbox"
                         checked={ppnEnabled}
-                        onChange={(e) => setPpnEnabled(e.target.checked)}
+                        onChange={(e) => {
+                          setPpnEnabled(e.target.checked);
+                          if (e.target.checked) setPpnRate(11);
+                        }}
                         className="sr-only peer"
                       />
                       <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600" />
                     </label>
                   </div>
-                  {ppnEnabled && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-600 mb-1.5">Tarif PPN (%)</label>
-                      <input
-                        type="number"
-                        value={ppnRate}
-                        onChange={(e) => setPpnRate(Number(e.target.value))}
-                        min={0}
-                        max={100}
-                        className="block w-32 px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                      <p className="text-xs text-gray-400 mt-1">Standar PPN Indonesia: 11% (2022-sekarang)</p>
+                  {taxEnabled && ppnEnabled && (
+                    <div className="space-y-3">
+                      <div className="flex gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-600 mb-1.5">Tarif PPN (%)</label>
+                          <input
+                            type="number"
+                            value={ppnRate}
+                            onChange={(e) => setPpnRate(Number(e.target.value))}
+                            min={0}
+                            max={100}
+                            className="block w-32 px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-600 mb-1.5">Modifier Dasar Pengenaan</label>
+                          <select
+                            value={ppnModifierType}
+                            onChange={(e) => setPpnModifierType(e.target.value as any)}
+                            className="block w-44 px-4 py-2.5 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="none">None (100% DPP)</option>
+                            <option value="fraction">Fraction (a/b)</option>
+                            <option value="multiplier">Multiplier</option>
+                            <option value="fixed_deduction">Fixed Deduction</option>
+                          </select>
+                        </div>
+                      </div>
+                      {ppnModifierType === 'fraction' && (
+                        <div className="flex gap-3 items-end">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Numerator</label>
+                            <input
+                              type="number"
+                              value={ppnModifierNumerator}
+                              onChange={(e) => setPpnModifierNumerator(Number(e.target.value))}
+                              className="block w-24 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Denominator</label>
+                            <input
+                              type="number"
+                              value={ppnModifierDenominator}
+                              onChange={(e) => setPpnModifierDenominator(Number(e.target.value))}
+                              className="block w-24 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                        </div>
+                      )}
+                      <p className="text-xs text-gray-400">
+                        DPP = amount × modifier. Disimpan saat tekan Simpan.
+                      </p>
                     </div>
                   )}
 
                   <div className="border-t border-gray-100" />
 
+                  {/* Service Charge */}
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-medium text-gray-800">Service Charge</p>
@@ -400,22 +609,23 @@ export default function GeneralSettingsPage() {
                   <h3 className="text-sm font-semibold text-gray-700 mb-3">Aturan Aktif</h3>
                   {taxLoading ? (
                     <div className="text-sm text-gray-400">Memuat...</div>
-                  ) : !taxConfig || taxConfig.rules.length === 0 ? (
+                  ) : activeRules.length === 0 ? (
                     <div className="text-sm text-gray-400">Belum ada aturan pajak. Tambahkan aturan baru.</div>
                   ) : (
                     <div className="space-y-2">
-                      {taxConfig.rules.map((rule) => (
+                      {activeRules.map((rule) => (
                         <div key={rule.id} className="flex items-center justify-between px-4 py-3 bg-gray-50 rounded-lg">
                           <div className="flex items-center gap-3">
                             <span className={`w-2 h-2 rounded-full ${rule.isActive ? 'bg-green-400' : 'bg-gray-300'}`} />
                             <div>
                               <p className="text-sm font-medium text-gray-800">{rule.name}</p>
                               <p className="text-xs text-gray-400">
-                                {rule.type === 'compound' ? 'Compound' : rule.type === 'percentage' ? 'Persentase' : rule.type === 'exemption' ? 'Pengecualian' : rule.type} — {rule.rate}%
-                                {rule.calculationStrategy === 'indonesia_ppn_2025' && ' · DPP Nilai Lain (11/12)'}
-                                {rule.calculationStrategy === 'standard_percentage' && ' · Standar'}
-                                {rule.applyTo !== 'all' && ` · ${rule.applyTo === 'categories' ? 'Per kategori' : 'Per produk'}`}
-                                {rule.compoundOrder > 0 && ` · Urutan: ${rule.compoundOrder}`}
+                                {rule.taxType === 'vat' ? 'PPN' : rule.taxType === 'service_charge' ? 'Service Charge' : rule.taxType === 'withholding' ? 'PPh' : rule.taxType === 'exemption' ? 'Pengecualian' : rule.taxType} — {rule.policy.value}
+                                {rule.policy.type !== 'amount' ? '%' : ''}
+                                {rule.scope.type !== 'all' && ` · ${rule.scope.entityName}`}
+                                {rule.modifier && rule.modifier.type === 'fraction' && ` · DPP ${rule.modifier.config?.numerator}/${rule.modifier.config?.denominator}`}
+                                {rule.modifier && rule.modifier.type === 'multiplier' && ` · ×${rule.modifier.config?.multiplier}`}
+                                {rule.modifier && rule.modifier.type === 'fixed_deduction' && ` · -${rule.modifier.config?.deduction}`}
                               </p>
                             </div>
                           </div>
@@ -439,67 +649,250 @@ export default function GeneralSettingsPage() {
                 {/* Add New Rule */}
                 <div className="px-6 py-4 border-b border-gray-50">
                   <button
-                    onClick={() => setAddingRule(!addingRule)}
+                    onClick={() => {
+                      if (addingRule) {
+                        setAddingRule(false);
+                        setCalcMode('standard');
+                        setModifierType('none');
+                      } else {
+                        setAddingRule(true);
+                      }
+                    }}
                     className="text-sm font-medium text-blue-600 hover:text-blue-700"
                   >
                     {addingRule ? 'Batal' : '+ Tambah Aturan Pajak'}
                   </button>
 
                   {addingRule && (
-                    <div className="mt-4 p-4 bg-gray-50 rounded-lg space-y-3">
+                    <div className="mt-4 p-4 bg-gray-50 rounded-lg space-y-4">
+                      {/* Presets */}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Template Pajak</label>
+                        <select
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            if (v === 'ppn') {
+                              setNewRuleName('PPN 12%');
+                              setNewRuleTaxType('vat');
+                              setNewRuleRate(12);
+                              setCalcMode('custom');
+                              setModifierType('fraction');
+                              setModifierNumerator(11);
+                              setModifierDenominator(12);
+                            } else if (v === 'service') {
+                              setNewRuleName('Service Charge');
+                              setNewRuleTaxType('service_charge');
+                              setNewRuleRate(5);
+                              setCalcMode('standard');
+                              setModifierType('none');
+                            } else if (v === 'pph') {
+                              setNewRuleName('PPh Pasal 23');
+                              setNewRuleTaxType('withholding');
+                              setNewRuleRate(2);
+                              setCalcMode('standard');
+                              setModifierType('none');
+                            } else if (v === 'exempt') {
+                              setNewRuleName('Bebas Pajak');
+                              setNewRuleTaxType('exemption');
+                              setNewRuleRate(0);
+                              setCalcMode('standard');
+                              setModifierType('none');
+                            }
+                          }}
+                          defaultValue=""
+                          className="block w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="" disabled>Pilih template...</option>
+                          <option value="ppn">🇮🇩 PPN Indonesia 12%</option>
+                          <option value="service">🧾 Service Charge 5%</option>
+                          <option value="pph">📋 PPh Pasal 23 (2%)</option>
+                          <option value="exempt">✅ Bebas Pajak</option>
+                          <option value="custom">⚙️ Kustom</option>
+                        </select>
+                      </div>
+
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-xs font-medium text-gray-600 mb-1">Nama Aturan</label>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Nama Pajak</label>
                           <input
                             value={newRuleName}
                             onChange={(e) => setNewRuleName(e.target.value)}
                             className="block w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-                            placeholder="PPN, VAT, GST..."
+                            placeholder="PPN 12%"
                           />
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-gray-600 mb-1">Tipe</label>
                           <select
-                            value={newRuleType}
-                            onChange={(e) => setNewRuleType(e.target.value as any)}
+                            value={newRuleTaxType}
+                            onChange={(e) => setNewRuleTaxType(e.target.value as any)}
                             className="block w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500"
                           >
-                            <option value="percentage">Persentase</option>
-                            <option value="compound">Compound</option>
+                            <option value="vat">PPN</option>
+                            <option value="service_charge">Service Charge</option>
+                            <option value="withholding">PPh</option>
+                            <option value="custom">Kustom</option>
                             <option value="exemption">Pengecualian</option>
                           </select>
                         </div>
                       </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Tarif (%)</label>
-                        <input
-                          type="number"
-                          value={newRuleRate}
-                          onChange={(e) => setNewRuleRate(Number(e.target.value))}
-                          min={0}
-                          max={100}
-                          className="block w-32 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-                        />
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Tarif (%)</label>
+                          <input
+                            type="number"
+                            value={newRuleRate}
+                            onChange={(e) => setNewRuleRate(Number(e.target.value))}
+                            min={0}
+                            max={100}
+                            className="block w-32 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Metode Perhitungan</label>
+                          <select
+                            value={calcMode}
+                            onChange={(e) => {
+                              const mode = e.target.value as 'standard' | 'custom';
+                              setCalcMode(mode);
+                              if (mode === 'standard') setModifierType('none');
+                            }}
+                            className="block w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="standard">Standard</option>
+                            <option value="custom">Kustom</option>
+                          </select>
+                        </div>
                       </div>
+
+                      {/* Custom Formula Section */}
+                      {calcMode === 'custom' && (
+                        <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-3">
+                          <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Custom Modifier</h4>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Tipe Modifier</label>
+                            <select
+                              value={modifierType}
+                              onChange={(e) => setModifierType(e.target.value as any)}
+                              className="block w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500"
+                            >
+                              <option value="none">None</option>
+                              <option value="fraction">Fraction</option>
+                              <option value="multiplier">Multiplier</option>
+                              <option value="fixed_deduction">Fixed Deduction</option>
+                            </select>
+                          </div>
+
+                          {modifierType === 'fraction' && (
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">Pembilang (Numerator)</label>
+                                <input
+                                  type="number"
+                                  value={modifierNumerator}
+                                  onChange={(e) => setModifierNumerator(Number(e.target.value))}
+                                  className="block w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-600 mb-1">Penyebut (Denominator)</label>
+                                <input
+                                  type="number"
+                                  value={modifierDenominator}
+                                  onChange={(e) => setModifierDenominator(Number(e.target.value))}
+                                  className="block w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          {modifierType === 'multiplier' && (
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">Nilai Pengali</label>
+                              <input
+                                type="number"
+                                step={0.1}
+                                value={modifierMultiplier}
+                                onChange={(e) => setModifierMultiplier(Number(e.target.value))}
+                                className="block w-32 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                              />
+                            </div>
+                          )}
+
+                          {modifierType === 'fixed_deduction' && (
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">Pengurangan Tetap (Rp)</label>
+                              <input
+                                type="number"
+                                value={modifierDeduction}
+                                onChange={(e) => setModifierDeduction(Number(e.target.value))}
+                                className="block w-32 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                              />
+                            </div>
+                          )}
+
+                          {/* Formula Preview */}
+                          {modifierType !== 'none' && (
+                            <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3">
+                              <p className="text-xs font-medium text-blue-700 mb-1">Preview Formula</p>
+                              <p className="text-sm text-blue-800 font-mono">
+                                {modifierType === 'fraction' && (
+                                  <>Jumlah × ({modifierNumerator} / {modifierDenominator})</>
+                                )}
+                                {modifierType === 'multiplier' && (
+                                  <>Jumlah × {modifierMultiplier}</>
+                                )}
+                                {modifierType === 'fixed_deduction' && (
+                                  <>Jumlah − {modifierDeduction.toLocaleString()}</>
+                                )}
+                              </p>
+                              <p className="text-xs text-blue-600 mt-1">
+                                Contoh: Rp100.000 → Rp
+                                {modifierType === 'fraction' && ((100000 * modifierNumerator) / modifierDenominator).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                {modifierType === 'multiplier' && (100000 * modifierMultiplier).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                {modifierType === 'fixed_deduction' && Math.max(0, 100000 - modifierDeduction).toLocaleString()}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       <button
                         onClick={async () => {
                           if (!newRuleName || newRuleRate <= 0) return;
+                          const modifier = calcMode === 'custom' && modifierType !== 'none'
+                            ? {
+                                type: modifierType,
+                                config: modifierType === 'fraction'
+                                  ? { numerator: modifierNumerator, denominator: modifierDenominator }
+                                  : modifierType === 'multiplier'
+                                  ? { multiplier: modifierMultiplier }
+                                  : modifierType === 'fixed_deduction'
+                                  ? { deduction: modifierDeduction }
+                                  : {},
+                              }
+                            : undefined;
                           await addRule.mutateAsync({
+                            id: `rule_${Date.now()}`,
                             name: newRuleName,
-                            type: newRuleType,
-                            rate: newRuleRate,
-                            calculationStrategy: newRuleType === 'compound' ? 'compound' : 'standard_percentage',
-                            taxBaseModifier: null,
-                            compoundOrder: newRuleType === 'compound' ? 1 : 0,
-                            applyTo: 'all',
-                            categoryIds: [],
-                            productIds: [],
-                            exemptProductIds: [],
-                            exemptCustomerTags: [],
+                            taxType: newRuleTaxType,
+                            priority: 10,
+                            scope: { type: 'all', entityId: '', entityName: 'Semua' },
+                            policy: {
+                              type: 'rate',
+                              value: newRuleRate,
+                              roundingMode: 'round',
+                              precision: 2,
+                            },
+                            modifier,
                             isActive: true,
+                            effectiveDate: new Date().toISOString(),
                           });
                           setNewRuleName('');
                           setNewRuleRate(0);
+                          setCalcMode('standard');
+                          setModifierType('none');
                           setAddingRule(false);
                         }}
                         className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
@@ -528,7 +921,9 @@ export default function GeneralSettingsPage() {
                       onClick={async () => {
                         const el = document.getElementById('calc-amount') as HTMLInputElement;
                         const amount = parseInt(el?.value || '0');
+                        const tenantId = taxConfig?.tenantId ?? '';
                         const result = await calcTax.mutateAsync({
+                          tenantId,
                           items: [{ productId: 'test', productName: 'Sample', quantity: 1, unitPrice: amount }],
                         });
                         setCalcResult(
@@ -542,6 +937,159 @@ export default function GeneralSettingsPage() {
                   </div>
                   {calcResult && (
                     <p className="mt-3 text-sm text-gray-700 bg-blue-50 px-4 py-3 rounded-lg">{calcResult}</p>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {activeSection === 'pricing-profiles' && (
+              <section className="bg-white rounded-2xl shadow-sm border border-gray-100">
+                <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-bold text-gray-800">Profil Harga</h2>
+                    <p className="text-sm text-gray-400 mt-0.5">Kelompok aturan pajak untuk produk dengan kategori harga berbeda</p>
+                  </div>
+                  <button
+                    onClick={() => setProfileForm({ name: '', description: '', taxRuleIds: [], isDefault: false })}
+                    className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
+                  >
+                    + Profil Baru
+                  </button>
+                </div>
+
+                {profileForm && (
+                  <div className="px-6 py-5 border-b border-gray-100 bg-gray-50">
+                    <h3 className="text-sm font-semibold text-gray-700 mb-3">{profileForm.name || 'Profil Baru'}</h3>
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Nama Profil</label>
+                        <input
+                          type="text"
+                          value={profileForm.name}
+                          onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
+                          className="block w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                          placeholder="Food & Beverage"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Deskripsi</label>
+                        <input
+                          type="text"
+                          value={profileForm.description}
+                          onChange={(e) => setProfileForm({ ...profileForm, description: e.target.value })}
+                          className="block w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                          placeholder="Produk makanan dan minuman"
+                        />
+                      </div>
+                    </div>
+                    <div className="mb-4">
+                      <label className="block text-xs font-medium text-gray-600 mb-2">Aturan Pajak</label>
+                      <div className="space-y-1.5 max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-3 bg-white">
+                        {activeRules.length === 0 ? (
+                          <p className="text-xs text-gray-400 italic">Belum ada aturan pajak. Buat di tab Aturan Pajak.</p>
+                        ) : (
+                          activeRules.map((rule) => (
+                            <label key={rule.id} className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={profileForm.taxRuleIds.includes(rule.id)}
+                                onChange={(e) => {
+                                  setProfileForm({
+                                    ...profileForm,
+                                    taxRuleIds: e.target.checked
+                                      ? [...profileForm.taxRuleIds, rule.id]
+                                      : profileForm.taxRuleIds.filter((id) => id !== rule.id),
+                                  });
+                                }}
+                                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              />
+                              <span className="text-sm text-gray-700">{rule.name} ({rule.policy.value}%)</span>
+                            </label>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 mb-4">
+                      <input
+                        type="checkbox"
+                        id="profile-default"
+                        checked={profileForm.isDefault}
+                        onChange={(e) => setProfileForm({ ...profileForm, isDefault: e.target.checked })}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <label htmlFor="profile-default" className="text-sm text-gray-700">Jadikan default</label>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        disabled={profileSaving || !profileForm.name.trim()}
+                        onClick={async () => {
+                          setProfileSaving(true);
+                          try {
+                            await createProfile.mutateAsync(profileForm);
+                            setProfileForm(null);
+                          } finally {
+                            setProfileSaving(false);
+                          }
+                        }}
+                        className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        {profileSaving ? 'Menyimpan...' : 'Simpan'}
+                      </button>
+                      <button
+                        onClick={() => setProfileForm(null)}
+                        className="px-4 py-2 bg-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-300"
+                      >
+                        Batal
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="divide-y divide-gray-100">
+                  {profilesLoading ? (
+                    <div className="px-6 py-8 text-center text-sm text-gray-400">Memuat...</div>
+                  ) : !pricingProfiles || pricingProfiles.length === 0 ? (
+                    <div className="px-6 py-8 text-center text-sm text-gray-400">Belum ada profil harga. Klik "+ Profil Baru" untuk membuat.</div>
+                  ) : (
+                    pricingProfiles.map((profile) => (
+                      <div key={profile.id} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-800">{profile.name}</span>
+                            {profile.isDefault && (
+                              <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">Default</span>
+                            )}
+                            {!profile.active && (
+                              <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded font-medium">Nonaktif</span>
+                            )}
+                          </div>
+                          {profile.description && (
+                            <p className="text-xs text-gray-400 mt-0.5">{profile.description}</p>
+                          )}
+                          <p className="text-xs text-gray-400 mt-0.5">{profile.taxRuleIds.length} aturan pajak</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={async () => {
+                              await updatePricingProfile.mutateAsync({ id: profile.id, active: !profile.active });
+                            }}
+                            className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100"
+                          >
+                            {profile.active ? 'Nonaktifkan' : 'Aktifkan'}
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if (window.confirm(`Hapus profil "${profile.name}"?`)) {
+                                await deletePricingProfile.mutateAsync(profile.id);
+                              }
+                            }}
+                            className="text-xs px-2.5 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
+                          >
+                            Hapus
+                          </button>
+                        </div>
+                      </div>
+                    ))
                   )}
                 </div>
               </section>

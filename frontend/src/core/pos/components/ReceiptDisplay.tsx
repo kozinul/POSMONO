@@ -1,7 +1,7 @@
 import { usePOSStore } from '../store/posStore';
 
 export function ReceiptDisplay() {
-  const { receipt, items, total, tax, subtotal, clearCart } = usePOSStore();
+  const { receipt, items, total, subtotal, clearCart } = usePOSStore();
 
   if (!receipt) return null;
 
@@ -30,13 +30,21 @@ export function ReceiptDisplay() {
               <span>Subtotal</span>
               <span>Rp {subtotal.toLocaleString('id-ID')}</span>
             </div>
-            <div className="flex justify-between text-sm text-gray-500">
-              <span>Pajak (10%)</span>
-              <span>Rp {tax.toLocaleString('id-ID')}</span>
-            </div>
+            {receipt.serviceCharge > 0 && (
+              <div className="flex justify-between text-sm text-gray-500">
+                <span>Service Charge</span>
+                <span>Rp {receipt.serviceCharge.toLocaleString('id-ID')}</span>
+              </div>
+            )}
+            {receipt.taxBreakdown.map((t) => (
+              <div key={t.ruleId} className="flex justify-between text-sm text-gray-500">
+                <span>{t.name}</span>
+                <span>Rp {t.amount.toLocaleString('id-ID')}</span>
+              </div>
+            ))}
             <div className="flex justify-between text-lg font-bold text-gray-800 pt-2 border-t">
               <span>Total</span>
-              <span>Rp {total.toLocaleString('id-ID')}</span>
+              <span>Rp {receipt.grandTotal.toLocaleString('id-ID')}</span>
             </div>
             <div className="flex justify-between text-sm text-gray-600 pt-1">
               <span>Tunai</span>

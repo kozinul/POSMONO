@@ -1,114 +1,127 @@
-import { Entity } from '../../../@shared/domain/Entity';
-import { TaxRuleId } from '../../../@shared/domain/Identifier';
+import { TaxPolicy, ITaxPolicy } from './TaxPolicy';
+import { TaxScope, ITaxScope, ScopeMatchContext } from './TaxScope';
+import { IModifierConfig, ModifierEngine } from './ModifierEngine';
+import { RoundingEngine } from './RoundingEngine';
 
-export type TaxRuleType = 'percentage' | 'compound' | 'category_based' | 'product_based' | 'exemption';
-export type TaxApplyTo = 'all' | 'categories' | 'products' | 'exempt';
-export type TaxCalculationStrategy = 'standard_percentage' | 'indonesia_ppn_2025' | 'compound';
+export type TaxType = 'vat' | 'withholding' | 'service_charge' | 'custom' | 'exemption';
 
 export interface ITaxRule {
-  id?: string;
+  id: string;
   name: string;
-  type: TaxRuleType;
-  rate: number;
-  compoundOrder: number;
-  calculationStrategy: TaxCalculationStrategy;
-  taxBaseModifier: string | null;
-  applyTo: TaxApplyTo;
-  categoryIds: string[];
-  productIds: string[];
-  exemptProductIds: string[];
-  exemptCustomerTags: string[];
+  taxType: TaxType;
+  scope: ITaxScope;
+  policy: ITaxPolicy;
+  modifier?: IModifierConfig;
+  priority: number;
   isActive: boolean;
-  metadata: Record<string, unknown>;
+  effectiveDate: Date;
+  expiresAt?: Date;
+  conditions?: {
+    amountOperator?: 'greater_than' | 'less_than' | 'equals' | 'greater_or_equal' | 'less_or_equal';
+    amountThreshold?: number;
+    categoryIds?: string[];
+    productIds?: string[];
+    customerTypes?: string[];
+  };
+  metadata?: Record<string, unknown>;
 }
 
-export class TaxRule extends Entity<TaxRuleId> {
-  private name: string;
-  private type: TaxRuleType;
-  private rate: number;
-  private compoundOrder: number;
-  private calculationStrategy: TaxCalculationStrategy;
-  private taxBaseModifier: string | null;
-  private applyTo: TaxApplyTo;
-  private categoryIds: string[];
-  private productIds: string[];
-  private exemptProductIds: string[];
-  private exemptCustomerTags: string[];
-  private isActive: boolean;
-  private metadata: Record<string, unknown>;
+export class TaxRule {
+  private static readonly modifierEngine = new ModifierEngine();
+  private static readonly roundingEngine = new RoundingEngine();
 
-  private constructor(props: ITaxRule) {
-    super(new TaxRuleId(props.id));
-    this.name = props.name;
-    this.type = props.type;
-    this.rate = props.rate;
-    this.compoundOrder = props.compoundOrder;
-    this.calculationStrategy = props.calculationStrategy ?? 'standard_percentage';
-    this.taxBaseModifier = props.taxBaseModifier ?? null;
-    this.applyTo = props.applyTo;
-    this.categoryIds = [...props.categoryIds];
-    this.productIds = [...props.productIds];
-    this.exemptProductIds = [...props.exemptProductIds];
-    this.exemptCustomerTags = [...props.exemptCustomerTags];
-    this.isActive = props.isActive;
-    this.metadata = { ...props.metadata };
+  private constructor(private readonly data: ITaxRule) {}
+
+  static create(data: ITaxRule): TaxRule {
+    return new TaxRule(data);
   }
 
-  static create(props: Omit<ITaxRule, 'id'>): TaxRule {
-    return new TaxRule({ ...props, id: new TaxRuleId().toValue() });
+  static new(
+    name: string,
+    taxType: TaxType,
+    priority: number,
+    scope: TaxScope,
+    policy: TaxPolicy,
+    overrides?: Partial<ITaxRule>,
+  ): TaxRule {
+    return new TaxRule({
+      id: overrides?.id || `rule_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+      name,
+      taxType,
+      scope: scope.serialize(),
+      policy: policy.serialize(),
+      modifier: overrides?.modifier,
+      priority,
+      isActive: overrides?.isActive ?? true,
+      effectiveDate: overrides?.effectiveDate ?? new Date(),
+      expiresAt: overrides?.expiresAt,
+      conditions: overrides?.conditions,
+      metadata: overrides?.metadata,
+    });
   }
 
-  static hydrate(props: ITaxRule): TaxRule {
-    return new TaxRule(props);
+  getId(): string { return this.data.id; }
+  getName(): string { return this.data.name; }
+  getTaxType(): TaxType { return this.data.taxType; }
+  getPriority(): number { return this.data.priority; }
+  getModifier(): IModifierConfig | undefined { return this.data.modifier; }
+
+  getScope(): TaxScope {
+    return TaxScope.create(this.data.scope);
   }
 
-  appliesTo(productId: string, categoryId: string, customerTags: string[]): boolean {
-    if (!this.isActive) return false;
+  getPolicy(): TaxPolicy {
+    return TaxPolicy.create(this.data.policy);
+  }
 
-    if (this.applyTo === 'all') {
-      return !this.exemptProductIds.includes(productId) &&
-        !this.exemptCustomerTags.some((t) => customerTags.includes(t));
+  isExemption(): boolean {
+    return this.data.taxType === 'exemption';
+  }
+
+  isServiceCharge(): boolean {
+    return this.data.taxType === 'service_charge';
+  }
+
+  isEnabled(): boolean {
+    if (!this.data.isActive) return false;
+    const now = new Date();
+    if (now < this.data.effectiveDate) return false;
+    if (this.data.expiresAt && now > this.data.expiresAt) return false;
+    return true;
+  }
+
+  shouldApply(context: ScopeMatchContext): boolean {
+    if (!this.isEnabled()) return false;
+
+    const matchesScope = this.getScope().appliesTo(context);
+    if (!matchesScope) return false;
+
+    if (this.data.conditions?.amountOperator === 'greater_than') {
+      const total = context.items
+        ? context.items.reduce((sum, item) => sum + (item as any).unitPrice * (item as any).quantity, 0)
+        : 0;
+      if (total <= (this.data.conditions.amountThreshold ?? 0)) return false;
     }
 
-    if (this.applyTo === 'categories') return this.categoryIds.includes(categoryId);
-    if (this.applyTo === 'products') return this.productIds.includes(productId);
-    if (this.applyTo === 'exempt') return false;
-
-    return false;
+    return true;
   }
 
-  isCompound(): boolean {
-    return this.type === 'compound';
-  }
+  calculateTax(taxableAmount: number): number {
+    if (this.isExemption()) return 0;
+    if (this.data.policy.type === 'amount') return this.data.policy.value;
 
-  getRate(): number {
-    return this.rate;
-  }
-
-  getCalculationStrategy(): TaxCalculationStrategy {
-    return this.calculationStrategy;
-  }
-
-  getTaxBaseModifier(): string | null {
-    return this.taxBaseModifier;
+    const base = TaxRule.modifierEngine.apply(taxableAmount, this.data.modifier);
+    const rawTax = base * (this.data.policy.value / 100);
+    return TaxRule.roundingEngine.round(rawTax, this.data.policy.roundingMode, this.data.policy.precision);
   }
 
   serialize(): ITaxRule {
     return {
-      id: this._id.toValue(),
-      name: this.name,
-      type: this.type,
-      rate: this.rate,
-      compoundOrder: this.compoundOrder,
-      calculationStrategy: this.calculationStrategy,
-      taxBaseModifier: this.taxBaseModifier,
-      applyTo: this.applyTo,
-      categoryIds: [...this.categoryIds],
-      productIds: [...this.productIds],
-      exemptProductIds: [...this.exemptProductIds],
-      exemptCustomerTags: [...this.exemptCustomerTags],
-      isActive: this.isActive,
-      metadata: { ...this.metadata },
+      ...this.data,
+      scope: this.data.scope,
+      policy: this.data.policy,
+      modifier: this.data.modifier ? { ...this.data.modifier, config: this.data.modifier.config ? { ...this.data.modifier.config } : undefined } : undefined,
+      conditions: this.data.conditions ? { ...this.data.conditions } : undefined,
     };
   }
 }

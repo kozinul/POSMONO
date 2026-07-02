@@ -14,6 +14,7 @@ interface Product {
   sku: string;
   description: string;
   tags: string[];
+  pricingProfileId?: string;
 }
 
 interface Category {
@@ -74,6 +75,8 @@ export function useBarcodeLookup() {
         name: product.name,
         price: product.basePrice,
         imageUrl: product.imageUrls?.[0],
+        categoryId: product.categoryId,
+        pricingProfileId: product.pricingProfileId,
       });
       return product;
     }

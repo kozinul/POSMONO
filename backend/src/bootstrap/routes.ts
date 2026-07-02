@@ -13,7 +13,9 @@ import { createOrderRoutes } from '../core/ordering/interfaces/http/routes/order
 import { createShiftRoutes } from '../core/pos/interfaces/http/routes/shift.routes';
 import { createPaymentRoutes } from '../core/payment/interfaces/http/routes/payment.routes';
 import { createReportRoutes } from '../core/reporting/interfaces/http/routes/report.routes';
-import { createTaxRoutes } from '../core/tax/interfaces/http/routes/tax.routes';
+import { createTaxRoutes } from '../core/tax/api/tax.routes';
+import { createPricingProfileRoutes } from '../core/pricing/api/pricingProfile.routes';
+import { createDiscountRouter } from '../core/discount/api/discount.routes';
 
 export function registerRoutes(app: Express, container: DIContainer): void {
   app.get('/health', (_req, res) => {
@@ -59,6 +61,13 @@ export function registerRoutes(app: Express, container: DIContainer): void {
   const reportController = container.resolve('reportController');
   app.use('/api/reports', createReportRoutes(reportController));
 
-  const taxController = container.resolve('taxController');
-  app.use('/api/tax', createTaxRoutes(taxController));
+  const taxConfigRepo = container.resolve('taxConfigurationRepository');
+  app.use('/api/tax', createTaxRoutes(taxConfigRepo));
+
+  const pricingProfileRepo = container.resolve('pricingProfileRepository');
+  app.use('/api/pricing-profiles', createPricingProfileRoutes(pricingProfileRepo));
+
+  const discountConfigRepo = container.resolve('discountConfigurationRepository');
+  const promoCodeRepo = container.resolve('promoCodeRepository');
+  app.use('/api/discount', createDiscountRouter(discountConfigRepo, promoCodeRepo));
 }

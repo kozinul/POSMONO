@@ -7,6 +7,7 @@ export const createProductSchema = z.object({
   description: z.string().optional().default(''),
   categoryId: z.string().min(1, 'Category is required'),
   basePrice: z.number().positive('Price must be positive'),
+  pricingProfileId: z.string().optional(),
   tags: z.array(z.string()).optional().default([]),
 });
 

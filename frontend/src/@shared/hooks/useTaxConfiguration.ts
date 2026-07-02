@@ -1,75 +1,68 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 
-export type TaxCalculationStrategy = 'standard_percentage' | 'indonesia_ppn_2025' | 'compound';
+// --- Backend response types ---
 
-export interface TaxRule {
-  id: string;
-  name: string;
-  type: 'percentage' | 'compound' | 'category_based' | 'product_based' | 'exemption';
-  rate: number;
-  compoundOrder: number;
-  calculationStrategy: TaxCalculationStrategy;
-  taxBaseModifier: string | null;
-  applyTo: 'all' | 'categories' | 'products' | 'exempt';
-  categoryIds: string[];
-  productIds: string[];
-  exemptProductIds: string[];
-  exemptCustomerTags: string[];
-  isActive: boolean;
+export interface IModifierConfig {
+  type: 'none' | 'fraction' | 'multiplier' | 'fixed_deduction';
+  config?: {
+    numerator?: number;
+    denominator?: number;
+    multiplier?: number;
+    deduction?: number;
+  };
 }
 
-export interface TaxConfiguration {
+export interface ITaxRule {
+  id: string;
+  name: string;
+  taxType: 'vat' | 'withholding' | 'service_charge' | 'custom' | 'exemption';
+  scope: { type: string; entityId: string; entityName: string };
+  policy: {
+    type: string;
+    value: number;
+    roundingMode: 'round' | 'floor' | 'ceil';
+    precision: number;
+  };
+  modifier?: IModifierConfig;
+  priority: number;
+  isActive: boolean;
+  effectiveDate: string;
+  expiresAt?: string;
+  conditions?: Record<string, unknown>;
+}
+
+export interface ITaxVersion {
+  id: string;
+  versionNumber: number;
+  effectiveDate: string;
+  rules: ITaxRule[];
+  status: 'draft' | 'active' | 'deprecated';
+  createdAt: string;
+  deprecatedAt?: string;
+}
+
+export interface ITaxConfiguration {
   id: string;
   tenantId: string;
   taxEnabled: boolean;
   pricingMode: 'inclusive' | 'exclusive';
   countryCode: string;
   currency: string;
-  rules: TaxRule[];
-  version: number;
+  activeVersionId: string;
+  versions: ITaxVersion[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-export interface TaxCalculateInput {
-  items: Array<{
-    productId: string;
-    productName?: string;
-    quantity: number;
-    unitPrice: number;
-    categoryId?: string;
-  }>;
-  discount?: number;
-  discountType?: 'percentage' | 'nominal';
-  customerTags?: string[];
-}
-
-export interface TaxCalculationResult {
-  subtotal: number;
-  discount: number;
-  discountAmount: number;
-  taxableAmount: number;
-  taxes: Array<{
-    name: string;
-    type: string;
-    rate: number;
-    calculationStrategy: TaxCalculationStrategy;
-    taxBaseModifier: string | null;
-    baseAmount: number;
-    amount: number;
-    compoundOrder: number;
-  }>;
-  totalTax: number;
-  serviceCharge: number;
-  grandTotal: number;
-  pricingMode: string;
-}
+// --- Hooks ---
 
 export function useTaxConfiguration() {
-  return useQuery<TaxConfiguration>({
+  return useQuery<ITaxConfiguration>({
     queryKey: ['tax-configuration'],
     queryFn: async () => {
       const { data } = await api.get('/tax/configuration');
-      return data.data;
+      return data;
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -84,8 +77,8 @@ export function useUpdateTaxConfiguration() {
       countryCode: string;
       currency: string;
     }>) => {
-      const { data } = await api.patch('/tax/configuration', settings);
-      return data.data;
+      const { data } = await api.put('/tax/configuration', settings);
+      return data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['tax-configuration'] }),
   });
@@ -94,9 +87,9 @@ export function useUpdateTaxConfiguration() {
 export function useAddTaxRule() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (rule: Omit<TaxRule, 'id'>) => {
+    mutationFn: async (rule: ITaxRule) => {
       const { data } = await api.post('/tax/rules', rule);
-      return data.data;
+      return data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['tax-configuration'] }),
   });
@@ -114,9 +107,24 @@ export function useDeleteTaxRule() {
 
 export function useCalculateTax() {
   return useMutation({
-    mutationFn: async (input: TaxCalculateInput) => {
+    mutationFn: async (input: {
+      tenantId: string;
+      items: Array<{
+        id?: string;
+        productId: string;
+        productName?: string;
+        quantity: number;
+        unitPrice: number;
+        categoryId?: string;
+      }>;
+      discount?: number;
+      discountType?: 'percentage' | 'nominal';
+      outletId?: string;
+      transactionType?: string;
+      customerTags?: string[];
+    }) => {
       const { data } = await api.post('/tax/calculate', input);
-      return data.data as TaxCalculationResult;
+      return data;
     },
   });
 }

@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { usePOSStore } from '../store/posStore';
 import { useProducts, useCategories, useBarcodeLookup } from '../hooks/useProducts';
 import { useTenant } from '../../../@shared/hooks/useTenant';
+import { useTaxConfiguration } from '../../../@shared/hooks/useTaxConfiguration';
+import { useDiscountConfiguration } from '../../../@shared/hooks/useDiscountConfiguration';
 import { ProductCard } from '../components/ProductCard';
 import { CartItemRow } from '../components/CartItemRow';
 import { PaymentModal } from '../components/PaymentModal';
@@ -18,28 +20,31 @@ export default function PosPage() {
     discount,
     discountType,
     discountAmount,
+    promoCode,
+    promoApplied,
     total,
     paymentModalOpen,
     receipt,
     openPaymentModal,
     setTaxConfig,
+    setDiscountRules,
+    setPromoCode,
   } = usePOSStore();
 
-  const { data: tenant } = useTenant();
+  const { data: taxConfig } = useTaxConfiguration();
+  const { data: discountConfig } = useDiscountConfiguration();
 
   useEffect(() => {
-    if (tenant?.config) {
-      setTaxConfig({
-        ppnEnabled: tenant.config.ppnEnabled,
-        ppnRate: tenant.config.ppnRate,
-        serviceChargeEnabled: tenant.config.serviceChargeEnabled,
-        serviceChargeRate: tenant.config.serviceChargeRate,
-        serviceChargeName: tenant.config.serviceChargeName,
-        taxName: tenant.config.taxName,
-        taxRate: tenant.config.taxRate,
-      });
+    if (taxConfig) {
+      setTaxConfig(taxConfig);
     }
-  }, [tenant, setTaxConfig]);
+  }, [taxConfig, setTaxConfig]);
+
+  useEffect(() => {
+    if (discountConfig?.rules) {
+      setDiscountRules(discountConfig.rules);
+    }
+  }, [discountConfig, setDiscountRules]);
 
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -160,6 +165,8 @@ export default function PosPage() {
                 name={product.name}
                 price={product.basePrice}
                 imageUrl={product.imageUrls?.[0] || ''}
+                categoryId={product.categoryId}
+                pricingProfileId={(product as any).pricingProfileId}
               />
             ))}
           </div>
@@ -202,9 +209,19 @@ export default function PosPage() {
               <span>{taxName}:</span>
               <span>Rp {tax.toLocaleString('id-ID')}</span>
             </div>
-            {discountAmount > 0 && (
+            {promoApplied && promoApplied.appliedRules.length > 0 && (
+              <div className="space-y-1">
+                {promoApplied.appliedRules.map((r) => (
+                  <div key={r.ruleId} className="flex justify-between text-green-600 text-sm">
+                    <span>{r.ruleName}:</span>
+                    <span>- Rp {r.discountAmount.toLocaleString('id-ID')}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {discount > 0 && (
               <div className="flex justify-between text-green-600">
-                <span>Diskon {discountType === 'percentage' ? `(${discount}%)` : ''}:</span>
+                <span>Diskon Manual {discountType === 'percentage' ? `(${discount}%)` : ''}:</span>
                 <span>- Rp {discountAmount.toLocaleString('id-ID')}</span>
               </div>
             )}

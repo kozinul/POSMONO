@@ -60,11 +60,17 @@ import { PaymentController } from '../core/payment/interfaces/http/controllers/P
 import { ReportService } from '../core/reporting/application/services/ReportService';
 import { ReportController } from '../core/reporting/interfaces/http/controllers/ReportController';
 import { TaxConfigurationSchema } from '../core/tax/infrastructure/persistence/schemas/TaxConfigurationSchema';
-import { TaxTransactionRecordSchema } from '../core/tax/infrastructure/persistence/schemas/TaxTransactionRecordSchema';
-import { MongoTaxConfigurationRepository } from '../core/tax/infrastructure/persistence/repositories/MongoTaxConfigurationRepository';
-import { MongoTaxTransactionRecordRepository } from '../core/tax/infrastructure/persistence/repositories/MongoTaxTransactionRecordRepository';
-import { TaxService } from '../core/tax/application/services/TaxService';
-import { TaxController } from '../core/tax/interfaces/http/controllers/TaxController';
+import { MongoTaxConfigurationRepository } from '../core/tax/infrastructure/persistence/MongoTaxConfigurationRepository';
+import { TaxServiceAdapter } from '../core/tax/application/services/TaxServiceAdapter';
+import { PricingProfileSchema } from '../core/pricing/infrastructure/persistence/schemas/PricingProfileSchema';
+import { MongoPricingProfileRepository } from '../core/pricing/infrastructure/persistence/MongoPricingProfileRepository';
+import { DiscountConfigurationSchema } from '../core/discount/infrastructure/persistence/schemas/DiscountConfigurationSchema';
+import { PromoCodeSchema } from '../core/discount/infrastructure/persistence/schemas/PromoCodeSchema';
+import { MongoDiscountConfigurationRepository } from '../core/discount/infrastructure/persistence/MongoDiscountConfigurationRepository';
+import { MongoPromoCodeRepository } from '../core/discount/infrastructure/persistence/MongoPromoCodeRepository';
+import { DiscountServiceAdapter } from '../core/discount/application/services/DiscountServiceAdapter';
+import { ManageDiscountRuleUseCase } from '../core/discount/application/services/ManageDiscountRuleUseCase';
+import { createDiscountRouter } from '../core/discount/api/discount.routes';
 
 export type DIContainer = ReturnType<typeof buildContainer>;
 
@@ -86,7 +92,9 @@ export function buildContainer() {
   const ShiftModel = systemConnection.model('Shift', ShiftSchema);
   const PaymentModel = systemConnection.model('Payment', PaymentSchema);
   const TaxConfigurationModel = systemConnection.model('TaxConfiguration', TaxConfigurationSchema);
-  const TaxTransactionRecordModel = systemConnection.model('TaxTransactionRecord', TaxTransactionRecordSchema);
+  const PricingProfileModel = systemConnection.model('PricingProfile', PricingProfileSchema);
+  const DiscountConfigurationModel = systemConnection.model('DiscountConfiguration', DiscountConfigurationSchema);
+  const PromoCodeModel = systemConnection.model('PromoCode', PromoCodeSchema);
 
   const eventBus = new EventBus();
 
@@ -111,7 +119,7 @@ export function buildContainer() {
     shiftModel: asValue(ShiftModel),
     paymentModel: asValue(PaymentModel),
     taxConfigurationModel: asValue(TaxConfigurationModel),
-    taxTransactionRecordModel: asValue(TaxTransactionRecordModel),
+    pricingProfileModel: asValue(PricingProfileModel),
     userRepository: asClass(MongoUserRepository, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
@@ -340,24 +348,40 @@ export function buildContainer() {
     }),
     taxConfigurationRepository: asClass(MongoTaxConfigurationRepository, {
       lifetime: Lifetime.SINGLETON,
-    }),
-    taxTransactionRecordRepository: asClass(MongoTaxTransactionRecordRepository, {
-      lifetime: Lifetime.SINGLETON,
-    }),
-    taxService: asClass(TaxService, {
-      lifetime: Lifetime.SINGLETON,
       injector: () => ({
-        configRepo: container.resolve('taxConfigurationRepository'),
-        recordRepo: container.resolve('taxTransactionRecordRepository'),
-        engineConfig: undefined,
+        model: TaxConfigurationModel,
       }),
     }),
-    taxController: asClass(TaxController, {
+    pricingProfileRepository: asClass(MongoPricingProfileRepository, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
-        taxService: container.resolve('taxService'),
-        configRepo: container.resolve('taxConfigurationRepository'),
-        recordRepo: container.resolve('taxTransactionRecordRepository'),
+        model: PricingProfileModel,
+      }),
+    }),
+    discountConfigurationRepository: asClass(MongoDiscountConfigurationRepository, {
+      lifetime: Lifetime.SINGLETON,
+    }),
+    promoCodeRepository: asClass(MongoPromoCodeRepository, {
+      lifetime: Lifetime.SINGLETON,
+    }),
+    discountService: asClass(DiscountServiceAdapter, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        configRepo: container.resolve('discountConfigurationRepository'),
+        promoCodeRepo: container.resolve('promoCodeRepository'),
+      }),
+    }),
+    manageDiscountRuleUseCase: asClass(ManageDiscountRuleUseCase, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        repo: container.resolve('discountConfigurationRepository'),
+      }),
+    }),
+    taxService: asClass(TaxServiceAdapter, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        repo: container.resolve('taxConfigurationRepository'),
+        pricingProfileRepo: container.resolve('pricingProfileRepository'),
       }),
     }),
     reportService: asClass(ReportService, {

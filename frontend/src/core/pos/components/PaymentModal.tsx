@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import { usePOSStore } from '../store/posStore';
 import { api } from '../../../@shared/services/api';
+import { useValidatePromoCode } from '../../../@shared/hooks/useDiscountConfiguration';
 
 export function PaymentModal() {
-  const { items, subtotal, serviceCharge, serviceChargeName, tax, taxName, discount, discountType, discountAmount, total, paymentState, setDiscount, setPaymentState, setReceipt, closePaymentModal, clearCart } =
+  const { items, subtotal, serviceCharge, serviceChargeName, taxBreakdown, discount, discountType, discountAmount, promoCode, promoApplied, total, paymentState, setDiscount, setPromoCode, setPaymentState, setReceipt, closePaymentModal } =
     usePOSStore();
   const [amountPaid, setAmountPaid] = useState('');
   const [discountInput, setDiscountInput] = useState('');
+  const [promoInput, setPromoInput] = useState(promoCode);
+  const validatePromo = useValidatePromoCode();
   const paid = parseInt(amountPaid.replace(/\D/g, ''), 10) || 0;
   const change = paid - total;
   const canSubmit = paid >= total && paymentState === 'idle';
@@ -23,6 +26,11 @@ export function PaymentModal() {
     setDiscount(numeric, newType);
   };
 
+  const handleApplyPromo = () => {
+    setPromoCode(promoInput);
+    validatePromo.mutate(promoInput);
+  };
+
   const handleSubmit = async () => {
     if (!canSubmit) return;
     setPaymentState('processing');
@@ -36,6 +44,7 @@ export function PaymentModal() {
         amountPaid: paid,
         discount,
         discountType,
+        promoCode,
       });
       setReceipt({
         orderNumber: res.data.data.order.orderNumber,
@@ -75,13 +84,21 @@ export function PaymentModal() {
                 <span>Rp {serviceCharge.toLocaleString('id-ID')}</span>
               </div>
             )}
-            <div className="flex justify-between text-gray-600">
-              <span>{taxName}</span>
-              <span>Rp {tax.toLocaleString('id-ID')}</span>
-            </div>
-            {discountAmount > 0 && (
+            {taxBreakdown.map((t) => (
+              <div key={t.ruleId} className="flex justify-between text-gray-600">
+                <span>{t.name}</span>
+                <span>Rp {t.amount.toLocaleString('id-ID')}</span>
+              </div>
+            ))}
+            {promoApplied && promoApplied.appliedRules.map((r) => (
+              <div key={r.ruleId} className="flex justify-between text-green-600 text-sm">
+                <span>{r.ruleName}</span>
+                <span>- Rp {r.discountAmount.toLocaleString('id-ID')}</span>
+              </div>
+            ))}
+            {discount > 0 && (
               <div className="flex justify-between text-green-600 font-medium">
-                <span>Diskon {discountType === 'percentage' ? `(${discount}%)` : ''}</span>
+                <span>Diskon Manual {discountType === 'percentage' ? `(${discount}%)` : ''}</span>
                 <span>- Rp {discountAmount.toLocaleString('id-ID')}</span>
               </div>
             )}
@@ -91,10 +108,42 @@ export function PaymentModal() {
             </div>
           </div>
 
+          {/* Promo Code Input */}
+          <div>
+            <label className="block text-sm font-medium text-gray-600 mb-2">
+              Kode Promo
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={promoInput}
+                onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
+                placeholder="CONTOH10"
+                className="block flex-1 px-4 py-2 text-sm font-mono uppercase border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                disabled={paymentState === 'processing'}
+              />
+              <button
+                onClick={handleApplyPromo}
+                disabled={!promoInput.trim()}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                Pakai
+              </button>
+            </div>
+            {validatePromo.data && (
+              <p className={`mt-1 text-xs ${validatePromo.data.valid ? 'text-green-600' : 'text-red-500'}`}>
+                {validatePromo.data.valid ? `✓ ${validatePromo.data.ruleName}` : validatePromo.data.error}
+              </p>
+            )}
+            {validatePromo.isError && (
+              <p className="mt-1 text-xs text-red-500">Gagal validasi kode promo</p>
+            )}
+          </div>
+
           {/* Discount Input */}
           <div>
             <label className="block text-sm font-medium text-gray-600 mb-2">
-              Diskon
+              Diskon Manual
             </label>
             <div className="flex gap-2">
               <input

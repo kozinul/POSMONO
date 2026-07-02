@@ -7,6 +7,7 @@ export interface Product {
   description: string;
   categoryId: string;
   basePrice: number;
+  pricingProfileId?: string;
   imageUrls: string[];
   tags: string[];
   isActive: boolean;
