@@ -9,6 +9,11 @@ interface PaymentDoc extends Document<string> {
   status: string;
   method: string;
   referenceNumber: string;
+  splitBills: Array<{ portion: number; amount: number; method: string; referenceNumber: string }>;
+  qrCodeUrl: string | null;
+  paymentTransactionId: string | null;
+  provider: string | null;
+  cardLastFour: string | null;
   metadata: Record<string, unknown>;
   paidAt: Date | null;
   createdAt: Date;
@@ -26,6 +31,11 @@ export class MongoPaymentRepository {
       status: doc.status as IPayment['status'],
       method: doc.method as IPayment['method'],
       referenceNumber: doc.referenceNumber,
+      splitBills: doc.splitBills ?? [],
+      qrCodeUrl: doc.qrCodeUrl ?? null,
+      paymentTransactionId: doc.paymentTransactionId ?? null,
+      provider: doc.provider ?? null,
+      cardLastFour: doc.cardLastFour ?? null,
       metadata: doc.metadata || {},
       paidAt: doc.paidAt,
       createdAt: doc.createdAt,
@@ -42,6 +52,11 @@ export class MongoPaymentRepository {
       status: data.status,
       method: data.method,
       referenceNumber: data.referenceNumber,
+      splitBills: data.splitBills,
+      qrCodeUrl: data.qrCodeUrl,
+      paymentTransactionId: data.paymentTransactionId,
+      provider: data.provider,
+      cardLastFour: data.cardLastFour,
       metadata: data.metadata,
       paidAt: data.paidAt,
     } as unknown as Partial<PaymentDoc>;
@@ -70,6 +85,11 @@ export class MongoPaymentRepository {
 
   async findByTenant(tenantId: string): Promise<Payment[]> {
     const docs = await this.model.find({ tenantId }).sort({ createdAt: -1 }).exec();
+    return docs.map((d: PaymentDoc) => this.toDomain(d));
+  }
+
+  async findByOrderId(tenantId: string, orderId: string): Promise<Payment[]> {
+    const docs = await this.model.find({ tenantId, orderId }).sort({ createdAt: -1 }).exec();
     return docs.map((d: PaymentDoc) => this.toDomain(d));
   }
 }

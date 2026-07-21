@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { usePOSStore } from '../store/posStore';
 import { useProducts, useCategories, useBarcodeLookup } from '../hooks/useProducts';
+import { useFamilies, MenuType } from '../hooks/useFamilies';
 import { useTenant } from '../../../@shared/hooks/useTenant';
 import { useTaxConfiguration } from '../../../@shared/hooks/useTaxConfiguration';
 import { useDiscountConfiguration } from '../../../@shared/hooks/useDiscountConfiguration';
@@ -47,6 +48,8 @@ export default function PosPage() {
   }, [discountConfig, setDiscountRules]);
 
   const [search, setSearch] = useState('');
+  const [selectedMenuType, setSelectedMenuType] = useState<MenuType>('food');
+  const [selectedFamily, setSelectedFamily] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const barcodeBuffer = useRef('');
@@ -90,6 +93,11 @@ export default function PosPage() {
     selectedCategory ?? undefined,
   );
   const { data: categories = [], isError: categoriesError } = useCategories();
+  const { data: families = [] } = useFamilies(selectedMenuType);
+
+  const filteredCategories = selectedFamily
+    ? categories.filter((c) => c.familyId === selectedFamily)
+    : categories;
 
   return (
     <div className="flex-1 flex overflow-hidden">
@@ -119,6 +127,62 @@ export default function PosPage() {
             </div>
           </div>
 
+          {/* Menu Type Tabs */}
+          <div className="flex gap-2">
+            {(['food', 'beverage'] as MenuType[]).map((type) => (
+              <button
+                key={type}
+                onClick={() => {
+                  setSelectedMenuType(type);
+                  setSelectedFamily(null);
+                  setSelectedCategory(null);
+                }}
+                className={`px-6 py-2 rounded-lg font-semibold text-sm transition-colors ${
+                  selectedMenuType === type
+                    ? 'blue-primary text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {type === 'food' ? 'Makanan' : 'Minuman'}
+              </button>
+            ))}
+          </div>
+
+          {/* Family Filter */}
+          {families.length > 0 && (
+            <div className="flex gap-3 flex-wrap">
+              <button
+                onClick={() => {
+                  setSelectedFamily(null);
+                  setSelectedCategory(null);
+                }}
+                className={`px-6 py-2 rounded-full font-medium text-sm transition-colors ${
+                  !selectedFamily
+                    ? 'blue-primary text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                Semua
+              </button>
+              {families.map((fam) => (
+                <button
+                  key={fam.id}
+                  onClick={() => {
+                    setSelectedFamily(fam.id);
+                    setSelectedCategory(null);
+                  }}
+                  className={`px-6 py-2 rounded-full font-medium text-sm transition-colors ${
+                    selectedFamily === fam.id
+                      ? 'blue-primary text-white'
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
+                >
+                  {fam.name}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Category Filter */}
           <div className="flex gap-3 flex-wrap">
             <button
@@ -131,7 +195,7 @@ export default function PosPage() {
             >
               Semua
             </button>
-            {categories.map((cat) => (
+            {filteredCategories.map((cat) => (
               <button
                 key={cat.id}
                 onClick={() => setSelectedCategory(cat.id)}

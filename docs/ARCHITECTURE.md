@@ -616,10 +616,15 @@ frontend/
 │   │   ├── products/                       # Feature: Product Catalog
 │   │   │   ├── components/
 │   │   │   ├── hooks/
+│   │   │   │   └── useProducts.ts           #     Shared hooks: useProductList, useCategoryList, useFamilyList, useCreateProduct, useUpdateProduct, useDeleteProduct, useUpload
 │   │   │   ├── services/
 │   │   │   └── pages/
-│   │   │       ├── ProductListPage.tsx
-│   │   │       └── ProductFormPage.tsx
+│   │   │       └── ProductListPage.tsx      #     Full CRUD: search, 3-level filter, pagination, image upload, tags
+│   │   │
+│   │   ├── families/                        # Feature: Menu Type Families
+│   │   │   ├── pages/
+│   │   │   │   └── FamilyListPage.tsx       #     CRUD with Food/Beverage tabs
+│   │   │   └── hooks/
 │   │   │
 │   │   ├── customers/                      # Feature: Customer Management
 │   │   │   ├── components/
@@ -632,6 +637,13 @@ frontend/
 │   │   │   ├── hooks/
 │   │   │   ├── services/
 │   │   │   └── pages/
+│   │   │
+│   │   ├── payment-methods/                # Feature: Payment Method Management
+│   │   │   ├── hooks/
+│   │   │   │   └── usePaymentMethods.ts    #     Shared hooks: usePaymentMethodList, useCreatePaymentMethod, etc.
+│   │   │   └── pages/
+│   │   │       └── PaymentMethodListPage.tsx  # CRUD with preset buttons, color picker
+│   │   │
 │   │   │
 │   │   ├── reports/                        # Feature: Reporting
 │   │   │   ├── components/

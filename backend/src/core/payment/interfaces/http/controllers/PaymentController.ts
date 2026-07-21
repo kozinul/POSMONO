@@ -15,6 +15,32 @@ const payCashSchema = z.object({
   discountType: z.enum(['percentage', 'nominal']).optional(),
 });
 
+const processPaymentSchema = z.object({
+  orderId: z.string().min(1),
+  amount: z.number().positive(),
+  method: z.enum(['cash', 'qris', 'transfer', 'card']),
+  cardLastFour: z.string().optional(),
+  provider: z.string().optional(),
+  qrCodeUrl: z.string().optional(),
+  paymentTransactionId: z.string().optional(),
+  cashierName: z.string().optional().default(''),
+});
+
+const refundSchema = z.object({
+  reason: z.string().min(1, 'Reason is required'),
+  refundedByName: z.string().min(1, 'Refunded by name is required'),
+});
+
+const splitBillSchema = z.object({
+  orderId: z.string().min(1),
+  splitBills: z.array(z.object({
+    portion: z.number().int().positive(),
+    amount: z.number().positive(),
+    method: z.enum(['cash', 'qris', 'transfer', 'card']),
+    referenceNumber: z.string().optional().default(''),
+  })).min(2, 'At least 2 split portions required'),
+});
+
 export class PaymentController extends BaseController {
   constructor(private readonly paymentService: PaymentService) {
     super();
@@ -35,6 +61,64 @@ export class PaymentController extends BaseController {
     this.ok(res, {
       payment: { ...paymentData, change: paymentData.amount - orderData.total },
       order: orderData,
+    });
+  }
+
+  async processPayment(req: Request, res: Response): Promise<void> {
+    const parsed = processPaymentSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
+
+    const result = await this.paymentService.processByOrderId({
+      tenantId: req.tenantId,
+      orderId: parsed.data.orderId,
+      amount: parsed.data.amount,
+      method: parsed.data.method,
+      cashierId: req.userId,
+      cashierName: parsed.data.cashierName,
+      cardLastFour: parsed.data.cardLastFour,
+      provider: parsed.data.provider,
+      qrCodeUrl: parsed.data.qrCodeUrl,
+      paymentTransactionId: parsed.data.paymentTransactionId,
+    });
+
+    this.ok(res, {
+      payment: result.payment.serialize(),
+      order: result.order.serialize(),
+    });
+  }
+
+  async refund(req: Request, res: Response): Promise<void> {
+    const parsed = refundSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
+
+    const result = await this.paymentService.refund({
+      tenantId: req.tenantId,
+      paymentId: req.params.id,
+      reason: parsed.data.reason,
+      refundedBy: req.userId,
+      refundedByName: parsed.data.refundedByName,
+    });
+
+    this.ok(res, {
+      refund: result.refund,
+      payment: result.payment.serialize(),
+    });
+  }
+
+  async splitBill(req: Request, res: Response): Promise<void> {
+    const parsed = splitBillSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
+
+    const result = await this.paymentService.splitBill({
+      tenantId: req.tenantId,
+      orderId: parsed.data.orderId,
+      splitBills: parsed.data.splitBills,
+      cashierId: req.userId,
+    });
+
+    this.ok(res, {
+      payments: result.payments.map((p) => p.serialize()),
+      order: result.order.serialize(),
     });
   }
 

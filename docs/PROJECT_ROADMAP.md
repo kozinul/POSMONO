@@ -57,16 +57,22 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | Event bus (in-process) | `[x]` |
 | Product catalog module | `[x]` |
 | Category module | `[x]` |
+| Family module (menu type: food/beverage) | `[x]` |
 | SKU / variant system | `[x]` |
 | Inventory module | `[x]` |
 | Stock movement & adjustment | `[x]` |
 | POS cart engine | `[x]` |
 | Checkout / order processing | `[x]` |
 | Payment handling (cash) | `[x]` |
+| Payment method management (CRUD) | `[x]` |
 | Receipt generation | `[x]` |
 | Basic reporting | `[x]` |
+| Upload service (image) | `[x]` |
+| Settings (key-value store) | `[x]` |
+| Member/Customer domain | `[x]` |
+| Promotion domain (14 rule types) | `[x]` |
 
-**Completion:** ~95%
+**Completion:** ~98%
 
 ---
 
@@ -77,17 +83,21 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | Project scaffolding (Vite + React Router) | `[x]` |
 | Login page | `[x]` |
 | Dashboard layout | `[x]` |
-| Product management UI | `[x]` |
+| Product management UI (search, filter, CRUD, image upload, tags) | `[x]` |
+| Family management UI (Food/Beverage tabs) | `[x]` |
 | Category management UI | `[x]` |
 | Inventory management UI | `[x]` |
-| POS page (cart UI) | `[x]` |
+| POS page (3-level filter: Menu Type → Family → Category) | `[x]` |
 | Checkout flow UI | `[x]` |
 | Receipt view | `[x]` |
 | Reports page | `[x]` |
 | Settings page | `[x]` |
 | Shift management UI | `[x]` |
+| Member management UI | `[x]` |
+| Promotion management UI | `[x]` |
+| Payment method management UI (presets, color picker) | `[x]` |
 
-**Completion:** ~90%
+**Completion:** ~95%
 
 ---
 

@@ -222,24 +222,40 @@ Indexes:
 
 ── CATALOG DOMAIN ────────────────────────────────────────────
 
+FAMILIES
+────────
+{
+  _id: string,                // "fam_" + nanoid
+  tenantId: string,
+  name: string,               // "Western", "Hot Drinks"
+  description: string,
+  menuType: "food" | "beverage",  // top-level menu classification
+  sortOrder: number,
+  isActive: boolean,
+  createdAt: Date,
+  updatedAt: Date
+}
+Indexes:
+  { tenantId: 1, name: 1 }        // unique compound
+  { tenantId: 1, menuType: 1 }    // filter by food/beverage
+
+
 CATEGORIES
 ──────────
 {
   _id: string,                // "cat_" + nanoid
   tenantId: string,
   name: string,               // "Makanan", "Minuman"
+  familyId: string | null,    // links to Family (menu grouping)
   parentId: string | null,    // supports sub-categories
   sortOrder: number,
-  icon: string | null,
   isActive: boolean,
-  isDeleted: boolean,
-  deletedAt: Date | null,
   createdAt: Date,
   updatedAt: Date
 }
 Indexes:
-  { tenantId: 1, parentId: 1, sortOrder: 1 }
-  { tenantId: 1, name: 1 }
+  { tenantId: 1, name: 1 }        // unique compound
+  { tenantId: 1, familyId: 1 }    // filter by family
 
 
 PRODUCTS
@@ -248,30 +264,29 @@ PRODUCTS
   _id: string,                // "prd_" + nanoid
   tenantId: string,
   sku: string,                // "BRG-001" (unique per tenant)
+  barcode: string,            // EAN/UPC barcode for scanner
+  bc: string,                 // additional barcode
   name: string,
   description: string,
   categoryId: string,
+  basePrice: number,
+  pricingProfileId: string | null,  // link to pricing profile
   imageUrls: string[],
   tags: string[],
-  unit: "pcs" | "kg" | "liter" | "portion",
+  country: string,
+  region: string,
+  currency: string,
   isActive: boolean,
-  isDeleted: boolean,
-  deletedAt: Date | null,
-  metadata: {
-    isFood: boolean,          // restaurant-specific hints
-    isDrink: boolean,
-    taxCategory: "food" | "non-food" | "service",
-    kitchenCategory: "kitchen" | "bar"  // where to prepare
-  },
+  metadata: Record<string, unknown>,
   createdAt: Date,
   updatedAt: Date
 }
 Indexes:
   { tenantId: 1, sku: 1 }           // unique compound
-  { tenantId: 1, categoryId: 1 }
+  { tenantId: 1, barcode: 1 }       // barcode lookup
+  { tenantId: 1, categoryId: 1 }    // filter by category
   { tenantId: 1, name: "text" }     // text search index
   { tenantId: 1, isActive: 1 }
-  { tenantId: 1, tags: 1 }
 
 
 PRODUCT_VARIANTS
@@ -511,6 +526,28 @@ Indexes:
 
 
 ── PAYMENTS DOMAIN ────────────────────────────────────────────
+
+PAYMENT_METHODS
+───────────────
+{
+  _id: string,                // "pm_" + nanoid
+  tenantId: string,
+  name: string,               // "Tunai", "Kartu Kredit", "QRIS"
+  code: string,               // "cash", "card", "qris" (unique per tenant)
+  description: string,
+  icon: string,               // emoji icon
+  color: string,              // hex color for UI
+  sortOrder: number,
+  isActive: boolean,
+  requiresReference: boolean, // true for card/transfer (need reference number)
+  config: object,             // method-specific configuration
+  createdAt: Date,
+  updatedAt: Date
+}
+Indexes:
+  { tenantId: 1, code: 1 }        // unique compound
+  { tenantId: 1, isActive: 1 }
+
 
 PAYMENTS
 ────────

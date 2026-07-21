@@ -1,16 +1,18 @@
 import { ConflictError, NotFoundError } from '../../../../@shared/infrastructure/error/AppError';
-import { Family, IFamily } from '../../domain/Family';
+import { Family, IFamily, MenuType } from '../../domain/Family';
 
 interface CreateFamilyInput {
   tenantId: string;
   name: string;
   description?: string;
+  menuType?: MenuType;
   sortOrder?: number;
 }
 
 interface UpdateFamilyInput {
   name?: string;
   description?: string;
+  menuType?: MenuType;
   sortOrder?: number;
   isActive?: boolean;
 }
@@ -23,6 +25,7 @@ export class FamilyService {
       tenantId: input.tenantId,
       name: input.name,
       description: input.description || '',
+      menuType: input.menuType ?? 'food',
       sortOrder: input.sortOrder || 0,
       isActive: true,
     });
@@ -44,6 +47,10 @@ export class FamilyService {
 
   async list(tenantId: string): Promise<Family[]> {
     return this.familyRepository.findByTenant(tenantId);
+  }
+
+  async listByMenuType(tenantId: string, menuType: MenuType): Promise<Family[]> {
+    return this.familyRepository.findByMenuType(tenantId, menuType);
   }
 
   async delete(id: string, tenantId: string): Promise<void> {

@@ -85,7 +85,7 @@ Every bounded context is a self-contained vertical slice with:
 
 | Context | Responsibility | Core Aggregate |
 |---------|---------------|----------------|
-| **Catalog** | Product definitions, categories, variants, modifiers, pricing, barcodes | `Product`, `Category`, `Variant` |
+| **Catalog** | Product definitions, categories, families (menu type grouping), variants, modifiers, pricing, barcodes | `Product`, `Category`, `Family`, `Modifier` |
 | **Ordering** | Cart management, order lifecycle, order state machine, discounts, taxes | `Order`, `Cart`, `OrderItem` |
 | **Inventory** | Stock levels, warehouse management, stock movements, low-stock alerts | `Stock`, `Warehouse`, `StockMovement` |
 | **POS** | Cash register, shift management, tender sessions, receipt generation | `Register`, `Shift`, `PaymentSession` |

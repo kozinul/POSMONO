@@ -150,7 +150,7 @@ Create a product.
 
 **Body:**
 ```json
-{ "sku": "SKU-001", "name": "Kopi Gula Aren", "categoryId": "cat-id", "basePrice": 25000, "barcode": "...", "description": "...", "tags": ["kopi"] }
+{ "sku": "SKU-001", "name": "Kopi Gula Aren", "categoryId": "cat-id", "basePrice": 25000, "barcode": "...", "description": "...", "imageUrls": ["https://..."], "tags": ["kopi"], "country": "ID", "region": "Bali", "currency": "IDR" }
 ```
 
 **Response 201:** Full product object.
@@ -181,21 +181,110 @@ Update product fields (all optional).
 
 List all categories.
 
-**Response 200:** `{ "success": true, "data": [{ "id": "...", "tenantId": "...", "name": "Kopi", "parentId": null, "sortOrder": 1, "isActive": true, "createdAt": "...", "updatedAt": "..." }] }`
+**Response 200:** `{ "success": true, "data": [{ "id": "...", "tenantId": "...", "name": "Kopi", "familyId": "fam-id", "parentId": null, "sortOrder": 1, "isActive": true, "createdAt": "...", "updatedAt": "..." }] }`
+
+### `GET /api/categories/by-family/:familyId`
+
+List categories filtered by family.
+
+**Response 200:** Array of category objects.
 
 ### `POST /api/categories`
 
-**Body:** `{ "name": "Minuman", "parentId": null, "sortOrder": 1 }`
+**Body:** `{ "name": "Minuman", "familyId": "fam-id", "parentId": null, "sortOrder": 1 }`
 
 **Response 201:** Full category object.
 
 ### `PUT /api/categories/:id`
 
-**Body:** `{ "name": "New Name", "isActive": false }` (all optional)
+**Body:** `{ "name": "New Name", "familyId": "fam-id", "isActive": false }` (all optional)
 
 **Response 200:** Full category object.
 
 ### `DELETE /api/categories/:id`
+
+**Response:** `204 No Content`
+
+---
+
+## Families (`/api/families`)
+
+### `GET /api/families`
+
+List all families for current tenant.
+
+**Response 200:** `{ "success": true, "data": [{ "id": "...", "tenantId": "...", "name": "Western", "description": "Masakan Barat", "menuType": "food", "sortOrder": 1, "isActive": true, "createdAt": "...", "updatedAt": "..." }] }`
+
+### `GET /api/families/by-menu-type/:menuType`
+
+List families filtered by menu type (`food` or `beverage`).
+
+**Response 200:** Array of family objects filtered by `menuType`.
+
+### `POST /api/families`
+
+**Body:** `{ "name": "Western", "description": "Masakan Barat", "menuType": "food", "sortOrder": 1 }`
+
+**Response 201:** Full family object.
+
+### `PUT /api/families/:id`
+
+**Body:** `{ "name": "Asian", "menuType": "food", "isActive": false }` (all optional)
+
+**Response 200:** Full family object.
+
+### `DELETE /api/families/:id`
+
+**Response:** `204 No Content`
+
+---
+
+## Payment Methods (`/api/payment-methods`)
+
+### `GET /api/payment-methods`
+
+List all payment methods for current tenant.
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "data": [{ "id": "...", "tenantId": "...", "name": "Tunai", "code": "cash", "description": "Pembayaran tunai", "icon": "💵", "color": "#22C55E", "sortOrder": 1, "isActive": true, "requiresReference": false, "config": {}, "createdAt": "...", "updatedAt": "..." }]
+}
+```
+
+### `GET /api/payment-methods/active`
+
+List only active payment methods (for POS display).
+
+**Response 200:** Array of active payment method objects.
+
+### `GET /api/payment-methods/:id`
+
+Get payment method by ID.
+
+**Response 200:** Single payment method object.
+
+### `POST /api/payment-methods`
+
+Create a payment method.
+
+**Body:**
+```json
+{ "name": "Tunai", "code": "cash", "description": "Pembayaran tunai", "icon": "💵", "color": "#22C55E", "sortOrder": 1, "requiresReference": false }
+```
+
+**Response 201:** Full payment method object.
+
+### `PUT /api/payment-methods/:id`
+
+Update payment method fields (all optional).
+
+**Body:** `{ "name": "Cash", "isActive": false }`
+
+**Response 200:** Full payment method object.
+
+### `DELETE /api/payment-methods/:id`
 
 **Response:** `204 No Content`
 

@@ -76,6 +76,24 @@ interface SplitItemInput {
   quantities: number[];
 }
 
+interface RemoveItemInput {
+  id: string;
+  itemIndex: number;
+}
+
+interface UpdateItemQuantityInput {
+  id: string;
+  itemIndex: number;
+  quantity: number;
+}
+
+interface VoidAndRollbackInput {
+  id: string;
+  reason: string;
+  voidedBy: string;
+  voidedByName: string;
+}
+
 export class CreateOrderService implements UseCase<CreateOrderInput, Order> {
   constructor(
     private readonly orderRepository: any,
@@ -116,6 +134,7 @@ export class CreateOrderService implements UseCase<CreateOrderInput, Order> {
       serviceChargeRate: 0,
       paymentBreakdown: [],
       promotions: [],
+      discountBreakdown: [],
       customerId: input.customerId,
       customerName: input.customerName ?? null,
       cashierId: input.cashierId,
@@ -329,6 +348,7 @@ export class SplitItemService implements UseCase<SplitItemInput, Order> {
         serviceChargeRate: 0,
         paymentBreakdown: [],
         promotions: [],
+        discountBreakdown: [],
         customerName: null,
         cashierName: '',
         customerId: null,
@@ -345,6 +365,72 @@ export class SplitItemService implements UseCase<SplitItemInput, Order> {
         this.eventBus.publish(event);
       }
     }
+    return order;
+  }
+}
+
+export class RemoveItemService implements UseCase<RemoveItemInput, Order> {
+  constructor(
+    private readonly orderRepository: any,
+    private readonly eventBus: any,
+  ) {}
+
+  async execute(input: RemoveItemInput): Promise<Order> {
+    const order = await this.orderRepository.findById(input.id);
+    if (!order) throw new Error('Order not found');
+
+    order.removeItem(input.itemIndex);
+
+    await this.orderRepository.save(order);
+
+    for (const event of order.domainEvents) {
+      this.eventBus.publish(event);
+    }
+
+    return order;
+  }
+}
+
+export class UpdateItemQuantityService implements UseCase<UpdateItemQuantityInput, Order> {
+  constructor(
+    private readonly orderRepository: any,
+    private readonly eventBus: any,
+  ) {}
+
+  async execute(input: UpdateItemQuantityInput): Promise<Order> {
+    const order = await this.orderRepository.findById(input.id);
+    if (!order) throw new Error('Order not found');
+
+    order.updateItemQuantity(input.itemIndex, input.quantity);
+
+    await this.orderRepository.save(order);
+
+    for (const event of order.domainEvents) {
+      this.eventBus.publish(event);
+    }
+
+    return order;
+  }
+}
+
+export class VoidAndRollbackService implements UseCase<VoidAndRollbackInput, Order> {
+  constructor(
+    private readonly orderRepository: any,
+    private readonly eventBus: any,
+  ) {}
+
+  async execute(input: VoidAndRollbackInput): Promise<Order> {
+    const order = await this.orderRepository.findById(input.id);
+    if (!order) throw new Error('Order not found');
+
+    order.voidAndRollback(input.reason, input.voidedBy, input.voidedByName);
+
+    await this.orderRepository.save(order);
+
+    for (const event of order.domainEvents) {
+      this.eventBus.publish(event);
+    }
+
     return order;
   }
 }

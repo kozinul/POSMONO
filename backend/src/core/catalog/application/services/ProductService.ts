@@ -10,7 +10,11 @@ interface CreateProductInput {
   categoryId: string;
   basePrice: number;
   pricingProfileId?: string;
+  imageUrls?: string[];
   tags?: string[];
+  country?: string;
+  region?: string;
+  currency?: string;
 }
 
 interface UpdateProductInput {
@@ -45,13 +49,17 @@ export class ProductService {
       tenantId: input.tenantId,
       sku: input.sku,
       barcode: input.barcode || '',
+      bc: '',
       name: input.name,
       description: input.description || '',
       categoryId: input.categoryId,
       basePrice: input.basePrice,
       pricingProfileId: input.pricingProfileId,
-      imageUrls: [],
+      imageUrls: input.imageUrls || [],
       tags: input.tags || [],
+      country: input.country || '',
+      region: input.region || '',
+      currency: input.currency || '',
       isActive: true,
       metadata: {},
     });

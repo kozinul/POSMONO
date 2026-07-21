@@ -9,6 +9,9 @@ import {
   VoidPaymentService,
   ReopenOrderService,
   SplitItemService,
+  RemoveItemService,
+  UpdateItemQuantityService,
+  VoidAndRollbackService,
 } from '../../../application/services/OrderService';
 import { MongoOrderRepository } from '../../../infrastructure/persistence/MongoOrderRepository';
 import { z } from 'zod';
@@ -88,6 +91,20 @@ const voidPaymentSchema = z.object({
   voidedByName: z.string().min(1, 'Voided by name is required'),
 });
 
+const removeItemSchema = z.object({
+  itemIndex: z.number().int().nonnegative(),
+});
+
+const updateItemQuantitySchema = z.object({
+  itemIndex: z.number().int().nonnegative(),
+  quantity: z.number().int().positive(),
+});
+
+const voidAndRollbackSchema = z.object({
+  reason: z.string().min(1, 'Reason is required'),
+  voidedByName: z.string().min(1, 'Voided by name is required'),
+});
+
 export class OrderController extends BaseController {
   constructor(
     private readonly createOrderService: CreateOrderService,
@@ -98,6 +115,9 @@ export class OrderController extends BaseController {
     private readonly voidPaymentService: VoidPaymentService,
     private readonly reopenOrderService: ReopenOrderService,
     private readonly splitItemService: SplitItemService,
+    private readonly removeItemService: RemoveItemService,
+    private readonly updateItemQuantityService: UpdateItemQuantityService,
+    private readonly voidAndRollbackService: VoidAndRollbackService,
     private readonly orderRepository: MongoOrderRepository,
   ) {
     super();
@@ -241,6 +261,45 @@ export class OrderController extends BaseController {
     const order = await this.reopenOrderService.execute({
       id: req.params.id,
       reopenedBy: req.userId,
+    });
+
+    this.ok(res, order.serialize());
+  }
+
+  async removeItem(req: Request, res: Response): Promise<void> {
+    const parsed = removeItemSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
+
+    const order = await this.removeItemService.execute({
+      id: req.params.id,
+      itemIndex: parsed.data.itemIndex,
+    });
+
+    this.ok(res, order.serialize());
+  }
+
+  async updateItemQuantity(req: Request, res: Response): Promise<void> {
+    const parsed = updateItemQuantitySchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
+
+    const order = await this.updateItemQuantityService.execute({
+      id: req.params.id,
+      itemIndex: parsed.data.itemIndex,
+      quantity: parsed.data.quantity,
+    });
+
+    this.ok(res, order.serialize());
+  }
+
+  async voidAndRollback(req: Request, res: Response): Promise<void> {
+    const parsed = voidAndRollbackSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
+
+    const order = await this.voidAndRollbackService.execute({
+      id: req.params.id,
+      reason: parsed.data.reason,
+      voidedBy: req.userId,
+      voidedByName: parsed.data.voidedByName,
     });
 
     this.ok(res, order.serialize());

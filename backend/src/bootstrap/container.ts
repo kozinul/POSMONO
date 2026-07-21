@@ -55,7 +55,7 @@ import { UserController } from '../core/identity/interfaces/http/controllers/Use
 import { PermissionController } from '../core/identity/interfaces/http/controllers/PermissionController';
 import { OrderSchema } from '../core/ordering/infrastructure/persistence/schemas/OrderSchema';
 import { MongoOrderRepository } from '../core/ordering/infrastructure/persistence/MongoOrderRepository';
-import { CreateOrderService, UpdateOrderService, VoidOrderService, VoidItemService, PayOrderService, VoidPaymentService, ReopenOrderService, SplitItemService } from '../core/ordering/application/services/OrderService';
+import { CreateOrderService, UpdateOrderService, VoidOrderService, VoidItemService, PayOrderService, VoidPaymentService, ReopenOrderService, SplitItemService, RemoveItemService, UpdateItemQuantityService, VoidAndRollbackService } from '../core/ordering/application/services/OrderService';
 import { OrderController } from '../core/ordering/interfaces/http/controllers/OrderController';
 import { ShiftSchema } from '../core/pos/infrastructure/persistence/schemas/ShiftSchema';
 import { MongoShiftRepository } from '../core/pos/infrastructure/persistence/MongoShiftRepository';
@@ -82,6 +82,24 @@ import { MongoPromoCodeRepository } from '../core/discount/infrastructure/persis
 import { DiscountServiceAdapter } from '../core/discount/application/services/DiscountServiceAdapter';
 import { ManageDiscountRuleUseCase } from '../core/discount/application/services/ManageDiscountRuleUseCase';
 import { createDiscountRouter } from '../core/discount/api/discount.routes';
+import { CustomerSchema } from '../core/customer/infrastructure/persistence/schemas/CustomerSchema';
+import { MongoCustomerRepository } from '../core/customer/infrastructure/persistence/MongoCustomerRepository';
+import { CustomerService } from '../core/customer/application/services/CustomerService';
+import { CustomerController } from '../core/customer/interfaces/http/controllers/CustomerController';
+import { SettingSchema } from '../core/settings/infrastructure/persistence/schemas/SettingSchema';
+import { MongoSettingRepository } from '../core/settings/infrastructure/persistence/MongoSettingRepository';
+import { SettingService } from '../core/settings/application/services/SettingService';
+import { SettingController } from '../core/settings/interfaces/http/controllers/SettingController';
+import { UploadService } from '../core/upload/application/services/UploadService';
+import { UploadController } from '../core/upload/interfaces/http/controllers/UploadController';
+import { PromotionSchema } from '../core/promotion/infrastructure/persistence/schemas/PromotionSchema';
+import { MongoPromotionRepository } from '../core/promotion/infrastructure/persistence/MongoPromotionRepository';
+import { PromotionService } from '../core/promotion/application/services/PromotionService';
+import { PromotionController } from '../core/promotion/interfaces/http/controllers/PromotionController';
+import { PaymentMethodSchema } from '../core/payment/infrastructure/persistence/schemas/PaymentMethodSchema';
+import { MongoPaymentMethodRepository } from '../core/payment/infrastructure/persistence/MongoPaymentMethodRepository';
+import { PaymentMethodService } from '../core/payment/application/services/PaymentMethodService';
+import { PaymentMethodController } from '../core/payment/interfaces/http/controllers/PaymentMethodController';
 
 export type DIContainer = ReturnType<typeof buildContainer>;
 
@@ -109,6 +127,10 @@ export function buildContainer() {
   const DiscountConfigurationModel = systemConnection.model('DiscountConfiguration', DiscountConfigurationSchema);
   const PromoCodeModel = systemConnection.model('PromoCode', PromoCodeSchema);
   const DailyMetricModel = systemConnection.model('DailyMetric', DailyMetricSchema);
+  const CustomerModel = systemConnection.model('Customer', CustomerSchema);
+  const SettingModel = systemConnection.model('Setting', SettingSchema);
+  const PromotionModel = systemConnection.model('Promotion', PromotionSchema);
+  const PaymentMethodModel = systemConnection.model('PaymentMethod', PaymentMethodSchema);
 
   const eventBus = new EventBus();
 
@@ -136,6 +158,10 @@ export function buildContainer() {
     paymentModel: asValue(PaymentModel),
     taxConfigurationModel: asValue(TaxConfigurationModel),
     pricingProfileModel: asValue(PricingProfileModel),
+    customerModel: asValue(CustomerModel),
+    settingModel: asValue(SettingModel),
+    promotionModel: asValue(PromotionModel),
+    paymentMethodModel: asValue(PaymentMethodModel),
     userRepository: asClass(MongoUserRepository, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
@@ -401,6 +427,27 @@ export function buildContainer() {
         createOrderService: container.resolve('createOrderService'),
       }),
     }),
+    removeItemService: asClass(RemoveItemService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        orderRepository: container.resolve('orderRepository'),
+        eventBus: container.resolve('eventBus'),
+      }),
+    }),
+    updateItemQuantityService: asClass(UpdateItemQuantityService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        orderRepository: container.resolve('orderRepository'),
+        eventBus: container.resolve('eventBus'),
+      }),
+    }),
+    voidAndRollbackService: asClass(VoidAndRollbackService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        orderRepository: container.resolve('orderRepository'),
+        eventBus: container.resolve('eventBus'),
+      }),
+    }),
     orderController: asClass(OrderController, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
@@ -412,6 +459,9 @@ export function buildContainer() {
         voidPaymentService: container.resolve('voidPaymentService'),
         reopenOrderService: container.resolve('reopenOrderService'),
         splitItemService: container.resolve('splitItemService'),
+        removeItemService: container.resolve('removeItemService'),
+        updateItemQuantityService: container.resolve('updateItemQuantityService'),
+        voidAndRollbackService: container.resolve('voidAndRollbackService'),
         orderRepository: container.resolve('orderRepository'),
       }),
     }),
@@ -453,6 +503,24 @@ export function buildContainer() {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
         paymentService: container.resolve('paymentService'),
+      }),
+    }),
+    paymentMethodRepository: asClass(MongoPaymentMethodRepository, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        model: PaymentMethodModel,
+      }),
+    }),
+    paymentMethodService: asClass(PaymentMethodService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        paymentMethodRepository: container.resolve('paymentMethodRepository'),
+      }),
+    }),
+    paymentMethodController: asClass(PaymentMethodController, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        paymentMethodService: container.resolve('paymentMethodService'),
       }),
     }),
     taxConfigurationRepository: asClass(MongoTaxConfigurationRepository, {
@@ -520,6 +588,69 @@ export function buildContainer() {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
         reportService: container.resolve('reportService'),
+      }),
+    }),
+    customerRepository: asClass(MongoCustomerRepository, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        model: CustomerModel,
+      }),
+    }),
+    customerService: asClass(CustomerService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        customerRepository: container.resolve('customerRepository'),
+      }),
+    }),
+    customerController: asClass(CustomerController, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        customerService: container.resolve('customerService'),
+      }),
+    }),
+    settingRepository: asClass(MongoSettingRepository, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        model: SettingModel,
+      }),
+    }),
+    settingService: asClass(SettingService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        settingRepository: container.resolve('settingRepository'),
+      }),
+    }),
+    settingController: asClass(SettingController, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        settingService: container.resolve('settingService'),
+      }),
+    }),
+    uploadService: asClass(UploadService, {
+      lifetime: Lifetime.SINGLETON,
+    }),
+    uploadController: asClass(UploadController, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        uploadService: container.resolve('uploadService'),
+      }),
+    }),
+    promotionRepository: asClass(MongoPromotionRepository, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        model: PromotionModel,
+      }),
+    }),
+    promotionService: asClass(PromotionService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        promotionRepository: container.resolve('promotionRepository'),
+      }),
+    }),
+    promotionController: asClass(PromotionController, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        promotionService: container.resolve('promotionService'),
       }),
     }),
   });

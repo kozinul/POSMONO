@@ -7,6 +7,7 @@ export interface IProduct {
   tenantId: string;
   sku: string;
   barcode: string;
+  bc: string;
   name: string;
   description: string;
   categoryId: string;
@@ -14,6 +15,9 @@ export interface IProduct {
   pricingProfileId?: string;
   imageUrls: string[];
   tags: string[];
+  country: string;
+  region: string;
+  currency: string;
   isActive: boolean;
   metadata: Record<string, unknown>;
   createdAt: Date;
@@ -24,6 +28,7 @@ export class Product extends AggregateRoot<ProductId> {
   private tenantId: string;
   private sku: string;
   private barcode: string;
+  private bc: string;
   private name: string;
   private description: string;
   private categoryId: string;
@@ -31,6 +36,9 @@ export class Product extends AggregateRoot<ProductId> {
   private pricingProfileId?: string;
   private imageUrls: string[];
   private tags: string[];
+  private country: string;
+  private region: string;
+  private currency: string;
   private isActive: boolean;
   private metadata: Record<string, unknown>;
   private createdAt: Date;
@@ -41,6 +49,7 @@ export class Product extends AggregateRoot<ProductId> {
     this.tenantId = props.tenantId;
     this.sku = props.sku;
     this.barcode = props.barcode;
+    this.bc = props.bc ?? '';
     this.name = props.name;
     this.description = props.description;
     this.categoryId = props.categoryId;
@@ -48,6 +57,9 @@ export class Product extends AggregateRoot<ProductId> {
     this.pricingProfileId = props.pricingProfileId;
     this.imageUrls = [...props.imageUrls];
     this.tags = [...props.tags];
+    this.country = props.country ?? '';
+    this.region = props.region ?? '';
+    this.currency = props.currency ?? '';
     this.isActive = props.isActive;
     this.metadata = { ...props.metadata };
     this.createdAt = props.createdAt;
@@ -83,7 +95,7 @@ export class Product extends AggregateRoot<ProductId> {
     return new Product(props);
   }
 
-  update(data: Partial<Pick<IProduct, 'name' | 'description' | 'categoryId' | 'basePrice' | 'barcode' | 'sku' | 'tags' | 'imageUrls' | 'isActive' | 'pricingProfileId'>>): void {
+  update(data: Partial<Pick<IProduct, 'name' | 'description' | 'categoryId' | 'basePrice' | 'barcode' | 'sku' | 'tags' | 'imageUrls' | 'isActive' | 'pricingProfileId' | 'bc' | 'country' | 'region' | 'currency'>>): void {
     if (data.name !== undefined) this.name = data.name;
     if (data.description !== undefined) this.description = data.description;
     if (data.categoryId !== undefined) this.categoryId = data.categoryId;
@@ -94,6 +106,10 @@ export class Product extends AggregateRoot<ProductId> {
     if (data.imageUrls !== undefined) this.imageUrls = [...data.imageUrls];
     if (data.isActive !== undefined) this.isActive = data.isActive;
     if (data.pricingProfileId !== undefined) this.pricingProfileId = data.pricingProfileId;
+    if (data.bc !== undefined) this.bc = data.bc;
+    if (data.country !== undefined) this.country = data.country;
+    if (data.region !== undefined) this.region = data.region;
+    if (data.currency !== undefined) this.currency = data.currency;
     this.updatedAt = new Date();
   }
 
@@ -103,6 +119,7 @@ export class Product extends AggregateRoot<ProductId> {
       tenantId: this.tenantId,
       sku: this.sku,
       barcode: this.barcode,
+      bc: this.bc,
       name: this.name,
       description: this.description,
       categoryId: this.categoryId,
@@ -110,6 +127,9 @@ export class Product extends AggregateRoot<ProductId> {
       pricingProfileId: this.pricingProfileId,
       imageUrls: [...this.imageUrls],
       tags: [...this.tags],
+      country: this.country,
+      region: this.region,
+      currency: this.currency,
       isActive: this.isActive,
       metadata: { ...this.metadata },
       createdAt: this.createdAt,

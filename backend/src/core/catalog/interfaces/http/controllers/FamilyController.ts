@@ -3,10 +3,12 @@ import { BaseController } from '../../../../../@shared/interfaces/BaseController
 import { FamilyService } from '../../../application/services/FamilyService';
 import { z } from 'zod';
 import { ValidationError } from '../../../../../@shared/infrastructure/error/AppError';
+import { MenuType } from '../../../domain/Family';
 
 const createFamilySchema = z.object({
   name: z.string().min(1, 'Name is required'),
   description: z.string().optional(),
+  menuType: z.enum(['food', 'beverage']).optional(),
   sortOrder: z.number().optional(),
 });
 
@@ -43,6 +45,12 @@ export class FamilyController extends BaseController {
 
   async list(req: Request, res: Response): Promise<void> {
     const families = await this.familyService.list(req.tenantId);
+    this.ok(res, families.map((f) => f.serialize()));
+  }
+
+  async listByMenuType(req: Request, res: Response): Promise<void> {
+    const menuType = req.params.menuType as MenuType;
+    const families = await this.familyService.listByMenuType(req.tenantId, menuType);
     this.ok(res, families.map((f) => f.serialize()));
   }
 

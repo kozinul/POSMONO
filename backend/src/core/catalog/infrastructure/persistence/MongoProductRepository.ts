@@ -6,12 +6,16 @@ interface ProductDoc extends Document<string> {
   tenantId: string;
   sku: string;
   barcode: string;
+  bc: string;
   name: string;
   description: string;
   categoryId: string;
   basePrice: number;
   imageUrls: string[];
   tags: string[];
+  country: string;
+  region: string;
+  currency: string;
   isActive: boolean;
   metadata: Record<string, unknown>;
   createdAt: Date;
@@ -27,12 +31,16 @@ export class MongoProductRepository {
       tenantId: doc.tenantId,
       sku: doc.sku,
       barcode: doc.barcode,
+      bc: doc.bc ?? '',
       name: doc.name,
       description: doc.description,
       categoryId: doc.categoryId,
       basePrice: doc.basePrice,
       imageUrls: doc.imageUrls,
       tags: doc.tags,
+      country: doc.country ?? '',
+      region: doc.region ?? '',
+      currency: doc.currency ?? '',
       isActive: doc.isActive,
       metadata: doc.metadata || {},
       createdAt: doc.createdAt,
@@ -47,12 +55,16 @@ export class MongoProductRepository {
       tenantId: data.tenantId,
       sku: data.sku,
       barcode: data.barcode,
+      bc: data.bc,
       name: data.name,
       description: data.description,
       categoryId: data.categoryId,
       basePrice: data.basePrice,
       imageUrls: data.imageUrls,
       tags: data.tags,
+      country: data.country,
+      region: data.region,
+      currency: data.currency,
       isActive: data.isActive,
       metadata: data.metadata,
     } as unknown as Partial<ProductDoc>;

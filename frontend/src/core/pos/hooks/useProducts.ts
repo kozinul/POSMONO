@@ -20,6 +20,7 @@ interface Product {
 interface Category {
   id: string;
   name: string;
+  familyId: string | null;
   sortOrder: number;
 }
 

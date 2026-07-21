@@ -71,6 +71,17 @@ const PromotionBreakdownSchema = new Schema(
   { _id: false },
 );
 
+const DiscountBreakdownSchema = new Schema(
+  {
+    id: { type: String, required: true },
+    name: { type: String, required: true },
+    type: { type: String, enum: ['percentage', 'nominal', 'buy_x_get_y', 'min_purchase'], required: true },
+    amount: { type: Number, required: true },
+    appliedTo: { type: String, required: true },
+  },
+  { _id: false },
+);
+
 export const OrderSchema = new Schema(
   {
     _id: { type: String },
@@ -101,6 +112,7 @@ export const OrderSchema = new Schema(
     },
     paymentBreakdown: { type: [PaymentBreakdownEntrySchema], default: [] },
     promotions: { type: [PromotionBreakdownSchema], default: [] },
+    discountBreakdown: { type: [DiscountBreakdownSchema], default: [] },
     customerId: { type: String, default: null },
     customerName: { type: String, default: null },
     cashierId: { type: String, required: true },

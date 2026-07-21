@@ -55,6 +55,14 @@ export interface IPromotionBreakdown {
   description: string;
 }
 
+export interface IDiscountBreakdown {
+  id: string;
+  name: string;
+  type: 'percentage' | 'nominal' | 'buy_x_get_y' | 'min_purchase';
+  amount: number;
+  appliedTo: string;
+}
+
 export interface IOrder {
   id: string;
   tenantId: string;
@@ -76,6 +84,7 @@ export interface IOrder {
   paymentStatus: PaymentStatus;
   paymentBreakdown: IPaymentBreakdownEntry[];
   promotions: IPromotionBreakdown[];
+  discountBreakdown: IDiscountBreakdown[];
   customerId: string | null;
   customerName: string | null;
   cashierId: string;
@@ -115,6 +124,7 @@ export class Order extends AggregateRoot<OrderId> {
   private paymentStatus: PaymentStatus;
   private paymentBreakdown: IPaymentBreakdownEntry[];
   private promotions: IPromotionBreakdown[];
+  private discountBreakdown: IDiscountBreakdown[];
   private customerId: string | null;
   private customerName: string | null;
   private cashierId: string;
@@ -154,6 +164,7 @@ export class Order extends AggregateRoot<OrderId> {
     this.paymentStatus = props.paymentStatus;
     this.paymentBreakdown = [...props.paymentBreakdown];
     this.promotions = [...props.promotions];
+    this.discountBreakdown = [...(props.discountBreakdown ?? [])];
     this.customerId = props.customerId;
     this.customerName = props.customerName;
     this.cashierId = props.cashierId;
@@ -185,6 +196,7 @@ export class Order extends AggregateRoot<OrderId> {
       taxDetails: props.taxDetails ?? [],
       paymentBreakdown: props.paymentBreakdown ?? [],
       promotions: props.promotions ?? [],
+      discountBreakdown: props.discountBreakdown ?? [],
       voidedItems: [],
       voidedAt: null,
       voidedBy: null,
@@ -412,6 +424,88 @@ export class Order extends AggregateRoot<OrderId> {
     this.updatedAt = new Date();
   }
 
+  removeItem(itemIndex: number): void {
+    if (this.status === 'voided' || this.status === 'cancelled' || this.status === 'paid') {
+      throw new Error('Cannot remove items from a voided/cancelled/paid order');
+    }
+    if (itemIndex < 0 || itemIndex >= this.items.length) {
+      throw new Error('Invalid item index');
+    }
+
+    this.items.splice(itemIndex, 1);
+    this.recalculateTotals();
+    this.updatedAt = new Date();
+  }
+
+  updateItemQuantity(itemIndex: number, newQuantity: number): void {
+    if (this.status === 'voided' || this.status === 'cancelled' || this.status === 'paid') {
+      throw new Error('Cannot update items on a voided/cancelled/paid order');
+    }
+    if (itemIndex < 0 || itemIndex >= this.items.length) {
+      throw new Error('Invalid item index');
+    }
+    if (newQuantity <= 0) {
+      throw new Error('Quantity must be positive');
+    }
+
+    const item = this.items[itemIndex];
+    const ratio = newQuantity / item.quantity;
+    item.quantity = newQuantity;
+    item.totalPrice = Math.round(item.unitPrice * newQuantity * 100) / 100;
+    item.tax.amount = Math.round(item.tax.amount * ratio * 100) / 100;
+
+    this.recalculateTotals();
+    this.updatedAt = new Date();
+  }
+
+  voidAndRollback(reason: string, voidedBy: string, voidedByName: string): void {
+    if (this.status === 'voided' || this.status === 'refunded') {
+      throw new Error('Cannot void an already voided/refunded order');
+    }
+
+    this.status = 'voided';
+    this.voidedAt = new Date();
+    this.voidedBy = voidedBy;
+    this.voidedByName = voidedByName;
+    this.voidReason = reason;
+    this.paymentStatus = 'pending';
+    this.paidAt = null;
+    this.paymentBreakdown = [];
+    this.updatedAt = new Date();
+
+    for (const item of this.items) {
+      this.voidedItems.push({
+        productId: item.productId,
+        productName: item.productName,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        totalPrice: item.totalPrice,
+        reason,
+        voidedBy,
+        voidedByName,
+        voidedAt: new Date(),
+      });
+    }
+    this.items = [];
+
+    this.addDomainEvent(
+      new DomainEvent({
+        eventName: 'ordering.order.voided',
+        aggregateId: this.id.toValue(),
+        aggregateType: 'Order',
+        tenantId: this.tenantId,
+        payload: {
+          orderId: this.id.toValue(),
+          orderNumber: this.orderNumber,
+          voidedBy,
+          voidedByName,
+          reason,
+          rollback: true,
+        },
+      }),
+    );
+  }
+
   voidPayment(paymentIndex: number, reason: string, voidedBy: string, voidedByName: string): void {
     if (paymentIndex < 0 || paymentIndex >= this.paymentBreakdown.length) {
       throw new Error('Invalid payment index');
@@ -523,6 +617,7 @@ export class Order extends AggregateRoot<OrderId> {
       paymentStatus: this.paymentStatus,
       paymentBreakdown: [...this.paymentBreakdown],
       promotions: [...this.promotions],
+      discountBreakdown: [...this.discountBreakdown],
       customerId: this.customerId,
       customerName: this.customerName,
       cashierId: this.cashierId,

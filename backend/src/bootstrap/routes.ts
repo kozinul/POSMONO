@@ -18,6 +18,11 @@ import { createReportRoutes } from '../core/reporting/interfaces/http/routes/rep
 import { createTaxRoutes } from '../core/tax/api/tax.routes';
 import { createPricingProfileRoutes } from '../core/pricing/api/pricingProfile.routes';
 import { createDiscountRouter } from '../core/discount/api/discount.routes';
+import { createCustomerRoutes } from '../core/customer/interfaces/http/routes/customer.routes';
+import { createSettingRoutes } from '../core/settings/interfaces/http/routes/setting.routes';
+import { createUploadRoutes } from '../core/upload/interfaces/http/routes/upload.routes';
+import { createPromotionRoutes } from '../core/promotion/interfaces/http/routes/promotion.routes';
+import { createPaymentMethodRoutes } from '../core/payment/interfaces/http/routes/paymentMethod.routes';
 
 export function registerRoutes(app: Express, container: DIContainer): void {
   app.get('/health', (_req, res) => {
@@ -78,4 +83,19 @@ export function registerRoutes(app: Express, container: DIContainer): void {
   const discountConfigRepo = container.resolve('discountConfigurationRepository');
   const promoCodeRepo = container.resolve('promoCodeRepository');
   app.use('/api/discount', createDiscountRouter(discountConfigRepo, promoCodeRepo));
+
+  const customerController = container.resolve('customerController');
+  app.use('/api/members', createCustomerRoutes(customerController));
+
+  const settingController = container.resolve('settingController');
+  app.use('/api/settings', createSettingRoutes(settingController));
+
+  const uploadController = container.resolve('uploadController');
+  app.use('/api/upload', createUploadRoutes(uploadController));
+
+  const promotionController = container.resolve('promotionController');
+  app.use('/api/promotions', createPromotionRoutes(promotionController));
+
+  const paymentMethodController = container.resolve('paymentMethodController');
+  app.use('/api/payment-methods', createPaymentMethodRoutes(paymentMethodController));
 }

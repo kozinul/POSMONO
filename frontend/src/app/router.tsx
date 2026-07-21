@@ -9,10 +9,14 @@ const DashboardPage = lazy(() => import('../core/dashboard/pages/DashboardPage')
 const PosPage = lazy(() => import('../core/pos/pages/PosPage'));
 const OrderListPage = lazy(() => import('../core/orders/pages/OrderListPage'));
 const ProductListPage = lazy(() => import('../core/products/pages/ProductListPage'));
+const FamilyListPage = lazy(() => import('../core/families/pages/FamilyListPage'));
 const StockListPage = lazy(() => import('../core/inventory/pages/StockListPage'));
 const SettingsPage = lazy(() => import('../core/settings/pages/GeneralSettingsPage'));
 const ReportPage = lazy(() => import('../core/reports/pages/ReportPage'));
 const ShiftPage = lazy(() => import('../core/shifts/pages/ShiftPage'));
+const MemberListPage = lazy(() => import('../core/members/pages/MemberListPage'));
+const PromotionListPage = lazy(() => import('../core/promotions/pages/PromotionListPage'));
+const PaymentMethodListPage = lazy(() => import('../core/payment-methods/pages/PaymentMethodListPage'));
 
 const Loading = () => (
   <div className="flex items-center justify-center min-h-screen">
@@ -34,10 +38,14 @@ export function AppRouter() {
             <Route path="/pos" element={<PosPage />} />
             <Route path="/orders" element={<OrderListPage />} />
             <Route path="/products" element={<ProductListPage />} />
+            <Route path="/families" element={<FamilyListPage />} />
             <Route path="/inventory" element={<StockListPage />} />
             <Route path="/reports" element={<ReportPage />} />
             <Route path="/shifts" element={<ShiftPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/members" element={<MemberListPage />} />
+            <Route path="/promotions" element={<PromotionListPage />} />
+            <Route path="/payment-methods" element={<PaymentMethodListPage />} />
           </Route>
           <Route path="*" element={<NotFoundPage />} />
         </Routes>

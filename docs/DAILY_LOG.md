@@ -631,3 +631,122 @@ Moved from Week 8 (Testing & Polish) into Week 9 (MVP Launch Prep). The producti
 **Notes:**
 
 Tax Engine is the most architecturally significant module so far. Compound engine with configurable strategies, DPP modifiers, and 5 rule types spans the full DDD stack. The indonesia_ppn_2025 strategy correctly handles Indonesia's 2025 PPN (12% × 11/12 = 11% effective). Backend: 286 tests (down from 299 because 13 old tests replaced by new patterns). Frontend: 11 tests. All passing.
+
+---
+
+## July 21, 2026 — Menu Type System + Product Management
+
+**Session:** Menu Type classification + full product CRUD frontend
+
+**What I worked on:**
+
+- **Menu Type classification system** — added `menuType` (`'food' | 'beverage'`) field to Family entity for top-level menu grouping
+- **3-level hierarchy**: Menu Type → Family → Category → Product
+- **Product management page** — complete rewrite with full CRUD, search, image upload, tags, pagination
+- **Families management page** — new page with Food/Beverage tab filtering
+
+**Backend changes:**
+
+- `Family.ts` — added `menuType: MenuType` to interface, class, create, update, serialize
+- `FamilySchema.ts` — added `menuType` field (enum, default 'food') + compound index `(tenantId, menuType)`
+- `MongoFamilyRepository.ts` — added `menuType` mapping + `findByMenuType()` method
+- `FamilyService.ts` — added `menuType` to CreateFamilyInput/UpdateFamilyInput + `listByMenuType()` method
+- `FamilyController.ts` — added `listByMenuType()` handler + Zod schema for `menuType`
+- `family.routes.ts` — added `GET /families/by-menu-type/:menuType`
+- `ProductService.ts` — added `imageUrls`, `country`, `region`, `currency` to CreateProductInput
+
+**Frontend changes:**
+
+- `products/hooks/useProducts.ts` — **new** shared hooks: `useProductList`, `useCategoryList`, `useFamilyList`, `useCreateProduct`, `useUpdateProduct`, `useDeleteProduct`, `useUpload`
+- `pos/hooks/useFamilies.ts` — **new** hook for fetching families with menuType filter
+- `products/pages/ProductListPage.tsx` — **rewrite** with search, 3-level filter, pagination, image upload, tags, delete confirmation, category name resolution
+- `families/pages/FamilyListPage.tsx` — **new** CRUD page with Food/Beverage tabs
+- `pos/pages/PosPage.tsx` — added Menu Type tabs + Family pills above Category pills
+- `app/router.tsx` — added `/families` route
+- `layouts/DashboardLayout.tsx` — added Families nav item
+
+**Products page features:**
+
+| Feature | Description |
+|---------|-------------|
+| Search | Cari by nama, SKU, atau barcode |
+| 3-level filter | Menu Type → Family → Category |
+| Pagination | 20 items/page with navigation |
+| Image upload | Upload via modal, preview, remove |
+| Tags | Input + Enter, badge chips, remove |
+| Delete confirmation | Modal before nonaktifkan |
+| Category resolution | Shows category name from categoryId |
+
+**TypeScript:** Backend 0 errors, Frontend 0 errors
+
+**What I learned:**
+
+- Adding `menuType` to Family (rather than creating a separate MenuType entity) keeps the hierarchy simple for 2-value enum
+- Frontend hooks separation (`products/hooks/useProducts.ts`) enables reuse across ProductListPage and POS page
+- Image upload integration requires multer middleware on backend + FormData on frontend
+
+**Tomorrow priority:**
+
+- Per-item discount
+- Printer engine template/spec
+- MVP deployment (VPS + SSL + pilot tenant)
+- Seed data for default families (Western, Asia, Hot Drinks, etc.)
+
+**Productivity score:** 9
+
+---
+
+## July 21, 2026 — Payment Method Management (Session 2)
+
+**Session:** Payment method CRUD system
+
+**What I worked on:**
+
+- **PaymentMethod domain entity** — new aggregate for managing payment methods (Cash, Card, QRIS, Transfer, etc.)
+- **Full DDD stack** — entity, schema, repository, service, controller, routes
+- **Frontend management page** — CRUD with preset buttons, color picker, icon support
+
+**Backend changes (7 files):**
+
+- `PaymentMethod.ts` — domain entity with fields: `name`, `code`, `icon`, `color`, `sortOrder`, `requiresReference`, `config`
+- `PaymentMethodSchema.ts` — Mongoose schema with unique index `(tenantId, code)`
+- `MongoPaymentMethodRepository.ts` — CRUD + `findActiveByTenant()`, `findByCode()`
+- `PaymentMethodService.ts` — business logic + code uniqueness check
+- `PaymentMethodController.ts` — 6 HTTP handlers
+- `paymentMethod.routes.ts` — REST routes
+- `container.ts` + `routes.ts` — registered at `/api/payment-methods`
+
+**Frontend changes (4 files):**
+
+- `payment-methods/hooks/usePaymentMethods.ts` — shared hooks for CRUD
+- `payment-methods/pages/PaymentMethodListPage.tsx` — full management page
+- `router.tsx` — added `/payment-methods` route
+- `DashboardLayout.tsx` — added "Payment" nav item
+
+**API Endpoints:**
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/payment-methods` | List all |
+| GET | `/api/payment-methods/active` | List active only |
+| GET | `/api/payment-methods/:id` | Get by ID |
+| POST | `/api/payment-methods` | Create |
+| PUT | `/api/payment-methods/:id` | Update |
+| DELETE | `/api/payment-methods/:id` | Delete |
+
+**Page features:**
+
+- 6 preset buttons (Tunai, Kartu, QRIS, Transfer, E-Wallet, Kredit) for quick setup
+- Color picker + emoji icon support
+- `requiresReference` flag for methods that need reference numbers
+- Delete confirmation modal
+
+**What I learned:**
+
+- PaymentMethod is a separate entity from Payment — it's configuration, not transaction data
+- Preset buttons significantly speed up initial setup for tenants
+- `requiresReference` flag enables UI to conditionally show reference input in POS
+
+**TypeScript:** Backend 0 errors, Frontend 0 errors
+
+**Productivity score:** 9

@@ -6,6 +6,7 @@ export const FamilySchema = new Schema(
     tenantId: { type: String, required: true, index: true },
     name: { type: String, required: true },
     description: { type: String, default: '' },
+    menuType: { type: String, enum: ['food', 'beverage'], default: 'food', required: true },
     sortOrder: { type: Number, default: 0 },
     isActive: { type: Boolean, default: true },
   },
@@ -17,3 +18,4 @@ export const FamilySchema = new Schema(
 );
 
 FamilySchema.index({ tenantId: 1, name: 1 }, { unique: true });
+FamilySchema.index({ tenantId: 1, menuType: 1 });

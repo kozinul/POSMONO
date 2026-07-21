@@ -162,21 +162,25 @@ families.view, families.edit
 
 ### Models
 - **Family** (`Family.ts`)
-  - `name` (string, unique)
-  - `slug` (string, unique)
+  - `name` (string, unique per tenant)
   - `description` (string)
+  - `menuType` (`'food' | 'beverage'`) — top-level menu classification
+  - `sortOrder` (number)
+  - `isActive` (boolean)
 
 ### API Endpoints
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| GET | `/api/families` | ❌ | List families |
+| GET | `/api/families` | ❌ | List all families |
+| GET | `/api/families/by-menu-type/:menuType` | ❌ | List families filtered by food/beverage |
 | POST | `/api/families` | ✅ admin | Create family |
 | PUT | `/api/families/:id` | ✅ admin | Update family |
 | DELETE | `/api/families/:id` | ✅ admin | Delete family |
 
 ### Business Logic
-- Top-level grouping untuk produk (Makanan, Minuman, Merchandise)
-- Category di-bawah Family
+- Top-level grouping untuk menu: **Food** (Makanan) atau **Beverage** (Minuman)
+- Family mengelompokkan Category (misal: Western → Main Course, Appetizer)
+- 3-level hierarchy: Menu Type → Family → Category → Product
 
 ---
 
@@ -184,15 +188,17 @@ families.view, families.edit
 
 ### Models
 - **Category** (`Category.ts`)
-  - `name` (string, unique)
-  - `description` (string)
-  - `family` (ObjectId → Family)
-  - `active` (boolean)
+  - `name` (string, unique per tenant)
+  - `familyId` (string | null) — links to Family
+  - `parentId` (string | null) — supports sub-categories
+  - `sortOrder` (number)
+  - `isActive` (boolean)
 
 ### API Endpoints
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| GET | `/api/categories` | ❌ | List categories |
+| GET | `/api/categories` | ❌ | List all categories |
+| GET | `/api/categories/by-family/:familyId` | ❌ | List categories filtered by family |
 | POST | `/api/categories` | ✅ admin | Create category |
 | PUT | `/api/categories/:id` | ✅ admin | Update category |
 | DELETE | `/api/categories/:id` | ✅ admin | Delete category |
@@ -203,34 +209,39 @@ families.view, families.edit
 
 ### Models
 - **Product** (`Product.ts`)
+  - `sku` (string, unique per tenant)
+  - `barcode` (string) — EAN/UPC for scanner
+  - `bc` (string) — additional barcode
   - `name` (string)
-  - `barcode` (string, unique, sparse)
-  - `price` (number)
-  - `costPrice` (number)
-  - `stock` (number)
-  - `stockManagement` (boolean)
-  - `taxes` (ITaxEntry[]) — `{ tax: ObjectId, included: boolean }`
-  - `discount` (number)
-  - `category` (ObjectId → Category)
-  - `outlets` (ObjectId[] → Outlet)
-  - `modifiers` (ObjectId[] → Modifier)
-  - `image` (string — URL)
-  - `active` (boolean)
+  - `description` (string)
+  - `categoryId` (string → Category)
+  - `basePrice` (number)
+  - `pricingProfileId` (string | null)
+  - `imageUrls` (string[])
+  - `tags` (string[])
+  - `country` (string)
+  - `region` (string)
+  - `currency` (string)
+  - `isActive` (boolean)
+  - `metadata` (Record<string, unknown>)
 
 ### API Endpoints
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| GET | `/api/products` | ❌ | List products (filter by outlet, category, search) |
-| GET | `/api/products/popular` | ❌ | Get popular products |
+| GET | `/api/products` | ❌ | List products (paginated, filter by categoryId, search) |
+| GET | `/api/products/by-barcode/:barcode` | ❌ | Lookup product by barcode (POS scanner) |
 | GET | `/api/products/:id` | ❌ | Get product detail |
 | POST | `/api/products` | ✅ admin | Create product |
 | PUT | `/api/products/:id` | ✅ admin | Update product |
-| DELETE | `/api/products/:id` | ✅ admin | Delete product |
+| DELETE | `/api/products/:id` | ✅ admin | Soft-delete (set isActive: false) |
 
 ### Business Logic
-- Per-product tax assignment (bisa multiple tax)
-- Per-product modifier assignment
-- Outlet scoping: produk hanya muncul di outlet tertentu
+- SKU uniqueness enforced per tenant
+- Barcode lookup for POS scanner
+- Soft-delete: `DELETE` sets `isActive: false`, product hidden from POS
+- Image upload via `/api/upload` endpoint (multer + sharp)
+- Tags for flexible product tagging
+- Search by name, SKU, or barcode
 - Stock management: bisa di-disable per produk
 - Barcode auto-generate atau manual input
 - Popular products: berdasarkan jumlah order
@@ -450,37 +461,30 @@ families.view, families.edit
 
 ### Models
 - **PaymentMethod** (`PaymentMethod.ts`)
-  - `name`, `code` (unique)
-  - `type` ('cash' | 'non-cash')
-  - `requiresCardLastFour` (boolean)
+  - `name` (string) — display name ("Tunai", "Kartu Kredit")
+  - `code` (string, unique per tenant) — internal code ("cash", "card", "qris")
   - `description` (string)
-  - `roundingPolicy` — `{ enabled, method, maxRoundingAdjustment }`
-  - `active` (boolean)
-  - `outlets` (ObjectId[])
-
-### Rounding Methods
-| Method | Deskripsi |
-|--------|-----------|
-| `nearest_100` | Bulatkan ke 100 terdekat |
-| `nearest_500` | Bulatkan ke 500 terdekat |
-| `nearest_1000` | Bulatkan ke 1000 terdekat |
-| `round_up_100` | Pembulatan ke atas ke 100 |
-| `round_down_100` | Pembulatan ke bawah ke 100 |
-| `no_rounding` | Tanpa pembulatan |
+  - `icon` (string) — emoji icon for UI
+  - `color` (string) — hex color for UI
+  - `sortOrder` (number)
+  - `isActive` (boolean)
+  - `requiresReference` (boolean) — true for card/transfer (need reference number)
+  - `config` (Record<string, unknown>) — method-specific configuration
 
 ### API Endpoints
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| GET | `/api/payment-methods` | ❌ | List payment methods |
+| GET | `/api/payment-methods` | ❌ | List all payment methods |
+| GET | `/api/payment-methods/active` | ❌ | List active methods (for POS) |
+| GET | `/api/payment-methods/:id` | ❌ | Get payment method by ID |
 | POST | `/api/payment-methods` | ✅ admin | Create payment method |
 | PUT | `/api/payment-methods/:id` | ✅ admin | Update payment method |
 | DELETE | `/api/payment-methods/:id` | ✅ admin | Delete payment method |
 
-### Business Logic (Payment Engine)
-- **Split payment**: satu transaksi bisa bayar dengan beberapa metode
-- **Rounding policy per method**: tunai bisa bulatkan, non-cash tidak
-- **Cash change**: hitung kembalian untuk pembayaran tunai
-- **Card last four**: simpan 4 digit terakhir kartu untuk debit/kredit
+### Business Logic
+- Code uniqueness enforced per tenant
+- `requiresReference` flag enables UI to conditionally show reference input in POS
+- Preset buttons for quick setup: Tunai, Kartu, QRIS, Transfer, E-Wallet, Kredit
 
 ---
 

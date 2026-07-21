@@ -27,6 +27,15 @@
 - `[~]` Receipt printing *(WIP — thermal integration pending)*
 - `[~]` MVP deployment
 - `[x]` Barcode scanning
+- `[x]` Tax engine (compound tax, DPP modifiers, 5 rule types)
+- `[x]` Product management (CRUD, search, image upload, tags, pagination)
+- `[x]` Menu type system (Food/Beverage → Family → Category → Product)
+- `[x]` Family management (CRUD with Food/Beverage tabs)
+- `[x]` Member/Customer domain
+- `[x]` Promotion domain (14 rule types)
+- `[x]` Settings (key-value store)
+- `[x]` Upload service (image)
+- `[x]` Payment method management (CRUD, presets, color picker)
 - `[ ]` Discount & promo engine
 - `[ ]` Split bill
 - `[ ]` Hold / recall order

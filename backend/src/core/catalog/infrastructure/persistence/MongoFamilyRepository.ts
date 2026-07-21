@@ -1,11 +1,12 @@
 import { Model, Document } from 'mongoose';
-import { Family, IFamily } from '../../domain/Family';
+import { Family, IFamily, MenuType } from '../../domain/Family';
 
 interface FamilyDoc extends Document<string> {
   _id: string;
   tenantId: string;
   name: string;
   description: string;
+  menuType: MenuType;
   sortOrder: number;
   isActive: boolean;
   createdAt: Date;
@@ -21,6 +22,7 @@ export class MongoFamilyRepository {
       tenantId: doc.tenantId,
       name: doc.name,
       description: doc.description,
+      menuType: doc.menuType,
       sortOrder: doc.sortOrder,
       isActive: doc.isActive,
       createdAt: doc.createdAt,
@@ -35,6 +37,7 @@ export class MongoFamilyRepository {
       tenantId: data.tenantId,
       name: data.name,
       description: data.description,
+      menuType: data.menuType,
       sortOrder: data.sortOrder,
       isActive: data.isActive,
     } as unknown as Partial<FamilyDoc>;
@@ -56,6 +59,11 @@ export class MongoFamilyRepository {
 
   async findByTenant(tenantId: string): Promise<Family[]> {
     const docs = await this.model.find({ tenantId }).sort({ sortOrder: 1 }).exec();
+    return docs.map((d: FamilyDoc) => this.toDomain(d));
+  }
+
+  async findByMenuType(tenantId: string, menuType: MenuType): Promise<Family[]> {
+    const docs = await this.model.find({ tenantId, menuType }).sort({ sortOrder: 1 }).exec();
     return docs.map((d: FamilyDoc) => this.toDomain(d));
   }
 
