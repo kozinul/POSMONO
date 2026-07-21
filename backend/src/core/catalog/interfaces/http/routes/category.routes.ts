@@ -7,6 +7,7 @@ export function createCategoryRoutes(categoryController: CategoryController): Ro
   const router = Router();
 
   router.get('/', authenticate, asyncHandler(categoryController.list.bind(categoryController)));
+  router.get('/by-family/:familyId', authenticate, asyncHandler(categoryController.listByFamily.bind(categoryController)));
   router.post('/', authenticate, asyncHandler(categoryController.create.bind(categoryController)));
   router.put('/:id', authenticate, asyncHandler(categoryController.update.bind(categoryController)));
   router.delete('/:id', authenticate, asyncHandler(categoryController.delete.bind(categoryController)));

@@ -35,4 +35,38 @@ export class ReportController extends BaseController {
     );
     this.ok(res, result);
   }
+
+  async cashier(req: Request, res: Response): Promise<void> {
+    const { date } = req.query;
+    if (!date) {
+      res.status(400).json({ success: false, message: 'date query parameter is required' });
+      return;
+    }
+    const result = await this.reportService.getCashierReport(req.tenantId, date as string);
+    this.ok(res, result);
+  }
+
+  async generateDailyMetric(req: Request, res: Response): Promise<void> {
+    const { date } = req.query;
+    if (!date) {
+      res.status(400).json({ success: false, message: 'date query parameter is required' });
+      return;
+    }
+    const result = await this.reportService.generateDailyMetric(req.tenantId, date as string);
+    this.ok(res, result.serialize());
+  }
+
+  async dailyMetrics(req: Request, res: Response): Promise<void> {
+    const { dateFrom, dateTo } = req.query;
+    if (!dateFrom || !dateTo) {
+      res.status(400).json({ success: false, message: 'dateFrom and dateTo query parameters are required' });
+      return;
+    }
+    const result = await this.reportService.getDailyMetrics(
+      req.tenantId,
+      dateFrom as string,
+      dateTo as string,
+    );
+    this.ok(res, result.map((m) => m.serialize()));
+  }
 }

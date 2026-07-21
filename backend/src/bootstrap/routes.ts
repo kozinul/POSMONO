@@ -4,6 +4,8 @@ import { createAuthRoutes } from '../core/identity/interfaces/http/routes/auth.r
 import { createTenantRoutes } from '../core/tenant/interfaces/http/routes/tenant.routes';
 import { createProductRoutes } from '../core/catalog/interfaces/http/routes/product.routes';
 import { createCategoryRoutes } from '../core/catalog/interfaces/http/routes/category.routes';
+import { createFamilyRoutes } from '../core/catalog/interfaces/http/routes/family.routes';
+import { createModifierRoutes } from '../core/catalog/interfaces/http/routes/modifier.routes';
 import { createInventoryRoutes } from '../core/inventory/interfaces/http/routes/inventory.routes';
 import { createWarehouseRoutes } from '../core/inventory/interfaces/http/routes/warehouse.routes';
 import { createRoleRoutes } from '../core/identity/interfaces/http/routes/role.routes';
@@ -33,6 +35,12 @@ export function registerRoutes(app: Express, container: DIContainer): void {
 
   const categoryController = container.resolve('categoryController');
   app.use('/api/categories', createCategoryRoutes(categoryController));
+
+  const familyController = container.resolve('familyController');
+  app.use('/api/families', createFamilyRoutes(familyController));
+
+  const modifierController = container.resolve('modifierController');
+  app.use('/api/modifiers', createModifierRoutes(modifierController));
 
   const inventoryController = container.resolve('inventoryController');
   app.use('/api/inventory', createInventoryRoutes(inventoryController));

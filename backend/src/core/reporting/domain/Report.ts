@@ -48,6 +48,13 @@ export class DailyMetric extends AggregateRoot<ReportId> {
     return new DailyMetric(props);
   }
 
+  update(data: Partial<Pick<IDailyMetric, 'metrics'>>): void {
+    if (data.metrics !== undefined) {
+      this.metrics = data.metrics;
+    }
+    this.updatedAt = new Date();
+  }
+
   serialize(): IDailyMetric {
     return {
       id: this._id.toValue(),

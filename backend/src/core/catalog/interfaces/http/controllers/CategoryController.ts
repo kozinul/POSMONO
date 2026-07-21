@@ -6,6 +6,7 @@ import { ValidationError } from '../../../../../@shared/infrastructure/error/App
 
 const createCategorySchema = z.object({
   name: z.string().min(1, 'Name is required'),
+  familyId: z.string().optional(),
   parentId: z.string().optional(),
   sortOrder: z.number().optional(),
 });
@@ -43,6 +44,11 @@ export class CategoryController extends BaseController {
 
   async list(req: Request, res: Response): Promise<void> {
     const categories = await this.categoryService.list(req.tenantId);
+    this.ok(res, categories.map((c) => c.serialize()));
+  }
+
+  async listByFamily(req: Request, res: Response): Promise<void> {
+    const categories = await this.categoryService.listByFamily(req.params.familyId);
     this.ok(res, categories.map((c) => c.serialize()));
   }
 

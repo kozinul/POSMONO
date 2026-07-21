@@ -10,8 +10,26 @@ const openSchema = z.object({
 });
 
 const closeSchema = z.object({
-  expectedTotal: z.number().nonnegative(),
-  actualTotal: z.number().nonnegative(),
+  physicalCash: z.number().nonnegative(),
+});
+
+const cashPickupSchema = z.object({
+  amount: z.number().positive(),
+  reason: z.string().min(1),
+});
+
+const paymentBreakdownEntrySchema = z.object({
+  method: z.string(),
+  code: z.string(),
+  amount: z.number(),
+});
+
+const updateSalesSchema = z.object({
+  totalSales: z.number().nonnegative(),
+  cashSales: z.number().nonnegative(),
+  nonCashSales: z.number().nonnegative(),
+  totalTransactions: z.number().nonnegative(),
+  paymentBreakdown: z.array(paymentBreakdownEntrySchema),
 });
 
 export class ShiftController extends BaseController {
@@ -21,6 +39,11 @@ export class ShiftController extends BaseController {
 
   async list(req: Request, res: Response): Promise<void> {
     const shifts = await this.shiftService.list(req.tenantId);
+    this.ok(res, shifts.map((s) => s.serialize()));
+  }
+
+  async getActive(req: Request, res: Response): Promise<void> {
+    const shifts = await this.shiftService.getActiveShifts(req.tenantId);
     this.ok(res, shifts.map((s) => s.serialize()));
   }
 
@@ -51,6 +74,25 @@ export class ShiftController extends BaseController {
     if (!parsed.success) throw new ValidationError('Invalid input');
 
     const shift = await this.shiftService.close(req.tenantId, req.params.id, parsed.data);
+    this.ok(res, shift.serialize());
+  }
+
+  async cashPickup(req: Request, res: Response): Promise<void> {
+    const parsed = cashPickupSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError('Invalid input');
+
+    const shift = await this.shiftService.cashPickup(req.tenantId, req.params.id, {
+      ...parsed.data,
+      pickedBy: req.userId,
+    });
+    this.ok(res, shift.serialize());
+  }
+
+  async updateSales(req: Request, res: Response): Promise<void> {
+    const parsed = updateSalesSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError('Invalid input');
+
+    const shift = await this.shiftService.updateSales(req.tenantId, req.params.id, parsed.data);
     this.ok(res, shift.serialize());
   }
 }

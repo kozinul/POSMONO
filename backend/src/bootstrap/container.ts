@@ -23,12 +23,20 @@ import { TenantService } from '../core/tenant/application/services/TenantService
 import { TenantController } from '../core/tenant/interfaces/http/controllers/TenantController';
 import { ProductSchema } from '../core/catalog/infrastructure/persistence/schemas/ProductSchema';
 import { CategorySchema } from '../core/catalog/infrastructure/persistence/schemas/CategorySchema';
+import { FamilySchema } from '../core/catalog/infrastructure/persistence/schemas/FamilySchema';
+import { ModifierSchema } from '../core/catalog/infrastructure/persistence/schemas/ModifierSchema';
 import { MongoProductRepository } from '../core/catalog/infrastructure/persistence/MongoProductRepository';
 import { MongoCategoryRepository } from '../core/catalog/infrastructure/persistence/MongoCategoryRepository';
+import { MongoFamilyRepository } from '../core/catalog/infrastructure/persistence/MongoFamilyRepository';
+import { MongoModifierRepository } from '../core/catalog/infrastructure/persistence/MongoModifierRepository';
 import { ProductService } from '../core/catalog/application/services/ProductService';
 import { CategoryService } from '../core/catalog/application/services/CategoryService';
+import { FamilyService } from '../core/catalog/application/services/FamilyService';
+import { ModifierService } from '../core/catalog/application/services/ModifierService';
 import { ProductController } from '../core/catalog/interfaces/http/controllers/ProductController';
 import { CategoryController } from '../core/catalog/interfaces/http/controllers/CategoryController';
+import { FamilyController } from '../core/catalog/interfaces/http/controllers/FamilyController';
+import { ModifierController } from '../core/catalog/interfaces/http/controllers/ModifierController';
 import { StockSchema } from '../core/inventory/infrastructure/persistence/schemas/StockSchema';
 import { StockMovementSchema } from '../core/inventory/infrastructure/persistence/schemas/StockMovementSchema';
 import { WarehouseSchema } from '../core/inventory/infrastructure/persistence/schemas/WarehouseSchema';
@@ -47,7 +55,7 @@ import { UserController } from '../core/identity/interfaces/http/controllers/Use
 import { PermissionController } from '../core/identity/interfaces/http/controllers/PermissionController';
 import { OrderSchema } from '../core/ordering/infrastructure/persistence/schemas/OrderSchema';
 import { MongoOrderRepository } from '../core/ordering/infrastructure/persistence/MongoOrderRepository';
-import { CreateOrderService } from '../core/ordering/application/services/OrderService';
+import { CreateOrderService, UpdateOrderService, VoidOrderService, VoidItemService, PayOrderService, SplitItemService } from '../core/ordering/application/services/OrderService';
 import { OrderController } from '../core/ordering/interfaces/http/controllers/OrderController';
 import { ShiftSchema } from '../core/pos/infrastructure/persistence/schemas/ShiftSchema';
 import { MongoShiftRepository } from '../core/pos/infrastructure/persistence/MongoShiftRepository';
@@ -59,6 +67,9 @@ import { PaymentService } from '../core/payment/application/services/PaymentServ
 import { PaymentController } from '../core/payment/interfaces/http/controllers/PaymentController';
 import { ReportService } from '../core/reporting/application/services/ReportService';
 import { ReportController } from '../core/reporting/interfaces/http/controllers/ReportController';
+import { DailyMetricSchema } from '../core/reporting/infrastructure/persistence/schemas/DailyMetricSchema';
+import { MongoDailyMetricRepository } from '../core/reporting/infrastructure/persistence/MongoDailyMetricRepository';
+import { ReportAggregation } from '../core/reporting/infrastructure/aggregation/ReportAggregation';
 import { TaxConfigurationSchema } from '../core/tax/infrastructure/persistence/schemas/TaxConfigurationSchema';
 import { MongoTaxConfigurationRepository } from '../core/tax/infrastructure/persistence/MongoTaxConfigurationRepository';
 import { TaxServiceAdapter } from '../core/tax/application/services/TaxServiceAdapter';
@@ -85,6 +96,8 @@ export function buildContainer() {
   const TenantModel = systemConnection.model('Tenant', TenantSchema);
   const ProductModel = systemConnection.model('Product', ProductSchema);
   const CategoryModel = systemConnection.model('Category', CategorySchema);
+  const FamilyModel = systemConnection.model('Family', FamilySchema);
+  const ModifierModel = systemConnection.model('Modifier', ModifierSchema);
   const StockModel = systemConnection.model('Stock', StockSchema);
   const StockMovementModel = systemConnection.model('StockMovement', StockMovementSchema);
   const WarehouseModel = systemConnection.model('Warehouse', WarehouseSchema);
@@ -95,6 +108,7 @@ export function buildContainer() {
   const PricingProfileModel = systemConnection.model('PricingProfile', PricingProfileSchema);
   const DiscountConfigurationModel = systemConnection.model('DiscountConfiguration', DiscountConfigurationSchema);
   const PromoCodeModel = systemConnection.model('PromoCode', PromoCodeSchema);
+  const DailyMetricModel = systemConnection.model('DailyMetric', DailyMetricSchema);
 
   const eventBus = new EventBus();
 
@@ -112,6 +126,8 @@ export function buildContainer() {
     tenantModel: asValue(TenantModel),
     productModel: asValue(ProductModel),
     categoryModel: asValue(CategoryModel),
+    familyModel: asValue(FamilyModel),
+    modifierModel: asValue(ModifierModel),
     stockModel: asValue(StockModel),
     stockMovementModel: asValue(StockMovementModel),
     warehouseModel: asValue(WarehouseModel),
@@ -243,6 +259,42 @@ export function buildContainer() {
         categoryService: container.resolve('categoryService'),
       }),
     }),
+    familyRepository: asClass(MongoFamilyRepository, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        model: FamilyModel,
+      }),
+    }),
+    modifierRepository: asClass(MongoModifierRepository, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        model: ModifierModel,
+      }),
+    }),
+    familyService: asClass(FamilyService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        familyRepository: container.resolve('familyRepository'),
+      }),
+    }),
+    modifierService: asClass(ModifierService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        modifierRepository: container.resolve('modifierRepository'),
+      }),
+    }),
+    familyController: asClass(FamilyController, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        familyService: container.resolve('familyService'),
+      }),
+    }),
+    modifierController: asClass(ModifierController, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        modifierService: container.resolve('modifierService'),
+      }),
+    }),
     stockRepository: asClass(MongoStockRepository, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
@@ -299,10 +351,51 @@ export function buildContainer() {
         eventBus: container.resolve('eventBus'),
       }),
     }),
+    updateOrderService: asClass(UpdateOrderService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        orderRepository: container.resolve('orderRepository'),
+        eventBus: container.resolve('eventBus'),
+      }),
+    }),
+    voidOrderService: asClass(VoidOrderService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        orderRepository: container.resolve('orderRepository'),
+        eventBus: container.resolve('eventBus'),
+      }),
+    }),
+    voidItemService: asClass(VoidItemService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        orderRepository: container.resolve('orderRepository'),
+        eventBus: container.resolve('eventBus'),
+      }),
+    }),
+    payOrderService: asClass(PayOrderService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        orderRepository: container.resolve('orderRepository'),
+        eventBus: container.resolve('eventBus'),
+      }),
+    }),
+    splitItemService: asClass(SplitItemService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        orderRepository: container.resolve('orderRepository'),
+        eventBus: container.resolve('eventBus'),
+        createOrderService: container.resolve('createOrderService'),
+      }),
+    }),
     orderController: asClass(OrderController, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
         createOrderService: container.resolve('createOrderService'),
+        updateOrderService: container.resolve('updateOrderService'),
+        voidOrderService: container.resolve('voidOrderService'),
+        voidItemService: container.resolve('voidItemService'),
+        payOrderService: container.resolve('payOrderService'),
+        splitItemService: container.resolve('splitItemService'),
         orderRepository: container.resolve('orderRepository'),
       }),
     }),
@@ -384,12 +477,27 @@ export function buildContainer() {
         pricingProfileRepo: container.resolve('pricingProfileRepository'),
       }),
     }),
+    dailyMetricRepository: asClass(MongoDailyMetricRepository, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        model: DailyMetricModel,
+      }),
+    }),
+    reportAggregation: asClass(ReportAggregation, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        orderModel: OrderModel,
+        shiftModel: ShiftModel,
+        productModel: ProductModel,
+      }),
+    }),
     reportService: asClass(ReportService, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
         orderRepository: container.resolve('orderRepository'),
         shiftRepository: container.resolve('shiftRepository'),
-        paymentService: container.resolve('paymentService'),
+        dailyMetricRepository: container.resolve('dailyMetricRepository'),
+        reportAggregation: container.resolve('reportAggregation'),
       }),
     }),
     reportController: asClass(ReportController, {

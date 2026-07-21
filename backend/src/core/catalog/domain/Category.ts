@@ -5,6 +5,7 @@ export interface ICategory {
   id: string;
   tenantId: string;
   name: string;
+  familyId: string | null;
   parentId: string | null;
   sortOrder: number;
   isActive: boolean;
@@ -15,6 +16,7 @@ export interface ICategory {
 export class Category extends Entity<Identifier> {
   private tenantId: string;
   private name: string;
+  private familyId: string | null;
   private parentId: string | null;
   private sortOrder: number;
   private isActive: boolean;
@@ -25,6 +27,7 @@ export class Category extends Entity<Identifier> {
     super(new Identifier(props.id));
     this.tenantId = props.tenantId;
     this.name = props.name;
+    this.familyId = props.familyId;
     this.parentId = props.parentId;
     this.sortOrder = props.sortOrder;
     this.isActive = props.isActive;
@@ -45,8 +48,9 @@ export class Category extends Entity<Identifier> {
     return new Category(props);
   }
 
-  update(data: Partial<Pick<ICategory, 'name' | 'parentId' | 'sortOrder' | 'isActive'>>): void {
+  update(data: Partial<Pick<ICategory, 'name' | 'familyId' | 'parentId' | 'sortOrder' | 'isActive'>>): void {
     if (data.name !== undefined) this.name = data.name;
+    if (data.familyId !== undefined) this.familyId = data.familyId;
     if (data.parentId !== undefined) this.parentId = data.parentId;
     if (data.sortOrder !== undefined) this.sortOrder = data.sortOrder;
     if (data.isActive !== undefined) this.isActive = data.isActive;
@@ -58,6 +62,7 @@ export class Category extends Entity<Identifier> {
       id: this._id.toValue(),
       tenantId: this.tenantId,
       name: this.name,
+      familyId: this.familyId,
       parentId: this.parentId,
       sortOrder: this.sortOrder,
       isActive: this.isActive,

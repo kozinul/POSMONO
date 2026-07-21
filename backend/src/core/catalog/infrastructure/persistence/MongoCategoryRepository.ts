@@ -5,6 +5,7 @@ interface CategoryDoc extends Document<string> {
   _id: string;
   tenantId: string;
   name: string;
+  familyId: string | null;
   parentId: string | null;
   sortOrder: number;
   isActive: boolean;
@@ -20,6 +21,7 @@ export class MongoCategoryRepository {
       id: doc._id,
       tenantId: doc.tenantId,
       name: doc.name,
+      familyId: doc.familyId,
       parentId: doc.parentId,
       sortOrder: doc.sortOrder,
       isActive: doc.isActive,
@@ -34,10 +36,16 @@ export class MongoCategoryRepository {
       _id: data.id,
       tenantId: data.tenantId,
       name: data.name,
+      familyId: data.familyId,
       parentId: data.parentId,
       sortOrder: data.sortOrder,
       isActive: data.isActive,
     } as unknown as Partial<CategoryDoc>;
+  }
+
+  async findByFamily(familyId: string): Promise<Category[]> {
+    const docs = await this.model.find({ familyId }).sort({ sortOrder: 1 }).exec();
+    return docs.map((d: CategoryDoc) => this.toDomain(d));
   }
 
   async save(category: Category): Promise<void> {

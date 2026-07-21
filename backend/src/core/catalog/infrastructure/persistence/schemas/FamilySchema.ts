@@ -1,21 +1,19 @@
 import { Schema } from 'mongoose';
 
-export const CategorySchema = new Schema(
+export const FamilySchema = new Schema(
   {
     _id: { type: String },
     tenantId: { type: String, required: true, index: true },
     name: { type: String, required: true },
-    familyId: { type: String, default: null, index: true },
-    parentId: { type: String, default: null },
+    description: { type: String, default: '' },
     sortOrder: { type: Number, default: 0 },
     isActive: { type: Boolean, default: true },
   },
   {
     timestamps: true,
     _id: false,
-    collection: 'categories',
+    collection: 'families',
   },
 );
 
-CategorySchema.index({ tenantId: 1, name: 1 }, { unique: true });
-CategorySchema.index({ tenantId: 1, familyId: 1 });
+FamilySchema.index({ tenantId: 1, name: 1 }, { unique: true });
