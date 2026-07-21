@@ -750,3 +750,43 @@ Tax Engine is the most architecturally significant module so far. Compound engin
 **TypeScript:** Backend 0 errors, Frontend 0 errors
 
 **Productivity score:** 9
+
+---
+
+## July 21, 2026 — Discount & Promo Engine Integration
+
+**Session:** Wire discount engine into POS checkout flow
+
+**What I worked on:**
+
+- **Promo code at checkout** — wired `DiscountServiceAdapter` into `PaymentService.payCash` so promo codes are validated and applied during payment
+- **Promotion breakdown on orders** — store `promotions[]` and `discountBreakdown[]` on the Order entity when a promo is applied
+- **Combined discounts** — manual discount + promo code discount are combined (capped to subtotal) before tax calculation
+- **Metadata enrichment** — order and payment metadata now include `promoCode`, `promoDiscount`, `manualDiscount` for audit trail
+
+**Backend changes (3 files):**
+
+- `PaymentService.ts` — added `discountService` (DiscountServiceAdapter) to constructor; `payCash` now accepts `promoCode`, validates via discount engine, applies promo discount, combines with manual discount, stores promotion breakdown on order
+- `PaymentController.ts` — added `promoCode` (optional string) to `payCashSchema`
+- `container.ts` — injected `discountService` into `paymentService`
+
+**How it works:**
+
+1. Frontend sends `{ items, amountPaid, discount, discountType, promoCode }` to `POST /api/payments/pay-cash`
+2. If `promoCode` is provided, `DiscountServiceAdapter.apply()` evaluates all active discount rules against the cart items
+3. Matching rules produce `totalDiscount` + `appliedRules[]` breakdown
+4. Promo discount is combined with any manual discount
+5. Combined discount is passed to `TaxService.calculate()` (discount before tax)
+6. Order stores `promotions[]` and `discountBreakdown[]` for receipt/reporting
+7. Payment metadata includes `promoCode`, `promoDiscount`, `manualDiscount`
+
+**Discount engine (already built in `core/discount/`):**
+
+- 8 condition types: MinPurchase, MinItems, CategoryMatch, ProductMatch, DateRange, DayOfWeek, QuantityThreshold, PromoCode
+- 5 effect types: PercentageOff, NominalOff, FreeItem, FixedPrice, BundlePrice
+- Client-side calculator in `discountCalculator.ts` for instant UI feedback
+- Server-side validation via `DiscountServiceAdapter.apply()` at checkout
+
+**TypeScript:** Backend 0 errors, Frontend 0 errors
+
+**Productivity score:** 8

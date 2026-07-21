@@ -496,6 +496,7 @@ export function buildContainer() {
         orderRepository: container.resolve('orderRepository'),
         tenantRepository: container.resolve('tenantRepository'),
         taxService: container.resolve('taxService'),
+        discountService: container.resolve('discountService'),
         eventBus: container.resolve('eventBus'),
       }),
     }),

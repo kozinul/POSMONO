@@ -107,7 +107,7 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 |------|--------|
 | Cart state management | `[x]` |
 | Barcode scanning | `[x]` |
-| Discount & promo engine | `[ ]` |
+| Discount & promo engine | `[x]` |
 | Tax calculation engine | `[x]` |
 | DPP Nilai Lain (Indonesia PPN 12%) | `[x]` |
 | Compound tax (Service Charge + PPN) | `[x]` |

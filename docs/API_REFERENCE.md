@@ -542,20 +542,43 @@ Get payment by order ID.
 
 ### `POST /api/payments/pay-cash`
 
-Process a cash payment for an order.
+Process a cash payment with optional promo code and manual discount.
 
-**Body:** `{ "orderId": "uuid", "amount": 50000 }`
+**Body:**
+```json
+{
+  "items": [{ "productId": "...", "quantity": 2, "unitPrice": 15000 }],
+  "amountPaid": 50000,
+  "discount": 10,
+  "discountType": "percentage",
+  "promoCode": "HEMAT10"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| items | array | yes | Cart items with productId, quantity, unitPrice |
+| amountPaid | number | yes | Amount tendered by customer |
+| discount | number | no | Manual discount value (default 0) |
+| discountType | string | no | `"percentage"` or `"nominal"` (default nominal) |
+| promoCode | string | no | Promo code to apply (validated against discount engine) |
 
 **Response 200:**
 ```json
 {
   "success": true,
-  "data": {
-    "payment": { "id": "uuid", "orderId": "...", "amount": 50000, "status": "completed", "method": "cash", "referenceNumber": "CASH-...", "paidAt": "..." },
-    "order": { "id": "uuid", "status": "paid", "paymentStatus": "completed", "paidAt": "..." }
+  data: {
+    "payment": { "id": "...", "orderId": "...", "amount": 50000, "status": "completed", "method": "cash", "metadata": { "promoCode": "HEMAT10", "promoDiscount": 3000, "manualDiscount": 0 } },
+    "order": { "id": "...", "status": "paid", "subtotal": 30000, "discount": 3000, "total": 27000, "promotions": [{ "id": "...", "name": "...", "code": "HEMAT10", "totalDiscount": 3000 }], "discountBreakdown": [...] }
   }
 }
 ```
+
+**Discount flow:**
+1. If `promoCode` provided → `DiscountServiceAdapter.apply()` evaluates rules against cart
+2. Promo discount + manual discount combined (capped to subtotal)
+3. Combined discount passed to `TaxService.calculate()` (discount before tax)
+4. Order stores `promotions[]` and `discountBreakdown[]` for receipt/reporting
 
 ---
 

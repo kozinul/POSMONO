@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { NotFoundError, ValidationError } from '../../../../@shared/infrastructure/error/AppError';
 import { Payment, PaymentMethod, ISplitBill } from '../../domain/Payment';
-import { Order, IOrderItem } from '../../../ordering/domain/Order';
+import { Order, IOrderItem, IPromotionBreakdown, IDiscountBreakdown } from '../../../ordering/domain/Order';
 
 export class PaymentService {
   constructor(
@@ -9,6 +9,7 @@ export class PaymentService {
     private readonly orderRepository: any,
     private readonly tenantRepository: any,
     private readonly taxService: any,
+    private readonly discountService: any,
     private readonly eventBus: any,
   ) {}
 
@@ -19,8 +20,46 @@ export class PaymentService {
     amountPaid: number;
     discount?: number;
     discountType?: 'percentage' | 'nominal';
+    promoCode?: string;
   }): Promise<{ payment: Payment; order: any }> {
-    const discountValue = input.discount ?? 0;
+    let manualDiscountValue = input.discount ?? 0;
+
+    let promoDiscount = 0;
+    let promotionBreakdown: IPromotionBreakdown[] = [];
+    let discountBreakdownList: IDiscountBreakdown[] = [];
+
+    if (input.promoCode && this.discountService) {
+      const discountResult = await this.discountService.apply({
+        tenantId: input.tenantId,
+        items: input.items.map((item) => ({
+          productId: item.productId,
+          categoryId: '',
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+        })),
+        promoCode: input.promoCode,
+      });
+
+      if (discountResult.totalDiscount > 0) {
+        promoDiscount = discountResult.totalDiscount;
+        promotionBreakdown = discountResult.appliedRules.map((rule: any) => ({
+          id: rule.ruleId,
+          name: rule.ruleName,
+          code: input.promoCode!,
+          totalDiscount: rule.discountAmount,
+          description: rule.description,
+        }));
+        discountBreakdownList = discountResult.appliedRules.map((rule: any) => ({
+          id: rule.ruleId,
+          name: rule.ruleName,
+          type: 'percentage' as const,
+          amount: rule.discountAmount,
+          appliedTo: 'order',
+        }));
+      }
+    }
+
+    const totalDiscountValue = manualDiscountValue + promoDiscount;
 
     const taxResult = await this.taxService.calculate({
       tenantId: input.tenantId,
@@ -31,8 +70,8 @@ export class PaymentService {
         unitPrice: item.unitPrice,
         categoryId: '',
       })),
-      discount: discountValue,
-      discountType: input.discountType ?? 'nominal',
+      discount: totalDiscountValue,
+      discountType: 'nominal',
       customerTags: [],
     });
 
@@ -71,8 +110,8 @@ export class PaymentService {
       serviceCharge,
       serviceChargeRate: 0,
       paymentBreakdown: [],
-      promotions: [],
-      discountBreakdown: [],
+      promotions: promotionBreakdown,
+      discountBreakdown: discountBreakdownList,
       customerId: null,
       customerName: null,
       cashierId: input.cashierId,
@@ -83,8 +122,11 @@ export class PaymentService {
       source: 'pos',
       voidedItems: [],
       metadata: {
-        discountType: input.discountType,
-        discountValue,
+        discountType: input.promoCode ? 'promo' : (input.discountType ?? 'nominal'),
+        discountValue: totalDiscountValue,
+        promoCode: input.promoCode ?? null,
+        promoDiscount,
+        manualDiscount: manualDiscountValue,
         serviceCharge,
         taxBreakdown: taxResult.taxes,
       },
@@ -108,7 +150,13 @@ export class PaymentService {
       paymentTransactionId: null,
       provider: null,
       cardLastFour: null,
-      metadata: { cashierId: input.cashierId, discountAmount: taxResult.discountAmount },
+      metadata: {
+        cashierId: input.cashierId,
+        discountAmount: discount,
+        promoCode: input.promoCode ?? null,
+        promoDiscount,
+        manualDiscount: manualDiscountValue,
+      },
       paidAt: null,
     });
 

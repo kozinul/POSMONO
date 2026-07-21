@@ -13,6 +13,7 @@ const payCashSchema = z.object({
   amountPaid: z.number().positive(),
   discount: z.number().nonnegative().default(0),
   discountType: z.enum(['percentage', 'nominal']).optional(),
+  promoCode: z.string().optional(),
 });
 
 const processPaymentSchema = z.object({

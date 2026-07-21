@@ -36,7 +36,7 @@
 - `[x]` Settings (key-value store)
 - `[x]` Upload service (image)
 - `[x]` Payment method management (CRUD, presets, color picker)
-- `[ ]` Discount & promo engine
+- `[x]` Discount & promo engine
 - `[ ]` Split bill
 - `[ ]` Hold / recall order
 
