@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../../@shared/services/api';
 
 interface OrderItem {
@@ -6,7 +6,31 @@ interface OrderItem {
   productName: string;
   quantity: number;
   unitPrice: number;
-  subtotal: number;
+  subtotal?: number;
+  totalPrice?: number;
+  modifiers: Array<{ name: string; price: number }>;
+  tax: { rate: number; amount: number };
+  isVoided?: boolean;
+  voidedAt?: string;
+  voidedReason?: string;
+}
+
+interface IVoidedItem {
+  itemIndex: number;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  voidedAt: string;
+  voidedReason: string;
+  voidedByName: string;
+}
+
+interface IPaymentBreakdownEntry {
+  method: string;
+  code: string;
+  amount: number;
+  change: number;
+  cardLastFour?: string;
 }
 
 interface Order {
@@ -20,11 +44,22 @@ interface Order {
   total: number;
   paymentStatus: string;
   customerId: string | null;
+  customerName: string | null;
   cashierId: string;
+  cashierName: string;
   notes: string;
   source: string;
+  tableNumber: string | null;
+  transactionType: string;
+  paymentBreakdown: IPaymentBreakdownEntry[];
+  voidedItems: IVoidedItem[];
+  voidedAt: string | null;
+  voidedBy: string | null;
+  voidedByName: string | null;
+  voidedReason: string | null;
   paidAt: string | null;
   createdAt: string;
+  updatedAt: string;
 }
 
 interface OrdersResponse {
@@ -118,3 +153,42 @@ export function useSalesReport(dateFrom: string, dateTo: string) {
     enabled: !!dateFrom && !!dateTo,
   });
 }
+
+export function useVoidOrder() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ orderId, reason, voidedByName }: { orderId: string; reason: string; voidedByName: string }) => {
+      const res = await api.post<{ success: boolean; data: Order }>(`/orders/${orderId}/void`, { reason, voidedByName });
+      return res.data.data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['orders'] });
+    },
+  });
+}
+
+export function useVoidItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ orderId, itemIndex, reason, voidedByName }: { orderId: string; itemIndex: number; reason: string; voidedByName: string }) => {
+      const res = await api.post<{ success: boolean; data: Order }>(`/orders/${orderId}/void-item`, { itemIndex, reason, voidedByName });
+      return res.data.data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['orders'] });
+    },
+  });
+}
+
+export function useRecentOrders(limit = 10) {
+  return useQuery({
+    queryKey: ['orders', 'recent', limit],
+    queryFn: async () => {
+      const res = await api.get<OrdersResponse>(`/orders?limit=${limit}&page=1`);
+      return res.data.data;
+    },
+    refetchInterval: 15_000,
+  });
+}
+
+export type { Order, OrderItem, IVoidedItem, IPaymentBreakdownEntry };

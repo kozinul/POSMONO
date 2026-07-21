@@ -1,6 +1,15 @@
 import { Request, Response } from 'express';
 import { BaseController } from '../../../../../@shared/interfaces/BaseController';
-import { CreateOrderService } from '../../../application/services/OrderService';
+import {
+  CreateOrderService,
+  UpdateOrderService,
+  VoidOrderService,
+  VoidItemService,
+  PayOrderService,
+  VoidPaymentService,
+  ReopenOrderService,
+  SplitItemService,
+} from '../../../application/services/OrderService';
 import { MongoOrderRepository } from '../../../infrastructure/persistence/MongoOrderRepository';
 import { z } from 'zod';
 import { ValidationError } from '../../../../../@shared/infrastructure/error/AppError';
@@ -17,14 +26,78 @@ const createOrderSchema = z.object({
     tax: z.object({ rate: z.number(), amount: z.number() }).optional().default({ rate: 0, amount: 0 }),
   })).min(1),
   customerId: z.string().nullable().optional(),
+  customerName: z.string().nullable().optional(),
+  cashierName: z.string().optional().default(''),
   notes: z.string().optional().default(''),
   source: z.enum(['pos', 'waiter', 'online']).default('pos'),
+  tableNumber: z.string().nullable().optional(),
+  transactionType: z.enum(['dine_in', 'takeaway', 'delivery', 'online']).optional().default('dine_in'),
   metadata: z.record(z.unknown()).optional().default({}),
+});
+
+const updateOrderSchema = z.object({
+  items: z.array(z.object({
+    productId: z.string().min(1),
+    variantId: z.string().nullable().optional(),
+    productName: z.string().min(1),
+    quantity: z.number().int().positive(),
+    unitPrice: z.number().nonnegative(),
+    totalPrice: z.number().nonnegative(),
+    modifiers: z.array(z.object({ name: z.string(), price: z.number() })).optional().default([]),
+    tax: z.object({ rate: z.number(), amount: z.number() }).optional().default({ rate: 0, amount: 0 }),
+  })).optional(),
+  customerId: z.string().nullable().optional(),
+  customerName: z.string().nullable().optional(),
+  cashierName: z.string().optional(),
+  notes: z.string().optional(),
+  tableNumber: z.string().nullable().optional(),
+  transactionType: z.enum(['dine_in', 'takeaway', 'delivery', 'online']).optional(),
+  metadata: z.record(z.unknown()).optional(),
+}).optional();
+
+const voidOrderSchema = z.object({
+  reason: z.string().min(1, 'Reason is required'),
+  voidedByName: z.string().min(1, 'Voided by name is required'),
+});
+
+const voidItemSchema = z.object({
+  itemIndex: z.number().int().nonnegative(),
+  reason: z.string().min(1, 'Reason is required'),
+  voidedByName: z.string().min(1, 'Voided by name is required'),
+});
+
+const payOrderSchema = z.object({
+  paymentBreakdown: z.array(z.object({
+    method: z.string().min(1),
+    code: z.string().min(1),
+    amount: z.number().positive(),
+    change: z.number().default(0),
+    cardLastFour: z.string().optional(),
+  })).min(1),
+  cashierName: z.string().optional().default(''),
+});
+
+const splitItemSchema = z.object({
+  itemIndex: z.number().int().nonnegative(),
+  quantities: z.array(z.number().int().positive()).min(2, 'At least 2 quantities required'),
+});
+
+const voidPaymentSchema = z.object({
+  paymentIndex: z.number().int().nonnegative(),
+  reason: z.string().min(1, 'Reason is required'),
+  voidedByName: z.string().min(1, 'Voided by name is required'),
 });
 
 export class OrderController extends BaseController {
   constructor(
     private readonly createOrderService: CreateOrderService,
+    private readonly updateOrderService: UpdateOrderService,
+    private readonly voidOrderService: VoidOrderService,
+    private readonly voidItemService: VoidItemService,
+    private readonly payOrderService: PayOrderService,
+    private readonly voidPaymentService: VoidPaymentService,
+    private readonly reopenOrderService: ReopenOrderService,
+    private readonly splitItemService: SplitItemService,
     private readonly orderRepository: MongoOrderRepository,
   ) {
     super();
@@ -32,18 +105,39 @@ export class OrderController extends BaseController {
 
   async create(req: Request, res: Response): Promise<void> {
     const parsed = createOrderSchema.safeParse(req.body);
-    if (!parsed.success) throw new ValidationError('Invalid input');
+    if (!parsed.success) throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
 
-    const { items, customerId, ...rest } = parsed.data;
+    const { items, customerId, customerName, tableNumber, cashierName, ...rest } = parsed.data;
     const order = await this.createOrderService.execute({
       tenantId: req.tenantId,
       cashierId: req.userId,
+      cashierName: cashierName ?? '',
       items: items.map((item) => ({ ...item, variantId: item.variantId ?? null })),
       customerId: customerId ?? null,
+      customerName: customerName ?? null,
+      tableNumber: tableNumber ?? undefined,
       ...rest,
     });
 
     this.created(res, order.serialize());
+  }
+
+  async update(req: Request, res: Response): Promise<void> {
+    const parsed = updateOrderSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError('Invalid input');
+
+    const data = parsed.data || {};
+    const { items, tableNumber, ...rest } = data;
+    const order = await this.updateOrderService.execute({
+      id: req.params.id,
+      tenantId: req.tenantId,
+      items: items?.map((item) => ({ ...item, variantId: item.variantId ?? null })),
+      tableNumber: tableNumber ?? undefined,
+      ...rest,
+      cashierName: rest.cashierName || '',
+    });
+
+    this.ok(res, order.serialize());
   }
 
   async list(req: Request, res: Response): Promise<void> {
@@ -69,6 +163,86 @@ export class OrderController extends BaseController {
     if (!order || order.serialize().tenantId !== req.tenantId) {
       throw new ValidationError('Order not found');
     }
+    this.ok(res, order.serialize());
+  }
+
+  async voidOrder(req: Request, res: Response): Promise<void> {
+    const parsed = voidOrderSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
+
+    const order = await this.voidOrderService.execute({
+      id: req.params.id,
+      voidedBy: req.userId,
+      voidedByName: parsed.data.voidedByName,
+      reason: parsed.data.reason,
+    });
+
+    this.ok(res, order.serialize());
+  }
+
+  async voidItem(req: Request, res: Response): Promise<void> {
+    const parsed = voidItemSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
+
+    const order = await this.voidItemService.execute({
+      id: req.params.id,
+      itemIndex: parsed.data.itemIndex,
+      reason: parsed.data.reason,
+      voidedBy: req.userId,
+      voidedByName: parsed.data.voidedByName,
+    });
+
+    this.ok(res, order.serialize());
+  }
+
+  async pay(req: Request, res: Response): Promise<void> {
+    const parsed = payOrderSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
+
+    const order = await this.payOrderService.execute({
+      id: req.params.id,
+      paymentBreakdown: parsed.data.paymentBreakdown,
+      cashierId: req.userId,
+      cashierName: parsed.data.cashierName,
+    });
+
+    this.ok(res, order.serialize());
+  }
+
+  async splitItem(req: Request, res: Response): Promise<void> {
+    const parsed = splitItemSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
+
+    const order = await this.splitItemService.execute({
+      orderId: req.params.id,
+      itemIndex: parsed.data.itemIndex,
+      quantities: parsed.data.quantities,
+    });
+
+    this.ok(res, order.serialize());
+  }
+
+  async voidPayment(req: Request, res: Response): Promise<void> {
+    const parsed = voidPaymentSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
+
+    const order = await this.voidPaymentService.execute({
+      id: req.params.id,
+      paymentIndex: parsed.data.paymentIndex,
+      reason: parsed.data.reason,
+      voidedBy: req.userId,
+      voidedByName: parsed.data.voidedByName,
+    });
+
+    this.ok(res, order.serialize());
+  }
+
+  async reopen(req: Request, res: Response): Promise<void> {
+    const order = await this.reopenOrderService.execute({
+      id: req.params.id,
+      reopenedBy: req.userId,
+    });
+
     this.ok(res, order.serialize());
   }
 }

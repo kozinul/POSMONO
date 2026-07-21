@@ -25,7 +25,7 @@ export function errorHandler(
     return;
   }
 
-  logger.error({ err, req }, 'Unhandled error');
+  logger.error({ err: err.message, stack: err.stack, req }, 'Unhandled error');
 
   res.status(500).json({
     success: false,

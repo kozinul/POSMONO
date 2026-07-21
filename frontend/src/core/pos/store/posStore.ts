@@ -49,7 +49,7 @@ interface POSState {
   receipt: Receipt | null;
   taxConfig: ITaxConfiguration | null;
 
-  addItem: (item: CartItem & { quantity?: number }) => void;
+  addItem: (item: Omit<CartItem, 'quantity'> & { quantity?: number }) => void;
   removeItem: (productId: string) => void;
   updateQuantity: (productId: string, delta: number) => void;
   setItemNotes: (productId: string, notes: string) => void;

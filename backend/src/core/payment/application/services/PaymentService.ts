@@ -49,21 +49,42 @@ export class PaymentService {
       tax: { rate: 0, amount: 0 },
     }));
 
+    const subtotal = taxResult.subtotal;
+    const discount = taxResult.discountAmount;
+    const dppTotal = subtotal - discount;
+    const serviceCharge = taxResult.serviceCharge || 0;
+    const tax = taxResult.totalTax;
+
     const order = Order.create({
       tenantId: input.tenantId,
       items: orderItems,
-      subtotal: taxResult.subtotal,
-      discount: taxResult.discountAmount,
-      tax: taxResult.totalTax,
+      subtotal,
+      discount,
+      discountTotal: discount,
+      dppTotal,
+      tax,
+      taxDetails: [],
       total,
+      roundingAdjustment: 0,
+      roundedPayable: 0,
+      roundingMethod: 'nearest',
+      serviceCharge,
+      serviceChargeRate: 0,
+      paymentBreakdown: [],
+      promotions: [],
       customerId: null,
+      customerName: null,
       cashierId: input.cashierId,
+      cashierName: '',
+      tableNumber: null,
+      transactionType: 'dine_in',
       notes: '',
       source: 'pos',
+      voidedItems: [],
       metadata: {
         discountType: input.discountType,
         discountValue,
-        serviceCharge: taxResult.serviceCharge,
+        serviceCharge,
         taxBreakdown: taxResult.taxes,
       },
     });

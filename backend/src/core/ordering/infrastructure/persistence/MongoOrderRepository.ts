@@ -10,13 +10,32 @@ interface OrderDoc extends Document<string> {
   items: any[];
   subtotal: number;
   discount: number;
+  discountTotal: number;
+  dppTotal: number;
   tax: number;
+  taxDetails: any[];
   total: number;
+  roundingAdjustment: number;
+  roundedPayable: number;
+  roundingMethod: string;
+  serviceCharge: number;
+  serviceChargeRate: number;
   paymentStatus: string;
+  paymentBreakdown: any[];
+  promotions: any[];
   customerId: string | null;
+  customerName: string | null;
   cashierId: string;
+  cashierName: string;
+  tableNumber: string | null;
+  transactionType: string;
   notes: string;
   source: string;
+  voidedItems: any[];
+  voidedAt: Date | null;
+  voidedBy: string | null;
+  voidedByName: string | null;
+  voidReason: string | null;
   metadata: Record<string, unknown>;
   paidAt: Date | null;
   createdAt: Date;
@@ -35,13 +54,32 @@ export class MongoOrderRepository {
       items: doc.items,
       subtotal: doc.subtotal,
       discount: doc.discount,
+      discountTotal: doc.discountTotal ?? 0,
+      dppTotal: doc.dppTotal ?? 0,
       tax: doc.tax,
+      taxDetails: doc.taxDetails ?? [],
       total: doc.total,
+      roundingAdjustment: doc.roundingAdjustment ?? 0,
+      roundedPayable: doc.roundedPayable ?? 0,
+      roundingMethod: doc.roundingMethod ?? 'nearest',
+      serviceCharge: doc.serviceCharge ?? 0,
+      serviceChargeRate: doc.serviceChargeRate ?? 0,
       paymentStatus: doc.paymentStatus as IOrder['paymentStatus'],
+      paymentBreakdown: doc.paymentBreakdown ?? [],
+      promotions: doc.promotions ?? [],
       customerId: doc.customerId,
+      customerName: doc.customerName ?? null,
       cashierId: doc.cashierId,
+      cashierName: doc.cashierName ?? '',
+      tableNumber: doc.tableNumber ?? null,
+      transactionType: (doc.transactionType ?? 'dine_in') as IOrder['transactionType'],
       notes: doc.notes,
       source: doc.source as IOrder['source'],
+      voidedItems: doc.voidedItems ?? [],
+      voidedAt: doc.voidedAt ?? null,
+      voidedBy: doc.voidedBy ?? null,
+      voidedByName: doc.voidedByName ?? null,
+      voidReason: doc.voidReason ?? null,
       metadata: doc.metadata || {},
       paidAt: doc.paidAt,
       createdAt: doc.createdAt,
@@ -59,13 +97,32 @@ export class MongoOrderRepository {
       items: data.items,
       subtotal: data.subtotal,
       discount: data.discount,
+      discountTotal: data.discountTotal,
+      dppTotal: data.dppTotal,
       tax: data.tax,
+      taxDetails: data.taxDetails,
       total: data.total,
+      roundingAdjustment: data.roundingAdjustment,
+      roundedPayable: data.roundedPayable,
+      roundingMethod: data.roundingMethod,
+      serviceCharge: data.serviceCharge,
+      serviceChargeRate: data.serviceChargeRate,
       paymentStatus: data.paymentStatus,
+      paymentBreakdown: data.paymentBreakdown,
+      promotions: data.promotions,
       customerId: data.customerId,
+      customerName: data.customerName,
       cashierId: data.cashierId,
+      cashierName: data.cashierName,
+      tableNumber: data.tableNumber,
+      transactionType: data.transactionType,
       notes: data.notes,
       source: data.source,
+      voidedItems: data.voidedItems,
+      voidedAt: data.voidedAt,
+      voidedBy: data.voidedBy,
+      voidedByName: data.voidedByName,
+      voidReason: data.voidReason,
       metadata: data.metadata,
       paidAt: data.paidAt,
     } as unknown as Partial<OrderDoc>;

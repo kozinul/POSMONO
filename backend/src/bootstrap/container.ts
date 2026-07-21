@@ -55,7 +55,7 @@ import { UserController } from '../core/identity/interfaces/http/controllers/Use
 import { PermissionController } from '../core/identity/interfaces/http/controllers/PermissionController';
 import { OrderSchema } from '../core/ordering/infrastructure/persistence/schemas/OrderSchema';
 import { MongoOrderRepository } from '../core/ordering/infrastructure/persistence/MongoOrderRepository';
-import { CreateOrderService, UpdateOrderService, VoidOrderService, VoidItemService, PayOrderService, SplitItemService } from '../core/ordering/application/services/OrderService';
+import { CreateOrderService, UpdateOrderService, VoidOrderService, VoidItemService, PayOrderService, VoidPaymentService, ReopenOrderService, SplitItemService } from '../core/ordering/application/services/OrderService';
 import { OrderController } from '../core/ordering/interfaces/http/controllers/OrderController';
 import { ShiftSchema } from '../core/pos/infrastructure/persistence/schemas/ShiftSchema';
 import { MongoShiftRepository } from '../core/pos/infrastructure/persistence/MongoShiftRepository';
@@ -379,6 +379,20 @@ export function buildContainer() {
         eventBus: container.resolve('eventBus'),
       }),
     }),
+    voidPaymentService: asClass(VoidPaymentService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        orderRepository: container.resolve('orderRepository'),
+        eventBus: container.resolve('eventBus'),
+      }),
+    }),
+    reopenOrderService: asClass(ReopenOrderService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        orderRepository: container.resolve('orderRepository'),
+        eventBus: container.resolve('eventBus'),
+      }),
+    }),
     splitItemService: asClass(SplitItemService, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
@@ -395,6 +409,8 @@ export function buildContainer() {
         voidOrderService: container.resolve('voidOrderService'),
         voidItemService: container.resolve('voidItemService'),
         payOrderService: container.resolve('payOrderService'),
+        voidPaymentService: container.resolve('voidPaymentService'),
+        reopenOrderService: container.resolve('reopenOrderService'),
         splitItemService: container.resolve('splitItemService'),
         orderRepository: container.resolve('orderRepository'),
       }),

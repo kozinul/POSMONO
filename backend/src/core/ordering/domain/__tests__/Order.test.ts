@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Order } from '../Order';
-import { validOrderInput } from '../../../../../tests/fixtures/ordering.fixtures';
+import { validOrderInput, validPaymentBreakdown } from '../../../../../tests/fixtures/ordering.fixtures';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -160,6 +160,171 @@ describe('Order', () => {
       const restored = Order.hydrate(data);
 
       expect(restored.serialize()).toEqual(data);
+    });
+  });
+
+  describe('voidOrder', () => {
+    it('transitions to voided and moves all items to voidedItems', () => {
+      const order = Order.create(validOrderInput);
+      order.voidOrder('user-1', 'Admin', 'Mistake');
+
+      const data = order.serialize();
+      expect(data.status).toBe('voided');
+      expect(data.voidedItems).toHaveLength(1);
+      expect(data.voidedItems[0].productName).toBe('Nasi Goreng');
+      expect(data.items).toHaveLength(0);
+      expect(data.voidReason).toBe('Mistake');
+      expect(data.voidedByName).toBe('Admin');
+    });
+
+    it('emits ordering.order.voided event', () => {
+      const order = Order.create(validOrderInput);
+      order.clearEvents();
+      order.voidOrder('user-1', 'Admin', 'Test');
+
+      const events = order.domainEvents;
+      expect(events).toHaveLength(1);
+      expect(events[0].eventName).toBe('ordering.order.voided');
+    });
+
+    it('throws if already voided', () => {
+      const order = Order.create(validOrderInput);
+      order.voidOrder('user-1', 'Admin', 'First');
+      expect(() => order.voidOrder('user-1', 'Admin', 'Second')).toThrow('Cannot void an already voided/refunded order');
+    });
+  });
+
+  describe('pay', () => {
+    it('sets payment breakdown and marks as paid', () => {
+      const order = Order.create(validOrderInput);
+      order.pay(validPaymentBreakdown, 'cashier-1', 'Kasir 1');
+
+      const data = order.serialize();
+      expect(data.status).toBe('paid');
+      expect(data.paymentStatus).toBe('completed');
+      expect(data.paymentBreakdown).toHaveLength(1);
+      expect(data.paymentBreakdown[0].method).toBe('cash');
+      expect(data.paidAt).toBeInstanceOf(Date);
+    });
+
+    it('emits ordering.order.paid event', () => {
+      const order = Order.create(validOrderInput);
+      order.clearEvents();
+      order.pay(validPaymentBreakdown, 'cashier-1', 'Kasir 1');
+
+      const events = order.domainEvents;
+      expect(events).toHaveLength(1);
+      expect(events[0].eventName).toBe('ordering.order.paid');
+    });
+
+    it('throws if already paid', () => {
+      const order = Order.create(validOrderInput);
+      order.pay(validPaymentBreakdown, 'cashier-1', 'Kasir 1');
+      expect(() => order.pay(validPaymentBreakdown, 'cashier-1', 'Kasir 1')).toThrow('Order is already paid');
+    });
+
+    it('throws if order is voided', () => {
+      const order = Order.create(validOrderInput);
+      order.voidOrder('user-1', 'Admin', 'Void');
+      expect(() => order.pay(validPaymentBreakdown, 'cashier-1', 'Kasir 1')).toThrow('Cannot pay a voided/cancelled order');
+    });
+  });
+
+  describe('addItem', () => {
+    it('adds an item and recalculates totals', () => {
+      const order = Order.create(validOrderInput);
+      const newItem = {
+        productId: 'product-2',
+        variantId: null,
+        productName: 'Es Teh',
+        quantity: 1,
+        unitPrice: 10000,
+        totalPrice: 10000,
+        modifiers: [],
+        tax: { rate: 0, amount: 0 },
+      };
+
+      order.addItem(newItem);
+      const data = order.serialize();
+      expect(data.items).toHaveLength(2);
+      expect(data.subtotal).toBe(60000);
+      expect(data.total).toBe(60000);
+    });
+
+    it('throws if order is paid', () => {
+      const order = Order.create(validOrderInput);
+      order.pay(validPaymentBreakdown, 'cashier-1', 'Kasir 1');
+      expect(() => order.addItem({
+        productId: 'product-2', variantId: null, productName: 'Es Teh',
+        quantity: 1, unitPrice: 10000, totalPrice: 10000, modifiers: [], tax: { rate: 0, amount: 0 },
+      })).toThrow('Cannot add items to a voided/cancelled/paid order');
+    });
+  });
+
+  describe('voidPayment', () => {
+    it('removes a payment and resets status if no payments left', () => {
+      const order = Order.create(validOrderInput);
+      order.pay(validPaymentBreakdown, 'cashier-1', 'Kasir 1');
+      order.clearEvents();
+
+      order.voidPayment(0, 'Wrong payment', 'user-1', 'Admin');
+      const data = order.serialize();
+      expect(data.paymentBreakdown).toHaveLength(0);
+      expect(data.paymentStatus).toBe('pending');
+      expect(data.status).toBe('confirmed');
+    });
+
+    it('emits ordering.order.payment_voided event', () => {
+      const order = Order.create(validOrderInput);
+      order.pay(validPaymentBreakdown, 'cashier-1', 'Kasir 1');
+      order.clearEvents();
+
+      order.voidPayment(0, 'Wrong', 'user-1', 'Admin');
+      const events = order.domainEvents;
+      expect(events).toHaveLength(1);
+      expect(events[0].eventName).toBe('ordering.order.payment_voided');
+    });
+
+    it('throws on invalid payment index', () => {
+      const order = Order.create(validOrderInput);
+      order.pay(validPaymentBreakdown, 'cashier-1', 'Kasir 1');
+      expect(() => order.voidPayment(5, 'Reason', 'user-1', 'Admin')).toThrow('Invalid payment index');
+    });
+  });
+
+  describe('reopen', () => {
+    it('reopens a cancelled order to draft', () => {
+      const order = Order.create(validOrderInput);
+      order.cancel('Changed mind');
+      order.reopen('user-1');
+
+      const data = order.serialize();
+      expect(data.status).toBe('draft');
+      expect(data.paymentStatus).toBe('pending');
+    });
+
+    it('reopens a voided order to draft', () => {
+      const order = Order.create(validOrderInput);
+      order.voidOrder('user-1', 'Admin', 'Mistake');
+      order.reopen('user-1');
+
+      expect(order.serialize().status).toBe('draft');
+    });
+
+    it('emits ordering.order.reopened event', () => {
+      const order = Order.create(validOrderInput);
+      order.cancel('Test');
+      order.clearEvents();
+      order.reopen('user-1');
+
+      const events = order.domainEvents;
+      expect(events).toHaveLength(1);
+      expect(events[0].eventName).toBe('ordering.order.reopened');
+    });
+
+    it('throws if order is not cancelled or voided', () => {
+      const order = Order.create(validOrderInput);
+      expect(() => order.reopen('user-1')).toThrow('Only cancelled or voided orders can be reopened');
     });
   });
 });

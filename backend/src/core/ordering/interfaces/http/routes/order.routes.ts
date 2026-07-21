@@ -9,6 +9,13 @@ export function createOrderRoutes(orderController: OrderController): Router {
   router.get('/', authenticate, asyncHandler(orderController.list.bind(orderController)));
   router.get('/:id', authenticate, asyncHandler(orderController.getById.bind(orderController)));
   router.post('/', authenticate, asyncHandler(orderController.create.bind(orderController)));
+  router.put('/:id', authenticate, asyncHandler(orderController.update.bind(orderController)));
+  router.post('/:id/pay', authenticate, asyncHandler(orderController.pay.bind(orderController)));
+  router.post('/:id/void', authenticate, asyncHandler(orderController.voidOrder.bind(orderController)));
+  router.post('/:id/void-item', authenticate, asyncHandler(orderController.voidItem.bind(orderController)));
+  router.post('/:id/void-payment', authenticate, asyncHandler(orderController.voidPayment.bind(orderController)));
+  router.patch('/:id/reopen', authenticate, asyncHandler(orderController.reopen.bind(orderController)));
+  router.post('/:id/split-item', authenticate, asyncHandler(orderController.splitItem.bind(orderController)));
 
   return router;
 }

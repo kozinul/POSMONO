@@ -11,3 +11,4 @@ home/
 .xdg/
 test123/
 .vscode/
+.pnpm-store/
