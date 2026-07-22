@@ -185,7 +185,10 @@ export class Order extends AggregateRoot<OrderId> {
   }
 
   static create(props: Omit<IOrder, 'id' | 'orderNumber' | 'status' | 'paymentStatus' | 'createdAt' | 'updatedAt' | 'paidAt' | 'voidedAt' | 'voidedBy' | 'voidedByName' | 'voidReason'>): Order {
-    const orderNumber = `ORD-${Date.now().toString(36).toUpperCase()}`;
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+    const seq = String(Math.floor(Math.random() * 9999) + 1).padStart(4, '0');
+    const orderNumber = `ORD-${dateStr}-${seq}`;
 
     const order = new Order({
       ...props,
@@ -458,6 +461,30 @@ export class Order extends AggregateRoot<OrderId> {
     this.updatedAt = new Date();
   }
 
+  applyDiscount(discountBreakdown: IDiscountBreakdown[]): void {
+    if (this.status === 'voided' || this.status === 'cancelled' || this.status === 'paid') {
+      throw new Error('Cannot apply discount on a voided/cancelled/paid order');
+    }
+    this.discountBreakdown = [...discountBreakdown];
+    this.recalculateTotals();
+    this.updatedAt = new Date();
+  }
+
+  setServiceCharge(rate: number): void {
+    if (this.status === 'voided' || this.status === 'cancelled' || this.status === 'paid') {
+      throw new Error('Cannot set service charge on a voided/cancelled/paid order');
+    }
+    this.serviceChargeRate = rate;
+    this.recalculateTotals();
+    this.updatedAt = new Date();
+  }
+
+  setRoundingMethod(method: string): void {
+    this.roundingMethod = method;
+    this.recalculateTotals();
+    this.updatedAt = new Date();
+  }
+
   voidAndRollback(reason: string, voidedBy: string, voidedByName: string): void {
     if (this.status === 'voided' || this.status === 'refunded') {
       throw new Error('Cannot void an already voided/refunded order');
@@ -541,6 +568,76 @@ export class Order extends AggregateRoot<OrderId> {
     );
   }
 
+  refund(refundedBy: string, refundedByName: string, reason: string): void {
+    if (this.status === 'voided' || this.status === 'refunded') {
+      throw new Error('Cannot refund an already voided/refunded order');
+    }
+    if (this.paymentStatus !== 'completed') {
+      throw new Error('Cannot refund an unpaid order');
+    }
+
+    this.status = 'refunded';
+    this.paymentStatus = 'refunded';
+    this.updatedAt = new Date();
+
+    this.addDomainEvent(
+      new DomainEvent({
+        eventName: 'ordering.order.refunded',
+        aggregateId: this.id.toValue(),
+        aggregateType: 'Order',
+        tenantId: this.tenantId,
+        payload: {
+          orderId: this.id.toValue(),
+          orderNumber: this.orderNumber,
+          refundedBy,
+          refundedByName,
+          reason,
+          total: this.total,
+          paymentBreakdown: this.paymentBreakdown,
+        },
+      }),
+    );
+  }
+
+  topay(paymentBreakdown: IPaymentBreakdownEntry[], cashierId: string, cashierName: string): void {
+    if (this.status === 'voided' || this.status === 'cancelled' || this.status === 'refunded') {
+      throw new Error('Cannot pay a voided/cancelled/refunded order');
+    }
+    if (this.paymentStatus === 'completed') {
+      throw new Error('Order is already paid');
+    }
+
+    const totalPaid = paymentBreakdown.reduce((sum, p) => sum + p.amount, 0);
+    const expectedTotal = this.roundedPayable || this.total;
+    if (Math.abs(totalPaid - expectedTotal) > 1) {
+      throw new Error(`Total payment (${totalPaid}) does not match order total (${expectedTotal})`);
+    }
+
+    this.paymentBreakdown = [...paymentBreakdown];
+    this.paymentStatus = 'completed';
+    this.status = 'paid';
+    this.paidAt = new Date();
+    this.cashierId = cashierId;
+    this.cashierName = cashierName;
+    this.updatedAt = new Date();
+
+    this.addDomainEvent(
+      new DomainEvent({
+        eventName: 'ordering.order.paid',
+        aggregateId: this.id.toValue(),
+        aggregateType: 'Order',
+        tenantId: this.tenantId,
+        payload: {
+          orderId: this.id.toValue(),
+          orderNumber: this.orderNumber,
+          paymentBreakdown,
+          total: this.total,
+          method: 'topay',
+        },
+      }),
+    );
+  }
+
   reopen(reopenedBy: string): void {
     if (this.status !== 'cancelled' && this.status !== 'voided') {
       throw new Error('Only cancelled or voided orders can be reopened');
@@ -572,9 +669,15 @@ export class Order extends AggregateRoot<OrderId> {
 
   private recalculateTotals(): void {
     this.subtotal = this.items.reduce((sum, item) => sum + item.totalPrice, 0);
-    this.discount = 0;
-    this.discountTotal = 0;
-    this.dppTotal = this.subtotal - this.discount;
+
+    this.discountTotal = this.discountBreakdown.reduce((sum, d) => sum + d.amount, 0);
+    this.discount = this.discountTotal;
+
+    const afterDiscount = this.subtotal - this.discountTotal;
+    this.dppTotal = afterDiscount;
+
+    this.serviceCharge = Math.round(afterDiscount * this.serviceChargeRate * 100) / 100;
+
     this.tax = this.items.reduce((sum, item) => sum + (item.tax?.amount || 0), 0);
     this.taxDetails = this.items.map(item => {
       if (!item.tax || item.tax.rate === 0) return null;
@@ -587,12 +690,24 @@ export class Order extends AggregateRoot<OrderId> {
         baseAmount: item.totalPrice - item.tax.amount,
       } as ITaxDetail;
     }).filter(Boolean) as ITaxDetail[];
-    this.total = this.subtotal + this.tax;
-    this.roundingAdjustment = 0;
-    this.roundedPayable = this.total;
-    this.roundingMethod = 'nearest';
-    this.serviceCharge = 0;
-    this.serviceChargeRate = 0;
+
+    const rawTotal = afterDiscount + this.serviceCharge + this.tax;
+
+    if (this.roundingMethod === 'nearest' || this.roundingMethod === 'up' || this.roundingMethod === 'down') {
+      const precision = 100;
+      if (this.roundingMethod === 'nearest') {
+        this.roundingAdjustment = Math.round(rawTotal * precision) / precision - rawTotal;
+      } else if (this.roundingMethod === 'up') {
+        this.roundingAdjustment = Math.ceil(rawTotal * precision) / precision - rawTotal;
+      } else {
+        this.roundingAdjustment = Math.floor(rawTotal * precision) / precision - rawTotal;
+      }
+    } else {
+      this.roundingAdjustment = 0;
+    }
+
+    this.total = rawTotal;
+    this.roundedPayable = Math.round((rawTotal + this.roundingAdjustment) * 100) / 100;
   }
 
   serialize(): IOrder {

@@ -11,6 +11,9 @@ services:
       - pnpm_store:/home/node/.local/share/pnpm/store
       - turbo_cache:/workspace/.turbo
     command: sleep infinity
+    ports:
+      - '3000:3000'
+      - '5173:5173'
     environment:
       NODE_ENV: development
       PORT: 3000

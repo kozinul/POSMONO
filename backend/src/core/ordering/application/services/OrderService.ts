@@ -5,6 +5,7 @@ import {
   IPaymentBreakdownEntry,
   ITaxDetail,
   TransactionType,
+  IDiscountBreakdown,
 } from '../../domain/Order';
 
 interface CreateOrderInput {
@@ -92,6 +93,30 @@ interface VoidAndRollbackInput {
   reason: string;
   voidedBy: string;
   voidedByName: string;
+}
+
+interface TopayInput {
+  id: string;
+  paymentBreakdown: IPaymentBreakdownEntry[];
+  cashierId: string;
+  cashierName: string;
+}
+
+interface RefundInput {
+  id: string;
+  refundedBy: string;
+  refundedByName: string;
+  reason: string;
+}
+
+interface ApplyDiscountInput {
+  id: string;
+  discountBreakdown: IDiscountBreakdown[];
+}
+
+interface SetServiceChargeInput {
+  id: string;
+  rate: number;
 }
 
 export class CreateOrderService implements UseCase<CreateOrderInput, Order> {
@@ -424,6 +449,94 @@ export class VoidAndRollbackService implements UseCase<VoidAndRollbackInput, Ord
     if (!order) throw new Error('Order not found');
 
     order.voidAndRollback(input.reason, input.voidedBy, input.voidedByName);
+
+    await this.orderRepository.save(order);
+
+    for (const event of order.domainEvents) {
+      this.eventBus.publish(event);
+    }
+
+    return order;
+  }
+}
+
+export class TopayService implements UseCase<TopayInput, Order> {
+  constructor(
+    private readonly orderRepository: any,
+    private readonly eventBus: any,
+  ) {}
+
+  async execute(input: TopayInput): Promise<Order> {
+    const order = await this.orderRepository.findById(input.id);
+    if (!order) throw new Error('Order not found');
+
+    order.topay(input.paymentBreakdown, input.cashierId, input.cashierName);
+
+    await this.orderRepository.save(order);
+
+    for (const event of order.domainEvents) {
+      this.eventBus.publish(event);
+    }
+
+    return order;
+  }
+}
+
+export class RefundService implements UseCase<RefundInput, Order> {
+  constructor(
+    private readonly orderRepository: any,
+    private readonly eventBus: any,
+  ) {}
+
+  async execute(input: RefundInput): Promise<Order> {
+    const order = await this.orderRepository.findById(input.id);
+    if (!order) throw new Error('Order not found');
+
+    order.refund(input.refundedBy, input.refundedByName, input.reason);
+
+    await this.orderRepository.save(order);
+
+    for (const event of order.domainEvents) {
+      this.eventBus.publish(event);
+    }
+
+    return order;
+  }
+}
+
+export class ApplyDiscountService implements UseCase<ApplyDiscountInput, Order> {
+  constructor(
+    private readonly orderRepository: any,
+    private readonly eventBus: any,
+  ) {}
+
+  async execute(input: ApplyDiscountInput): Promise<Order> {
+    const order = await this.orderRepository.findById(input.id);
+    if (!order) throw new Error('Order not found');
+
+    order.applyDiscount(input.discountBreakdown);
+
+    await this.orderRepository.save(order);
+
+    for (const event of order.domainEvents) {
+      this.eventBus.publish(event);
+    }
+
+    return order;
+  }
+}
+
+export class SetServiceChargeService implements UseCase<SetServiceChargeInput, Order> {
+  constructor(
+    private readonly orderRepository: any,
+    private readonly eventBus: any,
+  ) {}
+
+  async execute(input: SetServiceChargeInput): Promise<Order> {
+    const order = await this.orderRepository.findById(input.id);
+    if (!order) throw new Error('Order not found');
+
+    order.setServiceCharge(input.rate);
 
     await this.orderRepository.save(order);
 

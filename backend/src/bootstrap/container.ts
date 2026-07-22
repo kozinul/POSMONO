@@ -55,14 +55,16 @@ import { UserController } from '../core/identity/interfaces/http/controllers/Use
 import { PermissionController } from '../core/identity/interfaces/http/controllers/PermissionController';
 import { OrderSchema } from '../core/ordering/infrastructure/persistence/schemas/OrderSchema';
 import { MongoOrderRepository } from '../core/ordering/infrastructure/persistence/MongoOrderRepository';
-import { CreateOrderService, UpdateOrderService, VoidOrderService, VoidItemService, PayOrderService, VoidPaymentService, ReopenOrderService, SplitItemService, RemoveItemService, UpdateItemQuantityService, VoidAndRollbackService } from '../core/ordering/application/services/OrderService';
+import { CreateOrderService, UpdateOrderService, VoidOrderService, VoidItemService, PayOrderService, VoidPaymentService, ReopenOrderService, SplitItemService, RemoveItemService, UpdateItemQuantityService, VoidAndRollbackService, TopayService, RefundService, ApplyDiscountService, SetServiceChargeService } from '../core/ordering/application/services/OrderService';
 import { OrderController } from '../core/ordering/interfaces/http/controllers/OrderController';
 import { ShiftSchema } from '../core/pos/infrastructure/persistence/schemas/ShiftSchema';
 import { MongoShiftRepository } from '../core/pos/infrastructure/persistence/MongoShiftRepository';
 import { ShiftService } from '../core/pos/application/services/ShiftService';
 import { ShiftController } from '../core/pos/interfaces/http/controllers/ShiftController';
 import { PaymentSchema } from '../core/payment/infrastructure/persistence/schemas/PaymentSchema';
+import { RefundSchema } from '../core/payment/infrastructure/persistence/schemas/RefundSchema';
 import { MongoPaymentRepository } from '../core/payment/infrastructure/persistence/MongoPaymentRepository';
+import { MongoRefundRepository } from '../core/payment/infrastructure/persistence/MongoRefundRepository';
 import { PaymentService } from '../core/payment/application/services/PaymentService';
 import { PaymentController } from '../core/payment/interfaces/http/controllers/PaymentController';
 import { ReportService } from '../core/reporting/application/services/ReportService';
@@ -122,6 +124,7 @@ export function buildContainer() {
   const OrderModel = systemConnection.model('Order', OrderSchema);
   const ShiftModel = systemConnection.model('Shift', ShiftSchema);
   const PaymentModel = systemConnection.model('Payment', PaymentSchema);
+  const RefundModel = systemConnection.model('Refund', RefundSchema);
   const TaxConfigurationModel = systemConnection.model('TaxConfiguration', TaxConfigurationSchema);
   const PricingProfileModel = systemConnection.model('PricingProfile', PricingProfileSchema);
   const DiscountConfigurationModel = systemConnection.model('DiscountConfiguration', DiscountConfigurationSchema);
@@ -156,6 +159,7 @@ export function buildContainer() {
     orderModel: asValue(OrderModel),
     shiftModel: asValue(ShiftModel),
     paymentModel: asValue(PaymentModel),
+    refundModel: asValue(RefundModel),
     taxConfigurationModel: asValue(TaxConfigurationModel),
     pricingProfileModel: asValue(PricingProfileModel),
     customerModel: asValue(CustomerModel),
@@ -448,6 +452,34 @@ export function buildContainer() {
         eventBus: container.resolve('eventBus'),
       }),
     }),
+    topayService: asClass(TopayService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        orderRepository: container.resolve('orderRepository'),
+        eventBus: container.resolve('eventBus'),
+      }),
+    }),
+    refundService: asClass(RefundService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        orderRepository: container.resolve('orderRepository'),
+        eventBus: container.resolve('eventBus'),
+      }),
+    }),
+    applyDiscountService: asClass(ApplyDiscountService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        orderRepository: container.resolve('orderRepository'),
+        eventBus: container.resolve('eventBus'),
+      }),
+    }),
+    setServiceChargeService: asClass(SetServiceChargeService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        orderRepository: container.resolve('orderRepository'),
+        eventBus: container.resolve('eventBus'),
+      }),
+    }),
     orderController: asClass(OrderController, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
@@ -462,6 +494,10 @@ export function buildContainer() {
         removeItemService: container.resolve('removeItemService'),
         updateItemQuantityService: container.resolve('updateItemQuantityService'),
         voidAndRollbackService: container.resolve('voidAndRollbackService'),
+        topayService: container.resolve('topayService'),
+        refundService: container.resolve('refundService'),
+        applyDiscountService: container.resolve('applyDiscountService'),
+        setServiceChargeService: container.resolve('setServiceChargeService'),
         orderRepository: container.resolve('orderRepository'),
       }),
     }),
@@ -489,11 +525,18 @@ export function buildContainer() {
         model: PaymentModel,
       }),
     }),
+    refundRepository: asClass(MongoRefundRepository, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        model: RefundModel,
+      }),
+    }),
     paymentService: asClass(PaymentService, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
         paymentRepository: container.resolve('paymentRepository'),
         orderRepository: container.resolve('orderRepository'),
+        refundRepository: container.resolve('refundRepository'),
         tenantRepository: container.resolve('tenantRepository'),
         taxService: container.resolve('taxService'),
         discountService: container.resolve('discountService'),

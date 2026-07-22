@@ -3,12 +3,17 @@ import { z } from 'zod';
 export const createProductSchema = z.object({
   sku: z.string().min(1, 'SKU is required'),
   barcode: z.string().optional().default(''),
+  bc: z.string().optional().default(''),
   name: z.string().min(1, 'Name is required'),
   description: z.string().optional().default(''),
   categoryId: z.string().min(1, 'Category is required'),
   basePrice: z.number().positive('Price must be positive'),
   pricingProfileId: z.string().optional(),
+  imageUrls: z.array(z.string()).optional().default([]),
   tags: z.array(z.string()).optional().default([]),
+  country: z.string().optional().default(''),
+  region: z.string().optional().default(''),
+  currency: z.string().optional().default(''),
 });
 
 export const updateProductSchema = createProductSchema.partial();

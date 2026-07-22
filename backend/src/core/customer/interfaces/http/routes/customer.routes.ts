@@ -12,6 +12,8 @@ export function createCustomerRoutes(customerController: CustomerController): Ro
   router.get('/:id', authenticate, asyncHandler(customerController.getById.bind(customerController)));
   router.post('/', authenticate, asyncHandler(customerController.create.bind(customerController)));
   router.put('/:id', authenticate, asyncHandler(customerController.update.bind(customerController)));
+  router.post('/:id/record-visit', authenticate, asyncHandler(customerController.recordVisit.bind(customerController)));
+  router.post('/:id/loyalty-points', authenticate, asyncHandler(customerController.addLoyaltyPoints.bind(customerController)));
   router.delete('/:id', authenticate, asyncHandler(customerController.delete.bind(customerController)));
 
   return router;

@@ -101,7 +101,7 @@ export class PaymentController extends BaseController {
     });
 
     this.ok(res, {
-      refund: result.refund,
+      refund: result.refund.serialize(),
       payment: result.payment.serialize(),
     });
   }

@@ -60,7 +60,7 @@ describe('PaymentService', () => {
     orderRepo = createMockRepo();
     taxService = createMockTaxService();
     eventBus = createMockEventBus();
-    service = new PaymentService(paymentRepo, orderRepo, null as any, taxService as any, eventBus);
+    service = new PaymentService(paymentRepo, orderRepo, null as any, null as any, taxService as any, null as any, eventBus);
   });
 
   describe('payCash', () => {

@@ -1,4 +1,4 @@
-import { Customer } from '../../domain/Customer';
+import { Customer, IAddress } from '../../domain/Customer';
 
 export class CustomerService {
   constructor(private readonly customerRepository: any) {}
@@ -8,7 +8,7 @@ export class CustomerService {
     name: string;
     phone?: string;
     email?: string;
-    address?: string;
+    address?: IAddress | string;
     isMember?: boolean;
     tags?: string[];
     preferences?: Record<string, unknown>;
@@ -34,7 +34,7 @@ export class CustomerService {
     name?: string;
     phone?: string;
     email?: string;
-    address?: string;
+    address?: IAddress | string;
     isMember?: boolean;
     tags?: string[];
     preferences?: Record<string, unknown>;
@@ -77,6 +77,26 @@ export class CustomerService {
 
   async search(tenantId: string, query: string): Promise<Customer[]> {
     return this.customerRepository.search(tenantId, query);
+  }
+
+  async recordVisit(input: { tenantId: string; customerId: string; amount: number }): Promise<Customer> {
+    const customer = await this.customerRepository.findById(input.customerId);
+    if (!customer) throw new Error('Customer not found');
+    if (customer.serialize().tenantId !== input.tenantId) throw new Error('Customer not found');
+
+    customer.recordVisit(input.amount);
+    await this.customerRepository.save(customer);
+    return customer;
+  }
+
+  async addLoyaltyPoints(input: { tenantId: string; customerId: string; points: number }): Promise<Customer> {
+    const customer = await this.customerRepository.findById(input.customerId);
+    if (!customer) throw new Error('Customer not found');
+    if (customer.serialize().tenantId !== input.tenantId) throw new Error('Customer not found');
+
+    customer.addLoyaltyPoints(input.points);
+    await this.customerRepository.save(customer);
+    return customer;
   }
 
   async delete(tenantId: string, id: string): Promise<void> {

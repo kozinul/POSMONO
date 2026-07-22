@@ -1,5 +1,16 @@
 import { Schema } from 'mongoose';
 
+const AddressSchema = new Schema(
+  {
+    street: { type: String, default: '' },
+    city: { type: String, default: '' },
+    state: { type: String, default: '' },
+    country: { type: String, default: '' },
+    postalCode: { type: String, default: '' },
+  },
+  { _id: false },
+);
+
 export const CustomerSchema = new Schema(
   {
     _id: { type: String },
@@ -7,11 +18,12 @@ export const CustomerSchema = new Schema(
     name: { type: String, required: true },
     phone: { type: String, default: '' },
     email: { type: String, default: '' },
-    address: { type: String, default: '' },
+    address: { type: Schema.Types.Mixed, default: '' },
     isMember: { type: Boolean, default: false },
     totalVisits: { type: Number, default: 0 },
     totalSpent: { type: Number, default: 0 },
     lastVisitAt: { type: Date, default: null },
+    loyaltyPoints: { type: Number, default: 0 },
     tags: { type: [String], default: [] },
     preferences: { type: Schema.Types.Mixed, default: {} },
   },

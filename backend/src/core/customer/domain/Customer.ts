@@ -2,17 +2,26 @@ import { AggregateRoot } from '../../../@shared/domain/AggregateRoot';
 import { CustomerId } from '../../../@shared/domain/Identifier';
 import { DomainEvent } from '../../../@shared/domain/DomainEvent';
 
+export interface IAddress {
+  street: string;
+  city: string;
+  state: string;
+  country: string;
+  postalCode: string;
+}
+
 export interface ICustomer {
   id: string;
   tenantId: string;
   name: string;
   phone: string;
   email: string;
-  address: string;
+  address: IAddress | string;
   isMember: boolean;
   totalVisits: number;
   totalSpent: number;
   lastVisitAt: Date | null;
+  loyaltyPoints: number;
   tags: string[];
   preferences: Record<string, unknown>;
   createdAt: Date;
@@ -24,11 +33,12 @@ export class Customer extends AggregateRoot<CustomerId> {
   private name: string;
   private phone: string;
   private email: string;
-  private address: string;
+  private address: IAddress | string;
   private isMember: boolean;
   private totalVisits: number;
   private totalSpent: number;
   private lastVisitAt: Date | null;
+  private loyaltyPoints: number;
   private tags: string[];
   private preferences: Record<string, unknown>;
   private createdAt: Date;
@@ -45,19 +55,21 @@ export class Customer extends AggregateRoot<CustomerId> {
     this.totalVisits = props.totalVisits;
     this.totalSpent = props.totalSpent;
     this.lastVisitAt = props.lastVisitAt;
+    this.loyaltyPoints = props.loyaltyPoints;
     this.tags = [...props.tags];
     this.preferences = { ...props.preferences };
     this.createdAt = props.createdAt;
     this.updatedAt = props.updatedAt;
   }
 
-  static create(props: Omit<ICustomer, 'id' | 'totalVisits' | 'totalSpent' | 'lastVisitAt' | 'createdAt' | 'updatedAt'>): Customer {
+  static create(props: Omit<ICustomer, 'id' | 'totalVisits' | 'totalSpent' | 'lastVisitAt' | 'loyaltyPoints' | 'createdAt' | 'updatedAt'>): Customer {
     const customer = new Customer({
       ...props,
       id: new CustomerId().toValue(),
       totalVisits: 0,
       totalSpent: 0,
       lastVisitAt: null,
+      loyaltyPoints: 0,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -86,6 +98,16 @@ export class Customer extends AggregateRoot<CustomerId> {
     this.updatedAt = new Date();
   }
 
+  addLoyaltyPoints(points: number): void {
+    this.loyaltyPoints += points;
+    this.updatedAt = new Date();
+  }
+
+  setAddress(address: IAddress | string): void {
+    this.address = address;
+    this.updatedAt = new Date();
+  }
+
   serialize(): ICustomer {
     return {
       id: this._id.toValue(),
@@ -98,6 +120,7 @@ export class Customer extends AggregateRoot<CustomerId> {
       totalVisits: this.totalVisits,
       totalSpent: this.totalSpent,
       lastVisitAt: this.lastVisitAt,
+      loyaltyPoints: this.loyaltyPoints,
       tags: [...this.tags],
       preferences: { ...this.preferences },
       createdAt: this.createdAt,

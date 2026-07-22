@@ -1,5 +1,5 @@
 import { Model, Document } from 'mongoose';
-import { Customer, ICustomer } from '../../domain/Customer';
+import { Customer, ICustomer, IAddress } from '../../domain/Customer';
 
 interface CustomerDoc extends Document<string> {
   _id: string;
@@ -7,11 +7,12 @@ interface CustomerDoc extends Document<string> {
   name: string;
   phone: string;
   email: string;
-  address: string;
+  address: IAddress | string;
   isMember: boolean;
   totalVisits: number;
   totalSpent: number;
   lastVisitAt: Date | null;
+  loyaltyPoints: number;
   tags: string[];
   preferences: Record<string, unknown>;
   createdAt: Date;
@@ -28,11 +29,12 @@ export class MongoCustomerRepository {
       name: doc.name,
       phone: doc.phone,
       email: doc.email,
-      address: doc.address,
+      address: doc.address ?? '',
       isMember: doc.isMember,
       totalVisits: doc.totalVisits,
       totalSpent: doc.totalSpent,
       lastVisitAt: doc.lastVisitAt,
+      loyaltyPoints: doc.loyaltyPoints ?? 0,
       tags: doc.tags ?? [],
       preferences: doc.preferences ?? {},
       createdAt: doc.createdAt,
@@ -53,6 +55,7 @@ export class MongoCustomerRepository {
       totalVisits: data.totalVisits,
       totalSpent: data.totalSpent,
       lastVisitAt: data.lastVisitAt,
+      loyaltyPoints: data.loyaltyPoints,
       tags: data.tags,
       preferences: data.preferences,
     } as unknown as Partial<CustomerDoc>;

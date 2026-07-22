@@ -1,25 +1,54 @@
 {
-  "name": "posmono",
+  "name": "kuire-platform",
   "version": "0.1.0",
   "private": true,
-  "description": "POSMono — Modular Business Operating System",
+  "description": "Kuire — Modular SaaS Platform",
   "scripts": {
     "dev": "turbo run dev",
-    "dev:setup": "pnpm install && pnpm --filter @posmono/shared run build",
+    "dev:api": "turbo run dev --filter=@kuire/api",
+    "dev:web": "turbo run dev --filter=@kuire/web",
+    "dev:pos": "turbo run dev --filter=@kuire/pos",
+    "dev:opsc": "turbo run dev --filter=@kuire/operation-center",
     "build": "turbo run build",
+    "build:packages": "turbo run build --filter='./packages/*'",
     "test": "turbo run test -- --passWithNoTests",
+    "test:unit": "turbo run test:unit -- --passWithNoTests",
+    "test:integration": "turbo run test:integration -- --passWithNoTests",
     "lint": "turbo run lint",
+    "lint:fix": "turbo run lint -- --fix",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
+    "typecheck": "turbo run typecheck",
     "clean": "turbo run clean",
-    "reset": "pnpm run clean && rm -rf node_modules && pnpm install"
+    "reset": "pnpm run clean && rm -rf node_modules && pnpm install",
+    "prepare": "husky",
+    "db:migrate": "turbo run db:migrate --filter=@kuire/api",
+    "db:seed": "turbo run db:seed --filter=@kuire/api",
+    "docker:up": "docker compose -f infrastructure/docker/docker-compose.yml up -d",
+    "docker:down": "docker compose -f infrastructure/docker/docker-compose.yml down",
+    "infra:up": "docker compose -f infrastructure/docker/docker-compose.infra.yml up -d",
+    "infra:down": "docker compose -f infrastructure/docker/docker-compose.infra.yml down"
   },
   "devDependencies": {
+    "@commitlint/cli": "^19.0.0",
+    "@commitlint/config-conventional": "^19.0.0",
+    "husky": "^9.0.0",
+    "lint-staged": "^15.0.0",
     "prettier": "^3.2.0",
     "turbo": "^2.0.0",
     "typescript": "^5.4.0"
   },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
+    ]
+  },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
   },
   "packageManager": "pnpm@9.0.0"
 }

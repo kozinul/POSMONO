@@ -1,12 +1,14 @@
 import { v4 as uuidv4 } from 'uuid';
 import { NotFoundError, ValidationError } from '../../../../@shared/infrastructure/error/AppError';
 import { Payment, PaymentMethod, ISplitBill } from '../../domain/Payment';
+import { Refund } from '../../domain/Refund';
 import { Order, IOrderItem, IPromotionBreakdown, IDiscountBreakdown } from '../../../ordering/domain/Order';
 
 export class PaymentService {
   constructor(
     private readonly paymentRepository: any,
     private readonly orderRepository: any,
+    private readonly refundRepository: any,
     private readonly tenantRepository: any,
     private readonly taxService: any,
     private readonly discountService: any,
@@ -248,18 +250,33 @@ export class PaymentService {
     reason: string;
     refundedBy: string;
     refundedByName: string;
-  }): Promise<{ refund: any; payment: Payment }> {
+  }): Promise<{ refund: Refund; payment: Payment }> {
     const payment = await this.paymentRepository.findById(input.paymentId);
     if (!payment) throw new NotFoundError('Payment not found');
 
     const paymentData = payment.serialize();
     if (paymentData.tenantId !== input.tenantId) throw new NotFoundError('Payment not found');
 
-    const refund = payment.refund(input.refundedBy, input.refundedByName, input.reason);
+    payment.refund(input.refundedBy, input.refundedByName, input.reason);
+
+    const refund = Refund.create({
+      tenantId: input.tenantId,
+      paymentId: input.paymentId,
+      orderId: paymentData.orderId,
+      amount: paymentData.amount,
+      reason: input.reason,
+      refundedBy: input.refundedBy,
+      refundedByName: input.refundedByName,
+    });
+    refund.complete();
 
     await this.paymentRepository.save(payment);
+    await this.refundRepository.save(refund);
 
     for (const event of payment.domainEvents) {
+      this.eventBus.publish(event);
+    }
+    for (const event of refund.domainEvents) {
       this.eventBus.publish(event);
     }
 

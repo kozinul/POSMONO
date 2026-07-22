@@ -12,6 +12,10 @@ import {
   RemoveItemService,
   UpdateItemQuantityService,
   VoidAndRollbackService,
+  TopayService,
+  RefundService,
+  ApplyDiscountService,
+  SetServiceChargeService,
 } from '../../../application/services/OrderService';
 import { MongoOrderRepository } from '../../../infrastructure/persistence/MongoOrderRepository';
 import { z } from 'zod';
@@ -105,6 +109,36 @@ const voidAndRollbackSchema = z.object({
   voidedByName: z.string().min(1, 'Voided by name is required'),
 });
 
+const topaySchema = z.object({
+  paymentBreakdown: z.array(z.object({
+    method: z.string().min(1),
+    code: z.string().min(1),
+    amount: z.number().positive(),
+    change: z.number().default(0),
+    cardLastFour: z.string().optional(),
+  })).min(1),
+  cashierName: z.string().optional().default(''),
+});
+
+const refundSchema = z.object({
+  reason: z.string().min(1, 'Reason is required'),
+  refundedByName: z.string().min(1, 'Refunded by name is required'),
+});
+
+const applyDiscountSchema = z.object({
+  discountBreakdown: z.array(z.object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    type: z.enum(['percentage', 'nominal', 'buy_x_get_y', 'min_purchase']),
+    amount: z.number().nonnegative(),
+    appliedTo: z.string().min(1),
+  })),
+});
+
+const setServiceChargeSchema = z.object({
+  rate: z.number().min(0).max(1),
+});
+
 export class OrderController extends BaseController {
   constructor(
     private readonly createOrderService: CreateOrderService,
@@ -118,6 +152,10 @@ export class OrderController extends BaseController {
     private readonly removeItemService: RemoveItemService,
     private readonly updateItemQuantityService: UpdateItemQuantityService,
     private readonly voidAndRollbackService: VoidAndRollbackService,
+    private readonly topayService: TopayService,
+    private readonly refundService: RefundService,
+    private readonly applyDiscountService: ApplyDiscountService,
+    private readonly setServiceChargeService: SetServiceChargeService,
     private readonly orderRepository: MongoOrderRepository,
   ) {
     super();
@@ -300,6 +338,58 @@ export class OrderController extends BaseController {
       reason: parsed.data.reason,
       voidedBy: req.userId,
       voidedByName: parsed.data.voidedByName,
+    });
+
+    this.ok(res, order.serialize());
+  }
+
+  async topay(req: Request, res: Response): Promise<void> {
+    const parsed = topaySchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
+
+    const order = await this.topayService.execute({
+      id: req.params.id,
+      paymentBreakdown: parsed.data.paymentBreakdown,
+      cashierId: req.userId,
+      cashierName: parsed.data.cashierName,
+    });
+
+    this.ok(res, order.serialize());
+  }
+
+  async refund(req: Request, res: Response): Promise<void> {
+    const parsed = refundSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
+
+    const order = await this.refundService.execute({
+      id: req.params.id,
+      refundedBy: req.userId,
+      refundedByName: parsed.data.refundedByName,
+      reason: parsed.data.reason,
+    });
+
+    this.ok(res, order.serialize());
+  }
+
+  async applyDiscount(req: Request, res: Response): Promise<void> {
+    const parsed = applyDiscountSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
+
+    const order = await this.applyDiscountService.execute({
+      id: req.params.id,
+      discountBreakdown: parsed.data.discountBreakdown,
+    });
+
+    this.ok(res, order.serialize());
+  }
+
+  async setServiceCharge(req: Request, res: Response): Promise<void> {
+    const parsed = setServiceChargeSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
+
+    const order = await this.setServiceChargeService.execute({
+      id: req.params.id,
+      rate: parsed.data.rate,
     });
 
     this.ok(res, order.serialize());

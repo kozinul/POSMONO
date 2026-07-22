@@ -14,10 +14,20 @@ describe('Order', () => {
       const data = order.serialize();
       expect(data.status).toBe('draft');
       expect(data.paymentStatus).toBe('pending');
-      expect(data.orderNumber).toMatch(/^ORD-/);
+      expect(data.orderNumber).toMatch(/^ORD-\d{8}-\d{4}$/);
       expect(data.tenantId).toBe('tenant-test-1');
       expect(data.total).toBe(50000);
       expect(data.paidAt).toBeNull();
+    });
+
+    it('generates order number in ORD-YYYYMMDD-XXXX format', () => {
+      const order = Order.create(validOrderInput);
+      const orderNumber = order.serialize().orderNumber;
+      const parts = orderNumber.split('-');
+      expect(parts).toHaveLength(3);
+      expect(parts[0]).toBe('ORD');
+      expect(parts[1]).toMatch(/^\d{8}$/);
+      expect(parts[2]).toMatch(/^\d{4}$/);
     });
 
     it('generates a unique order number', () => {
@@ -325,6 +335,166 @@ describe('Order', () => {
     it('throws if order is not cancelled or voided', () => {
       const order = Order.create(validOrderInput);
       expect(() => order.reopen('user-1')).toThrow('Only cancelled or voided orders can be reopened');
+    });
+  });
+
+  describe('refund', () => {
+    it('transitions to refunded and emits ordering.order.refunded event', () => {
+      const order = Order.create(validOrderInput);
+      order.pay(validPaymentBreakdown, 'cashier-1', 'Kasir 1');
+      order.clearEvents();
+
+      order.refund('user-1', 'Admin', 'Customer request');
+
+      const data = order.serialize();
+      expect(data.status).toBe('refunded');
+      expect(data.paymentStatus).toBe('refunded');
+
+      const events = order.domainEvents;
+      expect(events).toHaveLength(1);
+      expect(events[0].eventName).toBe('ordering.order.refunded');
+      expect(events[0].payload.reason).toBe('Customer request');
+      expect(events[0].payload.total).toBe(50000);
+    });
+
+    it('throws if order is not paid', () => {
+      const order = Order.create(validOrderInput);
+      expect(() => order.refund('user-1', 'Admin', 'reason')).toThrow('Cannot refund an unpaid order');
+    });
+
+    it('throws if already voided', () => {
+      const order = Order.create(validOrderInput);
+      order.pay(validPaymentBreakdown, 'cashier-1', 'Kasir 1');
+      order.voidOrder('user-1', 'Admin', 'void');
+      expect(() => order.refund('user-1', 'Admin', 'reason')).toThrow('Cannot refund an already voided/refunded order');
+    });
+
+    it('throws if already refunded', () => {
+      const order = Order.create(validOrderInput);
+      order.pay(validPaymentBreakdown, 'cashier-1', 'Kasir 1');
+      order.refund('user-1', 'Admin', 'first');
+      expect(() => order.refund('user-1', 'Admin', 'second')).toThrow('Cannot refund an already voided/refunded order');
+    });
+  });
+
+  describe('topay', () => {
+    it('accepts combined cash+non-cash payment', () => {
+      const order = Order.create(validOrderInput);
+      const combinedPayment = [
+        { method: 'cash', code: 'CASH', amount: 30000, change: 0 },
+        { method: 'qris', code: 'QRIS', amount: 20000, change: 0, cardLastFour: undefined },
+      ];
+
+      order.topay(combinedPayment, 'cashier-1', 'Kasir 1');
+
+      const data = order.serialize();
+      expect(data.status).toBe('paid');
+      expect(data.paymentStatus).toBe('completed');
+      expect(data.paymentBreakdown).toHaveLength(2);
+      expect(data.paymentBreakdown[0].method).toBe('cash');
+      expect(data.paymentBreakdown[1].method).toBe('qris');
+    });
+
+    it('emits ordering.order.paid event with method topay', () => {
+      const order = Order.create(validOrderInput);
+      order.clearEvents();
+
+      order.topay(validPaymentBreakdown, 'cashier-1', 'Kasir 1');
+
+      const events = order.domainEvents;
+      expect(events).toHaveLength(1);
+      expect(events[0].eventName).toBe('ordering.order.paid');
+      expect(events[0].payload.method).toBe('topay');
+    });
+
+    it('throws if total payment does not match order total', () => {
+      const order = Order.create(validOrderInput);
+      const wrongPayment = [
+        { method: 'cash', code: 'CASH', amount: 10000, change: 0 },
+      ];
+      expect(() => order.topay(wrongPayment, 'cashier-1', 'Kasir 1')).toThrow('Total payment');
+    });
+
+    it('throws if order is already paid', () => {
+      const order = Order.create(validOrderInput);
+      order.topay(validPaymentBreakdown, 'cashier-1', 'Kasir 1');
+      expect(() => order.topay(validPaymentBreakdown, 'cashier-1', 'Kasir 1')).toThrow('Order is already paid');
+    });
+  });
+
+  describe('applyDiscount', () => {
+    it('applies discount and recalculates totals', () => {
+      const order = Order.create(validOrderInput);
+      const discount = [
+        { id: 'd1', name: 'Promo 10%', type: 'percentage' as const, amount: 5000, appliedTo: 'subtotal' },
+      ];
+
+      order.applyDiscount(discount);
+
+      const data = order.serialize();
+      expect(data.discountBreakdown).toHaveLength(1);
+      expect(data.discountTotal).toBe(5000);
+      expect(data.discount).toBe(5000);
+      expect(data.dppTotal).toBe(45000);
+    });
+
+    it('throws on paid order', () => {
+      const order = Order.create(validOrderInput);
+      order.pay(validPaymentBreakdown, 'cashier-1', 'Kasir 1');
+      expect(() => order.applyDiscount([])).toThrow('Cannot apply discount on a voided/cancelled/paid order');
+    });
+  });
+
+  describe('setServiceCharge', () => {
+    it('sets service charge rate and recalculates', () => {
+      const order = Order.create(validOrderInput);
+      order.setServiceCharge(0.1);
+
+      const data = order.serialize();
+      expect(data.serviceChargeRate).toBe(0.1);
+      expect(data.serviceCharge).toBe(5000);
+      expect(data.total).toBe(55000);
+    });
+
+    it('throws on paid order', () => {
+      const order = Order.create(validOrderInput);
+      order.pay(validPaymentBreakdown, 'cashier-1', 'Kasir 1');
+      expect(() => order.setServiceCharge(0.1)).toThrow('Cannot set service charge on a voided/cancelled/paid order');
+    });
+  });
+
+  describe('recalculateTotals with rounding', () => {
+    it('setRoundingMethod updates rounding and recalculates', () => {
+      const order = Order.create(validOrderInput);
+      order.setRoundingMethod('up');
+
+      const data = order.serialize();
+      expect(data.roundingMethod).toBe('up');
+    });
+
+    it('service charge is calculated from afterDiscount subtotal', () => {
+      const order = Order.create(validOrderInput);
+      order.setServiceCharge(0.05);
+
+      const data = order.serialize();
+      expect(data.serviceCharge).toBe(2500);
+      expect(data.serviceChargeRate).toBe(0.05);
+      expect(data.total).toBe(52500);
+      expect(data.roundedPayable).toBe(52500);
+    });
+
+    it('discount + service charge + tax combined correctly', () => {
+      const order = Order.create(validOrderInput);
+      order.applyDiscount([
+        { id: 'd1', name: 'Diskon', type: 'nominal', amount: 10000, appliedTo: 'subtotal' },
+      ]);
+      order.setServiceCharge(0.05);
+
+      const data = order.serialize();
+      expect(data.discountTotal).toBe(10000);
+      expect(data.dppTotal).toBe(40000);
+      expect(data.serviceCharge).toBe(2000);
+      expect(data.total).toBe(42000);
     });
   });
 });

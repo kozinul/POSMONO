@@ -5,6 +5,7 @@ interface CreateProductInput {
   tenantId: string;
   sku: string;
   barcode?: string;
+  bc?: string;
   name: string;
   description?: string;
   categoryId: string;
@@ -20,13 +21,18 @@ interface CreateProductInput {
 interface UpdateProductInput {
   sku?: string;
   barcode?: string;
+  bc?: string;
   name?: string;
   description?: string;
   categoryId?: string;
   basePrice?: number;
   pricingProfileId?: string;
   tags?: string[];
+  imageUrls?: string[];
   isActive?: boolean;
+  country?: string;
+  region?: string;
+  currency?: string;
 }
 
 interface ListProductsOptions {
@@ -48,8 +54,8 @@ export class ProductService {
     const product = Product.create({
       tenantId: input.tenantId,
       sku: input.sku,
-      barcode: input.barcode || '',
-      bc: '',
+      barcode: input.barcode || input.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
+      bc: input.bc || '',
       name: input.name,
       description: input.description || '',
       categoryId: input.categoryId,

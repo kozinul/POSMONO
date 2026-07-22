@@ -4,11 +4,22 @@ import { CustomerService } from '../../../application/services/CustomerService';
 import { z } from 'zod';
 import { ValidationError } from '../../../../../@shared/infrastructure/error/AppError';
 
+const addressSchema = z.union([
+  z.string(),
+  z.object({
+    street: z.string().default(''),
+    city: z.string().default(''),
+    state: z.string().default(''),
+    country: z.string().default(''),
+    postalCode: z.string().default(''),
+  }),
+]);
+
 const createCustomerSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   phone: z.string().optional().default(''),
   email: z.string().email().optional().default(''),
-  address: z.string().optional().default(''),
+  address: addressSchema.optional().default(''),
   isMember: z.boolean().optional().default(false),
   tags: z.array(z.string()).optional().default([]),
   preferences: z.record(z.unknown()).optional().default({}),
@@ -18,10 +29,18 @@ const updateCustomerSchema = z.object({
   name: z.string().min(1).optional(),
   phone: z.string().optional(),
   email: z.string().email().optional(),
-  address: z.string().optional(),
+  address: addressSchema.optional(),
   isMember: z.boolean().optional(),
   tags: z.array(z.string()).optional(),
   preferences: z.record(z.unknown()).optional(),
+});
+
+const recordVisitSchema = z.object({
+  amount: z.number().min(0),
+});
+
+const addLoyaltyPointsSchema = z.object({
+  points: z.number().int().min(1),
 });
 
 export class CustomerController extends BaseController {
@@ -86,6 +105,32 @@ export class CustomerController extends BaseController {
     const { phone } = req.params;
     const customer = await this.customerService.searchByPhone(req.tenantId, phone);
     if (!customer) throw new ValidationError('Customer not found');
+    this.ok(res, customer.serialize());
+  }
+
+  async recordVisit(req: Request, res: Response): Promise<void> {
+    const parsed = recordVisitSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError('Invalid input');
+
+    const customer = await this.customerService.recordVisit({
+      tenantId: req.tenantId,
+      customerId: req.params.id,
+      amount: parsed.data.amount,
+    });
+
+    this.ok(res, customer.serialize());
+  }
+
+  async addLoyaltyPoints(req: Request, res: Response): Promise<void> {
+    const parsed = addLoyaltyPointsSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError('Invalid input');
+
+    const customer = await this.customerService.addLoyaltyPoints({
+      tenantId: req.tenantId,
+      customerId: req.params.id,
+      points: parsed.data.points,
+    });
+
     this.ok(res, customer.serialize());
   }
 
