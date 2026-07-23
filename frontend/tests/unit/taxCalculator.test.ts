@@ -150,17 +150,19 @@ describe('taxCalculator — PPN DPP Nilai Lain', () => {
   describe('with service charge', () => {
     const config = makeScPpnConfig();
 
-    it('Case 4a: SC not in DPP — PPN on item subtotal only', () => {
+    it('Case 4a: SC included in DPP — PPN on subtotal + SC', () => {
       const result = calculateTax(input({
         items: [{ productId: 'p1', quantity: 1, unitPrice: 25000 }],
       }), config);
 
       const expectedSc = 25000 * 10 / 100;
-      const expectedPpn = 25000 * 11 / 12 * 12 / 100;
+      const dppBase = 25000 + expectedSc;
+      const expectedPpn = Math.round(dppBase * 11 / 12 * 12 / 100);
 
       expect(result.serviceCharge).toBe(expectedSc);
-      expect(result.totalTax - result.serviceCharge).toBe(Math.round(expectedPpn));
-      expect(result.grandTotal).toBe(25000 + expectedSc + Math.round(expectedPpn));
+      expect(result.taxBreakdown[1].baseAmount).toBe(dppBase);
+      expect(result.totalTax - result.serviceCharge).toBe(expectedPpn);
+      expect(result.grandTotal).toBe(25000 + expectedSc + expectedPpn);
     });
   });
 

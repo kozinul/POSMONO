@@ -125,7 +125,8 @@ describe('TaxEngine', () => {
       }), config);
 
       const sc = 100000 * 5 / 100;
-      const vatTax = Math.round(100000 * 11 / 12 * 12 / 100 * 100) / 100;
+      const dppBase = 100000 + sc;
+      const vatTax = Math.round(dppBase * 11 / 12 * 12 / 100);
       expect(result.totalTax).toBe(sc + vatTax);
       expect(result.taxBreakdown).toHaveLength(2);
       expect(result.taxBreakdown[0].taxType).toBe('service_charge');

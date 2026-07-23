@@ -128,19 +128,22 @@ function calcItemTax(
   let totalTax = 0;
   let serviceCharge = 0;
   const breakdown: TaxBreakdownItem[] = [];
+  let dppBase = itemAmount;
 
   for (const rule of rules) {
     const isExemption = rule.taxType === 'exemption';
     const isSC = rule.taxType === 'service_charge';
 
+    const base = isExemption ? 0 : dppBase;
+
     let amount = 0;
     if (isExemption) {
       amount = 0;
     } else if (isInclusive && rule.policy.type !== 'amount') {
-      const modifiedBase = applyModifier(itemAmount, rule.modifier);
+      const modifiedBase = applyModifier(dppBase, rule.modifier);
       amount = Math.round(roundValue(modifiedBase - (modifiedBase / (1 + rule.policy.value / 100)), rule.policy.roundingMode, rule.policy.precision));
     } else if (rule.policy.type !== 'amount') {
-      const modifiedBase = applyModifier(itemAmount, rule.modifier);
+      const modifiedBase = applyModifier(dppBase, rule.modifier);
       amount = Math.round(roundValue(modifiedBase * (rule.policy.value / 100), rule.policy.roundingMode, rule.policy.precision));
     } else {
       amount = Math.round(rule.policy.value);
@@ -152,12 +155,15 @@ function calcItemTax(
       taxType: rule.taxType,
       rate: rule.policy.value,
       amount,
-      baseAmount: itemAmount,
+      baseAmount: base,
       priority: rule.priority,
     });
 
     totalTax += amount;
-    if (isSC) serviceCharge += amount;
+    if (isSC) {
+      serviceCharge += amount;
+      dppBase += amount;
+    }
   }
 
   return { tax: totalTax, serviceCharge, breakdown };

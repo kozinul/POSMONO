@@ -127,11 +127,15 @@ describe('PricingEngine', () => {
       }), config);
 
       const sc = 100000 * 5 / 100;
-      const vatTax = Math.round(100000 * 11 / 12 * 12 / 100 * 100) / 100;
+      const dppBase = 100000 + sc;
+      const vatTax = Math.round(dppBase * 11 / 12 * 12 / 100);
+      expect(result.serviceCharge).toBe(sc);
       expect(result.totalTax).toBe(sc + vatTax);
       expect(result.taxBreakdown).toHaveLength(2);
       expect(result.taxBreakdown[0].taxType).toBe('service_charge');
+      expect(result.taxBreakdown[0].baseAmount).toBe(100000);
       expect(result.taxBreakdown[1].taxType).toBe('vat');
+      expect(result.taxBreakdown[1].baseAmount).toBe(dppBase);
     });
 
     describe('PPN DPP Nilai Lain with SC (Case 4)', () => {
@@ -143,16 +147,20 @@ describe('PricingEngine', () => {
         TaxPolicy.create({ type: 'rate', value: 10, roundingMode: 'round', precision: 0 }),
       );
 
-      it('Case 4a: SC not included in DPP — PPN on item subtotal only', () => {
+      it('Case 4a: SC included in DPP — PPN on subtotal + SC', () => {
         const config = makeConfig({ rules: [scRule, ppnRule()] });
         const result = engine.calculate(input({
           items: [{ id: 'p1', productId: 'p1', productName: 'A', categoryId: 'c1', quantity: 1, unitPrice: 25000 }],
         }), config);
 
-        const expectedPpn = 25000 * 11 / 12 * 12 / 100;
-        expect(result.taxBreakdown[0].amount).toBe(2500);
-        expect(result.taxBreakdown[1].amount).toBe(Math.round(expectedPpn));
-        expect(result.totalTax).toBe(2500 + Math.round(expectedPpn));
+        const expectedSc = 2500;
+        const dppBase = 25000 + expectedSc;
+        const expectedPpn = Math.round(dppBase * 11 / 12 * 12 / 100);
+        expect(result.taxBreakdown[0].amount).toBe(expectedSc);
+        expect(result.taxBreakdown[1].amount).toBe(expectedPpn);
+        expect(result.taxBreakdown[1].baseAmount).toBe(dppBase);
+        expect(result.totalTax).toBe(expectedSc + expectedPpn);
+        expect(result.grandTotal).toBe(25000 + expectedSc + expectedPpn);
       });
 
       it('verifies engine uses policy.value=12, not effective rate 11', () => {

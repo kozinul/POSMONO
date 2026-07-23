@@ -75,10 +75,11 @@ export class PricingEngine {
     const taxBreakdown: TaxBreakdownItem[] = [];
     let totalTax = 0;
     let serviceCharge = 0;
+    let dppBase = taxableAmount;
 
     for (const rule of rules) {
-      const base = rule.isExemption() ? 0 : taxableAmount;
-      const taxAmount = this.calculateRuleTax(rule, taxableAmount);
+      const base = rule.isExemption() ? 0 : dppBase;
+      const taxAmount = this.calculateRuleTax(rule, dppBase);
 
       taxBreakdown.push({
         ruleId: rule.getId(),
@@ -91,7 +92,10 @@ export class PricingEngine {
       });
 
       totalTax += taxAmount;
-      if (rule.isServiceCharge()) serviceCharge += taxAmount;
+      if (rule.isServiceCharge()) {
+        serviceCharge += taxAmount;
+        dppBase += taxAmount;
+      }
     }
 
     const grandTotal =
