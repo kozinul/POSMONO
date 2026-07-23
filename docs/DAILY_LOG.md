@@ -36,6 +36,27 @@ Copy this block for each new day:
 
 ## Entries
 
+### DATE: 2026-07-23
+
+**Today I worked on:**
+
+- Deleted MenuType entity entirely (domain, schema, repository, service, controller, routes)
+- Updated Family entity — removed `menuType` field; Family is now the top-level grouping
+- Simplified catalog hierarchy from 4 levels (MenuType → Family → Category → Product) to 2 levels (Family → Category → Product)
+- Updated ProductListPage — filter simplified to Family → Category (cascading pills)
+- Updated PosPage — filter simplified to Family → Category
+- Updated FamilyListPage — removed MenuType tabs and field
+- Removed `/menu-types` route from frontend router and backend API
+- Updated all docs (ARCHITECTURE, API_REFERENCE, DATABASE_ARCHITECTURE, POS_CURRENT_FEATURES, roadmap)
+
+**Database migration needed:**
+```javascript
+db.menu_types.drop()
+db.families.updateMany({}, { $unset: { menuType: "" } })
+```
+
+---
+
 ### DATE: 2026-06-30
 
 **Today I worked on:**

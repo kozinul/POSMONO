@@ -52,7 +52,7 @@ describe('CreateOrderService', () => {
     const input = {
       ...validOrderInput,
       items: [
-        { productId: 'p1', productName: 'Item A', quantity: 1, unitPrice: 10000, totalPrice: 10000, variantId: null, modifiers: [], tax: { rate: 11, amount: 1100 } },
+        { productId: 'p1', productName: 'Item A', quantity: 1, unitPrice: 10000, totalPrice: 10000, variantId: null, modifiers: [], tax: { rate: 12, amount: 1100 } },
       ],
       subtotal: 10000,
       discount: 0,

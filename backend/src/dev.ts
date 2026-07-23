@@ -6,7 +6,9 @@ import { UserSchema } from './core/identity/infrastructure/persistence/schemas/U
 import { RoleSchema } from './core/identity/infrastructure/persistence/schemas/RoleSchema';
 import { ProductSchema } from './core/catalog/infrastructure/persistence/schemas/ProductSchema';
 import { CategorySchema } from './core/catalog/infrastructure/persistence/schemas/CategorySchema';
+import { FamilySchema } from './core/catalog/infrastructure/persistence/schemas/FamilySchema';
 import { StockSchema } from './core/inventory/infrastructure/persistence/schemas/StockSchema';
+import { PaymentMethodSchema } from './core/payment/infrastructure/persistence/schemas/PaymentMethodSchema';
 
 function id(prefix: string): string {
   return `${prefix}_${uuidv4().replace(/-/g, '').substring(0, 20)}`;
@@ -20,7 +22,9 @@ async function seedData() {
   const Role = mongoose.model('Role', RoleSchema);
   const Product = mongoose.model('Product', ProductSchema);
   const Category = mongoose.model('Category', CategorySchema);
+  const Family = mongoose.model('Family', FamilySchema);
   const Stock = mongoose.model('Stock', StockSchema);
+  const PaymentMethodModel = mongoose.model('PaymentMethod', PaymentMethodSchema);
 
   const existingTenant = await Tenant.findOne({ _id: DEV_TENANT_ID }).lean();
   if (existingTenant) {
@@ -116,10 +120,20 @@ async function seedData() {
     },
   ]);
 
+  const families = await Family.create([
+    { _id: id('fam'), tenantId, name: 'Food', description: 'Makanan', menuType: 'food', sortOrder: 1, isActive: true },
+    { _id: id('fam'), tenantId, name: 'Beverage', description: 'Minuman', menuType: 'beverage', sortOrder: 2, isActive: true },
+  ]);
+
+  const familyMap: Record<string, string> = {};
+  const famDocs = await Family.find({ tenantId }).exec();
+  famDocs.forEach((f: any) => { familyMap[f.name.toLowerCase()] = f._id; });
+
   const categories = await Category.create([
-    { _id: id('cat'), tenantId, name: 'Minuman', parentId: null, sortOrder: 1, isActive: true },
-    { _id: id('cat'), tenantId, name: 'Makanan', parentId: null, sortOrder: 2, isActive: true },
-    { _id: id('cat'), tenantId, name: 'Snack', parentId: null, sortOrder: 3, isActive: true },
+    { _id: id('cat'), tenantId, name: 'Makanan Utama', familyId: familyMap['food'], parentId: null, sortOrder: 1, isActive: true },
+    { _id: id('cat'), tenantId, name: 'Snack', familyId: familyMap['food'], parentId: null, sortOrder: 2, isActive: true },
+    { _id: id('cat'), tenantId, name: 'Kopi', familyId: familyMap['beverage'], parentId: null, sortOrder: 1, isActive: true },
+    { _id: id('cat'), tenantId, name: 'Non-Kopi', familyId: familyMap['beverage'], parentId: null, sortOrder: 2, isActive: true },
   ]);
 
   const categoryMap: Record<string, string> = {};
@@ -127,14 +141,14 @@ async function seedData() {
   catDocs.forEach((c: any) => { categoryMap[c.name.toLowerCase()] = c._id; });
 
   const products = await Product.create([
-    { _id: id('prd'), tenantId, sku: 'KOPI-001', barcode: '', name: 'Kopi Hitam', description: 'Black coffee', categoryId: categoryMap['minuman'], basePrice: 15000, isActive: true },
-    { _id: id('prd'), tenantId, sku: 'KOPI-002', barcode: '', name: 'Kopi Susu', description: 'Coffee with milk', categoryId: categoryMap['minuman'], basePrice: 20000, isActive: true },
-    { _id: id('prd'), tenantId, sku: 'TEH-001', barcode: '', name: 'Teh Manis', description: 'Sweet tea', categoryId: categoryMap['minuman'], basePrice: 10000, isActive: true },
-    { _id: id('prd'), tenantId, sku: 'ROTI-001', barcode: '', name: 'Roti Bakar', description: 'Toast with butter', categoryId: categoryMap['makanan'], basePrice: 12000, isActive: true },
-    { _id: id('prd'), tenantId, sku: 'NASI-001', barcode: '', name: 'Nasi Goreng', description: 'Fried rice', categoryId: categoryMap['makanan'], basePrice: 25000, isActive: true },
+    { _id: id('prd'), tenantId, sku: 'KOPI-001', barcode: '', name: 'Kopi Hitam', description: 'Black coffee', categoryId: categoryMap['kopi'], basePrice: 15000, isActive: true },
+    { _id: id('prd'), tenantId, sku: 'KOPI-002', barcode: '', name: 'Kopi Susu', description: 'Coffee with milk', categoryId: categoryMap['kopi'], basePrice: 20000, isActive: true },
+    { _id: id('prd'), tenantId, sku: 'TEH-001', barcode: '', name: 'Teh Manis', description: 'Sweet tea', categoryId: categoryMap['non-kopi'], basePrice: 10000, isActive: true },
+    { _id: id('prd'), tenantId, sku: 'ROTI-001', barcode: '', name: 'Roti Bakar', description: 'Toast with butter', categoryId: categoryMap['snack'], basePrice: 12000, isActive: true },
+    { _id: id('prd'), tenantId, sku: 'NASI-001', barcode: '', name: 'Nasi Goreng', description: 'Fried rice', categoryId: categoryMap['makanan utama'], basePrice: 25000, isActive: true },
     { _id: id('prd'), tenantId, sku: 'SNACK-001', barcode: '', name: 'Pisang Goreng', description: 'Fried banana', categoryId: categoryMap['snack'], basePrice: 8000, isActive: true },
     { _id: id('prd'), tenantId, sku: 'SNACK-002', barcode: '', name: 'Kentang Goreng', description: 'French fries', categoryId: categoryMap['snack'], basePrice: 15000, isActive: true },
-    { _id: id('prd'), tenantId, sku: 'MINUM-001', barcode: '', name: 'Jus Jeruk', description: 'Orange juice', categoryId: categoryMap['minuman'], basePrice: 18000, isActive: true },
+    { _id: id('prd'), tenantId, sku: 'MINUM-001', barcode: '', name: 'Jus Jeruk', description: 'Orange juice', categoryId: categoryMap['non-kopi'], basePrice: 18000, isActive: true },
   ]);
 
   const stockEntries = products.map((p) => ({
@@ -143,6 +157,51 @@ async function seedData() {
     quantity: 50, reservedQuantity: 0, minLevel: 5, maxLevel: 100,
   }));
   await Stock.create(stockEntries);
+
+  await PaymentMethodModel.create([
+    {
+      _id: id('pmt'), tenantId,
+      name: 'Tunai', code: 'cash',
+      description: 'Pembayaran tunai',
+      icon: '💵', color: '#4CAF50',
+      sortOrder: 1, isActive: true, requiresReference: false, config: {},
+    },
+    {
+      _id: id('pmt'), tenantId,
+      name: 'QRIS', code: 'qris',
+      description: 'QRIS / Scan QR',
+      icon: '📱', color: '#2196F3',
+      sortOrder: 2, isActive: true, requiresReference: true, config: {},
+    },
+    {
+      _id: id('pmt'), tenantId,
+      name: 'Kartu Debit', code: 'debit',
+      description: 'Kartu debit Visa/Mastercard',
+      icon: '💳', color: '#FF9800',
+      sortOrder: 3, isActive: true, requiresReference: true, config: {},
+    },
+    {
+      _id: id('pmt'), tenantId,
+      name: 'Kartu Kredit', code: 'credit',
+      description: 'Kartu kredit Visa/Mastercard',
+      icon: '💎', color: '#9C27B0',
+      sortOrder: 4, isActive: true, requiresReference: true, config: {},
+    },
+    {
+      _id: id('pmt'), tenantId,
+      name: 'Transfer Bank', code: 'transfer',
+      description: 'Transfer BCA / Mandiri / BRI / BNI',
+      icon: '🏦', color: '#607D8B',
+      sortOrder: 5, isActive: true, requiresReference: true, config: {},
+    },
+    {
+      _id: id('pmt'), tenantId,
+      name: 'E-Wallet', code: 'ewallet',
+      description: 'GoPay / OVO / Dana / ShopeePay',
+      icon: '📲', color: '#00BCD4',
+      sortOrder: 6, isActive: true, requiresReference: true, config: {},
+    },
+  ]);
 
   console.log('[DEV] Seed complete.');
 }

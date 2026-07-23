@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { usePOSStore } from '../store/posStore';
 import { useProducts, useCategories, useBarcodeLookup } from '../hooks/useProducts';
 import { useFamilies } from '../hooks/useFamilies';
@@ -10,7 +9,6 @@ import { CartItemRow } from '../components/CartItemRow';
 import { PaymentModal } from '../components/PaymentModal';
 import { ReceiptDisplay } from '../components/ReceiptDisplay';
 import { HeldOrdersPanel } from '../components/HeldOrdersPanel';
-import { api } from '../../../@shared/services/api';
 
 export default function PosPage() {
   const {
@@ -59,7 +57,6 @@ export default function PosPage() {
 
   const [holdError, setHoldError] = useState('');
   const [search, setSearch] = useState('');
-  const [selectedMenuType, setSelectedMenuType] = useState<string>('');
   const [selectedFamily, setSelectedFamily] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -104,16 +101,7 @@ export default function PosPage() {
     selectedCategory ?? undefined,
   );
   const { data: categories = [], isError: categoriesError } = useCategories();
-  const { data: families = [] } = useFamilies(selectedMenuType || undefined);
-
-  const { data: menuTypes = [] } = useQuery({
-    queryKey: ['menu-types'],
-    queryFn: async () => {
-      const res = await api.get('/menu-types');
-      return res.data.data;
-    },
-  });
-  const activeMenuTypeNames = menuTypes.filter((mt: any) => mt.isActive).map((mt: any) => mt.name);
+  const { data: families = [] } = useFamilies();
 
   const filteredCategories = selectedFamily
     ? categories.filter((c) => c.familyId === selectedFamily)
@@ -145,41 +133,6 @@ export default function PosPage() {
                 <path d="M7 8h10M7 12h10M7 16h10" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
-          </div>
-
-          {/* Menu Type Tabs */}
-          <div className="flex gap-2">
-            <button
-              onClick={() => {
-                setSelectedMenuType('');
-                setSelectedFamily(null);
-                setSelectedCategory(null);
-              }}
-              className={`px-6 py-2 rounded-lg font-semibold text-sm transition-colors ${
-                selectedMenuType === ''
-                  ? 'blue-primary text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              Semua
-            </button>
-            {activeMenuTypeNames.map((type: string) => (
-              <button
-                key={type}
-                onClick={() => {
-                  setSelectedMenuType(type);
-                  setSelectedFamily(null);
-                  setSelectedCategory(null);
-                }}
-                className={`px-6 py-2 rounded-lg font-semibold text-sm transition-colors ${
-                  selectedMenuType === type
-                    ? 'blue-primary text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                {type}
-              </button>
-            ))}
           </div>
 
           {/* Family Filter */}

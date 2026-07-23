@@ -134,6 +134,38 @@ describe('PricingEngine', () => {
       expect(result.taxBreakdown[1].taxType).toBe('vat');
     });
 
+    describe('PPN DPP Nilai Lain with SC (Case 4)', () => {
+      const ppnRule = (precision = 0) => TaxRule.new('PPN 12%', 'vat', 10, TaxScope.all(),
+        TaxPolicy.create({ type: 'rate', value: 12, roundingMode: 'round', precision }),
+        { modifier: { type: 'fraction', config: { numerator: 11, denominator: 12 } } },
+      );
+      const scRule = TaxRule.new('Service Charge 10%', 'service_charge', 5, TaxScope.all(),
+        TaxPolicy.create({ type: 'rate', value: 10, roundingMode: 'round', precision: 0 }),
+      );
+
+      it('Case 4a: SC not included in DPP — PPN on item subtotal only', () => {
+        const config = makeConfig({ rules: [scRule, ppnRule()] });
+        const result = engine.calculate(input({
+          items: [{ id: 'p1', productId: 'p1', productName: 'A', categoryId: 'c1', quantity: 1, unitPrice: 25000 }],
+        }), config);
+
+        const expectedPpn = 25000 * 11 / 12 * 12 / 100;
+        expect(result.taxBreakdown[0].amount).toBe(2500);
+        expect(result.taxBreakdown[1].amount).toBe(Math.round(expectedPpn));
+        expect(result.totalTax).toBe(2500 + Math.round(expectedPpn));
+      });
+
+      it('verifies engine uses policy.value=12, not effective rate 11', () => {
+        const config = makeConfig({ rules: [ppnRule()] });
+        const result = engine.calculate(input({
+          items: [{ id: 'p1', productId: 'p1', productName: 'A', categoryId: 'c1', quantity: 1, unitPrice: 120000 }],
+        }), config);
+
+        expect(result.taxBreakdown[0].rate).toBe(12);
+        expect(result.totalTax).toBe(13200);
+      });
+    });
+
     it('applies no modifier when none specified', () => {
       const rule = TaxRule.new('Flat 10%', 'vat', 10, TaxScope.all(),
         TaxPolicy.create({ type: 'rate', value: 10, roundingMode: 'round', precision: 2 }),

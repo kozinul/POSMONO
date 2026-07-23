@@ -3,7 +3,7 @@ import { PaymentId } from '../../../@shared/domain/Identifier';
 import { DomainEvent } from '../../../@shared/domain/DomainEvent';
 
 export type PaymentStatus = 'pending' | 'completed' | 'failed' | 'refunded';
-export type PaymentMethod = 'cash' | 'qris' | 'transfer' | 'card';
+export type PaymentMethod = 'cash' | 'qris' | 'transfer' | 'card' | 'debit' | 'credit' | 'ewallet';
 
 export interface ISplitBill {
   portion: number;

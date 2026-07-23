@@ -34,7 +34,6 @@ export interface Category {
 export interface Family {
   id: string;
   name: string;
-  menuType: string;
   sortOrder: number;
 }
 
@@ -76,9 +75,8 @@ async function fetchCategories(): Promise<Category[]> {
   return res.data.data;
 }
 
-async function fetchFamilies(menuType?: string): Promise<Family[]> {
-  const url = menuType ? `/families/by-menu-type/${menuType}` : '/families';
-  const res = await api.get<FamiliesResponse>(url);
+async function fetchFamilies(): Promise<Family[]> {
+  const res = await api.get<FamiliesResponse>('/families');
   return res.data.data;
 }
 
@@ -121,10 +119,10 @@ export function useCategoryList() {
   });
 }
 
-export function useFamilyList(menuType?: string) {
+export function useFamilyList() {
   return useQuery({
-    queryKey: ['families', menuType],
-    queryFn: () => fetchFamilies(menuType),
+    queryKey: ['families'],
+    queryFn: fetchFamilies,
     staleTime: 30_000,
   });
 }

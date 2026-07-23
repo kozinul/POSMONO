@@ -147,6 +147,35 @@ describe('TaxRule', () => {
       );
       expect(rule.calculateTax(100000)).toBe(10000);
     });
+
+    describe('PPN DPP Nilai Lain (modifier 11/12, rate 12%)', () => {
+      const ppnRule = TaxRule.new('PPN 12%', 'vat', 10, TaxScope.all(),
+        TaxPolicy.create({ type: 'rate', value: 12, roundingMode: 'round', precision: 0 }),
+        { modifier: { type: 'fraction', config: { numerator: 11, denominator: 12 } } },
+      );
+
+      it('Case 1: subtotal=100000 → tax=11000', () => {
+        const tax = ppnRule.calculateTax(100000);
+        expect(tax).toBe(11000);
+      });
+
+      it('Case 2: subtotal=120000 → tax=13200', () => {
+        const tax = ppnRule.calculateTax(120000);
+        expect(tax).toBe(13200);
+      });
+
+      it('Case 3: subtotal=25000 → tax=2750', () => {
+        const tax = ppnRule.calculateTax(25000);
+        expect(tax).toBe(2750);
+      });
+
+      it('uses policy.value (12) as rate, NOT the effective rate (11)', () => {
+        const serialized = ppnRule.serialize();
+        expect(serialized.policy.value).toBe(12);
+        expect(serialized.modifier?.config?.numerator).toBe(11);
+        expect(serialized.modifier?.config?.denominator).toBe(12);
+      });
+    });
   });
 
   describe('serialize', () => {

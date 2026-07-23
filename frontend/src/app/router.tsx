@@ -11,6 +11,7 @@ const PosPage = lazy(() => import('../core/pos/pages/PosPage'));
 const OrderListPage = lazy(() => import('../core/orders/pages/OrderListPage'));
 const ProductListPage = lazy(() => import('../core/products/pages/ProductListPage'));
 const FamilyListPage = lazy(() => import('../core/families/pages/FamilyListPage'));
+const CategoryListPage = lazy(() => import('../core/categories/pages/CategoryListPage'));
 const StockListPage = lazy(() => import('../core/inventory/pages/StockListPage'));
 const SettingsPage = lazy(() => import('../core/settings/pages/GeneralSettingsPage'));
 const ReportPage = lazy(() => import('../core/reports/pages/ReportPage'));
@@ -18,7 +19,6 @@ const ShiftPage = lazy(() => import('../core/shifts/pages/ShiftPage'));
 const MemberListPage = lazy(() => import('../core/members/pages/MemberListPage'));
 const PromotionListPage = lazy(() => import('../core/promotions/pages/PromotionListPage'));
 const PaymentMethodListPage = lazy(() => import('../core/payment-methods/pages/PaymentMethodListPage'));
-const MenuTypeListPage = lazy(() => import('../core/menu-types/pages/MenuTypeListPage'));
 
 const Loading = () => (
   <div className="flex items-center justify-center min-h-screen">
@@ -42,6 +42,7 @@ export function AppRouter() {
               <Route path="/orders" element={<OrderListPage />} />
               <Route path="/products" element={<ProductListPage />} />
               <Route path="/families" element={<FamilyListPage />} />
+              <Route path="/categories" element={<CategoryListPage />} />
               <Route path="/inventory" element={<StockListPage />} />
               <Route path="/reports" element={<ReportPage />} />
               <Route path="/shifts" element={<ShiftPage />} />
@@ -49,7 +50,6 @@ export function AppRouter() {
               <Route path="/members" element={<MemberListPage />} />
               <Route path="/promotions" element={<PromotionListPage />} />
               <Route path="/payment-methods" element={<PaymentMethodListPage />} />
-              <Route path="/menu-types" element={<MenuTypeListPage />} />
             </Route>
           </Route>
           <Route path="*" element={<NotFoundPage />} />

@@ -31,7 +31,7 @@ export class TenantService {
       config: {
         timezone: 'Asia/Jakarta', currency: 'IDR', locale: 'id',
         taxRate: 0.1, taxName: 'PPN',
-        ppnEnabled: true, ppnRate: 0.11,
+        ppnEnabled: true, ppnRate: 0.12,
         serviceChargeEnabled: false, serviceChargeRate: 0, serviceChargeName: 'Service Charge',
         discountMaxPercent: 100, discountMaxNominal: 1_000_000,
         receiptFooter: 'Terima kasih telah berbelanja',

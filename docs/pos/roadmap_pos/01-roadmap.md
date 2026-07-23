@@ -290,14 +290,11 @@ interface IModifier {
 ```typescript
 // backend/src/core/catalog/domain/Family.ts
 
-type MenuType = 'food' | 'beverage';
-
 interface IFamily {
   id: string;
   tenantId: string;
   name: string;
   description: string;
-  menuType: MenuType;  // top-level menu classification
   sortOrder: number;
   isActive: boolean;
 }
@@ -305,18 +302,16 @@ interface IFamily {
 
 **Implemented Features:**
 - GET /api/families ✅
-- GET /api/families/by-menu-type/:menuType ✅
 - POST /api/families ✅
 - PUT /api/families/:id ✅
 - DELETE /api/families/:id ✅
 - GET /api/categories/by-family/:familyId ✅
 
-**3-Level Menu Hierarchy:**
+**2-Level Menu Hierarchy:**
 ```
-Menu Type (Food / Beverage)
-  └── Family (Western, Asia, Hot Drinks, etc.)
-       └── Category (Main Course, Coffee, etc.)
-            └── Product
+Family (Food, Beverage)
+  └── Category (Asian, Western, Coffee, etc.)
+       └── Product
 ```
 
 **Files:**

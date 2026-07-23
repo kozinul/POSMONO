@@ -229,7 +229,6 @@ FAMILIES
   tenantId: string,
   name: string,               // "Western", "Hot Drinks"
   description: string,
-  menuType: "food" | "beverage",  // top-level menu classification
   sortOrder: number,
   isActive: boolean,
   createdAt: Date,
@@ -237,7 +236,6 @@ FAMILIES
 }
 Indexes:
   { tenantId: 1, name: 1 }        // unique compound
-  { tenantId: 1, menuType: 1 }    // filter by food/beverage
 
 
 CATEGORIES
@@ -318,7 +316,7 @@ PRODUCT_PRICING
   variantId: string | null,
   basePrice: number,
   costPrice: number | null,   // for margin calculation
-  taxRate: number,            // 0.11 for 11% PPN
+  taxRate: number,            // effective tax rate (e.g. 0.11 = 12% × 11/12 modifier)
   discountAllowed: boolean,
   maxDiscountPercent: number, // 0-100
   validFrom: Date,

@@ -11,15 +11,18 @@ const payCashSchema = z.object({
     unitPrice: z.number().nonnegative(),
   })).min(1),
   amountPaid: z.number().positive(),
+  method: z.enum(['cash', 'qris', 'transfer', 'card', 'debit', 'credit', 'ewallet']).default('cash'),
   discount: z.number().nonnegative().default(0),
   discountType: z.enum(['percentage', 'nominal']).optional(),
   promoCode: z.string().optional(),
+  referenceNumber: z.string().optional(),
+  cardLastFour: z.string().optional(),
 });
 
 const processPaymentSchema = z.object({
   orderId: z.string().min(1),
   amount: z.number().positive(),
-  method: z.enum(['cash', 'qris', 'transfer', 'card']),
+  method: z.enum(['cash', 'qris', 'transfer', 'card', 'debit', 'credit', 'ewallet']),
   cardLastFour: z.string().optional(),
   provider: z.string().optional(),
   qrCodeUrl: z.string().optional(),
@@ -37,7 +40,7 @@ const splitBillSchema = z.object({
   splitBills: z.array(z.object({
     portion: z.number().int().positive(),
     amount: z.number().positive(),
-    method: z.enum(['cash', 'qris', 'transfer', 'card']),
+    method: z.enum(['cash', 'qris', 'transfer', 'card', 'debit', 'credit', 'ewallet']),
     referenceNumber: z.string().optional().default(''),
   })).min(2, 'At least 2 split portions required'),
 });
@@ -54,13 +57,25 @@ export class PaymentController extends BaseController {
     const result = await this.paymentService.payCash({
       tenantId: req.tenantId,
       cashierId: req.userId,
-      ...parsed.data,
+      items: parsed.data.items,
+      amountPaid: parsed.data.amountPaid,
+      method: parsed.data.method,
+      discount: parsed.data.discount,
+      discountType: parsed.data.discountType,
+      promoCode: parsed.data.promoCode,
+      referenceNumber: parsed.data.referenceNumber,
+      cardLastFour: parsed.data.cardLastFour,
     });
 
     const paymentData = result.payment.serialize();
     const orderData = result.order.serialize();
     this.ok(res, {
-      payment: { ...paymentData, change: paymentData.amount - orderData.total },
+      payment: {
+        ...paymentData,
+        change: paymentData.method === 'cash'
+          ? paymentData.amount - orderData.total
+          : 0,
+      },
       order: orderData,
     });
   }

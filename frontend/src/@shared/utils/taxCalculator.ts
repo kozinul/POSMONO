@@ -116,6 +116,10 @@ function calcDiscount(subtotal: number, discount: number, isPercentage: boolean)
   return Math.min(discount, subtotal);
 }
 
+export function roundIDR(amount: number): number {
+  return Math.round(amount / 1000) * 1000;
+}
+
 function calcItemTax(
   itemAmount: number,
   rules: ITaxRule[],
@@ -134,12 +138,12 @@ function calcItemTax(
       amount = 0;
     } else if (isInclusive && rule.policy.type !== 'amount') {
       const modifiedBase = applyModifier(itemAmount, rule.modifier);
-      amount = roundValue(modifiedBase - (modifiedBase / (1 + rule.policy.value / 100)), rule.policy.roundingMode, rule.policy.precision);
+      amount = Math.round(roundValue(modifiedBase - (modifiedBase / (1 + rule.policy.value / 100)), rule.policy.roundingMode, rule.policy.precision));
     } else if (rule.policy.type !== 'amount') {
       const modifiedBase = applyModifier(itemAmount, rule.modifier);
-      amount = roundValue(modifiedBase * (rule.policy.value / 100), rule.policy.roundingMode, rule.policy.precision);
+      amount = Math.round(roundValue(modifiedBase * (rule.policy.value / 100), rule.policy.roundingMode, rule.policy.precision));
     } else {
-      amount = rule.policy.value;
+      amount = Math.round(rule.policy.value);
     }
 
     breakdown.push({

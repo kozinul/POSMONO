@@ -7,6 +7,7 @@ import { RoleSchema } from './core/identity/infrastructure/persistence/schemas/R
 import { ProductSchema } from './core/catalog/infrastructure/persistence/schemas/ProductSchema';
 import { CategorySchema } from './core/catalog/infrastructure/persistence/schemas/CategorySchema';
 import { StockSchema } from './core/inventory/infrastructure/persistence/schemas/StockSchema';
+import { PaymentMethodSchema } from './core/payment/infrastructure/persistence/schemas/PaymentMethodSchema';
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27018';
 const SYSTEM_DB = 'posmono_system';
@@ -26,6 +27,7 @@ async function seed() {
   const Product = systemConn.model('Product', ProductSchema);
   const Category = systemConn.model('Category', CategorySchema);
   const Stock = systemConn.model('Stock', StockSchema);
+  const PaymentMethodModel = systemConn.model('PaymentMethod', PaymentMethodSchema);
 
   const tenantId = id('ten');
   const adminUserId = id('usr');
@@ -156,6 +158,88 @@ async function seed() {
     { _id: id('prd'), tenantId, sku: 'MINUM-001', barcode: '8992760100084', name: 'Jus Jeruk', description: 'Orange juice', categoryId: categoryMap['minuman'], basePrice: 18000, isActive: true },
   ]);
 
+  console.log('Seeding payment methods...');
+  await PaymentMethodModel.create([
+    {
+      _id: id('pmt'),
+      tenantId,
+      name: 'Tunai',
+      code: 'cash',
+      description: 'Pembayaran tunai',
+      icon: '💵',
+      color: '#4CAF50',
+      sortOrder: 1,
+      isActive: true,
+      requiresReference: false,
+      config: {},
+    },
+    {
+      _id: id('pmt'),
+      tenantId,
+      name: 'QRIS',
+      code: 'qris',
+      description: 'QRIS / Scan QR',
+      icon: '📱',
+      color: '#2196F3',
+      sortOrder: 2,
+      isActive: true,
+      requiresReference: true,
+      config: {},
+    },
+    {
+      _id: id('pmt'),
+      tenantId,
+      name: 'Kartu Debit',
+      code: 'debit',
+      description: 'Kartu debit Visa/Mastercard',
+      icon: '💳',
+      color: '#FF9800',
+      sortOrder: 3,
+      isActive: true,
+      requiresReference: true,
+      config: {},
+    },
+    {
+      _id: id('pmt'),
+      tenantId,
+      name: 'Kartu Kredit',
+      code: 'credit',
+      description: 'Kartu kredit Visa/Mastercard',
+      icon: '💎',
+      color: '#9C27B0',
+      sortOrder: 4,
+      isActive: true,
+      requiresReference: true,
+      config: {},
+    },
+    {
+      _id: id('pmt'),
+      tenantId,
+      name: 'Transfer Bank',
+      code: 'transfer',
+      description: 'Transfer BCA / Mandiri / BRI / BNI',
+      icon: '🏦',
+      color: '#607D8B',
+      sortOrder: 5,
+      isActive: true,
+      requiresReference: true,
+      config: {},
+    },
+    {
+      _id: id('pmt'),
+      tenantId,
+      name: 'E-Wallet',
+      code: 'ewallet',
+      description: 'GoPay / OVO / Dana / ShopeePay',
+      icon: '📲',
+      color: '#00BCD4',
+      sortOrder: 6,
+      isActive: true,
+      requiresReference: true,
+      config: {},
+    },
+  ]);
+
   console.log('Seeding stock...');
   const stockEntries = products.map((p) => ({
     _id: id('stk'),
@@ -176,6 +260,7 @@ async function seed() {
   console.log(`   Cashier: cashier@demo.com / admin123`);
   console.log(`   Categories: ${categories.length}`);
   console.log(`   Products: ${products.length}`);
+  console.log(`   Payment Methods: 6`);
   console.log(`   Stock items: ${stockEntries.length}`);
 
   await systemConn.close();

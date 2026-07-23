@@ -30,7 +30,7 @@ export const TenantSchema = new Schema(
       taxRate: { type: Number, default: 0.1 },
       taxName: { type: String, default: 'PPN' },
       ppnEnabled: { type: Boolean, default: true },
-      ppnRate: { type: Number, default: 0.11 },
+      ppnRate: { type: Number, default: 0.12 },
       serviceChargeEnabled: { type: Boolean, default: false },
       serviceChargeRate: { type: Number, default: 0 },
       serviceChargeName: { type: String, default: 'Service Charge' },

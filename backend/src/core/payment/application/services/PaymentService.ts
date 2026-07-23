@@ -20,9 +20,12 @@ export class PaymentService {
     cashierId: string;
     items: Array<{ productId: string; quantity: number; unitPrice: number }>;
     amountPaid: number;
+    method?: PaymentMethod;
     discount?: number;
     discountType?: 'percentage' | 'nominal';
     promoCode?: string;
+    referenceNumber?: string;
+    cardLastFour?: string;
   }): Promise<{ payment: Payment; order: any }> {
     let manualDiscountValue = input.discount ?? 0;
 
@@ -140,18 +143,21 @@ export class PaymentService {
       throw new ValidationError(`Insufficient amount. Need ${total}, got ${input.amountPaid}`);
     }
 
+    const paymentMethod = (input.method || 'cash') as PaymentMethod;
+    const refNumber = input.referenceNumber || `${paymentMethod.toUpperCase()}-${uuidv4().replace(/-/g, '').substring(0, 12).toUpperCase()}`;
+
     const payment = Payment.create({
       tenantId: input.tenantId,
       orderId: order.serialize().id,
       amount: input.amountPaid,
       status: 'pending',
-      method: 'cash' as PaymentMethod,
-      referenceNumber: `CASH-${uuidv4().replace(/-/g, '').substring(0, 12).toUpperCase()}`,
+      method: paymentMethod,
+      referenceNumber: refNumber,
       splitBills: [],
       qrCodeUrl: null,
       paymentTransactionId: null,
       provider: null,
-      cardLastFour: null,
+      cardLastFour: input.cardLastFour || null,
       metadata: {
         cashierId: input.cashierId,
         discountAmount: discount,

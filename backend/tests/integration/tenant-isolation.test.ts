@@ -76,11 +76,12 @@ describe('Integration: Tenant Isolation', () => {
           ? Math.round(subtotal * Math.min(discount, 100) / 100)
           : Math.min(discount, subtotal);
         const taxableAmount = subtotal - discountAmount;
-        const ppn = Math.round(taxableAmount * 0.11);
+        const base = Math.round(taxableAmount * 11 / 12);
+        const ppn = Math.round(base * 12 / 100);
         return {
           subtotal, discount, discountType: input.discountType ?? 'nominal', discountAmount,
           taxableAmount,
-          taxes: [{ name: 'PPN', type: 'percentage', rate: 11, baseAmount: taxableAmount, amount: ppn, compoundOrder: 0 }],
+          taxes: [{ name: 'PPN 12%', type: 'vat', rate: 12, baseAmount: taxableAmount, amount: ppn, compoundOrder: 0 }],
           totalTax: ppn, serviceCharge: 0, grandTotal: taxableAmount + ppn, pricingMode: 'exclusive',
         };
       },

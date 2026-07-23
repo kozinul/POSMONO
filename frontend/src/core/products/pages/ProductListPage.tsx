@@ -1,5 +1,4 @@
 import { useState, useRef } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import {
   useProductList,
   useCategoryList,
@@ -11,7 +10,6 @@ import {
   Product,
 } from '../hooks/useProducts';
 import { usePricingProfiles } from '../../../@shared/hooks/usePricingProfile';
-import { api } from '../../../@shared/services/api';
 
 const PAGE_SIZE = 20;
 
@@ -19,9 +17,8 @@ export default function ProductListPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
-  const [selectedMenuType, setSelectedMenuType] = useState<string>('');
-  const [selectedFamily, setSelectedFamily] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedFormFamily, setSelectedFormFamily] = useState<string>('');
 
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -52,16 +49,9 @@ export default function ProductListPage() {
   });
 
   const { data: categories = [] } = useCategoryList();
-  const { data: families = [] } = useFamilyList(selectedMenuType || undefined);
+  const { data: families = [] } = useFamilyList();
   const { data: pricingProfiles = [] } = usePricingProfiles();
 
-  const { data: menuTypes = [] } = useQuery({
-    queryKey: ['menu-types'],
-    queryFn: async () => {
-      const res = await api.get('/menu-types');
-      return res.data.data;
-    },
-  });
   const createMutation = useCreateProduct();
   const updateMutation = useUpdateProduct();
   const deleteMutation = useDeleteProduct();
@@ -71,12 +61,10 @@ export default function ProductListPage() {
   const total = data?.total ?? 0;
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
-  const activeMenuTypeNames = menuTypes.filter((mt: any) => mt.isActive).map((mt: any) => mt.name);
   const categoryMap = Object.fromEntries(categories.map((c) => [c.id, c.name]));
-  const familyMap = Object.fromEntries(families.map((f) => [f.id, f.name]));
 
-  const filteredCategories = selectedFamily
-    ? categories.filter((c) => c.familyId === selectedFamily)
+  const filteredCategories = selectedFormFamily
+    ? categories.filter((c) => c.familyId === selectedFormFamily)
     : categories;
 
   const handleSearch = () => {
@@ -98,6 +86,7 @@ export default function ProductListPage() {
       pricingMode: '',
       pricingProfileId: '',
     });
+    setSelectedFormFamily('');
     setTagInput('');
   };
 
@@ -109,6 +98,8 @@ export default function ProductListPage() {
 
   const openEditModal = (product: Product) => {
     setEditingProduct(product);
+    const cat = categories.find((c) => c.id === product.categoryId);
+    setSelectedFormFamily(cat?.familyId || '');
     setFormData({
       name: product.name,
       sku: product.sku,
@@ -228,71 +219,40 @@ export default function ProductListPage() {
           </button>
         </div>
 
-        {/* Menu Type Tabs */}
+        {/* Family Pills */}
         <div className="flex gap-2">
           <button
             onClick={() => {
-              setSelectedMenuType('');
-              setSelectedFamily(null);
+              setSelectedFormFamily('');
               setSelectedCategory(null);
               setPage(1);
             }}
             className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
-              selectedMenuType === ''
+              selectedFormFamily === ''
                 ? 'blue-primary text-white'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
             Semua
           </button>
-          {activeMenuTypeNames.map((type: string) => (
+          {families.map((fam) => (
             <button
-              key={type}
+              key={fam.id}
               onClick={() => {
-                setSelectedMenuType(type);
-                setSelectedFamily(null);
+                setSelectedFormFamily(fam.id);
                 setSelectedCategory(null);
                 setPage(1);
               }}
               className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
-                selectedMenuType === type
+                selectedFormFamily === fam.id
                   ? 'blue-primary text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              {type}
+              {fam.name}
             </button>
           ))}
         </div>
-
-        {/* Family Pills */}
-        {families.length > 0 && (
-          <div className="flex gap-2 flex-wrap">
-            <button
-              onClick={() => { setSelectedFamily(null); setSelectedCategory(null); setPage(1); }}
-              className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                !selectedFamily
-                  ? 'blue-primary text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              Semua
-            </button>
-            {families.map((fam) => (
-              <button
-                key={fam.id}
-                onClick={() => { setSelectedFamily(fam.id); setSelectedCategory(null); setPage(1); }}
-                className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                  selectedFamily === fam.id
-                    ? 'blue-primary text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                {fam.name}
-              </button>
-            ))}
-          </div>
-        )}
 
         {/* Category Pills */}
         <div className="flex gap-2 flex-wrap">
@@ -536,34 +496,55 @@ export default function ProductListPage() {
                 </div>
               </div>
 
-              {/* Price + Category */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Harga (Rp) *</label>
-                  <input
-                    type="number"
-                    value={formData.basePrice || ''}
-                    onChange={(e) => setFormData({ ...formData, basePrice: Number(e.target.value) })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm"
-                    placeholder="0"
-                    min="0"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Kategori</label>
-                  <select
-                    value={formData.categoryId}
-                    onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm"
-                  >
-                    <option value="">Pilih kategori</option>
-                    {filteredCategories.map((cat) => (
-                      <option key={cat.id} value={cat.id}>
-                        {familyMap[cat.familyId || ''] ? `${familyMap[cat.familyId || '']} / ` : ''}{cat.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              {/* Price */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Harga (Rp) *</label>
+                <input
+                  type="number"
+                  value={formData.basePrice || ''}
+                  onChange={(e) => setFormData({ ...formData, basePrice: Number(e.target.value) })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  placeholder="0"
+                  min="0"
+                />
+              </div>
+
+              {/* Family */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Family</label>
+                <select
+                  value={selectedFormFamily}
+                  onChange={(e) => {
+                    setSelectedFormFamily(e.target.value);
+                    setFormData({ ...formData, categoryId: '' });
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm"
+                >
+                  <option value="">Pilih family</option>
+                  {families.map((fam) => (
+                    <option key={fam.id} value={fam.id}>
+                      {fam.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Category (filtered by Family) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Kategori</label>
+                <select
+                  value={formData.categoryId}
+                  onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
+                  disabled={!selectedFormFamily}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm disabled:bg-gray-50 disabled:text-gray-400"
+                >
+                  <option value="">{selectedFormFamily ? 'Pilih kategori' : 'Pilih family terlebih dahulu'}</option>
+                  {filteredCategories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Pricing Mode + Pricing Profile */}
@@ -716,7 +697,7 @@ export default function ProductListPage() {
               </button>
               <button
                 onClick={handleSubmit}
-                disabled={!formData.name || !formData.sku || formData.basePrice <= 0 || createMutation.isPending || updateMutation.isPending}
+                disabled={!formData.name || !formData.sku || !formData.categoryId || formData.basePrice <= 0 || createMutation.isPending || updateMutation.isPending}
                 className="px-4 py-2 blue-primary text-white rounded-lg hover:opacity-90 disabled:opacity-50 text-sm font-medium"
               >
                 {createMutation.isPending || updateMutation.isPending

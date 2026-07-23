@@ -22,17 +22,6 @@ export interface Family {
   tenantId: string;
   name: string;
   description: string;
-  menuType: string;
-  sortOrder: number;
-  isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface MenuType {
-  id: string;
-  tenantId: string;
-  name: string;
   sortOrder: number;
   isActive: boolean;
   createdAt: Date;
