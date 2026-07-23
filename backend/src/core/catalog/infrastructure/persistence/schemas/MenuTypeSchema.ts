@@ -1,21 +1,18 @@
 import { Schema } from 'mongoose';
 
-export const FamilySchema = new Schema(
+export const MenuTypeSchema = new Schema(
   {
     _id: { type: String },
     tenantId: { type: String, required: true, index: true },
     name: { type: String, required: true },
-    description: { type: String, default: '' },
-    menuType: { type: String, default: 'food', required: true },
     sortOrder: { type: Number, default: 0 },
     isActive: { type: Boolean, default: true },
   },
   {
     timestamps: true,
     _id: false,
-    collection: 'families',
+    collection: 'menu_types',
   },
 );
 
-FamilySchema.index({ tenantId: 1, name: 1 }, { unique: true });
-FamilySchema.index({ tenantId: 1, menuType: 1 });
+MenuTypeSchema.index({ tenantId: 1, name: 1 }, { unique: true });

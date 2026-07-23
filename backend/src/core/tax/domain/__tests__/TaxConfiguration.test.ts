@@ -162,7 +162,7 @@ function TaxRuleMock(id: string, name?: string): TaxRule {
     name: name ?? `Rule ${id}`,
     taxType: 'vat',
     scope: TaxScope.all().serialize(),
-    policy: TaxPolicy.create({ type: 'percentage_of_base', value: 11, roundingMode: 'round', precision: 2 }).serialize(),
+    policy: TaxPolicy.create({ type: 'rate', value: 12, roundingMode: 'round', precision: 2 }).serialize(),
     modifier: { type: 'fraction', config: { numerator: 11, denominator: 12 } },
     priority: 10,
     isActive: true,

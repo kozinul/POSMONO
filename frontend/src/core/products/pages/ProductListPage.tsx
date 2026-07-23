@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   useProductList,
   useCategoryList,
@@ -9,6 +10,8 @@ import {
   useUpload,
   Product,
 } from '../hooks/useProducts';
+import { usePricingProfiles } from '../../../@shared/hooks/usePricingProfile';
+import { api } from '../../../@shared/services/api';
 
 const PAGE_SIZE = 20;
 
@@ -16,7 +19,7 @@ export default function ProductListPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
-  const [selectedMenuType, setSelectedMenuType] = useState<'food' | 'beverage'>('food');
+  const [selectedMenuType, setSelectedMenuType] = useState<string>('');
   const [selectedFamily, setSelectedFamily] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
@@ -37,6 +40,8 @@ export default function ProductListPage() {
     imageUrls: [] as string[],
     tags: [] as string[],
     isActive: true,
+    pricingMode: '' as '' | 'inclusive' | 'exclusive',
+    pricingProfileId: '',
   });
 
   const { data, isLoading } = useProductList({
@@ -47,7 +52,16 @@ export default function ProductListPage() {
   });
 
   const { data: categories = [] } = useCategoryList();
-  const { data: families = [] } = useFamilyList(selectedMenuType);
+  const { data: families = [] } = useFamilyList(selectedMenuType || undefined);
+  const { data: pricingProfiles = [] } = usePricingProfiles();
+
+  const { data: menuTypes = [] } = useQuery({
+    queryKey: ['menu-types'],
+    queryFn: async () => {
+      const res = await api.get('/menu-types');
+      return res.data.data;
+    },
+  });
   const createMutation = useCreateProduct();
   const updateMutation = useUpdateProduct();
   const deleteMutation = useDeleteProduct();
@@ -57,6 +71,7 @@ export default function ProductListPage() {
   const total = data?.total ?? 0;
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
+  const activeMenuTypeNames = menuTypes.filter((mt: any) => mt.isActive).map((mt: any) => mt.name);
   const categoryMap = Object.fromEntries(categories.map((c) => [c.id, c.name]));
   const familyMap = Object.fromEntries(families.map((f) => [f.id, f.name]));
 
@@ -80,6 +95,8 @@ export default function ProductListPage() {
       imageUrls: [],
       tags: [],
       isActive: true,
+      pricingMode: '',
+      pricingProfileId: '',
     });
     setTagInput('');
   };
@@ -102,16 +119,22 @@ export default function ProductListPage() {
       imageUrls: [...product.imageUrls],
       tags: [...product.tags],
       isActive: product.isActive,
+      pricingMode: product.pricingMode || '',
+      pricingProfileId: product.pricingProfileId || '',
     });
     setTagInput('');
     setShowModal(true);
   };
 
   const handleSubmit = () => {
-    const payload = {
+    const payload: Record<string, any> = {
       ...formData,
       categoryId: formData.categoryId || undefined,
     };
+    if (formData.pricingMode) payload.pricingMode = formData.pricingMode;
+    else payload.pricingMode = undefined;
+    if (formData.pricingProfileId) payload.pricingProfileId = formData.pricingProfileId;
+    else payload.pricingProfileId = undefined;
 
     if (editingProduct) {
       updateMutation.mutate(
@@ -207,7 +230,22 @@ export default function ProductListPage() {
 
         {/* Menu Type Tabs */}
         <div className="flex gap-2">
-          {(['food', 'beverage'] as const).map((type) => (
+          <button
+            onClick={() => {
+              setSelectedMenuType('');
+              setSelectedFamily(null);
+              setSelectedCategory(null);
+              setPage(1);
+            }}
+            className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
+              selectedMenuType === ''
+                ? 'blue-primary text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            Semua
+          </button>
+          {activeMenuTypeNames.map((type: string) => (
             <button
               key={type}
               onClick={() => {
@@ -222,7 +260,7 @@ export default function ProductListPage() {
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              {type === 'food' ? 'Makanan' : 'Minuman'}
+              {type}
             </button>
           ))}
         </div>
@@ -295,6 +333,7 @@ export default function ProductListPage() {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Barcode</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kategori</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Harga</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mode</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tags</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
@@ -303,7 +342,7 @@ export default function ProductListPage() {
           <tbody className="bg-white divide-y divide-gray-200">
             {isLoading ? (
               <tr>
-                <td colSpan={9} className="px-6 py-12 text-center text-gray-500">
+                <td colSpan={10} className="px-6 py-12 text-center text-gray-500">
                   <div className="flex items-center justify-center gap-2">
                     <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600" />
                     Memuat data...
@@ -312,7 +351,7 @@ export default function ProductListPage() {
               </tr>
             ) : products.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-6 py-12 text-center text-gray-500">
+                <td colSpan={10} className="px-6 py-12 text-center text-gray-500">
                   Tidak ada produk ditemukan
                 </td>
               </tr>
@@ -347,6 +386,17 @@ export default function ProductListPage() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                     Rp {product.basePrice.toLocaleString('id-ID')}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                      product.pricingMode === 'inclusive'
+                        ? 'bg-green-100 text-green-800'
+                        : product.pricingMode === 'exclusive'
+                          ? 'bg-orange-100 text-orange-800'
+                          : 'bg-gray-100 text-gray-500'
+                    }`}>
+                      {product.pricingMode === 'inclusive' ? 'Nett' : product.pricingMode === 'exclusive' ? '++' : 'Global'}
+                    </span>
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex gap-1 flex-wrap max-w-[150px]">
@@ -513,6 +563,39 @@ export default function ProductListPage() {
                       </option>
                     ))}
                   </select>
+                </div>
+              </div>
+
+              {/* Pricing Mode + Pricing Profile */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Mode Harga</label>
+                  <select
+                    value={formData.pricingMode}
+                    onChange={(e) => setFormData({ ...formData, pricingMode: e.target.value as '' | 'inclusive' | 'exclusive' })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  >
+                    <option value="">Ikut Global</option>
+                    <option value="exclusive">Exclusive (Harga + Pajak)</option>
+                    <option value="inclusive">Inclusive / Nett (Harga sudah termasuk pajak)</option>
+                  </select>
+                  <p className="text-xs text-gray-400 mt-1">Override pricing mode global per produk ini</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Profil Harga</label>
+                  <select
+                    value={formData.pricingProfileId}
+                    onChange={(e) => setFormData({ ...formData, pricingProfileId: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  >
+                    <option value="">Tanpa profil</option>
+                    {pricingProfiles.filter((p) => p.active).map((profile) => (
+                      <option key={profile.id} value={profile.id}>
+                        {profile.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-400 mt-1">Filter aturan pajak yang berlaku</p>
                 </div>
               </div>
 

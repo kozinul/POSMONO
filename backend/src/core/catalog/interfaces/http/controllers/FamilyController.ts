@@ -8,7 +8,7 @@ import { MenuType } from '../../../domain/Family';
 const createFamilySchema = z.object({
   name: z.string().min(1, 'Name is required'),
   description: z.string().optional(),
-  menuType: z.enum(['food', 'beverage']).optional(),
+  menuType: z.string().optional(),
   sortOrder: z.number().optional(),
 });
 

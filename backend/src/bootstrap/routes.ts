@@ -23,6 +23,7 @@ import { createSettingRoutes } from '../core/settings/interfaces/http/routes/set
 import { createUploadRoutes } from '../core/upload/interfaces/http/routes/upload.routes';
 import { createPromotionRoutes } from '../core/promotion/interfaces/http/routes/promotion.routes';
 import { createPaymentMethodRoutes } from '../core/payment/interfaces/http/routes/paymentMethod.routes';
+import { createMenuTypeRoutes } from '../core/catalog/interfaces/http/routes/menuType.routes';
 
 export function registerRoutes(app: Express, container: DIContainer): void {
   app.get('/health', (_req, res) => {
@@ -98,4 +99,7 @@ export function registerRoutes(app: Express, container: DIContainer): void {
 
   const paymentMethodController = container.resolve('paymentMethodController');
   app.use('/api/payment-methods', createPaymentMethodRoutes(paymentMethodController));
+
+  const menuTypeController = container.resolve('menuTypeController');
+  app.use('/api/menu-types', createMenuTypeRoutes(menuTypeController));
 }

@@ -5,11 +5,11 @@ import { TaxPolicy } from '../TaxPolicy';
 
 function makeVatRule(overrides?: Record<string, any>): TaxRule {
   return TaxRule.new(
-    overrides?.name ?? 'PPN 11%',
+    overrides?.name ?? 'PPN 12%',
     overrides?.taxType ?? 'vat',
     overrides?.priority ?? 10,
     overrides?.scope ?? TaxScope.all(),
-    overrides?.policy ?? TaxPolicy.create({ type: 'percentage_of_base', value: 11, roundingMode: 'round', precision: 2 }),
+    overrides?.policy ?? TaxPolicy.create({ type: 'rate', value: 12, roundingMode: 'round', precision: 2 }),
     {
       modifier: overrides?.modifier ?? { type: 'fraction', config: { numerator: 11, denominator: 12 } },
       isActive: overrides?.isActive ?? true,
@@ -27,7 +27,7 @@ describe('TaxRule', () => {
       const serialized = rule.serialize();
       const restored = TaxRule.create(serialized);
       expect(restored.getId()).toBe(rule.getId());
-      expect(restored.getName()).toBe('PPN 11%');
+      expect(restored.getName()).toBe('PPN 12%');
       expect(restored.getTaxType()).toBe('vat');
       expect(restored.getPriority()).toBe(10);
     });
@@ -124,7 +124,7 @@ describe('TaxRule', () => {
     it('calculates VAT with fraction modifier 11/12', () => {
       const rule = makeVatRule();
       const tax = rule.calculateTax(120000);
-      expect(tax).toBe(12100);
+      expect(tax).toBe(13200);
     });
 
     it('returns 0 for exemption', () => {
@@ -154,7 +154,7 @@ describe('TaxRule', () => {
       const rule = makeVatRule();
       const s = rule.serialize();
       expect(s.id).toBe(rule.getId());
-      expect(s.name).toBe('PPN 11%');
+      expect(s.name).toBe('PPN 12%');
       expect(s.taxType).toBe('vat');
       expect(s.modifier).toEqual({ type: 'fraction', config: { numerator: 11, denominator: 12 } });
     });

@@ -11,6 +11,7 @@ export interface Product {
   description: string;
   categoryId: string;
   basePrice: number;
+  pricingMode?: 'inclusive' | 'exclusive';
   pricingProfileId?: string;
   imageUrls: string[];
   tags: string[];
@@ -33,7 +34,7 @@ export interface Category {
 export interface Family {
   id: string;
   name: string;
-  menuType: 'food' | 'beverage';
+  menuType: string;
   sortOrder: number;
 }
 

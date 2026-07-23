@@ -18,6 +18,7 @@ const ShiftPage = lazy(() => import('../core/shifts/pages/ShiftPage'));
 const MemberListPage = lazy(() => import('../core/members/pages/MemberListPage'));
 const PromotionListPage = lazy(() => import('../core/promotions/pages/PromotionListPage'));
 const PaymentMethodListPage = lazy(() => import('../core/payment-methods/pages/PaymentMethodListPage'));
+const MenuTypeListPage = lazy(() => import('../core/menu-types/pages/MenuTypeListPage'));
 
 const Loading = () => (
   <div className="flex items-center justify-center min-h-screen">
@@ -48,6 +49,7 @@ export function AppRouter() {
               <Route path="/members" element={<MemberListPage />} />
               <Route path="/promotions" element={<PromotionListPage />} />
               <Route path="/payment-methods" element={<PaymentMethodListPage />} />
+              <Route path="/menu-types" element={<MenuTypeListPage />} />
             </Route>
           </Route>
           <Route path="*" element={<NotFoundPage />} />

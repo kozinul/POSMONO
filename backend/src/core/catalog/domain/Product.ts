@@ -12,6 +12,7 @@ export interface IProduct {
   description: string;
   categoryId: string;
   basePrice: number;
+  pricingMode?: 'inclusive' | 'exclusive';
   pricingProfileId?: string;
   imageUrls: string[];
   tags: string[];
@@ -33,6 +34,7 @@ export class Product extends AggregateRoot<ProductId> {
   private description: string;
   private categoryId: string;
   private basePrice: number;
+  private pricingMode?: 'inclusive' | 'exclusive';
   private pricingProfileId?: string;
   private imageUrls: string[];
   private tags: string[];
@@ -54,6 +56,7 @@ export class Product extends AggregateRoot<ProductId> {
     this.description = props.description;
     this.categoryId = props.categoryId;
     this.basePrice = props.basePrice;
+    this.pricingMode = props.pricingMode;
     this.pricingProfileId = props.pricingProfileId;
     this.imageUrls = [...props.imageUrls];
     this.tags = [...props.tags];
@@ -95,7 +98,7 @@ export class Product extends AggregateRoot<ProductId> {
     return new Product(props);
   }
 
-  update(data: Partial<Pick<IProduct, 'name' | 'description' | 'categoryId' | 'basePrice' | 'barcode' | 'sku' | 'tags' | 'imageUrls' | 'isActive' | 'pricingProfileId' | 'bc' | 'country' | 'region' | 'currency'>>): void {
+  update(data: Partial<Pick<IProduct, 'name' | 'description' | 'categoryId' | 'basePrice' | 'barcode' | 'sku' | 'tags' | 'imageUrls' | 'isActive' | 'pricingProfileId' | 'pricingMode' | 'bc' | 'country' | 'region' | 'currency'>>): void {
     if (data.name !== undefined) this.name = data.name;
     if (data.description !== undefined) this.description = data.description;
     if (data.categoryId !== undefined) this.categoryId = data.categoryId;
@@ -106,6 +109,7 @@ export class Product extends AggregateRoot<ProductId> {
     if (data.imageUrls !== undefined) this.imageUrls = [...data.imageUrls];
     if (data.isActive !== undefined) this.isActive = data.isActive;
     if (data.pricingProfileId !== undefined) this.pricingProfileId = data.pricingProfileId;
+    if (data.pricingMode !== undefined) this.pricingMode = data.pricingMode;
     if (data.bc !== undefined) this.bc = data.bc;
     if (data.country !== undefined) this.country = data.country;
     if (data.region !== undefined) this.region = data.region;
@@ -124,6 +128,7 @@ export class Product extends AggregateRoot<ProductId> {
       description: this.description,
       categoryId: this.categoryId,
       basePrice: this.basePrice,
+      pricingMode: this.pricingMode,
       pricingProfileId: this.pricingProfileId,
       imageUrls: [...this.imageUrls],
       tags: [...this.tags],

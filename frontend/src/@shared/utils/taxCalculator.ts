@@ -5,6 +5,7 @@ export interface TaxCalcItem {
   categoryId?: string;
   quantity: number;
   unitPrice: number;
+  pricingMode?: 'inclusive' | 'exclusive';
 }
 
 export interface TaxCalcInput {
@@ -115,6 +116,49 @@ function calcDiscount(subtotal: number, discount: number, isPercentage: boolean)
   return Math.min(discount, subtotal);
 }
 
+function calcItemTax(
+  itemAmount: number,
+  rules: ITaxRule[],
+  isInclusive: boolean,
+): { tax: number; serviceCharge: number; breakdown: TaxBreakdownItem[] } {
+  let totalTax = 0;
+  let serviceCharge = 0;
+  const breakdown: TaxBreakdownItem[] = [];
+
+  for (const rule of rules) {
+    const isExemption = rule.taxType === 'exemption';
+    const isSC = rule.taxType === 'service_charge';
+
+    let amount = 0;
+    if (isExemption) {
+      amount = 0;
+    } else if (isInclusive && rule.policy.type !== 'amount') {
+      const modifiedBase = applyModifier(itemAmount, rule.modifier);
+      amount = roundValue(modifiedBase - (modifiedBase / (1 + rule.policy.value / 100)), rule.policy.roundingMode, rule.policy.precision);
+    } else if (rule.policy.type !== 'amount') {
+      const modifiedBase = applyModifier(itemAmount, rule.modifier);
+      amount = roundValue(modifiedBase * (rule.policy.value / 100), rule.policy.roundingMode, rule.policy.precision);
+    } else {
+      amount = rule.policy.value;
+    }
+
+    breakdown.push({
+      ruleId: rule.id,
+      name: rule.name,
+      taxType: rule.taxType,
+      rate: rule.policy.value,
+      amount,
+      baseAmount: itemAmount,
+      priority: rule.priority,
+    });
+
+    totalTax += amount;
+    if (isSC) serviceCharge += amount;
+  }
+
+  return { tax: totalTax, serviceCharge, breakdown };
+}
+
 export function calculateTax(input: TaxCalcInput, config: ITaxConfiguration): TaxCalcResult {
   if (!config.taxEnabled) {
     return {
@@ -129,7 +173,6 @@ export function calculateTax(input: TaxCalcInput, config: ITaxConfiguration): Ta
   const subtotal = input.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
   const discountAmount = calcDiscount(subtotal, input.discount ?? 0, input.discountType === 'percentage');
   const taxableAmount = subtotal - discountAmount;
-  const isInclusive = config.pricingMode === 'inclusive';
 
   const ctx = { items: input.items, outletId: input.outletId, transactionType: input.transactionType, customerTags: input.customerTags };
 
@@ -137,48 +180,63 @@ export function calculateTax(input: TaxCalcInput, config: ITaxConfiguration): Ta
     .filter((r) => scopeMatches(r, ctx))
     .sort((a, b) => a.priority - b.priority);
 
-  const taxBreakdown: TaxBreakdownItem[] = [];
-  let totalTax = 0;
-  let serviceCharge = 0;
+  // Check if all items have the same pricing mode (or none)
+  const allModes = input.items.map((i) => i.pricingMode).filter(Boolean);
+  const uniqueModes = [...new Set(allModes)];
 
-  for (const rule of rules) {
-    const isExemption = rule.taxType === 'exemption';
-    const isSC = rule.taxType === 'service_charge';
-    const base = isExemption ? 0 : taxableAmount;
+  // If all items share the same pricing mode (or no per-item mode set), use global logic
+  if (uniqueModes.length <= 1) {
+    const isInclusive = uniqueModes[0] === 'inclusive' || config.pricingMode === 'inclusive';
+    const result = calcItemTax(taxableAmount, rules, isInclusive);
 
-    let amount = 0;
-    if (isExemption) {
-      amount = 0;
-    } else if (isInclusive && rule.policy.type !== 'amount') {
-      // Inclusive: extract tax from the price
-      // amount = total - (total / (1 + rate/100))
-      const modifiedBase = applyModifier(taxableAmount, rule.modifier);
-      amount = roundValue(modifiedBase - (modifiedBase / (1 + rule.policy.value / 100)), rule.policy.roundingMode, rule.policy.precision);
-    } else if (rule.policy.type !== 'amount') {
-      // Exclusive: add tax/SC on top
-      const modifiedBase = applyModifier(taxableAmount, rule.modifier);
-      amount = roundValue(modifiedBase * (rule.policy.value / 100), rule.policy.roundingMode, rule.policy.precision);
-    } else {
-      amount = rule.policy.value;
-    }
+    const grandTotal = isInclusive ? taxableAmount : taxableAmount + result.tax;
 
-    taxBreakdown.push({
-      ruleId: rule.id,
-      name: rule.name,
-      taxType: rule.taxType,
-      rate: rule.policy.value,
-      amount,
-      baseAmount: base,
-      priority: rule.priority,
-    });
-
-    totalTax += amount;
-    if (isSC) serviceCharge += amount;
+    return {
+      subtotal,
+      discount: input.discount ?? 0,
+      discountType: input.discountType ?? 'nominal',
+      discountAmount,
+      taxableAmount,
+      taxBreakdown: result.breakdown,
+      totalTax: result.tax,
+      serviceCharge: result.serviceCharge,
+      grandTotal,
+    };
   }
 
-  const grandTotal = isInclusive
-    ? taxableAmount
-    : taxableAmount + totalTax;
+  // Mixed pricing modes: calculate per-item
+  let totalTax = 0;
+  let totalServiceCharge = 0;
+  const allBreakdown: TaxBreakdownItem[] = [];
+
+  for (const item of input.items) {
+    const itemSubtotal = item.quantity * item.unitPrice;
+    // Proportional discount allocation
+    const itemDiscount = subtotal > 0 ? (itemSubtotal / subtotal) * discountAmount : 0;
+    const itemAmount = itemSubtotal - itemDiscount;
+    const itemIsInclusive = item.pricingMode === 'inclusive' || config.pricingMode === 'inclusive';
+
+    const result = calcItemTax(itemAmount, rules, itemIsInclusive);
+    totalTax += result.tax;
+    totalServiceCharge += result.serviceCharge;
+    allBreakdown.push(...result.breakdown);
+  }
+
+  // For mixed modes, grandTotal = exclusive items' (price + tax) + inclusive items' (price only)
+  let grandTotal = 0;
+  for (const item of input.items) {
+    const itemSubtotal = item.quantity * item.unitPrice;
+    const itemDiscount = subtotal > 0 ? (itemSubtotal / subtotal) * discountAmount : 0;
+    const itemAmount = itemSubtotal - itemDiscount;
+    const itemIsInclusive = item.pricingMode === 'inclusive' || config.pricingMode === 'inclusive';
+    const result = calcItemTax(itemAmount, rules, itemIsInclusive);
+
+    if (itemIsInclusive) {
+      grandTotal += itemAmount;
+    } else {
+      grandTotal += itemAmount + result.tax;
+    }
+  }
 
   return {
     subtotal,
@@ -186,9 +244,9 @@ export function calculateTax(input: TaxCalcInput, config: ITaxConfiguration): Ta
     discountType: input.discountType ?? 'nominal',
     discountAmount,
     taxableAmount,
-    taxBreakdown,
+    taxBreakdown: allBreakdown,
     totalTax,
-    serviceCharge,
+    serviceCharge: totalServiceCharge,
     grandTotal,
   };
 }

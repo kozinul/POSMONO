@@ -13,6 +13,7 @@ export interface CartItem {
   notes?: string;
   categoryId?: string;
   pricingProfileId?: string;
+  pricingMode?: 'inclusive' | 'exclusive';
 }
 
 export type PaymentState = 'idle' | 'processing' | 'success' | 'error';
@@ -153,6 +154,7 @@ function derive(
       categoryId: i.categoryId || '',
       quantity: i.quantity,
       unitPrice: i.price,
+      pricingMode: i.pricingMode,
     })),
     discount: cappedDiscount,
     discountType: 'nominal',

@@ -32,6 +32,7 @@ Monorepo (pnpm + Turborepo)
 | 3 | Role (RBAC) | Role | `/api/roles` | ✅ |
 | 4 | Outlet | Outlet | `/api/outlets` | ✅ |
 | 5 | Family | Family | `/api/families` | ✅ |
+| 5a | MenuType | MenuType | `/api/menu-types` | ✅ |
 | 6 | Category | Category | `/api/categories` | ✅ |
 | 7 | Product | Product | `/api/products` | ✅ |
 | 8 | Modifier | Modifier | `/api/modifiers` | ✅ |
@@ -158,13 +159,38 @@ families.view, families.edit
 
 ---
 
-## 5. Domain: Family
+## 5. Domain: MenuType
+
+### Models
+- **MenuType** (`MenuType.ts`)
+  - `name` (string, unique per tenant)
+  - `sortOrder` (number)
+  - `isActive` (boolean)
+
+### API Endpoints
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/menu-types` | ❌ | List all menu types |
+| POST | `/api/menu-types` | ✅ admin | Create menu type |
+| PUT | `/api/menu-types/:id` | ✅ admin | Update menu type |
+| PUT | `/api/menu-types/:id/rename` | ✅ admin | Rename (auto-syncs to all families) |
+| DELETE | `/api/menu-types/:id` | ✅ admin | Delete (fails if families still use it) |
+
+### Business Logic
+- Top-level menu classification (Makanan, Minuman, Snack, dll)
+- Family references `menuType` string field
+- Rename otomatis sync ke semua family yang pakai nama lama
+- Hapus gagal jika masih ada family yang reference nama ini
+
+---
+
+## 5b. Domain: Family
 
 ### Models
 - **Family** (`Family.ts`)
   - `name` (string, unique per tenant)
   - `description` (string)
-  - `menuType` (`'food' | 'beverage'`) — top-level menu classification
+  - `menuType` (string) — references MenuType name (dynamic, not enum)
   - `sortOrder` (number)
   - `isActive` (boolean)
 
@@ -172,13 +198,13 @@ families.view, families.edit
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | GET | `/api/families` | ❌ | List all families |
-| GET | `/api/families/by-menu-type/:menuType` | ❌ | List families filtered by food/beverage |
+| GET | `/api/families/by-menu-type/:menuType` | ❌ | List families filtered by menu type |
 | POST | `/api/families` | ✅ admin | Create family |
 | PUT | `/api/families/:id` | ✅ admin | Update family |
 | DELETE | `/api/families/:id` | ✅ admin | Delete family |
 
 ### Business Logic
-- Top-level grouping untuk menu: **Food** (Makanan) atau **Beverage** (Minuman)
+- Top-level grouping untuk menu (e.g., Western, Asian, Dessert)
 - Family mengelompokkan Category (misal: Western → Main Course, Appetizer)
 - 3-level hierarchy: Menu Type → Family → Category → Product
 

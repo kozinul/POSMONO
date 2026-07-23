@@ -67,6 +67,10 @@ export class MongoFamilyRepository {
     return docs.map((d: FamilyDoc) => this.toDomain(d));
   }
 
+  async updateMenuTypeBulk(tenantId: string, oldName: string, newName: string): Promise<void> {
+    await this.model.updateMany({ tenantId, menuType: oldName }, { $set: { menuType: newName } }).exec();
+  }
+
   async delete(id: string): Promise<void> {
     await this.model.findByIdAndDelete(id).exec();
   }

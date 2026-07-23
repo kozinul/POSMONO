@@ -102,6 +102,10 @@ import { PaymentMethodSchema } from '../core/payment/infrastructure/persistence/
 import { MongoPaymentMethodRepository } from '../core/payment/infrastructure/persistence/MongoPaymentMethodRepository';
 import { PaymentMethodService } from '../core/payment/application/services/PaymentMethodService';
 import { PaymentMethodController } from '../core/payment/interfaces/http/controllers/PaymentMethodController';
+import { MenuTypeSchema } from '../core/catalog/infrastructure/persistence/schemas/MenuTypeSchema';
+import { MongoMenuTypeRepository } from '../core/catalog/infrastructure/persistence/MongoMenuTypeRepository';
+import { MenuTypeService } from '../core/catalog/application/services/MenuTypeService';
+import { MenuTypeController } from '../core/catalog/interfaces/http/controllers/MenuTypeController';
 
 export type DIContainer = ReturnType<typeof buildContainer>;
 
@@ -134,6 +138,7 @@ export function buildContainer() {
   const SettingModel = systemConnection.model('Setting', SettingSchema);
   const PromotionModel = systemConnection.model('Promotion', PromotionSchema);
   const PaymentMethodModel = systemConnection.model('PaymentMethod', PaymentMethodSchema);
+  const MenuTypeModel = systemConnection.model('MenuType', MenuTypeSchema);
 
   const eventBus = new EventBus();
 
@@ -166,6 +171,7 @@ export function buildContainer() {
     settingModel: asValue(SettingModel),
     promotionModel: asValue(PromotionModel),
     paymentMethodModel: asValue(PaymentMethodModel),
+    menuTypeModel: asValue(MenuTypeModel),
     userRepository: asClass(MongoUserRepository, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
@@ -581,6 +587,25 @@ export function buildContainer() {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
         paymentMethodService: container.resolve('paymentMethodService'),
+      }),
+    }),
+    menuTypeRepository: asClass(MongoMenuTypeRepository, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        model: MenuTypeModel,
+      }),
+    }),
+    menuTypeService: asClass(MenuTypeService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        menuTypeRepository: container.resolve('menuTypeRepository'),
+        familyRepository: container.resolve('familyRepository'),
+      }),
+    }),
+    menuTypeController: asClass(MenuTypeController, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        menuTypeService: container.resolve('menuTypeService'),
       }),
     }),
     taxConfigurationRepository: asClass(MongoTaxConfigurationRepository, {

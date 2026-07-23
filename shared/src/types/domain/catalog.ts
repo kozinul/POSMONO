@@ -7,11 +7,34 @@ export interface Product {
   description: string;
   categoryId: string;
   basePrice: number;
+  pricingMode?: 'inclusive' | 'exclusive';
   pricingProfileId?: string;
   imageUrls: string[];
   tags: string[];
   isActive: boolean;
   metadata: Record<string, unknown>;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface Family {
+  id: string;
+  tenantId: string;
+  name: string;
+  description: string;
+  menuType: string;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface MenuType {
+  id: string;
+  tenantId: string;
+  name: string;
+  sortOrder: number;
+  isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

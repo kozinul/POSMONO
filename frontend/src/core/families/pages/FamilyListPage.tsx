@@ -1,34 +1,39 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../../@shared/services/api';
-import { MenuType } from '../../pos/hooks/useFamilies';
 
 interface Family {
   id: string;
   name: string;
   description: string;
-  menuType: MenuType;
+  menuType: string;
   sortOrder: number;
   isActive: boolean;
 }
 
-interface FamiliesResponse {
-  success: boolean;
-  data: Family[];
+interface MenuType {
+  id: string;
+  name: string;
+  isActive: boolean;
 }
 
 async function fetchFamilies(): Promise<Family[]> {
-  const res = await api.get<FamiliesResponse>('/families');
+  const res = await api.get('/families');
+  return res.data.data;
+}
+
+async function fetchMenuTypes(): Promise<MenuType[]> {
+  const res = await api.get('/menu-types');
   return res.data.data;
 }
 
 async function createFamily(data: Partial<Family>): Promise<Family> {
-  const res = await api.post<{ success: boolean; data: Family }>('/families', data);
+  const res = await api.post('/families', data);
   return res.data.data;
 }
 
 async function updateFamily(id: string, data: Partial<Family>): Promise<Family> {
-  const res = await api.put<{ success: boolean; data: Family }>(`/families/${id}`, data);
+  const res = await api.put(`/families/${id}`, data);
   return res.data.data;
 }
 
@@ -38,13 +43,13 @@ async function deleteFamily(id: string): Promise<void> {
 
 export default function FamilyListPage() {
   const queryClient = useQueryClient();
-  const [selectedMenuType, setSelectedMenuType] = useState<MenuType>('food');
+  const [selectedMenuType, setSelectedMenuType] = useState<string>('');
   const [showModal, setShowModal] = useState(false);
   const [editingFamily, setEditingFamily] = useState<Family | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    menuType: 'food' as MenuType,
+    menuType: '',
     sortOrder: 0,
     isActive: true,
   });
@@ -53,6 +58,13 @@ export default function FamilyListPage() {
     queryKey: ['families'],
     queryFn: fetchFamilies,
   });
+
+  const { data: menuTypes = [] } = useQuery({
+    queryKey: ['menu-types'],
+    queryFn: fetchMenuTypes,
+  });
+
+  const activeMenuTypes = menuTypes.filter((mt) => mt.isActive);
 
   const createMutation = useMutation({
     mutationFn: createFamily,
@@ -84,7 +96,7 @@ export default function FamilyListPage() {
     setFormData({
       name: '',
       description: '',
-      menuType: 'food',
+      menuType: activeMenuTypes[0]?.name || '',
       sortOrder: 0,
       isActive: true,
     });
@@ -116,7 +128,10 @@ export default function FamilyListPage() {
     }
   };
 
-  const filteredFamilies = families.filter((f) => f.menuType === selectedMenuType);
+  const uniqueMenuTypes = menuTypes.map((mt) => mt.name);
+  const filteredFamilies = selectedMenuType
+    ? families.filter((f) => f.menuType === selectedMenuType)
+    : families;
 
   return (
     <div>
@@ -132,8 +147,18 @@ export default function FamilyListPage() {
 
       {/* Menu Type Tabs */}
       <div className="bg-white rounded-lg shadow p-4 mb-6">
-        <div className="flex gap-2">
-          {(['food', 'beverage'] as MenuType[]).map((type) => (
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => setSelectedMenuType('')}
+            className={`px-6 py-2 rounded-lg font-semibold text-sm transition-colors ${
+              selectedMenuType === ''
+                ? 'blue-primary text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            Semua
+          </button>
+          {uniqueMenuTypes.map((type) => (
             <button
               key={type}
               onClick={() => setSelectedMenuType(type)}
@@ -143,7 +168,7 @@ export default function FamilyListPage() {
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              {type === 'food' ? 'Makanan' : 'Minuman'}
+              {type}
             </button>
           ))}
         </div>
@@ -177,8 +202,8 @@ export default function FamilyListPage() {
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{family.name}</td>
                   <td className="px-6 py-4 text-sm text-gray-500">{family.description || '-'}</td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${family.menuType === 'food' ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800'}`}>
-                      {family.menuType === 'food' ? 'Makanan' : 'Minuman'}
+                    <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
+                      {family.menuType}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{family.sortOrder}</td>
@@ -227,11 +252,13 @@ export default function FamilyListPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Tipe Menu</label>
                   <select
                     value={formData.menuType}
-                    onChange={(e) => setFormData({ ...formData, menuType: e.target.value as MenuType })}
+                    onChange={(e) => setFormData({ ...formData, menuType: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                   >
-                    <option value="food">Makanan</option>
-                    <option value="beverage">Minuman</option>
+                    {activeMenuTypes.length === 0 && <option value="">Buat tipe menu dulu</option>}
+                    {activeMenuTypes.map((mt) => (
+                      <option key={mt.id} value={mt.name}>{mt.name}</option>
+                    ))}
                   </select>
                 </div>
                 <div>
@@ -263,7 +290,7 @@ export default function FamilyListPage() {
               </button>
               <button
                 onClick={handleSubmit}
-                disabled={!formData.name}
+                disabled={!formData.name || !formData.menuType}
                 className="px-4 py-2 blue-primary text-white rounded-lg hover:opacity-90 disabled:opacity-50"
               >
                 {editingFamily ? 'Simpan' : 'Tambah'}

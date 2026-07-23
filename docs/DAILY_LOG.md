@@ -831,3 +831,47 @@ Tax Engine is the most architecturally significant module so far. Compound engin
 **TypeScript:** Backend 0 errors, Frontend 0 errors
 
 **Productivity score:** 9
+
+---
+
+### DATE: 2026-07-23
+
+**What I worked on:**
+
+- **MenuType entity** — new domain entity (`MenuType.ts`) with CRUD, separate from Family. Replaces hardcoded `'food' | 'beverage'` enum with dynamic string-based menu types (Makanan, Minuman, Snack, dll)
+- **Backend full stack** — MenuType domain entity, Mongoose schema, MongoMenuTypeRepository, MenuTypeService (create/list/update/rename/delete), MenuTypeController, menuType.routes
+- **Rename sync** — `PUT /api/menu-types/:id/rename` automatically updates all families using the old name via `updateMenuTypeBulk()`
+- **Delete guard** — delete fails if any family still references the menu type
+- **Frontend MenuTypeListPage** — CRUD page at `/menu-types` with table, create/edit modal, toggle active, delete with confirmation
+- **FamilyListPage update** — menuType field now uses dropdown from `/menu-types` API (was free text input)
+- **Tab updates** — PosPage, ProductListPage, FamilyListPage all fetch menu types from `/menu-types` API for tabs (was derived from families via `Set`)
+- **Shared types** — added `MenuType` interface to `shared/src/types/domain/catalog.ts`
+- **DI registration** — MenuType model, repository, service, controller registered in `container.ts` + `routes.ts`
+- **Nav bar** — added "Menu Types" link in `DashboardLayout.tsx`
+- **Docs** — updated ARCHITECTURE.md, API_REFERENCE.md, POS_CURRENT_FEATURES.md with MenuType domain and endpoints
+
+**Files changed:**
+
+- `backend/src/core/catalog/domain/MenuType.ts` — new entity
+- `backend/src/core/catalog/infrastructure/persistence/schemas/MenuTypeSchema.ts` — new schema
+- `backend/src/core/catalog/infrastructure/persistence/MongoMenuTypeRepository.ts` — new repository
+- `backend/src/core/catalog/application/services/MenuTypeService.ts` — new service
+- `backend/src/core/catalog/interfaces/http/controllers/MenuTypeController.ts` — new controller
+- `backend/src/core/catalog/interfaces/http/routes/menuType.routes.ts` — new routes
+- `backend/src/core/catalog/infrastructure/persistence/MongoFamilyRepository.ts` — added `updateMenuTypeBulk()`
+- `backend/src/bootstrap/container.ts` — registered MenuType DI
+- `backend/src/bootstrap/routes.ts` — registered `/api/menu-types` routes
+- `shared/src/types/domain/catalog.ts` — added `MenuType` interface
+- `frontend/src/core/menu-types/pages/MenuTypeListPage.tsx` — new page
+- `frontend/src/core/families/pages/FamilyListPage.tsx` — dropdown from API, tabs from API
+- `frontend/src/core/pos/pages/PosPage.tsx` — tabs from `/menu-types` API
+- `frontend/src/core/products/pages/ProductListPage.tsx` — tabs from `/menu-types` API
+- `frontend/src/app/router.tsx` — added `/menu-types` route
+- `frontend/src/layouts/DashboardLayout.tsx` — added "Menu Types" nav item
+- `docs/ARCHITECTURE.md` — added MenuType to catalog domain structure
+- `docs/API_REFERENCE.md` — added MenuType endpoints section
+- `docs/POS_CURRENT_FEATURES.md` — added MenuType domain + endpoints
+
+**Tests:** 555/572 passing (17 pre-existing failures in Shift/Order/Payment)
+
+**Productivity score:** 8

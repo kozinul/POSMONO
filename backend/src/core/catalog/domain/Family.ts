@@ -4,7 +4,7 @@ import { DomainEvent } from '../../../@shared/domain/DomainEvent';
 
 class FamilyId extends Identifier {}
 
-export type MenuType = 'food' | 'beverage';
+export type MenuType = string;
 
 export interface IFamily {
   id: string;

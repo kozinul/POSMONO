@@ -221,6 +221,8 @@ backend/
 │   │   │   ├── domain/
 │   │   │   │   ├── Product.ts         #     Product aggregate root
 │   │   │   │   ├── Category.ts        #     Category entity
+│   │   │   │   ├── Family.ts          #     Family entity (menu grouping)
+│   │   │   │   ├── MenuType.ts        #     MenuType entity (Makanan/Minuman/Snack)
 │   │   │   │   ├── Variant.ts         #     Variant entity (size, color)
 │   │   │   │   ├── Modifier.ts        #     Modifier group (add-ons, extras)
 │   │   │   │   └── events/

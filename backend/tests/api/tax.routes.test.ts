@@ -30,11 +30,11 @@ const app = createTestApp();
 function vatRulePayload(overrides?: Record<string, any>) {
   return {
     id: overrides?.id ?? 'rule-vat',
-    name: overrides?.name ?? 'PPN 11%',
+    name: overrides?.name ?? 'PPN 12%',
     taxType: 'vat',
     priority: 10,
     scope: { type: 'all', entityId: '', entityName: 'Semua' },
-    policy: { type: 'percentage_of_base', value: 11, roundingMode: 'round', precision: 2 },
+    policy: { type: 'rate', value: 12, roundingMode: 'round', precision: 2 },
     modifier: { type: 'fraction', config: { numerator: 11, denominator: 12 } },
     isActive: true,
     effectiveDate: '2025-01-01T00:00:00.000Z',
@@ -100,7 +100,7 @@ describe('Tax Routes', () => {
       expect(res.status).toBe(201);
       const activeVer = res.body.versions.find((v: any) => v.status === 'active');
       expect(activeVer.rules).toHaveLength(1);
-      expect(activeVer.rules[0].name).toBe('PPN 11%');
+      expect(activeVer.rules[0].name).toBe('PPN 12%');
     });
 
     it('returns error for invalid rule (negative priority)', async () => {
@@ -151,8 +151,8 @@ describe('Tax Routes', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.subtotal).toBe(120000);
-      expect(res.body.totalTax).toBe(12100);
-      expect(res.body.grandTotal).toBe(132100);
+      expect(res.body.totalTax).toBe(13200);
+      expect(res.body.grandTotal).toBe(133200);
       expect(res.body.taxBreakdown).toHaveLength(1);
       expect(res.body.taxBreakdown[0].taxType).toBe('vat');
     });
@@ -180,7 +180,7 @@ describe('Tax Routes', () => {
       expect(res.body.subtotal).toBe(150000);
       expect(res.body.discountAmount).toBe(15000);
       expect(res.body.taxableAmount).toBe(135000);
-      const expectedTax = Math.round(135000 * 11 / 12 * 11 / 100 * 100) / 100;
+      const expectedTax = Math.round(135000 * 11 / 12 * 12 / 100 * 100) / 100;
       expect(res.body.totalTax).toBe(expectedTax);
       expect(res.body.grandTotal).toBe(150000 + expectedTax);
     });

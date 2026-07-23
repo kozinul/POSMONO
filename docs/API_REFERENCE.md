@@ -207,29 +207,65 @@ List categories filtered by family.
 
 ---
 
+## Menu Types (`/api/menu-types`)
+
+### `GET /api/menu-types`
+
+List all menu types for current tenant.
+
+**Response 200:** `{ "success": true, "data": [{ "id": "...", "tenantId": "...", "name": "Makanan", "sortOrder": 0, "isActive": true, "createdAt": "...", "updatedAt": "..." }] }`
+
+### `POST /api/menu-types`
+
+**Body:** `{ "name": "Makanan", "sortOrder": 0 }`
+
+**Response 201:** Full menu type object.
+
+### `PUT /api/menu-types/:id`
+
+**Body:** `{ "name": "Makanan Updated", "sortOrder": 1, "isActive": false }` (all optional)
+
+**Response 200:** Full menu type object.
+
+### `PUT /api/menu-types/:id/rename`
+
+Rename a menu type. Automatically updates all families using the old name.
+
+**Body:** `{ "name": "New Name" }`
+
+**Response 200:** Full menu type object.
+
+### `DELETE /api/menu-types/:id`
+
+Fails if any family still references this menu type.
+
+**Response:** `204 No Content`
+
+---
+
 ## Families (`/api/families`)
 
 ### `GET /api/families`
 
 List all families for current tenant.
 
-**Response 200:** `{ "success": true, "data": [{ "id": "...", "tenantId": "...", "name": "Western", "description": "Masakan Barat", "menuType": "food", "sortOrder": 1, "isActive": true, "createdAt": "...", "updatedAt": "..." }] }`
+**Response 200:** `{ "success": true, "data": [{ "id": "...", "tenantId": "...", "name": "Western", "description": "Masakan Barat", "menuType": "Makanan", "sortOrder": 1, "isActive": true, "createdAt": "...", "updatedAt": "..." }] }`
 
 ### `GET /api/families/by-menu-type/:menuType`
 
-List families filtered by menu type (`food` or `beverage`).
+List families filtered by menu type string.
 
 **Response 200:** Array of family objects filtered by `menuType`.
 
 ### `POST /api/families`
 
-**Body:** `{ "name": "Western", "description": "Masakan Barat", "menuType": "food", "sortOrder": 1 }`
+**Body:** `{ "name": "Western", "description": "Masakan Barat", "menuType": "Makanan", "sortOrder": 1 }`
 
 **Response 201:** Full family object.
 
 ### `PUT /api/families/:id`
 
-**Body:** `{ "name": "Asian", "menuType": "food", "isActive": false }` (all optional)
+**Body:** `{ "name": "Asian", "menuType": "Makanan", "isActive": false }` (all optional)
 
 **Response 200:** Full family object.
 

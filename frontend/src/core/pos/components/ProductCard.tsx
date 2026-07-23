@@ -7,11 +7,12 @@ interface ProductCardProps {
   imageUrl: string;
   categoryId?: string;
   pricingProfileId?: string;
+  pricingMode?: 'inclusive' | 'exclusive';
   stock?: number;
   isOutOfStock?: boolean;
 }
 
-export function ProductCard({ id, name, price, imageUrl, categoryId, pricingProfileId, stock = 0, isOutOfStock = false }: ProductCardProps) {
+export function ProductCard({ id, name, price, imageUrl, categoryId, pricingProfileId, pricingMode, stock = 0, isOutOfStock = false }: ProductCardProps) {
   const addItem = usePOSStore((s) => s.addItem);
 
   return (
@@ -42,7 +43,7 @@ export function ProductCard({ id, name, price, imageUrl, categoryId, pricingProf
             {isOutOfStock ? 'Stok: Habis' : `Stok: ${stock}`}
           </span>
           <button
-            onClick={() => addItem({ productId: id, name, price, imageUrl, categoryId, pricingProfileId })}
+            onClick={() => addItem({ productId: id, name, price, imageUrl, categoryId, pricingProfileId, pricingMode })}
             disabled={isOutOfStock}
             className={`px-4 py-1.5 rounded-lg text-sm font-medium ${
               isOutOfStock
