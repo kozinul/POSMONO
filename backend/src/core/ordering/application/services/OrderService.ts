@@ -119,6 +119,14 @@ interface SetServiceChargeInput {
   rate: number;
 }
 
+interface HoldOrderInput {
+  id: string;
+}
+
+interface RecallOrderInput {
+  id: string;
+}
+
 export class CreateOrderService implements UseCase<CreateOrderInput, Order> {
   constructor(
     private readonly orderRepository: any,
@@ -537,6 +545,50 @@ export class SetServiceChargeService implements UseCase<SetServiceChargeInput, O
     if (!order) throw new Error('Order not found');
 
     order.setServiceCharge(input.rate);
+
+    await this.orderRepository.save(order);
+
+    for (const event of order.domainEvents) {
+      this.eventBus.publish(event);
+    }
+
+    return order;
+  }
+}
+
+export class HoldOrderService implements UseCase<HoldOrderInput, Order> {
+  constructor(
+    private readonly orderRepository: any,
+    private readonly eventBus: any,
+  ) {}
+
+  async execute(input: HoldOrderInput): Promise<Order> {
+    const order = await this.orderRepository.findById(input.id);
+    if (!order) throw new Error('Order not found');
+
+    order.hold();
+
+    await this.orderRepository.save(order);
+
+    for (const event of order.domainEvents) {
+      this.eventBus.publish(event);
+    }
+
+    return order;
+  }
+}
+
+export class RecallOrderService implements UseCase<RecallOrderInput, Order> {
+  constructor(
+    private readonly orderRepository: any,
+    private readonly eventBus: any,
+  ) {}
+
+  async execute(input: RecallOrderInput): Promise<Order> {
+    const order = await this.orderRepository.findById(input.id);
+    if (!order) throw new Error('Order not found');
+
+    order.recall();
 
     await this.orderRepository.save(order);
 

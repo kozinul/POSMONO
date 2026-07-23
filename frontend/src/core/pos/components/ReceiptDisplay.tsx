@@ -1,20 +1,34 @@
 import { usePOSStore } from '../store/posStore';
 
 export function ReceiptDisplay() {
-  const { receipt, items, total, subtotal, clearCart } = usePOSStore();
+  const { receipt, items, clearCart, openPaymentModal, clearReceipt } = usePOSStore();
 
   if (!receipt) return null;
+
+  const handleNewOrder = () => {
+    if (receipt.hasRemaining) {
+      clearReceipt();
+      openPaymentModal();
+    } else {
+      clearCart();
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div className="bg-white rounded-2xl w-full max-w-sm mx-4 overflow-hidden shadow-2xl">
         <div className="p-6 border-b border-gray-100 text-center">
           <h2 className="text-lg font-bold text-gray-800">POSMono</h2>
-          <p className="text-sm text-gray-500 mt-1">Pesanan {receipt.orderNumber}</p>
+          <p className="text-sm text-gray-500 mt-1">Pesanan {receipt.displayOrderNumber}</p>
+          {receipt.hasRemaining && (
+            <p className="text-xs text-amber-600 font-medium mt-1">
+              {items.length} item tersisa di keranjang
+            </p>
+          )}
         </div>
 
         <div className="p-6 space-y-3">
-          {items.map((item) => (
+          {(receipt.paidItems || items).map((item) => (
             <div key={item.productId} className="flex justify-between text-sm">
               <span className="text-gray-700">
                 {item.name} x{item.quantity}
@@ -28,7 +42,7 @@ export function ReceiptDisplay() {
           <div className="border-t pt-3 space-y-1">
             <div className="flex justify-between text-sm text-gray-500">
               <span>Subtotal</span>
-              <span>Rp {subtotal.toLocaleString('id-ID')}</span>
+              <span>Rp {receipt.grandTotal.toLocaleString('id-ID')}</span>
             </div>
             {receipt.serviceCharge > 0 && (
               <div className="flex justify-between text-sm text-gray-500">
@@ -65,10 +79,10 @@ export function ReceiptDisplay() {
             Print
           </button>
           <button
-            onClick={clearCart}
+            onClick={handleNewOrder}
             className="flex-[2] blue-primary text-white py-3 rounded-xl font-bold hover:opacity-90 transition-opacity"
           >
-            New Order
+            {receipt.hasRemaining ? 'Bayar Sisanya' : 'Selesai'}
           </button>
         </div>
       </div>

@@ -2,13 +2,13 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { usePOSStore } from '../store/posStore';
 import { useProducts, useCategories, useBarcodeLookup } from '../hooks/useProducts';
 import { useFamilies, MenuType } from '../hooks/useFamilies';
-import { useTenant } from '../../../@shared/hooks/useTenant';
 import { useTaxConfiguration } from '../../../@shared/hooks/useTaxConfiguration';
 import { useDiscountConfiguration } from '../../../@shared/hooks/useDiscountConfiguration';
 import { ProductCard } from '../components/ProductCard';
 import { CartItemRow } from '../components/CartItemRow';
 import { PaymentModal } from '../components/PaymentModal';
 import { ReceiptDisplay } from '../components/ReceiptDisplay';
+import { HeldOrdersPanel } from '../components/HeldOrdersPanel';
 
 export default function PosPage() {
   const {
@@ -18,6 +18,7 @@ export default function PosPage() {
     serviceChargeName,
     tax,
     taxName,
+    taxBreakdown,
     discount,
     discountType,
     discountAmount,
@@ -26,10 +27,17 @@ export default function PosPage() {
     total,
     paymentModalOpen,
     receipt,
+    heldOrders,
+    customerName,
+    tableNumber,
     openPaymentModal,
     setTaxConfig,
     setDiscountRules,
     setPromoCode,
+    setCustomerName,
+    setTableNumber,
+    holdOrder,
+    toggleHeldOrdersPanel,
   } = usePOSStore();
 
   const { data: taxConfig } = useTaxConfiguration();
@@ -47,6 +55,7 @@ export default function PosPage() {
     }
   }, [discountConfig, setDiscountRules]);
 
+  const [holdError, setHoldError] = useState('');
   const [search, setSearch] = useState('');
   const [selectedMenuType, setSelectedMenuType] = useState<MenuType>('food');
   const [selectedFamily, setSelectedFamily] = useState<string | null>(null);
@@ -239,9 +248,30 @@ export default function PosPage() {
 
       {/* Right: Cart Sidebar */}
       <aside className="w-[400px] bg-white border-l border-gray-200 flex flex-col shadow-xl z-20">
-        <div className="p-6 border-b border-gray-100 flex justify-between items-center shrink-0">
-          <h2 className="text-lg font-bold text-gray-800">Pesanan Baru</h2>
-          <span className="text-gray-400 font-medium">{items.length} item</span>
+        <div className="p-4 border-b border-gray-100 shrink-0 space-y-3">
+          <div className="flex justify-between items-center">
+            <h2 className="text-lg font-bold text-gray-800">Pesanan Baru</h2>
+            <span className="text-gray-400 font-medium text-sm">{items.length} item</span>
+          </div>
+          <div className="flex gap-2">
+            <input
+              value={customerName}
+              onChange={(e) => { setCustomerName(e.target.value); setHoldError(''); }}
+              className={`flex-1 px-3 py-2 bg-gray-50 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none ${holdError ? 'border-red-400' : 'border-gray-200'}`}
+              placeholder="Nama Customer"
+              type="text"
+            />
+            <input
+              value={tableNumber}
+              onChange={(e) => { setTableNumber(e.target.value); setHoldError(''); }}
+              className={`w-24 px-3 py-2 bg-gray-50 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-center ${holdError ? 'border-red-400' : 'border-gray-200'}`}
+              placeholder="No Meja"
+              type="text"
+            />
+          </div>
+          {holdError && (
+            <p className="text-xs text-red-500 font-medium">{holdError}</p>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto order-list-container p-6 space-y-6">
@@ -263,16 +293,19 @@ export default function PosPage() {
               <span>Subtotal:</span>
               <span>Rp {subtotal.toLocaleString('id-ID')}</span>
             </div>
-            {serviceCharge > 0 && (
-              <div className="flex justify-between text-gray-700">
-                <span>{serviceChargeName}:</span>
-                <span>Rp {serviceCharge.toLocaleString('id-ID')}</span>
-              </div>
-            )}
-            <div className="flex justify-between text-gray-700">
-              <span>{taxName}:</span>
-              <span>Rp {tax.toLocaleString('id-ID')}</span>
-            </div>
+            {taxBreakdown.length > 0
+              ? taxBreakdown.map((t) => (
+                  <div key={t.ruleId} className="flex justify-between text-gray-700 text-sm">
+                    <span>{t.name} ({t.rate}%)</span>
+                    <span>Rp {t.amount.toLocaleString('id-ID')}</span>
+                  </div>
+                ))
+              : tax > 0 && (
+                  <div className="flex justify-between text-gray-700">
+                    <span>{taxName}:</span>
+                    <span>Rp {tax.toLocaleString('id-ID')}</span>
+                  </div>
+                )}
             {promoApplied && promoApplied.appliedRules.length > 0 && (
               <div className="space-y-1">
                 {promoApplied.appliedRules.map((r) => (
@@ -297,7 +330,19 @@ export default function PosPage() {
             </span>
           </div>
           <div className="flex gap-4 pt-4">
-            <button className="flex-1 bg-[#9E9E9E] text-white py-4 rounded-xl font-bold hover:bg-gray-500 transition-colors">
+            <button
+              onClick={() => {
+                if (items.length === 0) return;
+                if (!customerName.trim() && !tableNumber.trim()) {
+                  setHoldError('Isi nama customer atau nomor meja');
+                  return;
+                }
+                setHoldError('');
+                holdOrder();
+              }}
+              disabled={items.length === 0}
+              className="flex-1 bg-[#9E9E9E] text-white py-4 rounded-xl font-bold hover:bg-gray-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               Hold
             </button>
             <button
@@ -313,6 +358,7 @@ export default function PosPage() {
 
       {paymentModalOpen && <PaymentModal />}
       {receipt && <ReceiptDisplay />}
+      <HeldOrdersPanel />
     </div>
   );
 }

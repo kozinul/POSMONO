@@ -463,6 +463,94 @@ describe('Order', () => {
     });
   });
 
+  describe('hold', () => {
+    it('transitions draft order to held', () => {
+      const order = Order.create(validOrderInput);
+      order.hold();
+
+      expect(order.serialize().status).toBe('held');
+    });
+
+    it('transitions confirmed order to held', () => {
+      const order = Order.create(validOrderInput);
+      order.confirm();
+      order.hold();
+
+      expect(order.serialize().status).toBe('held');
+    });
+
+    it('throws if order is paid', () => {
+      const order = Order.create(validOrderInput);
+      order.pay(validPaymentBreakdown, 'cashier-1', 'Kasir 1');
+      expect(() => order.hold()).toThrow('Only draft or confirmed orders can be held');
+    });
+
+    it('throws if order is already held', () => {
+      const order = Order.create(validOrderInput);
+      order.hold();
+      expect(() => order.hold()).toThrow('Only draft or confirmed orders can be held');
+    });
+
+    it('throws if order is voided', () => {
+      const order = Order.create(validOrderInput);
+      order.voidOrder('user-1', 'Admin', 'reason');
+      expect(() => order.hold()).toThrow('Only draft or confirmed orders can be held');
+    });
+
+    it('emits ordering.order.held event', () => {
+      const order = Order.create(validOrderInput);
+      order.clearEvents();
+      order.hold();
+
+      const events = order.domainEvents;
+      expect(events).toHaveLength(1);
+      expect(events[0].eventName).toBe('ordering.order.held');
+      expect(events[0].payload.orderId).toBe(order.id.toValue());
+      expect(events[0].payload.items).toHaveLength(1);
+    });
+  });
+
+  describe('recall', () => {
+    it('transitions held order back to draft', () => {
+      const order = Order.create(validOrderInput);
+      order.hold();
+      order.recall();
+
+      expect(order.serialize().status).toBe('draft');
+    });
+
+    it('throws if order is not held', () => {
+      const order = Order.create(validOrderInput);
+      expect(() => order.recall()).toThrow('Only held orders can be recalled');
+    });
+
+    it('throws if order is draft', () => {
+      const order = Order.create(validOrderInput);
+      expect(() => order.recall()).toThrow('Only held orders can be recalled');
+    });
+
+    it('emits ordering.order.recalled event', () => {
+      const order = Order.create(validOrderInput);
+      order.hold();
+      order.clearEvents();
+      order.recall();
+
+      const events = order.domainEvents;
+      expect(events).toHaveLength(1);
+      expect(events[0].eventName).toBe('ordering.order.recalled');
+      expect(events[0].payload.orderId).toBe(order.id.toValue());
+    });
+
+    it('can be held again after recall', () => {
+      const order = Order.create(validOrderInput);
+      order.hold();
+      order.recall();
+      order.hold();
+
+      expect(order.serialize().status).toBe('held');
+    });
+  });
+
   describe('recalculateTotals with rounding', () => {
     it('setRoundingMethod updates rounding and recalculates', () => {
       const order = Order.create(validOrderInput);

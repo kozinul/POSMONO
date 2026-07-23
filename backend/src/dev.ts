@@ -1,4 +1,3 @@
-import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
@@ -13,6 +12,8 @@ function id(prefix: string): string {
   return `${prefix}_${uuidv4().replace(/-/g, '').substring(0, 20)}`;
 }
 
+const DEV_TENANT_ID = 'dev-tenant';
+
 async function seedData() {
   const Tenant = mongoose.model('Tenant', TenantSchema);
   const User = mongoose.model('User', UserSchema);
@@ -21,9 +22,15 @@ async function seedData() {
   const Category = mongoose.model('Category', CategorySchema);
   const Stock = mongoose.model('Stock', StockSchema);
 
-  await mongoose.connection.dropDatabase();
+  const existingTenant = await Tenant.findOne({ _id: DEV_TENANT_ID }).lean();
+  if (existingTenant) {
+    console.log('[DEV] Data already exists, skipping seed. Use --seed to force re-seed.');
+    return;
+  }
 
-  const tenantId = 'dev-tenant';
+  console.log('[DEV] Seeding initial data...');
+
+  const tenantId = DEV_TENANT_ID;
   const adminUserId = id('usr');
   const cashierUserId = id('usr');
   const adminRoleId = id('rol');
@@ -137,20 +144,55 @@ async function seedData() {
   }));
   await Stock.create(stockEntries);
 
-  return { tenantId, tenantSlug: 'toko-abc' };
+  console.log('[DEV] Seed complete.');
 }
 
 async function main() {
-  process.env.MONGOMS_VERSION = '7.3.4';
-  process.env.MONGOMS_DOWNLOAD_URL = 'https://fastdl.mongodb.org/linux/mongodb-linux-aarch64-ubuntu2204-7.3.4.tgz';
+  const forceSeed = process.argv.includes('--seed');
+  const customUri = process.env.MONGO_URI;
+  const isCustomMongo = customUri && !customUri.includes('localhost:27017/posmono');
 
-  const mongod = await MongoMemoryServer.create();
-  const uri = mongod.getUri();
+  let uri: string;
+  let mongod: any = null;
+
+  if (isCustomMongo) {
+    // Use real MongoDB from .env
+    uri = customUri!;
+    console.log(`[DEV] Connecting to real MongoDB: ${uri.replace(/\/\/.*@/, '//***@')}`);
+    try {
+      await mongoose.connect(uri);
+      console.log('[DEV] Connected to real MongoDB.');
+    } catch (err: any) {
+      console.error(`[DEV] Failed to connect to ${uri}: ${err.message}`);
+      console.log('[DEV] Falling back to in-memory MongoDB...');
+      const { MongoMemoryServer } = await import('mongodb-memory-server');
+      process.env.MONGOMS_VERSION = '7.3.4';
+      process.env.MONGOMS_DOWNLOAD_URL = 'https://fastdl.mongodb.org/linux/mongodb-linux-aarch64-ubuntu2204-7.3.4.tgz';
+      mongod = await MongoMemoryServer.create();
+      uri = mongod.getUri();
+      await mongoose.connect(uri);
+      console.log('[DEV] Connected to in-memory MongoDB.');
+    }
+  } else {
+    // Use in-memory MongoDB
+    const { MongoMemoryServer } = await import('mongodb-memory-server');
+    process.env.MONGOMS_VERSION = '7.3.4';
+    process.env.MONGOMS_DOWNLOAD_URL = 'https://fastdl.mongodb.org/linux/mongodb-linux-aarch64-ubuntu2204-7.3.4.tgz';
+    mongod = await MongoMemoryServer.create();
+    uri = mongod.getUri();
+    console.log('[DEV] Using in-memory MongoDB.');
+    await mongoose.connect(uri);
+  }
+
+  if (forceSeed) {
+    const Tenant = mongoose.model('Tenant', TenantSchema);
+    await Tenant.deleteMany({});
+    console.log('[DEV] Cleared existing data for re-seed.');
+  }
+
+  await seedData();
 
   process.env.MONGO_URI = uri;
-
-  await mongoose.connect(uri);
-  await seedData();
 
   const { createServer } = await import('./bootstrap/server');
   const { buildContainer } = await import('./bootstrap/container');
@@ -168,10 +210,11 @@ async function main() {
 
   const app = createServer(container);
 
+  const dbMode = mongod ? 'in-memory' : 'persistent';
   app.listen(env.PORT, () => {
     logger.info(
-      { port: env.PORT, env: env.NODE_ENV },
-      'POSMono server started (dev mode with in-memory MongoDB)',
+      { port: env.PORT, env: env.NODE_ENV, db: dbMode },
+      'POSMono dev server started',
     );
     logger.info('Default credentials:');
     logger.info('  admin@demo.com / admin123  (Owner)');
@@ -179,17 +222,18 @@ async function main() {
     logger.info('Tenant slug: toko-abc');
   });
 
-  process.on('SIGINT', async () => {
-    logger.info('Shutting down...');
-    await mongod.stop();
-    process.exit(0);
-  });
-
-  process.on('SIGTERM', async () => {
-    logger.info('Shutting down...');
-    await mongod.stop();
-    process.exit(0);
-  });
+  if (mongod) {
+    process.on('SIGINT', async () => {
+      logger.info('Shutting down...');
+      await mongod.stop();
+      process.exit(0);
+    });
+    process.on('SIGTERM', async () => {
+      logger.info('Shutting down...');
+      await mongod.stop();
+      process.exit(0);
+    });
+  }
 }
 
 main().catch((err) => {

@@ -790,3 +790,44 @@ Tax Engine is the most architecturally significant module so far. Compound engin
 **TypeScript:** Backend 0 errors, Frontend 0 errors
 
 **Productivity score:** 8
+
+---
+
+## July 23, 2026 — Split Bill "Bayar Satu per Satu" + Hold/Recall Polish
+
+**Session:** Implement pay-one-at-a-time split bill with item selection, split order numbering, and collapsible held orders sidebar
+
+**What I worked on:**
+
+- **Hold/Recall UI rework** — deleted old `HoldModal.tsx` and `HeldOrdersBar.tsx`; replaced with `HeldOrdersPanel.tsx` (collapsible 280px sidebar on the left with toggle button + vertical text)
+- **Customer name & table number fields** — moved above cart in `PosPage.tsx`, always visible; Hold button validates requiring name OR table number before holding
+- **Hold is instant** — `holdOrder()` clears cart immediately, backend sync in background (fire-and-forget); `recallOrder()` syncs backend + restores customer/table fields
+- **Tax calculator fix** — inclusive mode now correctly extracts SC and PPN independently from subtotal; `grandTotal` = `taxableAmount` in inclusive mode (no SC on top)
+- **`setTaxConfig` bug fix** — was not storing `taxConfig` in Zustand state, so subsequent `addItem` calls used null config → tax always 0
+- **Cart & PaymentModal cleanup** — removed duplicate service charge line in cart; only shows `taxBreakdown` with rate percentage
+- **PaymentModal rewrite for split bill** — removed old "Bayar Biasa"/"Split Bill" tabs; replaced with item checkbox selection → pay selected items only → receipt → remaining items stay in cart → repeat
+- **Store split tracking** — added `splitNumber`, `splitBaseOrderNumber`, `removeItems()`, `resetSplit()` to `posStore.ts`; `clearCart` resets split state
+- **ReceiptDisplay update** — shows `ORD-xxx/N` suffix during split; shows "X item tersisa" when items remain; "Bayar Sisanya" button opens payment modal for remaining; "Selesai" when cart empty
+- **Database config** — `dev.ts` updated to support real MongoDB (`MONGO_URI` in `.env`) with in-memory fallback
+
+**Files changed:**
+
+- `backend/src/core/ordering/domain/Order.ts` — hold/recall methods, 'held' status
+- `backend/src/core/ordering/domain/__tests__/Order.test.ts` — 58 tests passing
+- `backend/src/core/ordering/infrastructure/persistence/schemas/OrderSchema.ts` — 'held' in enum
+- `backend/src/core/ordering/application/services/OrderService.ts` — HoldOrderService, RecallOrderService
+- `backend/src/core/ordering/interfaces/http/controllers/OrderController.ts` — hold/recall handlers
+- `backend/src/core/ordering/interfaces/http/routes/order.routes.ts` — POST /:id/hold, PATCH /:id/recall
+- `backend/src/bootstrap/container.ts` — registered hold/recall services
+- `backend/src/dev.ts` — smart MongoDB (real or in-memory fallback), seed logic
+- `frontend/src/@shared/utils/taxCalculator.ts` — inclusive/exclusive pricing fix
+- `frontend/src/@shared/styles/globals.css` — held-orders-scroll styles
+- `frontend/src/core/pos/store/posStore.ts` — splitNumber, splitBaseOrderNumber, removeItems, resetSplit, Receipt type update
+- `frontend/src/core/pos/components/PaymentModal.tsx` — complete rewrite: item checkboxes, pay selected only, split flow
+- `frontend/src/core/pos/components/ReceiptDisplay.tsx` — ORD-xxx/N suffix, Bayar Sisanya button, paid items only
+- `frontend/src/core/pos/components/HeldOrdersPanel.tsx` — new: collapsible sidebar for held orders
+- `frontend/src/core/pos/pages/PosPage.tsx` — customer/table inputs above cart, Hold with validation
+
+**TypeScript:** Backend 0 errors, Frontend 0 errors
+
+**Productivity score:** 9

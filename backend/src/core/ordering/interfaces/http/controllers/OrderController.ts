@@ -16,6 +16,8 @@ import {
   RefundService,
   ApplyDiscountService,
   SetServiceChargeService,
+  HoldOrderService,
+  RecallOrderService,
 } from '../../../application/services/OrderService';
 import { MongoOrderRepository } from '../../../infrastructure/persistence/MongoOrderRepository';
 import { z } from 'zod';
@@ -156,6 +158,8 @@ export class OrderController extends BaseController {
     private readonly refundService: RefundService,
     private readonly applyDiscountService: ApplyDiscountService,
     private readonly setServiceChargeService: SetServiceChargeService,
+    private readonly holdOrderService: HoldOrderService,
+    private readonly recallOrderService: RecallOrderService,
     private readonly orderRepository: MongoOrderRepository,
   ) {
     super();
@@ -390,6 +394,22 @@ export class OrderController extends BaseController {
     const order = await this.setServiceChargeService.execute({
       id: req.params.id,
       rate: parsed.data.rate,
+    });
+
+    this.ok(res, order.serialize());
+  }
+
+  async hold(req: Request, res: Response): Promise<void> {
+    const order = await this.holdOrderService.execute({
+      id: req.params.id,
+    });
+
+    this.ok(res, order.serialize());
+  }
+
+  async recall(req: Request, res: Response): Promise<void> {
+    const order = await this.recallOrderService.execute({
+      id: req.params.id,
     });
 
     this.ok(res, order.serialize());

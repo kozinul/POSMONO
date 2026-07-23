@@ -20,6 +20,8 @@ export function createOrderRoutes(orderController: OrderController): Router {
   router.post('/:id/apply-discount', authenticate, asyncHandler(orderController.applyDiscount.bind(orderController)));
   router.post('/:id/service-charge', authenticate, asyncHandler(orderController.setServiceCharge.bind(orderController)));
   router.patch('/:id/reopen', authenticate, asyncHandler(orderController.reopen.bind(orderController)));
+  router.post('/:id/hold', authenticate, asyncHandler(orderController.hold.bind(orderController)));
+  router.patch('/:id/recall', authenticate, asyncHandler(orderController.recall.bind(orderController)));
   router.post('/:id/split-item', authenticate, asyncHandler(orderController.splitItem.bind(orderController)));
   router.delete('/:id/item', authenticate, asyncHandler(orderController.removeItem.bind(orderController)));
   router.patch('/:id/item/quantity', authenticate, asyncHandler(orderController.updateItemQuantity.bind(orderController)));

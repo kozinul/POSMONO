@@ -39,3 +39,16 @@
   background: #ccc;
   border-radius: 10px;
 }
+
+.held-orders-scroll::-webkit-scrollbar {
+  height: 4px;
+}
+
+.held-orders-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.held-orders-scroll::-webkit-scrollbar-thumb {
+  background: #d4d4d8;
+  border-radius: 10px;
+}

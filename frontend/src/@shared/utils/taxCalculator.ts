@@ -129,6 +129,7 @@ export function calculateTax(input: TaxCalcInput, config: ITaxConfiguration): Ta
   const subtotal = input.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
   const discountAmount = calcDiscount(subtotal, input.discount ?? 0, input.discountType === 'percentage');
   const taxableAmount = subtotal - discountAmount;
+  const isInclusive = config.pricingMode === 'inclusive';
 
   const ctx = { items: input.items, outletId: input.outletId, transactionType: input.transactionType, customerTags: input.customerTags };
 
@@ -142,13 +143,22 @@ export function calculateTax(input: TaxCalcInput, config: ITaxConfiguration): Ta
 
   for (const rule of rules) {
     const isExemption = rule.taxType === 'exemption';
+    const isSC = rule.taxType === 'service_charge';
     const base = isExemption ? 0 : taxableAmount;
 
     let amount = 0;
-    if (!isExemption && rule.policy.type !== 'amount') {
+    if (isExemption) {
+      amount = 0;
+    } else if (isInclusive && rule.policy.type !== 'amount') {
+      // Inclusive: extract tax from the price
+      // amount = total - (total / (1 + rate/100))
+      const modifiedBase = applyModifier(taxableAmount, rule.modifier);
+      amount = roundValue(modifiedBase - (modifiedBase / (1 + rule.policy.value / 100)), rule.policy.roundingMode, rule.policy.precision);
+    } else if (rule.policy.type !== 'amount') {
+      // Exclusive: add tax/SC on top
       const modifiedBase = applyModifier(taxableAmount, rule.modifier);
       amount = roundValue(modifiedBase * (rule.policy.value / 100), rule.policy.roundingMode, rule.policy.precision);
-    } else if (rule.policy.type === 'amount') {
+    } else {
       amount = rule.policy.value;
     }
 
@@ -163,12 +173,12 @@ export function calculateTax(input: TaxCalcInput, config: ITaxConfiguration): Ta
     });
 
     totalTax += amount;
-    if (rule.taxType === 'service_charge') serviceCharge += amount;
+    if (isSC) serviceCharge += amount;
   }
 
-  const grandTotal = config.pricingMode === 'inclusive'
-    ? subtotal + serviceCharge
-    : subtotal + totalTax;
+  const grandTotal = isInclusive
+    ? taxableAmount
+    : taxableAmount + totalTax;
 
   return {
     subtotal,

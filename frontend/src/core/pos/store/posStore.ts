@@ -17,14 +17,30 @@ export interface CartItem {
 
 export type PaymentState = 'idle' | 'processing' | 'success' | 'error';
 
+interface HeldOrder {
+  id: string;
+  orderNumber: string;
+  items: CartItem[];
+  total: number;
+  subtotal: number;
+  tax: number;
+  serviceCharge: number;
+  customerName: string;
+  tableNumber: string;
+  createdAt: string;
+}
+
 interface Receipt {
   orderNumber: string;
+  displayOrderNumber: string;
   paid: number;
   change: number;
   taxBreakdown: TaxCalcResult['taxBreakdown'];
   totalTax: number;
   serviceCharge: number;
   grandTotal: number;
+  paidItems: CartItem[];
+  hasRemaining: boolean;
 }
 
 interface POSState {
@@ -49,6 +65,15 @@ interface POSState {
   receipt: Receipt | null;
   taxConfig: ITaxConfiguration | null;
 
+  customerName: string;
+  tableNumber: string;
+
+  heldOrders: HeldOrder[];
+  heldOrdersPanelOpen: boolean;
+
+  splitNumber: number;
+  splitBaseOrderNumber: string | null;
+
   addItem: (item: Omit<CartItem, 'quantity'> & { quantity?: number }) => void;
   removeItem: (productId: string) => void;
   updateQuantity: (productId: string, delta: number) => void;
@@ -58,12 +83,23 @@ interface POSState {
   setDiscountRules: (rules: IDiscountRule[]) => void;
   clearCart: () => void;
   setTaxConfig: (config: ITaxConfiguration) => void;
+  setCustomerName: (name: string) => void;
+  setTableNumber: (table: string) => void;
 
   openPaymentModal: () => void;
   closePaymentModal: () => void;
   setPaymentState: (state: PaymentState) => void;
   setReceipt: (receipt: Omit<Receipt, 'taxBreakdown' | 'totalTax' | 'serviceCharge' | 'grandTotal'>) => void;
   clearReceipt: () => void;
+
+  holdOrder: () => Promise<void>;
+  recallOrder: (heldOrder: HeldOrder) => void;
+  dismissHeldOrder: (orderId: string) => void;
+  loadHeldOrders: (tenantId: string) => Promise<void>;
+  toggleHeldOrdersPanel: () => void;
+
+  removeItems: (productIds: string[]) => void;
+  resetSplit: () => void;
 }
 
 function derive(
@@ -168,6 +204,13 @@ export const usePOSStore = create<POSState>((set) => ({
   paymentState: 'idle',
   receipt: null,
   taxConfig: null,
+  customerName: '',
+  tableNumber: '',
+  heldOrders: [],
+  heldOrdersPanelOpen: false,
+
+  splitNumber: 0,
+  splitBaseOrderNumber: null,
 
   addItem: (item) =>
     set((state) => {
@@ -235,8 +278,14 @@ export const usePOSStore = create<POSState>((set) => ({
     set((state) => derive(state.items, state.discount, state.discountType, state.taxConfig, rules, state.promoCode)),
 
   setTaxConfig: (config) => {
-    set((state) => derive(state.items, state.discount, state.discountType, config, state.discountRules, state.promoCode));
+    set((state) => ({
+      taxConfig: config,
+      ...derive(state.items, state.discount, state.discountType, config, state.discountRules, state.promoCode),
+    }));
   },
+
+  setCustomerName: (name) => set({ customerName: name }),
+  setTableNumber: (table) => set({ tableNumber: table }),
 
   clearCart: () =>
     set({
@@ -247,6 +296,8 @@ export const usePOSStore = create<POSState>((set) => ({
       promoCode: '', promoApplied: null, discountRules: [],
       total: 0,
       receipt: null, paymentState: 'idle',
+      customerName: '', tableNumber: '',
+      splitNumber: 0, splitBaseOrderNumber: null,
     }),
 
   openPaymentModal: () => set({ paymentModalOpen: true }),
@@ -265,4 +316,143 @@ export const usePOSStore = create<POSState>((set) => ({
     paymentModalOpen: false,
   })),
   clearReceipt: () => set({ receipt: null }),
+
+  holdOrder: async () => {
+    const state = usePOSStore.getState();
+    if (state.items.length === 0) return;
+
+    const snapshotItems = [...state.items];
+    const snapshotTotal = state.total;
+    const snapshotSubtotal = state.subtotal;
+    const snapshotTax = state.tax;
+    const snapshotServiceCharge = state.serviceCharge;
+    const snapshotCustomerName = state.customerName;
+    const snapshotTableNumber = state.tableNumber;
+    const tempId = `hold-${Date.now()}`;
+
+    const heldOrder: HeldOrder = {
+      id: tempId,
+      orderNumber: `HOLD-${Date.now().toString(36).toUpperCase()}`,
+      items: snapshotItems,
+      total: snapshotTotal,
+      subtotal: snapshotSubtotal,
+      tax: snapshotTax,
+      serviceCharge: snapshotServiceCharge,
+      customerName: snapshotCustomerName,
+      tableNumber: snapshotTableNumber,
+      createdAt: new Date().toISOString(),
+    };
+
+    set((s) => ({
+      heldOrders: [...s.heldOrders, heldOrder],
+    }));
+    usePOSStore.getState().clearCart();
+
+    try {
+      const { api } = await import('../../../@shared/services/api');
+      const res = await api.post('/orders', {
+        items: snapshotItems.map((i) => ({
+          productId: i.productId,
+          productName: i.name,
+          quantity: i.quantity,
+          unitPrice: i.price,
+          totalPrice: i.price * i.quantity,
+          modifiers: [],
+          tax: { rate: 0, amount: 0 },
+        })),
+        customerName: snapshotCustomerName || null,
+        tableNumber: snapshotTableNumber || null,
+        source: 'pos',
+        transactionType: 'dine_in',
+        notes: '',
+      });
+      const realOrderId = res.data.data.id;
+      const realOrderNumber = res.data.data.orderNumber;
+
+      await api.post(`/orders/${realOrderId}/hold`);
+
+      set((s) => ({
+        heldOrders: s.heldOrders.map((o) =>
+          o.id === tempId ? { ...o, id: realOrderId, orderNumber: realOrderNumber } : o,
+        ),
+      }));
+    } catch {
+      // local held order stays, cashier can recall later
+    }
+  },
+
+  recallOrder: (heldOrder: HeldOrder) => {
+    const state = usePOSStore.getState();
+    if (state.items.length > 0) {
+      const confirmed = window.confirm('Pesanan saat ini akan digantikan. Lanjutkan?');
+      if (!confirmed) return;
+    }
+
+    state.clearCart();
+
+    for (const item of heldOrder.items) {
+      usePOSStore.getState().addItem(item);
+    }
+
+    set((s) => ({
+      heldOrders: s.heldOrders.filter((o) => o.id !== heldOrder.id),
+      customerName: heldOrder.customerName || '',
+      tableNumber: heldOrder.tableNumber || '',
+    }));
+
+    // Background: notify backend
+    if (!heldOrder.id.startsWith('hold-')) {
+      import('../../../@shared/services/api').then(({ api }) =>
+        api.patch(`/orders/${heldOrder.id}/recall`).catch(() => {}),
+      );
+    }
+  },
+
+  dismissHeldOrder: (orderId: string) => {
+    set((s) => ({
+      heldOrders: s.heldOrders.filter((o) => o.id !== orderId),
+    }));
+  },
+
+  loadHeldOrders: async (tenantId: string) => {
+    try {
+      const { api } = await import('../../../@shared/services/api');
+      const res = await api.get('/orders', { params: { status: 'held', limit: 50 } });
+      const orders = res.data.data || [];
+      const heldOrders: HeldOrder[] = orders.map((o: any) => ({
+        id: o.id,
+        orderNumber: o.orderNumber,
+        items: (o.items || []).map((item: any) => ({
+          productId: item.productId,
+          name: item.productName,
+          price: item.unitPrice,
+          quantity: item.quantity,
+        })),
+        total: o.total,
+        subtotal: o.subtotal,
+        tax: o.tax,
+        serviceCharge: o.serviceCharge,
+        customerName: o.customerName || '',
+        tableNumber: o.tableNumber || '',
+        createdAt: o.createdAt,
+      }));
+      set({ heldOrders });
+    } catch {
+      // silent fail
+    }
+  },
+
+  toggleHeldOrdersPanel: () => set((s) => ({ heldOrdersPanelOpen: !s.heldOrdersPanelOpen })),
+
+  removeItems: (productIds) =>
+    set((state) => {
+      const remaining = state.items.filter((i) => !productIds.includes(i.productId));
+      return {
+        ...derive(remaining, state.discount, state.discountType, state.taxConfig, state.discountRules, state.promoCode),
+        splitNumber: remaining.length === 0 ? 0 : state.splitNumber,
+        splitBaseOrderNumber: remaining.length === 0 ? null : state.splitBaseOrderNumber,
+      };
+    }),
+
+  resetSplit: () => set({ splitNumber: 0, splitBaseOrderNumber: null }),
 }));

@@ -89,7 +89,7 @@ export const OrderSchema = new Schema(
     orderNumber: { type: String, required: true },
     status: {
       type: String,
-      enum: ['draft', 'confirmed', 'paid', 'preparing', 'completed', 'cancelled', 'refunded', 'voided', 'partially-voided'],
+      enum: ['draft', 'confirmed', 'paid', 'preparing', 'completed', 'cancelled', 'refunded', 'voided', 'partially-voided', 'held'],
       default: 'draft',
     },
     items: { type: [OrderItemSchema], default: [] },

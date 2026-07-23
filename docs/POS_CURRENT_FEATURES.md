@@ -526,16 +526,23 @@ families.view, families.edit
 | POST | `/api/orders/:id/void-payment` | ✅ | Void payment (return to cart) |
 | PUT | `/api/orders/:id/pay` | ✅ | Pay open bill |
 | PATCH | `/api/orders/:id/close-open` | ✅ | Close open bill |
+| POST | `/api/orders/:id/hold` | ✅ | Hold order (tahan pesanan) |
+| PATCH | `/api/orders/:id/recall` | ✅ | Recall held order (panggil pesanan) |
 
 ### Business Logic
 - **Order number auto-generated**: format `ORD-YYYYMMDD-XXXX`
 - **Tax calculation**: hitung DPP + pajak per item, termasuk DPP fraction 11/12
+- **Inclusive/exclusive pricing**: SC & PPN extracted from price (inclusive) or added on top (exclusive)
 - **Promotion application**: terapkan promo rules ke cart
 - **Split payment**: bayar dengan beberapa metode sekaligus
+- **Split bill (pay one at a time)**: pilih item yang mau dibayar → bayar → sisa item tetap di cart → ulangi
+- **Split order numbering**: receipt menampilkan `ORD-xxx/N` untuk split portions
+- **Hold/Recall order**: tahan pesanan (instant, backend sync in background), panggil kapan saja
 - **Void order**: batalkan seluruh transaksi (butuh supervisor auth)
 - **Void item**: batalkan item tertentu dalam transaksi
 - **Void payment**: batalkan pembayaran, kembali ke cart
 - **Open bill**: transaksi belum dibayar, bisa dilanjutkan nanti
+- **Customer name & table number**: field di atas cart, selalu terlihat
 - **Transaction types**: dine_in, takeaway, delivery, online
 
 ---
@@ -743,7 +750,18 @@ families.view, families.edit
 - Display member name & tier
 - Auto-apply member-based promos
 
-#### D. Promotion
+#### C. Customer & Table
+- Customer name input (above cart, always visible)
+- Table number input (above cart, always visible)
+- Both passed to held orders and order creation
+
+#### D. Hold/Recall Orders
+- Hold button (requires name OR table number) → instant cart clear, backend sync in background
+- Collapsible sidebar panel (left side, 280px) showing held orders
+- Recall button restores items, customer name, table number
+- Background sync to backend (POST create + POST hold, PATCH recall)
+
+#### E. Promotion
 - Apply promo code
 - Auto-apply eligible promos
 - Display promo breakdown
@@ -755,7 +773,9 @@ families.view, families.edit
 
 #### F. Payment
 - Single payment (cash, QRIS, debit, credit, transfer)
-- Split payment (multiple methods)
+- Split bill — pay one at a time (item checkboxes, sequential partial payments)
+- Split order numbering on receipt: `ORD-xxx/1`, `ORD-xxx/2`
+- "Bayar Sisanya" button when items remain after partial payment
 - Cash change calculation
 - Rounding based on payment method policy
 - Card last four for debit/credit

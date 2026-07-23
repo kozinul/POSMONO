@@ -2,7 +2,7 @@ import { AggregateRoot } from '../../../@shared/domain/AggregateRoot';
 import { OrderId } from '../../../@shared/domain/Identifier';
 import { DomainEvent } from '../../../@shared/domain/DomainEvent';
 
-export type OrderStatus = 'draft' | 'confirmed' | 'paid' | 'preparing' | 'completed' | 'cancelled' | 'refunded' | 'voided' | 'partially-voided';
+export type OrderStatus = 'draft' | 'confirmed' | 'paid' | 'preparing' | 'completed' | 'cancelled' | 'refunded' | 'voided' | 'partially-voided' | 'held';
 export type PaymentStatus = 'pending' | 'completed' | 'failed' | 'refunded';
 export type OrderSource = 'pos' | 'waiter' | 'online';
 export type TransactionType = 'dine_in' | 'takeaway' | 'delivery' | 'online';
@@ -662,6 +662,50 @@ export class Order extends AggregateRoot<OrderId> {
           orderId: this.id.toValue(),
           orderNumber: this.orderNumber,
           reopenedBy,
+        },
+      }),
+    );
+  }
+
+  hold(): void {
+    if (this.status !== 'draft' && this.status !== 'confirmed') {
+      throw new Error('Only draft or confirmed orders can be held');
+    }
+    this.status = 'held';
+    this.updatedAt = new Date();
+
+    this.addDomainEvent(
+      new DomainEvent({
+        eventName: 'ordering.order.held',
+        aggregateId: this.id.toValue(),
+        aggregateType: 'Order',
+        tenantId: this.tenantId,
+        payload: {
+          orderId: this.id.toValue(),
+          orderNumber: this.orderNumber,
+          items: this.items,
+          total: this.total,
+        },
+      }),
+    );
+  }
+
+  recall(): void {
+    if (this.status !== 'held') {
+      throw new Error('Only held orders can be recalled');
+    }
+    this.status = 'draft';
+    this.updatedAt = new Date();
+
+    this.addDomainEvent(
+      new DomainEvent({
+        eventName: 'ordering.order.recalled',
+        aggregateId: this.id.toValue(),
+        aggregateType: 'Order',
+        tenantId: this.tenantId,
+        payload: {
+          orderId: this.id.toValue(),
+          orderNumber: this.orderNumber,
         },
       }),
     );

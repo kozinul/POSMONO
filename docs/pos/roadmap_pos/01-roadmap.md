@@ -624,3 +624,70 @@ graph TD
 - Step 13: API testing ✅
 
 **All steps completed!**
+
+---
+
+## Phase 2: Stabilization & Enhancement (Plan)
+
+> Created: July 22, 2026
+> Status: Planning
+
+### Priority 1: Fix Pre-existing Test Failures
+
+- [ ] Fix Shift close logic — `expectedTotal` not including `updateSales` amounts (Shift.test.ts, ShiftService.test.ts, MongoShiftRepository.test.ts)
+- [ ] Fix PaymentService percentage discount mock — test expects `5000` but gets `10` (PaymentService.test.ts)
+- [ ] Fix integration tests — order-payment-flow, tenant-isolation, void-item returning 500 (likely missing DI wiring in test app bootstrap)
+
+### Priority 2: POS Frontend Refinement
+
+- [x] Receipt display refactor — print-ready format, promo breakdown display
+- [x] Hold order functionality — save draft order, recall later ✅ (Hold/Recall with collapsible sidebar)
+- [x] Customer name & table number fields above cart
+- [x] Inclusive/exclusive tax pricing (SC & PPN extracted from price or added on top)
+- [x] Split bill — pay one at a time (item checkboxes, sequential partial payments, ORD-xxx/N numbering)
+- [ ] Keyboard shortcuts — F1 search, F2 pay, F3 hold, Esc cancel
+- [ ] Real-time order updates via WebSocket
+
+### Priority 3: Order-Payment Integration
+
+- [ ] Auto `recordVisit()` when order is paid (wire CustomerService into PaymentService)
+- [ ] Auto `addLoyaltyPoints()` based on spend (configurable points-per-rupiah)
+- [ ] Customer search in POS page (phone lookup before payment)
+
+### Priority 4: Supervisor Auth
+
+- [ ] PIN-based supervisor authentication for void actions
+- [ ] Supervisor session timeout (configurable)
+- [ ] Audit log for supervisor actions
+
+### Priority 5: Midtrans Integration
+
+- [ ] Sandbox mode toggle (SettingStore key: `midtrans.sandbox`)
+- [ ] Webhook handler for payment notifications
+- [ ] QRIS generation via Midtrans API
+
+### Priority 6: Frontend Promotion Rule Builder
+
+- [ ] Visual rule builder UI (drag-and-drop conditions)
+- [ ] Effect configuration (percentage, nominal, free item, bundle)
+- [ ] Preview discount before saving
+
+### Priority 7: DevOps & Deployment
+
+- [ ] Docker Compose for local dev (MongoDB, backend, frontend)
+- [ ] GitHub Actions CI (lint, test, build)
+- [ ] Environment-based config (.env.staging, .env.production)
+
+### Priority 8: Performance & Optimization
+
+- [ ] MongoDB index audit — ensure all query patterns are indexed
+- [ ] Redis caching for frequently accessed configs (tax, discount, promotion)
+- [ ] Pagination optimization for large order lists
+
+### Priority 9: Phase 2 Features (Future)
+
+- [ ] Multi-outlet reporting aggregation
+- [ ] Inventory sync across outlets
+- [ ] Customer loyalty program tiers (Bronze/Silver/Gold/Platinum)
+- [ ] Gift card / voucher system
+- [ ] Table management (QR code per table)
