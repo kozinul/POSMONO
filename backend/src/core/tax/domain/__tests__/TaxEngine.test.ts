@@ -96,7 +96,7 @@ describe('TaxEngine', () => {
 
   describe('tax calculation', () => {
     it('applies VAT rule with fraction modifier 11/12', () => {
-      const vatRule = TaxRule.new('PPN 12%', 'vat', 10, TaxScope.all(),
+      const vatRule = TaxRule.new('Pajak 12%', 'vat', 10, TaxScope.all(),
         TaxPolicy.create({ type: 'rate', value: 12, roundingMode: 'round', precision: 2 }),
         { modifier: { type: 'fraction', config: { numerator: 11, denominator: 12 } } },
       );
@@ -115,7 +115,7 @@ describe('TaxEngine', () => {
       const serviceCharge = TaxRule.new('Service 5%', 'service_charge', 5, TaxScope.all(),
         TaxPolicy.create({ type: 'rate', value: 5, roundingMode: 'round', precision: 2 }),
       );
-      const vat = TaxRule.new('PPN 12%', 'vat', 10, TaxScope.all(),
+      const vat = TaxRule.new('Pajak 12%', 'vat', 10, TaxScope.all(),
         TaxPolicy.create({ type: 'rate', value: 12, roundingMode: 'round', precision: 2 }),
         { modifier: { type: 'fraction', config: { numerator: 11, denominator: 12 } } },
       );
@@ -165,7 +165,7 @@ describe('TaxEngine', () => {
 
   describe('pricing mode', () => {
     it('exclusive: grandTotal = subtotal + totalTax', () => {
-      const vat = TaxRule.new('PPN 12%', 'vat', 1, TaxScope.all(),
+      const vat = TaxRule.new('Pajak 12%', 'vat', 1, TaxScope.all(),
         TaxPolicy.create({ type: 'rate', value: 12, roundingMode: 'round', precision: 2 }),
         { modifier: { type: 'fraction', config: { numerator: 11, denominator: 12 } } },
       );
@@ -178,7 +178,7 @@ describe('TaxEngine', () => {
     });
 
     it('inclusive: grandTotal = subtotal + serviceCharge only', () => {
-      const vat = TaxRule.new('PPN 12%', 'vat', 1, TaxScope.all(),
+      const vat = TaxRule.new('Pajak 12%', 'vat', 1, TaxScope.all(),
         TaxPolicy.create({ type: 'rate', value: 12, roundingMode: 'round', precision: 2 }),
         { modifier: { type: 'fraction', config: { numerator: 11, denominator: 12 } } },
       );
@@ -189,7 +189,7 @@ describe('TaxEngine', () => {
       expect(result.grandTotal).toBe(100000);
     });
 
-    it('inclusive with service charge: grandTotal = subtotal + serviceCharge', () => {
+    it('inclusive with service charge: SC in price, grandTotal = subtotal', () => {
       const sc = TaxRule.new('Service 5%', 'service_charge', 1, TaxScope.all(),
         TaxPolicy.create({ type: 'rate', value: 5, roundingMode: 'round', precision: 2 }),
       );
@@ -197,7 +197,7 @@ describe('TaxEngine', () => {
       const result = TaxEngine.calculate(input({
         items: [{ id: 'p1', productId: 'p1', productName: 'A', categoryId: 'c1', quantity: 1, unitPrice: 100000 }],
       }), config);
-      expect(result.grandTotal).toBe(100000 + 5000);
+      expect(result.grandTotal).toBe(100000);
     });
   });
 

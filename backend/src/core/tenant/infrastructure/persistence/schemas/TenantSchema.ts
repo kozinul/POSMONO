@@ -28,7 +28,7 @@ export const TenantSchema = new Schema(
       currency: { type: String, default: 'IDR' },
       locale: { type: String, default: 'id' },
       taxRate: { type: Number, default: 0.1 },
-      taxName: { type: String, default: 'PPN' },
+      taxName: { type: String, default: 'Pajak' },
       ppnEnabled: { type: Boolean, default: true },
       ppnRate: { type: Number, default: 0.12 },
       serviceChargeEnabled: { type: Boolean, default: false },

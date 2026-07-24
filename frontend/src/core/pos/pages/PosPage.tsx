@@ -19,6 +19,8 @@ export default function PosPage() {
     tax,
     taxName,
     taxBreakdown,
+    displayBreakdown,
+    inclusiveTax,
     discount,
     discountType,
     discountAmount,
@@ -217,8 +219,8 @@ export default function PosPage() {
                 price={product.basePrice}
                 imageUrl={product.imageUrls?.[0] || ''}
                 categoryId={product.categoryId}
-                pricingProfileId={(product as any).pricingProfileId}
-                pricingMode={(product as any).pricingMode}
+                pricingProfileId={product.pricingProfileId}
+                pricingMode={product.pricingMode}
               />
             ))}
           </div>
@@ -272,14 +274,14 @@ export default function PosPage() {
               <span>Subtotal:</span>
               <span>Rp {subtotal.toLocaleString('id-ID')}</span>
             </div>
-            {taxBreakdown.length > 0
-              ? taxBreakdown.map((t) => (
+            {displayBreakdown.length > 0
+              ? displayBreakdown.map((t) => (
                   <div key={t.ruleId} className="flex justify-between text-gray-700 text-sm">
                     <span>{t.name} ({t.rate}%)</span>
                     <span>Rp {t.amount.toLocaleString('id-ID')}</span>
                   </div>
                 ))
-              : tax > 0 && (
+              : tax > 0 && inclusiveTax === 0 && (
                   <div className="flex justify-between text-gray-700">
                     <span>{taxName}:</span>
                     <span>Rp {tax.toLocaleString('id-ID')}</span>

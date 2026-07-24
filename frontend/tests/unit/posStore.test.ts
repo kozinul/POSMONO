@@ -1,14 +1,46 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { usePOSStore } from '../../src/core/pos/store/posStore';
+import type { ITaxConfiguration } from '../../src/@shared/hooks/useTaxConfiguration';
+
+function makeTaxConfig(): ITaxConfiguration {
+  const now = new Date().toISOString();
+  return {
+    id: 'cfg-1',
+    tenantId: 'tenant-test',
+    taxEnabled: true,
+    pricingMode: 'exclusive',
+    countryCode: 'ID',
+    currency: 'IDR',
+    activeVersionId: 'v1',
+    versions: [
+      {
+        id: 'v1',
+        versionNumber: 1,
+        effectiveDate: '2025-01-01',
+        rules: [
+          {
+            id: 'tax-10',
+            name: 'Pajak 10%',
+            taxType: 'vat',
+            scope: { type: 'all', entityId: '', entityName: '' },
+            policy: { type: 'percentage', value: 10, roundingMode: 'round', precision: 0 },
+            priority: 10,
+            isActive: true,
+            effectiveDate: '2025-01-01',
+          },
+        ],
+        status: 'active',
+        createdAt: now,
+      },
+    ],
+    metadata: {},
+  };
+}
 
 describe('POS Store', () => {
   beforeEach(() => {
     usePOSStore.setState({ items: [], itemCount: 0, subtotal: 0, serviceCharge: 0, tax: 0, discount: 0, discountType: 'nominal', discountAmount: 0, total: 0, paymentModalOpen: false, paymentState: 'idle', receipt: null });
-    usePOSStore.getState().setTaxConfig({
-      ppnEnabled: true, ppnRate: 0.1,
-      serviceChargeEnabled: false, serviceChargeRate: 0,
-      serviceChargeName: 'Service Charge', taxName: 'PPN', taxRate: 0.1,
-    });
+    usePOSStore.getState().setTaxConfig(makeTaxConfig());
   });
 
   const sampleItem = { productId: 'p1', name: 'Kopi Gula Aren', price: 25000, imageUrl: '' };
@@ -113,7 +145,10 @@ describe('POS Store', () => {
     });
 
     it('sets receipt after successful payment', () => {
-      const receipt = { orderNumber: 'ORD-001', paid: 50000, change: 5000 };
+      const receipt = {
+        orderNumber: 'ORD-001', paid: 50000, change: 5000,
+        grandTotal: 0, serviceCharge: 0, totalTax: 0, taxBreakdown: [],
+      };
       usePOSStore.getState().setReceipt(receipt);
 
       const state = usePOSStore.getState();

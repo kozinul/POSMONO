@@ -5,10 +5,10 @@ export type TaxApplyTo = 'all' | 'categories' | 'products' | 'exempt';
 /**
  * Strategi kalkulasi pajak:
  * - standard_percentage : tax = base × rate%
- * - indonesia_ppn_2025  : DPP Nilai Lain — DPP = base × 11/12, tax = DPP × rate%  (efektif 11% walau rate 12%)
+ * - indonesia_tax_2025  : DPP Nilai Lain — DPP = base × 11/12, tax = DPP × rate%  (efektif 11% walau rate 12%)
  * - compound            : tax dihitung berantai sesuai compoundOrder
  */
-export type TaxCalculationStrategy = 'standard_percentage' | 'indonesia_ppn_2025' | 'compound';
+export type TaxCalculationStrategy = 'standard_percentage' | 'indonesia_tax_2025' | 'compound';
 
 export interface TaxRule {
   id: string;

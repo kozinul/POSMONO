@@ -18,7 +18,7 @@ const sections = [
   {
     id: 'tax',
     label: 'Pajak & Service',
-    keywords: 'ppn pajak service charge biaya pelayanan tarif pricing mode inclusive exclusive',
+    keywords: 'pajak service charge biaya pelayanan tarif pricing mode inclusive exclusive',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
         <path d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" strokeLinecap="round" strokeLinejoin="round" />
@@ -219,7 +219,7 @@ export default function GeneralSettingsPage() {
         promises.push(
           addRule.mutateAsync({
             id: `rule_vat_${Date.now()}`,
-            name: `PPN ${ppnRate}%`,
+            name: `Pajak ${ppnRate}%`,
             taxType: 'vat',
             priority: 10,
             scope: { type: 'all', entityId: '', entityName: 'Semua' },
@@ -445,11 +445,11 @@ export default function GeneralSettingsPage() {
 
                   <div className="border-t border-gray-100" />
 
-                  {/* PPN */}
+                  {/* Tax Rate */}
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="font-medium text-gray-800">PPN (Pajak Pertambahan Nilai)</p>
-                      <p className="text-sm text-gray-400">Pajak untuk bisnis yang sudah ber-PKP</p>
+                      <p className="font-medium text-gray-800">Tarif Pajak</p>
+                      <p className="text-sm text-gray-400">Atur tarif pajak default untuk transaksi</p>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input
@@ -468,7 +468,7 @@ export default function GeneralSettingsPage() {
                     <div className="space-y-3">
                       <div className="flex gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-gray-600 mb-1.5">Tarif PPN (%)</label>
+                          <label className="block text-sm font-medium text-gray-600 mb-1.5">Tarif Pajak (%)</label>
                           <input
                             type="number"
                             value={ppnRate}
@@ -620,7 +620,7 @@ export default function GeneralSettingsPage() {
                             <div>
                               <p className="text-sm font-medium text-gray-800">{rule.name}</p>
                               <p className="text-xs text-gray-400">
-                                {rule.taxType === 'vat' ? 'PPN' : rule.taxType === 'service_charge' ? 'Service Charge' : rule.taxType === 'withholding' ? 'PPh' : rule.taxType === 'exemption' ? 'Pengecualian' : rule.taxType} — {rule.policy.value}
+                                {rule.taxType === 'vat' ? 'Pajak' : rule.taxType === 'service_charge' ? 'Service Charge' : rule.taxType === 'withholding' ? 'PPh' : rule.taxType === 'exemption' ? 'Pengecualian' : rule.taxType} — {rule.policy.value}
                                 {rule.policy.type !== 'amount' ? '%' : ''}
                                 {rule.scope.type !== 'all' && ` · ${rule.scope.entityName}`}
                                 {rule.modifier && rule.modifier.type === 'fraction' && ` · DPP ${rule.modifier.config?.numerator}/${rule.modifier.config?.denominator}`}
@@ -672,7 +672,7 @@ export default function GeneralSettingsPage() {
                           onChange={(e) => {
                             const v = e.target.value;
                             if (v === 'ppn') {
-                              setNewRuleName('PPN 12%');
+                              setNewRuleName('Pajak 12%');
                               setNewRuleTaxType('vat');
                               setNewRuleRate(12);
                               setCalcMode('custom');
@@ -703,7 +703,7 @@ export default function GeneralSettingsPage() {
                           className="block w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500"
                         >
                           <option value="" disabled>Pilih template...</option>
-                          <option value="ppn">🇮🇩 PPN Indonesia 12%</option>
+                          <option value="ppn">🇮🇩 Pajak Indonesia 12%</option>
                           <option value="service">🧾 Service Charge 5%</option>
                           <option value="pph">📋 PPh Pasal 23 (2%)</option>
                           <option value="exempt">✅ Bebas Pajak</option>
@@ -718,7 +718,7 @@ export default function GeneralSettingsPage() {
                             value={newRuleName}
                             onChange={(e) => setNewRuleName(e.target.value)}
                             className="block w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
-                            placeholder="PPN 12%"
+                            placeholder="Pajak 12%"
                           />
                         </div>
                         <div>
@@ -728,7 +728,7 @@ export default function GeneralSettingsPage() {
                             onChange={(e) => setNewRuleTaxType(e.target.value as any)}
                             className="block w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500"
                           >
-                            <option value="vat">PPN</option>
+                            <option value="vat">Pajak</option>
                             <option value="service_charge">Service Charge</option>
                             <option value="withholding">PPh</option>
                             <option value="custom">Kustom</option>

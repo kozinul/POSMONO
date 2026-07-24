@@ -77,12 +77,12 @@ describe('Integration: Tenant Isolation', () => {
           : Math.min(discount, subtotal);
         const taxableAmount = subtotal - discountAmount;
         const base = Math.round(taxableAmount * 11 / 12);
-        const ppn = Math.round(base * 12 / 100);
+        const pajak = Math.round(base * 12 / 100);
         return {
           subtotal, discount, discountType: input.discountType ?? 'nominal', discountAmount,
           taxableAmount,
-          taxes: [{ name: 'PPN 12%', type: 'vat', rate: 12, baseAmount: taxableAmount, amount: ppn, compoundOrder: 0 }],
-          totalTax: ppn, serviceCharge: 0, grandTotal: taxableAmount + ppn, pricingMode: 'exclusive',
+          taxes: [{ name: 'Pajak 12%', type: 'vat', rate: 12, baseAmount: taxableAmount, amount: pajak, compoundOrder: 0 }],
+          totalTax: pajak, serviceCharge: 0, grandTotal: taxableAmount + pajak, pricingMode: 'exclusive',
         };
       },
     };

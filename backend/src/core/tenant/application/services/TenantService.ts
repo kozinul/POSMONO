@@ -30,7 +30,7 @@ export class TenantService {
       databaseName: `posmono_${input.slug}`,
       config: {
         timezone: 'Asia/Jakarta', currency: 'IDR', locale: 'id',
-        taxRate: 0.1, taxName: 'PPN',
+        taxRate: 0.1, taxName: 'Pajak',
         ppnEnabled: true, ppnRate: 0.12,
         serviceChargeEnabled: false, serviceChargeRate: 0, serviceChargeName: 'Service Charge',
         discountMaxPercent: 100, discountMaxNominal: 1_000_000,

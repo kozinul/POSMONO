@@ -17,6 +17,8 @@ interface ProductDoc extends Document<string> {
   region: string;
   currency: string;
   isActive: boolean;
+  pricingMode?: string;
+  pricingProfileId?: string;
   metadata: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
@@ -42,6 +44,8 @@ export class MongoProductRepository {
       region: doc.region ?? '',
       currency: doc.currency ?? '',
       isActive: doc.isActive,
+      pricingMode: doc.pricingMode as 'inclusive' | 'exclusive' | undefined,
+      pricingProfileId: doc.pricingProfileId,
       metadata: doc.metadata || {},
       createdAt: doc.createdAt,
       updatedAt: doc.updatedAt,
@@ -66,6 +70,8 @@ export class MongoProductRepository {
       region: data.region,
       currency: data.currency,
       isActive: data.isActive,
+      pricingMode: data.pricingMode,
+      pricingProfileId: data.pricingProfileId,
       metadata: data.metadata,
     } as unknown as Partial<ProductDoc>;
   }

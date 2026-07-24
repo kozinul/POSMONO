@@ -15,6 +15,7 @@ interface Product {
   description: string;
   tags: string[];
   pricingProfileId?: string;
+  pricingMode?: 'inclusive' | 'exclusive';
 }
 
 interface Category {
@@ -78,6 +79,7 @@ export function useBarcodeLookup() {
         imageUrl: product.imageUrls?.[0],
         categoryId: product.categoryId,
         pricingProfileId: product.pricingProfileId,
+        pricingMode: product.pricingMode,
       });
       return product;
     }

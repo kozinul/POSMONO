@@ -293,7 +293,7 @@ export default function ProductListPage() {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Barcode</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kategori</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Harga</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mode</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipe Harga</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tags</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
@@ -355,7 +355,7 @@ export default function ProductListPage() {
                           ? 'bg-orange-100 text-orange-800'
                           : 'bg-gray-100 text-gray-500'
                     }`}>
-                      {product.pricingMode === 'inclusive' ? 'Nett' : product.pricingMode === 'exclusive' ? '++' : 'Global'}
+                      {product.pricingMode === 'inclusive' ? 'Inclusive' : product.pricingMode === 'exclusive' ? 'Exclusive' : 'Global'}
                     </span>
                   </td>
                   <td className="px-6 py-4">

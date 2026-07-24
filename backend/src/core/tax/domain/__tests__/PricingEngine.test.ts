@@ -98,7 +98,7 @@ describe('PricingEngine', () => {
 
   describe('tax calculation with modifier', () => {
     it('applies VAT rule with fraction modifier 11/12', () => {
-      const vatRule = TaxRule.new('PPN 12%', 'vat', 10, TaxScope.all(),
+      const vatRule = TaxRule.new('Pajak 12%', 'vat', 10, TaxScope.all(),
         TaxPolicy.create({ type: 'rate', value: 12, roundingMode: 'round', precision: 2 }),
         { modifier: { type: 'fraction', config: { numerator: 11, denominator: 12 } } },
       );
@@ -117,7 +117,7 @@ describe('PricingEngine', () => {
       const serviceCharge = TaxRule.new('Service 5%', 'service_charge', 5, TaxScope.all(),
         TaxPolicy.create({ type: 'rate', value: 5, roundingMode: 'round', precision: 2 }),
       );
-      const vat = TaxRule.new('PPN 12%', 'vat', 10, TaxScope.all(),
+      const vat = TaxRule.new('Pajak 12%', 'vat', 10, TaxScope.all(),
         TaxPolicy.create({ type: 'rate', value: 12, roundingMode: 'round', precision: 2 }),
         { modifier: { type: 'fraction', config: { numerator: 11, denominator: 12 } } },
       );
@@ -138,8 +138,8 @@ describe('PricingEngine', () => {
       expect(result.taxBreakdown[1].baseAmount).toBe(dppBase);
     });
 
-    describe('PPN DPP Nilai Lain with SC (Case 4)', () => {
-      const ppnRule = (precision = 0) => TaxRule.new('PPN 12%', 'vat', 10, TaxScope.all(),
+    describe('Pajak DPP Nilai Lain with SC (Case 4)', () => {
+      const pajakRule = (precision = 0) => TaxRule.new('Pajak 12%', 'vat', 10, TaxScope.all(),
         TaxPolicy.create({ type: 'rate', value: 12, roundingMode: 'round', precision }),
         { modifier: { type: 'fraction', config: { numerator: 11, denominator: 12 } } },
       );
@@ -147,24 +147,24 @@ describe('PricingEngine', () => {
         TaxPolicy.create({ type: 'rate', value: 10, roundingMode: 'round', precision: 0 }),
       );
 
-      it('Case 4a: SC included in DPP — PPN on subtotal + SC', () => {
-        const config = makeConfig({ rules: [scRule, ppnRule()] });
+      it('Case 4a: SC included in DPP — Pajak on subtotal + SC', () => {
+        const config = makeConfig({ rules: [scRule, pajakRule()] });
         const result = engine.calculate(input({
           items: [{ id: 'p1', productId: 'p1', productName: 'A', categoryId: 'c1', quantity: 1, unitPrice: 25000 }],
         }), config);
 
         const expectedSc = 2500;
         const dppBase = 25000 + expectedSc;
-        const expectedPpn = Math.round(dppBase * 11 / 12 * 12 / 100);
+        const expectedPajak = Math.round(dppBase * 11 / 12 * 12 / 100);
         expect(result.taxBreakdown[0].amount).toBe(expectedSc);
-        expect(result.taxBreakdown[1].amount).toBe(expectedPpn);
+        expect(result.taxBreakdown[1].amount).toBe(expectedPajak);
         expect(result.taxBreakdown[1].baseAmount).toBe(dppBase);
-        expect(result.totalTax).toBe(expectedSc + expectedPpn);
-        expect(result.grandTotal).toBe(25000 + expectedSc + expectedPpn);
+        expect(result.totalTax).toBe(expectedSc + expectedPajak);
+        expect(result.grandTotal).toBe(25000 + expectedSc + expectedPajak);
       });
 
       it('verifies engine uses policy.value=12, not effective rate 11', () => {
-        const config = makeConfig({ rules: [ppnRule()] });
+        const config = makeConfig({ rules: [pajakRule()] });
         const result = engine.calculate(input({
           items: [{ id: 'p1', productId: 'p1', productName: 'A', categoryId: 'c1', quantity: 1, unitPrice: 120000 }],
         }), config);
@@ -233,7 +233,7 @@ describe('PricingEngine', () => {
 
   describe('pricing mode', () => {
     it('exclusive: grandTotal = subtotal + totalTax', () => {
-      const vat = TaxRule.new('PPN 12%', 'vat', 1, TaxScope.all(),
+      const vat = TaxRule.new('Pajak 12%', 'vat', 1, TaxScope.all(),
         TaxPolicy.create({ type: 'rate', value: 12, roundingMode: 'round', precision: 2 }),
         { modifier: { type: 'fraction', config: { numerator: 11, denominator: 12 } } },
       );
@@ -246,7 +246,7 @@ describe('PricingEngine', () => {
     });
 
     it('inclusive: grandTotal = subtotal + serviceCharge only', () => {
-      const vat = TaxRule.new('PPN 12%', 'vat', 1, TaxScope.all(),
+      const vat = TaxRule.new('Pajak 12%', 'vat', 1, TaxScope.all(),
         TaxPolicy.create({ type: 'rate', value: 12, roundingMode: 'round', precision: 2 }),
         { modifier: { type: 'fraction', config: { numerator: 11, denominator: 12 } } },
       );
@@ -257,7 +257,7 @@ describe('PricingEngine', () => {
       expect(result.grandTotal).toBe(100000);
     });
 
-    it('inclusive with service charge: grandTotal = subtotal + serviceCharge', () => {
+    it('inclusive with service charge: SC in price, grandTotal = subtotal', () => {
       const sc = TaxRule.new('Service 5%', 'service_charge', 1, TaxScope.all(),
         TaxPolicy.create({ type: 'rate', value: 5, roundingMode: 'round', precision: 2 }),
       );
@@ -265,7 +265,61 @@ describe('PricingEngine', () => {
       const result = engine.calculate(input({
         items: [{ id: 'p1', productId: 'p1', productName: 'A', categoryId: 'c1', quantity: 1, unitPrice: 100000 }],
       }), config);
-      expect(result.grandTotal).toBe(100000 + 5000);
+      expect(result.grandTotal).toBe(100000);
+    });
+
+    it('inclusive with fraction modifier: extracts tax from price using modified DPP', () => {
+      const vat = TaxRule.new('Pajak 12%', 'vat', 10, TaxScope.all(),
+        TaxPolicy.create({ type: 'rate', value: 12, roundingMode: 'round', precision: 0 }),
+        { modifier: { type: 'fraction', config: { numerator: 11, denominator: 12 } } },
+      );
+      const config = makeConfig({ rules: [vat], pricingMode: 'inclusive' });
+      const result = engine.calculate(input({
+        items: [{ id: 'p1', productId: 'p1', productName: 'A', categoryId: 'c1', quantity: 1, unitPrice: 100000 }],
+      }), config);
+      // DPP = 100000 * 11/12 = 91666.67
+      // Tax extracted = 91666.67 - (91666.67 / 1.12) = 91666.67 - 81845.24 = 9821.43 → round = 9821
+      const dpp = Math.round(100000 * 11 / 12);
+      const expectedTax = Math.round(dpp - dpp / (1 + 12 / 100));
+      expect(result.totalTax).toBe(expectedTax);
+      expect(result.grandTotal).toBe(100000);
+    });
+
+    it('inclusive with SC + PPN fraction: SC in price, PPN extracted from subtotal', () => {
+      const sc = TaxRule.new('SC 5%', 'service_charge', 1, TaxScope.all(),
+        TaxPolicy.create({ type: 'rate', value: 5, roundingMode: 'round', precision: 0 }),
+      );
+      const vat = TaxRule.new('Pajak 12%', 'vat', 10, TaxScope.all(),
+        TaxPolicy.create({ type: 'rate', value: 12, roundingMode: 'round', precision: 0 }),
+        { modifier: { type: 'fraction', config: { numerator: 11, denominator: 12 } } },
+      );
+      const config = makeConfig({ rules: [sc, vat], pricingMode: 'inclusive' });
+      const result = engine.calculate(input({
+        items: [{ id: 'p1', productId: 'p1', productName: 'A', categoryId: 'c1', quantity: 1, unitPrice: 100000 }],
+      }), config);
+      // SC is in the price for inclusive items
+      // PPN: modifiedBase = 100000 * 11/12 = 91667, tax = 91667 * 12 / 112 = 9821
+      const base = Math.round(100000 * 11 / 12);
+      const expectedPajak = Math.round(base * 12 / 112);
+      expect(result.grandTotal).toBe(100000);
+      expect(result.totalTax).toBe(expectedPajak);
+    });
+
+    it('inclusive with discount: tax extracted from discounted amount', () => {
+      const vat = TaxRule.new('Pajak 12%', 'vat', 10, TaxScope.all(),
+        TaxPolicy.create({ type: 'rate', value: 12, roundingMode: 'round', precision: 0 }),
+      );
+      const config = makeConfig({ rules: [vat], pricingMode: 'inclusive' });
+      const result = engine.calculate(input({
+        items: [{ id: 'p1', productId: 'p1', productName: 'A', categoryId: 'c1', quantity: 1, unitPrice: 100000 }],
+        discount: 20000,
+        discountType: 'nominal',
+      }), config);
+      // taxableAmount = 100000 - 20000 = 80000
+      // Tax extracted = 80000 - 80000/1.12 = 80000 - 71428.57 = 8571.43 → round = 8571
+      const expectedTax = Math.round(80000 - 80000 / (1 + 12 / 100));
+      expect(result.totalTax).toBe(expectedTax);
+      expect(result.grandTotal).toBe(100000);
     });
   });
 

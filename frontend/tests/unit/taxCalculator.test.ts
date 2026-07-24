@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { calculateTax, type TaxCalcInput } from '../../src/@shared/utils/taxCalculator';
 import type { ITaxConfiguration } from '../../src/@shared/hooks/useTaxConfiguration';
 
-function makePpnConfig(overrides?: {
+function makeTaxConfig(overrides?: {
   precision?: number;
   roundingMode?: 'round' | 'floor' | 'ceil';
   taxEnabled?: boolean;
@@ -24,8 +24,8 @@ function makePpnConfig(overrides?: {
         effectiveDate: '2025-01-01',
         rules: [
           {
-            id: 'ppn-12',
-            name: 'PPN 12%',
+            id: 'tax-12',
+            name: 'Pajak 12%',
             taxType: 'vat',
             scope: { type: 'all', entityId: '', entityName: '' },
             policy: {
@@ -51,7 +51,7 @@ function makePpnConfig(overrides?: {
   };
 }
 
-function makeScPpnConfig(precision = 0): ITaxConfiguration {
+function makeScTaxConfig(precision = 0): ITaxConfiguration {
   const now = new Date().toISOString();
   return {
     id: 'cfg-2',
@@ -78,8 +78,8 @@ function makeScPpnConfig(precision = 0): ITaxConfiguration {
             effectiveDate: '2025-01-01',
           },
           {
-            id: 'ppn-12',
-            name: 'PPN 12%',
+            id: 'tax-12',
+            name: 'Pajak 12%',
             taxType: 'vat',
             scope: { type: 'all', entityId: '', entityName: '' },
             policy: { type: 'percentage', value: 12, roundingMode: 'round', precision },
@@ -110,9 +110,9 @@ function input(overrides?: Partial<TaxCalcInput>): TaxCalcInput {
   };
 }
 
-describe('taxCalculator — PPN DPP Nilai Lain', () => {
+describe('taxCalculator — Pajak DPP Nilai Lain', () => {
   describe('modifier 11/12 with rate 12%', () => {
-    const config = makePpnConfig();
+    const config = makeTaxConfig();
 
     it('Case 1: subtotal=100000 → tax=11000', () => {
       const result = calculateTax(input({
@@ -148,28 +148,28 @@ describe('taxCalculator — PPN DPP Nilai Lain', () => {
   });
 
   describe('with service charge', () => {
-    const config = makeScPpnConfig();
+    const config = makeScTaxConfig();
 
-    it('Case 4a: SC included in DPP — PPN on subtotal + SC', () => {
+    it('Case 4a: SC included in DPP — Pajak on subtotal + SC', () => {
       const result = calculateTax(input({
         items: [{ productId: 'p1', quantity: 1, unitPrice: 25000 }],
       }), config);
 
       const expectedSc = 25000 * 10 / 100;
       const dppBase = 25000 + expectedSc;
-      const expectedPpn = Math.round(dppBase * 11 / 12 * 12 / 100);
+      const expectedPajak = Math.round(dppBase * 11 / 12 * 12 / 100);
 
       expect(result.serviceCharge).toBe(expectedSc);
       expect(result.taxBreakdown[1].baseAmount).toBe(dppBase);
-      expect(result.totalTax - result.serviceCharge).toBe(expectedPpn);
-      expect(result.grandTotal).toBe(25000 + expectedSc + expectedPpn);
+      expect(result.totalTax - result.serviceCharge).toBe(expectedPajak);
+      expect(result.grandTotal).toBe(25000 + expectedSc + expectedPajak);
     });
   });
 
   describe('with discount', () => {
-    const config = makePpnConfig();
+    const config = makeTaxConfig();
 
-    it('PPN applies on discounted amount', () => {
+    it('Pajak applies on discounted amount', () => {
       const result = calculateTax(input({
         items: [{ productId: 'p1', quantity: 1, unitPrice: 100000 }],
         discount: 20000,
@@ -177,14 +177,14 @@ describe('taxCalculator — PPN DPP Nilai Lain', () => {
       }), config);
 
       const taxable = 80000;
-      const expectedPpn = taxable * 11 / 12 * 12 / 100;
+      const expectedPajak = taxable * 11 / 12 * 12 / 100;
       expect(result.taxableAmount).toBe(taxable);
-      expect(result.totalTax).toBe(Math.round(expectedPpn));
+      expect(result.totalTax).toBe(Math.round(expectedPajak));
     });
   });
 
   describe('pricing mode inclusive', () => {
-    const config = makePpnConfig();
+    const config = makeTaxConfig();
 
     it('inclusive: grandTotal equals taxableAmount (tax embedded)', () => {
       const inclusiveConfig = { ...config, pricingMode: 'inclusive' as const };

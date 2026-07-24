@@ -106,12 +106,19 @@ export class TaxRule {
     return true;
   }
 
-  calculateTax(taxableAmount: number): number {
+  calculateTax(taxableAmount: number, isInclusive = false): number {
     if (this.isExemption()) return 0;
     if (this.data.policy.type === 'amount') return this.data.policy.value;
 
-    const base = TaxRule.modifierEngine.apply(taxableAmount, this.data.modifier);
-    const rawTax = base * (this.data.policy.value / 100);
+    const modifiedBase = TaxRule.modifierEngine.apply(taxableAmount, this.data.modifier);
+
+    if (isInclusive) {
+      const divisor = 1 + this.data.policy.value / 100;
+      const rawTax = modifiedBase - modifiedBase / divisor;
+      return TaxRule.roundingEngine.round(rawTax, this.data.policy.roundingMode, this.data.policy.precision);
+    }
+
+    const rawTax = modifiedBase * (this.data.policy.value / 100);
     return TaxRule.roundingEngine.round(rawTax, this.data.policy.roundingMode, this.data.policy.precision);
   }
 

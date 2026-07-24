@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { ITaxConfiguration } from '../../../@shared/hooks/useTaxConfiguration';
 import type { IDiscountRule, IDiscountResult } from '../../../@shared/hooks/useDiscountConfiguration';
-import { calculateTax, type TaxCalcResult } from '../../../@shared/utils/taxCalculator';
+import { calculateTax, type TaxCalcResult, type TaxBreakdownItem } from '../../../@shared/utils/taxCalculator';
 import { calculateDiscount } from '../../../@shared/utils/discountCalculator';
 
 export interface CartItem {
@@ -53,6 +53,8 @@ interface POSState {
   tax: number;
   taxName: string;
   taxBreakdown: TaxCalcResult['taxBreakdown'];
+  displayBreakdown: TaxBreakdownItem[];
+  inclusiveTax: number;
   discount: number;
   discountType: 'percentage' | 'nominal';
   discountAmount: number;
@@ -138,6 +140,7 @@ function derive(
       subtotal: rawSubtotal,
       serviceCharge: 0, serviceChargeName: 'Service Charge',
       tax: 0, taxName: 'Pajak', taxBreakdown: [],
+      displayBreakdown: [], inclusiveTax: 0,
       discount, discountType,
       discountAmount: cappedDiscount,
       promoCode: promoCode || '',
@@ -160,12 +163,60 @@ function derive(
     discountType: 'nominal',
   }, taxConfig);
 
-  const firstTax = result.taxBreakdown[0];
-  const taxName = firstTax?.name ?? 'PPN';
   const scRule = taxConfig.versions
     .find((v) => v.id === taxConfig.activeVersionId)
     ?.rules.find((r) => r.taxType === 'service_charge');
   const serviceChargeName = scRule?.name ?? 'Service Charge';
+
+  const firstTax = result.taxBreakdown[0];
+  const taxName = firstTax?.name ?? 'Pajak';
+
+  // Compute per-item tax to split inclusive vs exclusive
+  const hasAnyInclusive = items.some((i) => i.pricingMode === 'inclusive');
+  const hasAnyExclusive = items.some((i) => i.pricingMode !== 'inclusive');
+  const isMixed = hasAnyInclusive && hasAnyExclusive;
+
+  let displayBreakdown: TaxBreakdownItem[] = result.taxBreakdown;
+  let inclusiveTax = 0;
+
+  if (isMixed) {
+    // For mixed carts: recalculate per-item to separate inclusive vs exclusive
+    const globalMode = taxConfig.pricingMode;
+    const exclusiveItemsResult = calculateTax({
+      items: items
+        .filter((i) => (i.pricingMode ?? globalMode) === 'exclusive')
+        .map((i) => ({
+          productId: i.productId,
+          categoryId: i.categoryId || '',
+          quantity: i.quantity,
+          unitPrice: i.price,
+          pricingMode: 'exclusive' as const,
+        })),
+      discount: 0,
+      discountType: 'nominal' as const,
+    }, taxConfig);
+    displayBreakdown = exclusiveItemsResult.taxBreakdown;
+
+    const inclusiveItemsResult = calculateTax({
+      items: items
+        .filter((i) => (i.pricingMode ?? globalMode) === 'inclusive')
+        .map((i) => ({
+          productId: i.productId,
+          categoryId: i.categoryId || '',
+          quantity: i.quantity,
+          unitPrice: i.price,
+          pricingMode: 'inclusive' as const,
+        })),
+      discount: 0,
+      discountType: 'nominal' as const,
+    }, taxConfig);
+    inclusiveTax = inclusiveItemsResult.totalTax;
+  } else if (hasAnyInclusive) {
+    // All inclusive: show nothing in breakdown (tax is in the price)
+    displayBreakdown = [];
+    inclusiveTax = result.totalTax;
+  }
+  // All exclusive: show full breakdown as-is
 
   return {
     items,
@@ -176,6 +227,8 @@ function derive(
     tax: result.totalTax,
     taxName,
     taxBreakdown: result.taxBreakdown,
+    displayBreakdown,
+    inclusiveTax,
     discount,
     discountType,
     discountAmount: cappedDiscount,
@@ -193,8 +246,10 @@ export const usePOSStore = create<POSState>((set) => ({
   serviceCharge: 0,
   serviceChargeName: 'Service Charge',
   tax: 0,
-  taxName: 'PPN',
+  taxName: 'Pajak',
   taxBreakdown: [],
+  displayBreakdown: [],
+  inclusiveTax: 0,
   discount: 0,
   discountType: 'nominal',
   discountAmount: 0,
@@ -293,7 +348,8 @@ export const usePOSStore = create<POSState>((set) => ({
     set({
       items: [], itemCount: 0, subtotal: 0,
       serviceCharge: 0, serviceChargeName: 'Service Charge',
-      tax: 0, taxName: 'PPN', taxBreakdown: [],
+      tax: 0, taxName: 'Pajak', taxBreakdown: [],
+      displayBreakdown: [], inclusiveTax: 0,
       discount: 0, discountType: 'nominal', discountAmount: 0,
       promoCode: '', promoApplied: null, discountRules: [],
       total: 0,

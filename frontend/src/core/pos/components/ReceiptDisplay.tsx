@@ -1,7 +1,7 @@
 import { usePOSStore } from '../store/posStore';
 
 export function ReceiptDisplay() {
-  const { receipt, items, clearCart, openPaymentModal, clearReceipt } = usePOSStore();
+  const { receipt, items, clearCart, openPaymentModal, clearReceipt, displayBreakdown, inclusiveTax } = usePOSStore();
 
   if (!receipt) return null;
 

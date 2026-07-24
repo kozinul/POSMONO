@@ -5,7 +5,7 @@ export const taxRuleSchema = z.object({
   type: z.enum(['percentage', 'compound', 'category_based', 'product_based', 'exemption']),
   rate: z.number().min(0).max(100),
   compoundOrder: z.number().int().min(0).default(0),
-  calculationStrategy: z.enum(['standard_percentage', 'indonesia_ppn_2025', 'compound']).default('standard_percentage'),
+  calculationStrategy: z.enum(['standard_percentage', 'indonesia_tax_2025', 'compound']).default('standard_percentage'),
   taxBaseModifier: z.string().nullable().default(null),
   applyTo: z.enum(['all', 'categories', 'products', 'exempt']).default('all'),
   categoryIds: z.array(z.string()).default([]),

@@ -5,7 +5,7 @@ import { TaxPolicy } from '../TaxPolicy';
 
 function makeVatRule(overrides?: Record<string, any>): TaxRule {
   return TaxRule.new(
-    overrides?.name ?? 'PPN 12%',
+    overrides?.name ?? 'Pajak 12%',
     overrides?.taxType ?? 'vat',
     overrides?.priority ?? 10,
     overrides?.scope ?? TaxScope.all(),
@@ -27,7 +27,7 @@ describe('TaxRule', () => {
       const serialized = rule.serialize();
       const restored = TaxRule.create(serialized);
       expect(restored.getId()).toBe(rule.getId());
-      expect(restored.getName()).toBe('PPN 12%');
+      expect(restored.getName()).toBe('Pajak 12%');
       expect(restored.getTaxType()).toBe('vat');
       expect(restored.getPriority()).toBe(10);
     });
@@ -148,29 +148,29 @@ describe('TaxRule', () => {
       expect(rule.calculateTax(100000)).toBe(10000);
     });
 
-    describe('PPN DPP Nilai Lain (modifier 11/12, rate 12%)', () => {
-      const ppnRule = TaxRule.new('PPN 12%', 'vat', 10, TaxScope.all(),
+    describe('Pajak DPP Nilai Lain (modifier 11/12, rate 12%)', () => {
+      const pajakRule = TaxRule.new('Pajak 12%', 'vat', 10, TaxScope.all(),
         TaxPolicy.create({ type: 'rate', value: 12, roundingMode: 'round', precision: 0 }),
         { modifier: { type: 'fraction', config: { numerator: 11, denominator: 12 } } },
       );
 
       it('Case 1: subtotal=100000 → tax=11000', () => {
-        const tax = ppnRule.calculateTax(100000);
+        const tax = pajakRule.calculateTax(100000);
         expect(tax).toBe(11000);
       });
 
       it('Case 2: subtotal=120000 → tax=13200', () => {
-        const tax = ppnRule.calculateTax(120000);
+        const tax = pajakRule.calculateTax(120000);
         expect(tax).toBe(13200);
       });
 
       it('Case 3: subtotal=25000 → tax=2750', () => {
-        const tax = ppnRule.calculateTax(25000);
+        const tax = pajakRule.calculateTax(25000);
         expect(tax).toBe(2750);
       });
 
       it('uses policy.value (12) as rate, NOT the effective rate (11)', () => {
-        const serialized = ppnRule.serialize();
+        const serialized = pajakRule.serialize();
         expect(serialized.policy.value).toBe(12);
         expect(serialized.modifier?.config?.numerator).toBe(11);
         expect(serialized.modifier?.config?.denominator).toBe(12);
@@ -183,7 +183,7 @@ describe('TaxRule', () => {
       const rule = makeVatRule();
       const s = rule.serialize();
       expect(s.id).toBe(rule.getId());
-      expect(s.name).toBe('PPN 12%');
+      expect(s.name).toBe('Pajak 12%');
       expect(s.taxType).toBe('vat');
       expect(s.modifier).toEqual({ type: 'fraction', config: { numerator: 11, denominator: 12 } });
     });

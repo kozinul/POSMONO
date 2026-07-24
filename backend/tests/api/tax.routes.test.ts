@@ -30,7 +30,7 @@ const app = createTestApp();
 function vatRulePayload(overrides?: Record<string, any>) {
   return {
     id: overrides?.id ?? 'rule-vat',
-    name: overrides?.name ?? 'PPN 12%',
+    name: overrides?.name ?? 'Pajak 12%',
     taxType: 'vat',
     priority: 10,
     scope: { type: 'all', entityId: '', entityName: 'Semua' },
@@ -100,7 +100,7 @@ describe('Tax Routes', () => {
       expect(res.status).toBe(201);
       const activeVer = res.body.versions.find((v: any) => v.status === 'active');
       expect(activeVer.rules).toHaveLength(1);
-      expect(activeVer.rules[0].name).toBe('PPN 12%');
+      expect(activeVer.rules[0].name).toBe('Pajak 12%');
     });
 
     it('returns error for invalid rule (negative priority)', async () => {

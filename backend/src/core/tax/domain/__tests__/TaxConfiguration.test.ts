@@ -136,9 +136,9 @@ describe('TaxConfiguration', () => {
 
     it('updates rule in active version', () => {
       const cfg = TaxConfiguration.hydrate(sampleConfig());
-      cfg.addRule(TaxRuleMock('r1', 'PPN 11%'));
-      cfg.updateRule('r1', { name: 'PPN 12%' });
-      expect(cfg.getActiveRules()[0].getName()).toBe('PPN 12%');
+      cfg.addRule(TaxRuleMock('r1', 'Pajak 11%'));
+      cfg.updateRule('r1', { name: 'Pajak 12%' });
+      expect(cfg.getActiveRules()[0].getName()).toBe('Pajak 12%');
     });
   });
 

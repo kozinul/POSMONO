@@ -120,6 +120,21 @@ export function roundIDR(amount: number): number {
   return Math.round(amount / 1000) * 1000;
 }
 
+function extractInclusiveDPP(price: number, taxRules: ITaxRule[]): number {
+  let totalTax = 0;
+  for (const rule of taxRules) {
+    if (rule.policy.type === 'amount') continue;
+    const rate = rule.policy.value;
+    let base = price;
+    if (rule.modifier?.type === 'fraction' && rule.modifier.config?.numerator && rule.modifier.config?.denominator) {
+      base = price * (rule.modifier.config.numerator / rule.modifier.config.denominator);
+    }
+    const rawTax = base - base / (1 + rate / 100);
+    totalTax += Math.round(roundValue(rawTax, rule.policy.roundingMode, rule.policy.precision));
+  }
+  return price - totalTax;
+}
+
 function calcItemTax(
   itemAmount: number,
   rules: ITaxRule[],
@@ -139,7 +154,7 @@ function calcItemTax(
     let amount = 0;
     if (isExemption) {
       amount = 0;
-    } else if (isInclusive && rule.policy.type !== 'amount') {
+    } else if (isInclusive && !isSC && rule.policy.type !== 'amount') {
       const modifiedBase = applyModifier(dppBase, rule.modifier);
       amount = Math.round(roundValue(modifiedBase - (modifiedBase / (1 + rule.policy.value / 100)), rule.policy.roundingMode, rule.policy.precision));
     } else if (rule.policy.type !== 'amount') {
@@ -190,73 +205,99 @@ export function calculateTax(input: TaxCalcInput, config: ITaxConfiguration): Ta
     .filter((r) => scopeMatches(r, ctx))
     .sort((a, b) => a.priority - b.priority);
 
-  // Check if all items have the same pricing mode (or none)
-  const allModes = input.items.map((i) => i.pricingMode).filter(Boolean);
-  const uniqueModes = [...new Set(allModes)];
+  // Resolve each item's effective pricing mode (undefined → use global config)
+  const resolvedModes = input.items.map((i) => i.pricingMode ?? config.pricingMode);
 
-  // If all items share the same pricing mode (or no per-item mode set), use global logic
-  if (uniqueModes.length <= 1) {
-    const isInclusive = uniqueModes[0] === 'inclusive' || config.pricingMode === 'inclusive';
-    const result = calcItemTax(taxableAmount, rules, isInclusive);
+  // --- Line-based pricing engine ---
+  // Per-item: extract DPP, calculate tax, accumulate
 
-    const grandTotal = isInclusive ? taxableAmount : taxableAmount + result.tax;
+  const scRules = rules.filter((r) => r.taxType === 'service_charge');
+  const taxRules = rules.filter((r) => r.taxType !== 'service_charge');
 
-    return {
-      subtotal,
-      discount: input.discount ?? 0,
-      discountType: input.discountType ?? 'nominal',
-      discountAmount,
-      taxableAmount,
-      taxBreakdown: result.breakdown,
-      totalTax: result.tax,
-      serviceCharge: result.serviceCharge,
-      grandTotal,
-    };
-  }
+  // 1. Calculate global SC rate on total taxableAmount (exclusive items only)
+  //    SC applies to exclusive items' DPP
+  const exclusiveSubtotal = input.items.reduce((sum, item, idx) => {
+    if (resolvedModes[idx] === 'exclusive') {
+      return sum + item.quantity * item.unitPrice;
+    }
+    return sum;
+  }, 0);
+  // Apply discount proportionally to exclusive items
+  const exclusiveDiscount = subtotal > 0 ? (exclusiveSubtotal / subtotal) * discountAmount : 0;
+  const exclusiveTaxable = exclusiveSubtotal - exclusiveDiscount;
+  const scResult = calcItemTax(exclusiveTaxable, scRules, false);
+  const globalSC = scResult.serviceCharge;
 
-  // Mixed pricing modes: calculate per-item
-  let totalTax = 0;
-  let totalServiceCharge = 0;
-  const allBreakdown: TaxBreakdownItem[] = [];
-
-  for (const item of input.items) {
-    const itemSubtotal = item.quantity * item.unitPrice;
-    // Proportional discount allocation
-    const itemDiscount = subtotal > 0 ? (itemSubtotal / subtotal) * discountAmount : 0;
-    const itemAmount = itemSubtotal - itemDiscount;
-    const itemIsInclusive = item.pricingMode === 'inclusive' || config.pricingMode === 'inclusive';
-
-    const result = calcItemTax(itemAmount, rules, itemIsInclusive);
-    totalTax += result.tax;
-    totalServiceCharge += result.serviceCharge;
-    allBreakdown.push(...result.breakdown);
-  }
-
-  // For mixed modes, grandTotal = exclusive items' (price + tax) + inclusive items' (price only)
+  // 2. Per-item line-based calculation
+  let totalTax = globalSC;
+  let totalSC = 0;
+  let totalDpp = 0;
   let grandTotal = 0;
-  for (const item of input.items) {
+  const allBreakdown: TaxBreakdownItem[] = [...scResult.breakdown];
+
+  for (let idx = 0; idx < input.items.length; idx++) {
+    const item = input.items[idx];
     const itemSubtotal = item.quantity * item.unitPrice;
     const itemDiscount = subtotal > 0 ? (itemSubtotal / subtotal) * discountAmount : 0;
     const itemAmount = itemSubtotal - itemDiscount;
-    const itemIsInclusive = item.pricingMode === 'inclusive' || config.pricingMode === 'inclusive';
-    const result = calcItemTax(itemAmount, rules, itemIsInclusive);
+    const isInclusive = resolvedModes[idx] === 'inclusive';
 
-    if (itemIsInclusive) {
-      grandTotal += itemAmount;
+    if (isInclusive) {
+      const dpp = extractInclusiveDPP(itemAmount, taxRules);
+      totalDpp += dpp;
+      const itemTax = itemAmount - dpp;
+      totalTax += itemTax;
+      grandTotal += itemSubtotal;
+
+      for (const rule of taxRules) {
+        allBreakdown.push({
+          ruleId: rule.id,
+          name: rule.name,
+          taxType: rule.taxType,
+          rate: rule.policy.value,
+          amount: Math.round(roundValue(
+            (rule.modifier?.type === 'fraction' ? itemAmount * ((rule.modifier.config?.numerator ?? 1) / (rule.modifier.config?.denominator ?? 1)) : itemAmount) - (rule.modifier?.type === 'fraction' ? itemAmount * ((rule.modifier.config?.numerator ?? 1) / (rule.modifier.config?.denominator ?? 1)) : itemAmount) / (1 + rule.policy.value / 100),
+            rule.policy.roundingMode, rule.policy.precision,
+          )),
+          baseAmount: Math.round(dpp),
+          priority: rule.priority,
+        });
+      }
     } else {
-      grandTotal += itemAmount + result.tax;
+      const itemSC = exclusiveTaxable > 0 ? (itemAmount / exclusiveTaxable) * globalSC : 0;
+      totalSC += itemSC;
+      const dpp = itemAmount + itemSC;
+      totalDpp += dpp;
+
+      const taxResult = calcItemTax(dpp, taxRules, false);
+      totalTax += taxResult.tax;
+      allBreakdown.push(...taxResult.breakdown);
+      grandTotal += itemAmount + itemSC + taxResult.tax;
     }
   }
+
+  // Aggregate breakdown by ruleId (merge entries from multiple items with same rule)
+  const aggregatedMap = new Map<string, TaxBreakdownItem>();
+  for (const entry of allBreakdown) {
+    const existing = aggregatedMap.get(entry.ruleId);
+    if (existing) {
+      existing.amount += entry.amount;
+      existing.baseAmount += entry.baseAmount;
+    } else {
+      aggregatedMap.set(entry.ruleId, { ...entry });
+    }
+  }
+  const aggregatedBreakdown = Array.from(aggregatedMap.values());
 
   return {
     subtotal,
     discount: input.discount ?? 0,
     discountType: input.discountType ?? 'nominal',
     discountAmount,
-    taxableAmount,
-    taxBreakdown: allBreakdown,
+    taxableAmount: totalDpp,
+    taxBreakdown: aggregatedBreakdown,
     totalTax,
-    serviceCharge: totalServiceCharge,
+    serviceCharge: globalSC,
     grandTotal,
   };
 }

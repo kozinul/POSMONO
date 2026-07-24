@@ -9,6 +9,7 @@ export interface TaxItem {
   categoryId: string;
   quantity: number;
   unitPrice: number;
+  pricingMode?: 'inclusive' | 'exclusive';
 }
 
 export interface PricingInput {
@@ -52,7 +53,7 @@ export class PricingEngine {
 
     const subtotal = input.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
     const discountAmount = this.calcDiscount(subtotal, input.discount ?? 0, input.discountType);
-    const taxableAmount = subtotal - discountAmount;
+    const globalMode = config.getPricingMode();
 
     const ctx: ScopeMatchContext = {
       items: input.items,
@@ -61,9 +62,7 @@ export class PricingEngine {
       customerTags: input.customerTags,
     };
 
-    let rules = config
-      .getActiveRules()
-      .filter((r) => r.shouldApply(ctx));
+    let rules = config.getActiveRules().filter((r) => r.shouldApply(ctx));
 
     if (allowedRuleIds) {
       const idSet = new Set(allowedRuleIds);
@@ -72,52 +71,122 @@ export class PricingEngine {
 
     rules.sort((a, b) => a.getPriority() - b.getPriority());
 
-    const taxBreakdown: TaxBreakdownItem[] = [];
-    let totalTax = 0;
-    let serviceCharge = 0;
-    let dppBase = taxableAmount;
+    const scRules = rules.filter((r) => r.isServiceCharge());
+    const taxRules = rules.filter((r) => !r.isServiceCharge());
 
-    for (const rule of rules) {
-      const base = rule.isExemption() ? 0 : dppBase;
-      const taxAmount = this.calculateRuleTax(rule, dppBase);
+    const exclusiveSubtotal = input.items.reduce((sum, item) => {
+      const mode = item.pricingMode ?? globalMode;
+      if (mode === 'exclusive') return sum + item.quantity * item.unitPrice;
+      return sum;
+    }, 0);
+    const exclusiveDiscount = subtotal > 0 ? (exclusiveSubtotal / subtotal) * discountAmount : 0;
+    const exclusiveTaxable = exclusiveSubtotal - exclusiveDiscount;
 
-      taxBreakdown.push({
+    let globalSC = 0;
+    const scBreakdown: TaxBreakdownItem[] = [];
+    let scDppBase = exclusiveTaxable;
+    for (const rule of scRules) {
+      const taxAmount = this.calculateRuleTax(rule, scDppBase, false);
+      scBreakdown.push({
         ruleId: rule.getId(),
         name: rule.getName(),
         taxType: rule.getTaxType(),
         rate: rule.getPolicy().getValue(),
         amount: taxAmount,
-        baseAmount: base,
+        baseAmount: scDppBase,
         priority: rule.getPriority(),
       });
+      globalSC += taxAmount;
+      scDppBase += taxAmount;
+    }
 
-      totalTax += taxAmount;
-      if (rule.isServiceCharge()) {
-        serviceCharge += taxAmount;
-        dppBase += taxAmount;
+    const taxBreakdown: TaxBreakdownItem[] = [...scBreakdown];
+    let totalTax = globalSC;
+    let totalDpp = 0;
+    let grandTotal = 0;
+
+    for (const item of input.items) {
+      const itemSubtotal = item.quantity * item.unitPrice;
+      const itemDiscount = subtotal > 0 ? (itemSubtotal / subtotal) * discountAmount : 0;
+      const itemAmount = itemSubtotal - itemDiscount;
+      const isInclusive = (item.pricingMode ?? globalMode) === 'inclusive';
+
+      if (isInclusive) {
+        const dpp = this.extractInclusiveDPP(itemAmount, taxRules);
+        totalDpp += dpp;
+        const itemTax = itemAmount - dpp;
+        totalTax += itemTax;
+        grandTotal += itemSubtotal;
+
+        for (const rule of taxRules) {
+          taxBreakdown.push({
+            ruleId: rule.getId(),
+            name: rule.getName(),
+            taxType: rule.getTaxType(),
+            rate: rule.getPolicy().getValue(),
+            amount: this.calculateRuleTax(rule, itemAmount, true),
+            baseAmount: Math.round(dpp),
+            priority: rule.getPriority(),
+          });
+        }
+      } else {
+        const itemSC = exclusiveTaxable > 0 ? (itemAmount / exclusiveTaxable) * globalSC : 0;
+        const dpp = itemAmount + itemSC;
+        totalDpp += dpp;
+
+        let itemTax = 0;
+        for (const rule of taxRules) {
+          const taxAmount = this.calculateRuleTax(rule, dpp, false);
+          itemTax += taxAmount;
+          taxBreakdown.push({
+            ruleId: rule.getId(),
+            name: rule.getName(),
+            taxType: rule.getTaxType(),
+            rate: rule.getPolicy().getValue(),
+            amount: taxAmount,
+            baseAmount: Math.round(dpp),
+            priority: rule.getPriority(),
+          });
+        }
+        totalTax += itemTax;
+        grandTotal += itemAmount + itemSC + itemTax;
       }
     }
 
-    const grandTotal =
-      config.getPricingMode() === 'inclusive'
-        ? subtotal + serviceCharge
-        : subtotal + totalTax;
+    const aggregatedMap = new Map<string, TaxBreakdownItem>();
+    for (const entry of taxBreakdown) {
+      const existing = aggregatedMap.get(entry.ruleId);
+      if (existing) {
+        existing.amount += entry.amount;
+        existing.baseAmount += entry.baseAmount;
+      } else {
+        aggregatedMap.set(entry.ruleId, { ...entry });
+      }
+    }
 
     return {
       subtotal,
       discount: input.discount ?? 0,
       discountType: input.discountType ?? 'nominal',
       discountAmount,
-      taxableAmount,
-      taxBreakdown,
+      taxableAmount: totalDpp,
+      taxBreakdown: Array.from(aggregatedMap.values()),
       totalTax,
-      serviceCharge,
+      serviceCharge: globalSC,
       grandTotal,
     };
   }
 
-  calculateRuleTax(rule: TaxRule, taxableAmount: number): number {
-    return rule.calculateTax(taxableAmount);
+  private extractInclusiveDPP(price: number, taxRules: TaxRule[]): number {
+    let totalTax = 0;
+    for (const rule of taxRules) {
+      totalTax += this.calculateRuleTax(rule, price, true);
+    }
+    return price - totalTax;
+  }
+
+  calculateRuleTax(rule: TaxRule, taxableAmount: number, isInclusive = false): number {
+    return rule.calculateTax(taxableAmount, isInclusive);
   }
 
   private calcDiscount(

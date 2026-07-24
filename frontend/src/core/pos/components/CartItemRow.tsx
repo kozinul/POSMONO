@@ -15,6 +15,15 @@ export function CartItemRow({ item }: CartItemRowProps) {
           <h4 className="font-bold text-gray-800 truncate">
             {item.name} x{item.quantity}
           </h4>
+          {item.pricingMode && (
+            <span className={`inline-block text-[10px] font-medium px-1.5 py-0.5 rounded ${
+              item.pricingMode === 'inclusive'
+                ? 'bg-green-50 text-green-600'
+                : 'bg-orange-50 text-orange-600'
+            }`}>
+              {item.pricingMode === 'inclusive' ? 'Nett (pajak termasuk)' : '++ (pajak terpisah)'}
+            </span>
+          )}
           {item.notes && (
             <p className="text-sm text-gray-400 truncate">{item.notes}</p>
           )}
