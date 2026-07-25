@@ -182,6 +182,17 @@ function derive(
   if (isMixed) {
     // For mixed carts: recalculate per-item to separate inclusive vs exclusive
     const globalMode = taxConfig.pricingMode;
+    const exclusiveSubtotal = items
+      .filter((i) => (i.pricingMode ?? globalMode) === 'exclusive')
+      .reduce((sum, i) => sum + i.price * i.quantity, 0);
+    const inclusiveSubtotal = items
+      .filter((i) => (i.pricingMode ?? globalMode) === 'inclusive')
+      .reduce((sum, i) => sum + i.price * i.quantity, 0);
+    const allSubtotal = exclusiveSubtotal + inclusiveSubtotal;
+
+    const exclusiveDiscount = allSubtotal > 0 ? (exclusiveSubtotal / allSubtotal) * cappedDiscount : 0;
+    const inclusiveDiscount = allSubtotal > 0 ? (inclusiveSubtotal / allSubtotal) * cappedDiscount : 0;
+
     const exclusiveItemsResult = calculateTax({
       items: items
         .filter((i) => (i.pricingMode ?? globalMode) === 'exclusive')
@@ -192,7 +203,7 @@ function derive(
           unitPrice: i.price,
           pricingMode: 'exclusive' as const,
         })),
-      discount: 0,
+      discount: exclusiveDiscount,
       discountType: 'nominal' as const,
     }, taxConfig);
     displayBreakdown = exclusiveItemsResult.taxBreakdown;
@@ -207,7 +218,7 @@ function derive(
           unitPrice: i.price,
           pricingMode: 'inclusive' as const,
         })),
-      discount: 0,
+      discount: inclusiveDiscount,
       discountType: 'nominal' as const,
     }, taxConfig);
     inclusiveTax = inclusiveItemsResult.totalTax;

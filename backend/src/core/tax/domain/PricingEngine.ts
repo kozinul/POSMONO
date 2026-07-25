@@ -153,7 +153,7 @@ export class PricingEngine {
         totalDpp += dpp;
         totalTax += itemTax + itemSC;
         totalSC += itemSC;
-        grandTotal += itemSubtotal;
+        grandTotal += itemAmount;
         perItemTax[item.id] = { tax: Math.round(itemTax), dpp: Math.round(dpp), serviceCharge: Math.round(itemSC) };
       } else {
         const itemSC = exclusiveTaxable > 0 ? (itemAmount / exclusiveTaxable) * globalSC : 0;
@@ -223,16 +223,18 @@ export class PricingEngine {
   }
 
   private emptyResult(input: PricingInput): PricingResult {
+    const subtotal = input.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
+    const discountAmount = this.calcDiscount(subtotal, input.discount ?? 0, input.discountType);
     return {
-      subtotal: 0,
+      subtotal,
       discount: input.discount ?? 0,
       discountType: input.discountType ?? 'nominal',
-      discountAmount: 0,
-      taxableAmount: 0,
+      discountAmount,
+      taxableAmount: subtotal - discountAmount,
       taxBreakdown: [],
       totalTax: 0,
       serviceCharge: 0,
-      grandTotal: 0,
+      grandTotal: subtotal - discountAmount,
     };
   }
 }

@@ -61,16 +61,16 @@ function scopeMatches(rule: ITaxRule, ctx: {
   switch (s.type) {
     case 'all': return true;
     case 'category':
-      return ctx.items.some((item) => item.categoryId === s.entityId);
+      return !!s.entityId && ctx.items.some((item) => item.categoryId === s.entityId);
     case 'product':
-      return ctx.items.some((item) => item.productId === s.entityId);
+      return !!s.entityId && ctx.items.some((item) => item.productId === s.entityId);
     case 'outlet':
       return ctx.outletId === s.entityId;
     case 'transaction_type':
       return ctx.transactionType === s.entityId;
     case 'customer':
     case 'service_type':
-      return !!(ctx.customerTags && ctx.customerTags.includes(s.entityId));
+      return !!s.entityId && !!(ctx.customerTags && ctx.customerTags.includes(s.entityId));
     default:
       return false;
   }
@@ -124,7 +124,7 @@ function calcInclusiveRuleAmount(price: number, rule: ITaxRule): number {
   if (rule.policy.type === 'amount') return Math.round(rule.policy.value);
   const modifiedBase = applyModifier(price, rule.modifier);
   const rawTax = modifiedBase - modifiedBase / (1 + rule.policy.value / 100);
-  return Math.round(roundValue(rawTax, rule.policy.roundingMode, rule.policy.precision));
+  return roundValue(rawTax, rule.policy.roundingMode, rule.policy.precision);
 }
 
 function extractInclusiveItemBreakdown(
@@ -192,10 +192,10 @@ function calcItemTax(
       amount = 0;
     } else if (isInclusive && !isSC && rule.policy.type !== 'amount') {
       const modifiedBase = applyModifier(dppBase, rule.modifier);
-      amount = Math.round(roundValue(modifiedBase - (modifiedBase / (1 + rule.policy.value / 100)), rule.policy.roundingMode, rule.policy.precision));
+      amount = roundValue(modifiedBase - (modifiedBase / (1 + rule.policy.value / 100)), rule.policy.roundingMode, rule.policy.precision);
     } else if (rule.policy.type !== 'amount') {
       const modifiedBase = applyModifier(dppBase, rule.modifier);
-      amount = Math.round(roundValue(modifiedBase * (rule.policy.value / 100), rule.policy.roundingMode, rule.policy.precision));
+      amount = roundValue(modifiedBase * (rule.policy.value / 100), rule.policy.roundingMode, rule.policy.precision);
     } else {
       amount = Math.round(rule.policy.value);
     }
@@ -222,12 +222,18 @@ function calcItemTax(
 
 export function calculateTax(input: TaxCalcInput, config: ITaxConfiguration): TaxCalcResult {
   if (!config.taxEnabled) {
+    const subtotal = input.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
+    const discountAmount = calcDiscount(subtotal, input.discount ?? 0, input.discountType === 'percentage');
     return {
-      subtotal: 0, discount: input.discount ?? 0,
+      subtotal,
+      discount: input.discount ?? 0,
       discountType: input.discountType ?? 'nominal',
-      discountAmount: 0, taxableAmount: 0,
-      taxBreakdown: [], totalTax: 0,
-      serviceCharge: 0, grandTotal: 0,
+      discountAmount,
+      taxableAmount: subtotal - discountAmount,
+      taxBreakdown: [],
+      totalTax: 0,
+      serviceCharge: 0,
+      grandTotal: subtotal - discountAmount,
     };
   }
 
@@ -283,7 +289,7 @@ export function calculateTax(input: TaxCalcInput, config: ITaxConfiguration): Ta
       totalDpp += dpp;
       totalSC += sc;
       totalTax += itemTax + sc;
-      grandTotal += itemSubtotal;
+      grandTotal += itemAmount;
 
       allBreakdown.push(...scBreakdown, ...itemTaxBreakdown);
     } else {

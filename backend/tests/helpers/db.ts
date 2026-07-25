@@ -1,20 +1,14 @@
-import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
 
-let mongod: MongoMemoryServer;
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27027/posmono_test';
 
 export async function setupTestDb(): Promise<string> {
-  mongod = await MongoMemoryServer.create({
-    instance: { dbName: 'test' },
-  });
-  const uri = mongod.getUri();
-  await mongoose.connect(uri);
-  return uri;
+  await mongoose.connect(MONGO_URI);
+  return MONGO_URI;
 }
 
 export async function teardownTestDb(): Promise<void> {
   await mongoose.disconnect();
-  if (mongod) await mongod.stop();
 }
 
 export async function clearCollections(): Promise<void> {
@@ -22,8 +16,4 @@ export async function clearCollections(): Promise<void> {
   for (const key in collections) {
     await collections[key].deleteMany({});
   }
-}
-
-export function getMongod(): MongoMemoryServer {
-  return mongod!;
 }

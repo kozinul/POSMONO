@@ -96,11 +96,28 @@ export class TaxRule {
     const matchesScope = this.getScope().appliesTo(context);
     if (!matchesScope) return false;
 
-    if (this.data.conditions?.amountOperator === 'greater_than') {
+    if (this.data.conditions?.amountOperator) {
       const total = context.items
         ? context.items.reduce((sum, item) => sum + (item as any).unitPrice * (item as any).quantity, 0)
         : 0;
-      if (total <= (this.data.conditions.amountThreshold ?? 0)) return false;
+      const threshold = this.data.conditions.amountThreshold ?? 0;
+      switch (this.data.conditions.amountOperator) {
+        case 'greater_than':
+          if (total <= threshold) return false;
+          break;
+        case 'less_than':
+          if (total >= threshold) return false;
+          break;
+        case 'equals':
+          if (total !== threshold) return false;
+          break;
+        case 'greater_or_equal':
+          if (total < threshold) return false;
+          break;
+        case 'less_or_equal':
+          if (total > threshold) return false;
+          break;
+      }
     }
 
     return true;

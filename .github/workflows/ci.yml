@@ -18,10 +18,15 @@ jobs:
         image: mongo:7
         ports:
           - 27017:27017
+        env:
+          MONGO_INITDB_DATABASE: posmono_test
       redis:
         image: redis:7-alpine
         ports:
           - 6379:6379
+
+    env:
+      MONGO_URI: mongodb://localhost:27017/posmono_test
 
     steps:
       - uses: actions/checkout@v4
@@ -39,7 +44,8 @@ jobs:
 
       - run: pnpm run build
 
-      - run: pnpm test
+      - name: Run tests
+        run: pnpm vitest run
 
   lint:
     runs-on: ubuntu-latest

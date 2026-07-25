@@ -1,0 +1,19 @@
+services:
+  mongodb-test:
+    image: mongo:7
+    container_name: posmono-mongodb-test
+    restart: 'no'
+    ports:
+      - '27027:27017'
+    volumes:
+      - mongodb_test_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: posmono_test
+    healthcheck:
+      test: ['CMD', 'mongosh', '--eval', 'db.adminCommand({ ping: 1 })']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  mongodb_test_data:

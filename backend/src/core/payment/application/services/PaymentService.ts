@@ -96,16 +96,16 @@ export class PaymentService {
         modifiers: [],
         tax: {
           rate: taxRate,
-          amount: itemTax?.tax || 0,
+          amount: Math.round(itemTax?.tax || 0),
         },
-        serviceCharge: itemTax?.serviceCharge || 0,
-        dpp: itemTax?.dpp || 0,
+        serviceCharge: Math.round(itemTax?.serviceCharge || 0),
+        dpp: Math.round(itemTax?.dpp || 0),
       };
     });
 
     const subtotal = taxResult.subtotal;
     const discount = taxResult.discountAmount;
-    const dppTotal = subtotal - discount;
+    const dppTotal = taxResult.taxableAmount;
     const serviceCharge = taxResult.serviceCharge || 0;
     const tax = taxResult.totalTax;
 

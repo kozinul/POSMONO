@@ -45,13 +45,13 @@ function input(overrides?: Partial<TaxCalculationInput>): TaxCalculationInput {
 
 describe('TaxEngine', () => {
   describe('when tax disabled', () => {
-    it('returns empty result with zero values', () => {
+    it('returns result with subtotal/grandTotal computed but no tax', () => {
       const config = makeConfig({ taxEnabled: false });
       const result = TaxEngine.calculate(input(), config);
-      expect(result.subtotal).toBe(0);
+      expect(result.subtotal).toBe(100000);
       expect(result.totalTax).toBe(0);
       expect(result.taxBreakdown).toEqual([]);
-      expect(result.grandTotal).toBe(0);
+      expect(result.grandTotal).toBe(100000);
     });
   });
 

@@ -47,13 +47,13 @@ describe('PricingEngine', () => {
   const engine = new PricingEngine();
 
   describe('when tax disabled', () => {
-    it('returns empty result with zero values', () => {
+    it('returns result with subtotal/grandTotal computed but no tax', () => {
       const config = makeConfig({ taxEnabled: false });
       const result = engine.calculate(input(), config);
-      expect(result.subtotal).toBe(0);
+      expect(result.subtotal).toBe(100000);
       expect(result.totalTax).toBe(0);
       expect(result.taxBreakdown).toEqual([]);
-      expect(result.grandTotal).toBe(0);
+      expect(result.grandTotal).toBe(100000);
     });
   });
 
@@ -435,8 +435,9 @@ describe('PricingEngine', () => {
       }), config);
 
       // itemAmount = 100000 - 20000 = 80000
+      // grandTotal for inclusive = itemAmount (discounted price, SC/tax embedded inside)
       const item = result.perItemTax?.['p1']!;
-      expect(result.grandTotal).toBe(100000);
+      expect(result.grandTotal).toBe(80000);
       expect(item.dpp + item.serviceCharge + item.tax).toBe(80000);
       expect(item.serviceCharge).toBeGreaterThan(0);
       expect(item.tax).toBeGreaterThan(0);
@@ -528,7 +529,8 @@ describe('PricingEngine', () => {
       // Tax extracted = 80000 - 80000/1.12 = 80000 - 71428.57 = 8571.43 → round = 8571
       const expectedTax = Math.round(80000 - 80000 / (1 + 12 / 100));
       expect(result.totalTax).toBe(expectedTax);
-      expect(result.grandTotal).toBe(100000);
+      // grandTotal for inclusive = itemAmount (discounted price, tax embedded inside)
+      expect(result.grandTotal).toBe(80000);
     });
   });
 
