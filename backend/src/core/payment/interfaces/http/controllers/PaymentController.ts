@@ -7,8 +7,10 @@ import { ValidationError } from '../../../../../@shared/infrastructure/error/App
 const payCashSchema = z.object({
   items: z.array(z.object({
     productId: z.string().min(1),
+    productName: z.string().optional().default(''),
     quantity: z.number().int().positive(),
     unitPrice: z.number().nonnegative(),
+    pricingMode: z.enum(['inclusive', 'exclusive']).optional().nullable(),
   })).min(1),
   amountPaid: z.number().positive(),
   method: z.enum(['cash', 'qris', 'transfer', 'card', 'debit', 'credit', 'ewallet']).default('cash'),
@@ -57,7 +59,10 @@ export class PaymentController extends BaseController {
     const result = await this.paymentService.payCash({
       tenantId: req.tenantId,
       cashierId: req.userId,
-      items: parsed.data.items,
+      items: parsed.data.items.map((item) => ({
+        ...item,
+        pricingMode: item.pricingMode ?? undefined,
+      })),
       amountPaid: parsed.data.amountPaid,
       method: parsed.data.method,
       discount: parsed.data.discount,

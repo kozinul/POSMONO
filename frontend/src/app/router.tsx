@@ -15,6 +15,7 @@ const CategoryListPage = lazy(() => import('../core/categories/pages/CategoryLis
 const StockListPage = lazy(() => import('../core/inventory/pages/StockListPage'));
 const SettingsPage = lazy(() => import('../core/settings/pages/GeneralSettingsPage'));
 const ReportPage = lazy(() => import('../core/reports/pages/ReportPage'));
+const SalesPerProductPage = lazy(() => import('../core/reports/pages/SalesPerProductPage'));
 const ShiftPage = lazy(() => import('../core/shifts/pages/ShiftPage'));
 const MemberListPage = lazy(() => import('../core/members/pages/MemberListPage'));
 const PromotionListPage = lazy(() => import('../core/promotions/pages/PromotionListPage'));
@@ -45,6 +46,7 @@ export function AppRouter() {
               <Route path="/categories" element={<CategoryListPage />} />
               <Route path="/inventory" element={<StockListPage />} />
               <Route path="/reports" element={<ReportPage />} />
+              <Route path="/reports/sales-per-product" element={<SalesPerProductPage />} />
               <Route path="/shifts" element={<ShiftPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/members" element={<MemberListPage />} />

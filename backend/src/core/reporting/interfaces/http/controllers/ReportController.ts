@@ -69,4 +69,18 @@ export class ReportController extends BaseController {
     );
     this.ok(res, result.map((m) => m.serialize()));
   }
+
+  async salesPerProduct(req: Request, res: Response): Promise<void> {
+    const { dateFrom, dateTo } = req.query;
+    if (!dateFrom || !dateTo) {
+      res.status(400).json({ success: false, message: 'dateFrom and dateTo query parameters are required' });
+      return;
+    }
+    const result = await this.reportService.getSalesPerProduct(
+      req.tenantId,
+      dateFrom as string,
+      dateTo as string,
+    );
+    this.ok(res, result);
+  }
 }

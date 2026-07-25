@@ -83,9 +83,9 @@ export class ReportAggregation {
       {
         $group: {
           _id: '$items.productId',
-          name: { $first: '$items.name' },
+          name: { $first: '$items.productName' },
           total: { $sum: '$items.quantity' },
-          revenue: { $sum: { $multiply: ['$items.price', '$items.quantity'] } },
+          revenue: { $sum: { $multiply: ['$items.unitPrice', '$items.quantity'] } },
         },
       },
       { $sort: { total: -1 } },
@@ -161,7 +161,7 @@ export class ReportAggregation {
         $group: {
           _id: '$product.categoryId',
           totalOrders: { $sum: 1 },
-          totalRevenue: { $sum: { $multiply: ['$items.price', '$items.quantity'] } },
+          totalRevenue: { $sum: { $multiply: ['$items.unitPrice', '$items.quantity'] } },
           totalItems: { $sum: '$items.quantity' },
         },
       },
@@ -174,5 +174,64 @@ export class ReportAggregation {
       totalRevenue: item.totalRevenue,
       totalItems: item.totalItems,
     }));
+  }
+
+  async getSalesPerProductAggregation(tenantId: string, dateFrom: string, dateTo: string) {
+    const startOfDay = new Date(dateFrom);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(dateTo);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    return this.orderModel.aggregate([
+      {
+        $match: {
+          tenantId,
+          createdAt: { $gte: startOfDay, $lte: endOfDay },
+          status: { $in: ['paid', 'completed'] },
+        },
+      },
+      { $unwind: '$items' },
+      {
+        $group: {
+          _id: { productId: '$items.productId', productName: '$items.productName' },
+          quantity: { $sum: '$items.quantity' },
+          totalSales: { $sum: { $multiply: ['$items.unitPrice', '$items.quantity'] } },
+          totalDpp: { $sum: { $ifNull: ['$items.dpp', 0] } },
+          totalTax: { $sum: { $ifNull: ['$items.tax.amount', 0] } },
+          totalSC: { $sum: { $ifNull: ['$items.serviceCharge', 0] } },
+          transactions: {
+            $push: {
+              orderId: '$orderNumber',
+              createdAt: '$createdAt',
+              quantity: '$items.quantity',
+              unitPrice: '$items.unitPrice',
+              dpp: { $ifNull: ['$items.dpp', 0] },
+              serviceCharge: { $ifNull: ['$items.serviceCharge', 0] },
+              tax: { $ifNull: ['$items.tax.amount', 0] },
+            },
+          },
+        },
+      },
+      { $sort: { totalSales: -1 } },
+    ]).then((rows: any[]) =>
+      rows.map((r) => ({
+        productId: r._id.productId,
+        productName: r._id.productName,
+        quantity: r.quantity,
+        totalSales: r.totalSales,
+        dpp: r.totalDpp > 0 ? Math.round(r.totalDpp) : Math.round(r.totalSales - r.totalTax - r.totalSC),
+        serviceCharge: Math.round(r.totalSC),
+        tax: r.totalTax,
+        transactions: r.transactions.map((t: any) => ({
+          orderId: t.orderId,
+          createdAt: t.createdAt,
+          quantity: t.quantity,
+          unitPrice: t.unitPrice,
+          dpp: Math.round(t.dpp),
+          serviceCharge: Math.round(t.serviceCharge),
+          tax: t.tax,
+        })),
+      })),
+    );
   }
 }

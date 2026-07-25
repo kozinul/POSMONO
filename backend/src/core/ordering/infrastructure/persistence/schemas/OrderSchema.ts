@@ -18,6 +18,8 @@ const OrderItemSchema = new Schema(
       rate: Number,
       amount: Number,
     },
+    serviceCharge: { type: Number, default: 0 },
+    dpp: { type: Number, default: 0 },
   },
   { _id: false },
 );

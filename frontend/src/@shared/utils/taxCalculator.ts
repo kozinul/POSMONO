@@ -120,19 +120,55 @@ export function roundIDR(amount: number): number {
   return Math.round(amount / 1000) * 1000;
 }
 
-function extractInclusiveDPP(price: number, taxRules: ITaxRule[]): number {
-  let totalTax = 0;
-  for (const rule of taxRules) {
-    if (rule.policy.type === 'amount') continue;
-    const rate = rule.policy.value;
-    let base = price;
-    if (rule.modifier?.type === 'fraction' && rule.modifier.config?.numerator && rule.modifier.config?.denominator) {
-      base = price * (rule.modifier.config.numerator / rule.modifier.config.denominator);
-    }
-    const rawTax = base - base / (1 + rate / 100);
-    totalTax += Math.round(roundValue(rawTax, rule.policy.roundingMode, rule.policy.precision));
+function calcInclusiveRuleAmount(price: number, rule: ITaxRule): number {
+  if (rule.policy.type === 'amount') return Math.round(rule.policy.value);
+  const modifiedBase = applyModifier(price, rule.modifier);
+  const rawTax = modifiedBase - modifiedBase / (1 + rule.policy.value / 100);
+  return Math.round(roundValue(rawTax, rule.policy.roundingMode, rule.policy.precision));
+}
+
+function extractInclusiveItemBreakdown(
+  price: number,
+  scRules: ITaxRule[],
+  taxRules: ITaxRule[],
+): { dpp: number; sc: number; tax: number; scBreakdown: TaxBreakdownItem[]; taxBreakdown: TaxBreakdownItem[] } {
+  let remaining = price;
+  let sc = 0;
+  let tax = 0;
+  const scBreakdown: TaxBreakdownItem[] = [];
+  const taxBreakdown: TaxBreakdownItem[] = [];
+
+  for (const rule of scRules) {
+    const amount = calcInclusiveRuleAmount(remaining, rule);
+    scBreakdown.push({
+      ruleId: rule.id,
+      name: rule.name,
+      taxType: rule.taxType,
+      rate: rule.policy.value,
+      amount,
+      baseAmount: Math.round(remaining),
+      priority: rule.priority,
+    });
+    sc += amount;
+    remaining -= amount;
   }
-  return price - totalTax;
+
+  for (const rule of taxRules) {
+    const amount = calcInclusiveRuleAmount(remaining, rule);
+    taxBreakdown.push({
+      ruleId: rule.id,
+      name: rule.name,
+      taxType: rule.taxType,
+      rate: rule.policy.value,
+      amount,
+      baseAmount: Math.round(remaining),
+      priority: rule.priority,
+    });
+    tax += amount;
+    remaining -= amount;
+  }
+
+  return { dpp: remaining, sc, tax, scBreakdown, taxBreakdown };
 }
 
 function calcItemTax(
@@ -243,26 +279,13 @@ export function calculateTax(input: TaxCalcInput, config: ITaxConfiguration): Ta
     const isInclusive = resolvedModes[idx] === 'inclusive';
 
     if (isInclusive) {
-      const dpp = extractInclusiveDPP(itemAmount, taxRules);
+      const { dpp, sc, tax: itemTax, scBreakdown, taxBreakdown: itemTaxBreakdown } = extractInclusiveItemBreakdown(itemAmount, scRules, taxRules);
       totalDpp += dpp;
-      const itemTax = itemAmount - dpp;
-      totalTax += itemTax;
+      totalSC += sc;
+      totalTax += itemTax + sc;
       grandTotal += itemSubtotal;
 
-      for (const rule of taxRules) {
-        allBreakdown.push({
-          ruleId: rule.id,
-          name: rule.name,
-          taxType: rule.taxType,
-          rate: rule.policy.value,
-          amount: Math.round(roundValue(
-            (rule.modifier?.type === 'fraction' ? itemAmount * ((rule.modifier.config?.numerator ?? 1) / (rule.modifier.config?.denominator ?? 1)) : itemAmount) - (rule.modifier?.type === 'fraction' ? itemAmount * ((rule.modifier.config?.numerator ?? 1) / (rule.modifier.config?.denominator ?? 1)) : itemAmount) / (1 + rule.policy.value / 100),
-            rule.policy.roundingMode, rule.policy.precision,
-          )),
-          baseAmount: Math.round(dpp),
-          priority: rule.priority,
-        });
-      }
+      allBreakdown.push(...scBreakdown, ...itemTaxBreakdown);
     } else {
       const itemSC = exclusiveTaxable > 0 ? (itemAmount / exclusiveTaxable) * globalSC : 0;
       totalSC += itemSC;
@@ -297,7 +320,7 @@ export function calculateTax(input: TaxCalcInput, config: ITaxConfiguration): Ta
     taxableAmount: totalDpp,
     taxBreakdown: aggregatedBreakdown,
     totalTax,
-    serviceCharge: globalSC,
+    serviceCharge: totalSC,
     grandTotal,
   };
 }

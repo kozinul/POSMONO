@@ -119,4 +119,8 @@ export class ReportService {
   async getDailyMetrics(tenantId: string, dateFrom: string, dateTo: string) {
     return this.dailyMetricRepository.findByDateRange(tenantId, dateFrom, dateTo);
   }
+
+  async getSalesPerProduct(tenantId: string, dateFrom: string, dateTo: string) {
+    return this.reportAggregation.getSalesPerProductAggregation(tenantId, dateFrom, dateTo);
+  }
 }

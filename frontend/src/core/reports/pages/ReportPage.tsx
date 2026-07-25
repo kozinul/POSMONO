@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useDailyReport, useSalesReport } from '../../orders/hooks/useOrders';
 import { formatCurrency } from '../../../@shared/utils/format';
 
@@ -16,7 +17,15 @@ export default function ReportPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Reports</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Reports</h1>
+        <Link
+          to="/reports/sales-per-product"
+          className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+        >
+          Sales per Product &rarr;
+        </Link>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-lg shadow p-6">

@@ -285,7 +285,7 @@ describe('PricingEngine', () => {
       expect(result.grandTotal).toBe(100000);
     });
 
-    it('inclusive with SC + PPN fraction: SC in price, PPN extracted from subtotal', () => {
+    it('inclusive with SC + PPN fraction: SC and PPN extracted from price', () => {
       const sc = TaxRule.new('SC 5%', 'service_charge', 1, TaxScope.all(),
         TaxPolicy.create({ type: 'rate', value: 5, roundingMode: 'round', precision: 0 }),
       );
@@ -297,12 +297,221 @@ describe('PricingEngine', () => {
       const result = engine.calculate(input({
         items: [{ id: 'p1', productId: 'p1', productName: 'A', categoryId: 'c1', quantity: 1, unitPrice: 100000 }],
       }), config);
-      // SC is in the price for inclusive items
-      // PPN: modifiedBase = 100000 * 11/12 = 91667, tax = 91667 * 12 / 112 = 9821
-      const base = Math.round(100000 * 11 / 12);
-      const expectedPajak = Math.round(base * 12 / 112);
+      // SC extracted from price: 100000 - 100000/1.05 = 4762
+      // PPN extracted from remaining (100000 - 4762 = 95238) with fraction 11/12
+      const scItem = Math.round(100000 - 100000 / (1 + 5 / 100));
+      const remainingAfterSc = 100000 - scItem;
+      const dpp = Math.round(remainingAfterSc * 11 / 12);
+      const expectedPajak = Math.round(dpp * 12 / 112);
       expect(result.grandTotal).toBe(100000);
-      expect(result.totalTax).toBe(expectedPajak);
+      expect(result.perItemTax?.['p1']?.serviceCharge).toBe(scItem);
+      expect(result.perItemTax?.['p1']?.tax).toBe(expectedPajak);
+      expect(result.totalTax).toBe(scItem + expectedPajak);
+      expect(result.taxBreakdown.length).toBeGreaterThanOrEqual(2);
+      expect(result.taxBreakdown[0].taxType).toBe('service_charge');
+      expect(result.taxBreakdown[0].amount).toBe(scItem);
+    });
+  });
+
+  describe('inclusive SC extraction — various scenarios', () => {
+    it('inclusive with PPN only (no SC): extracts tax from price', () => {
+      const vat = TaxRule.new('PPN 12%', 'vat', 10, TaxScope.all(),
+        TaxPolicy.create({ type: 'rate', value: 12, roundingMode: 'round', precision: 0 }),
+      );
+      const config = makeConfig({ rules: [vat], pricingMode: 'inclusive' });
+      const result = engine.calculate(input({
+        items: [{ id: 'p1', productId: 'p1', productName: 'Nasi Goreng', categoryId: 'cat-food', quantity: 1, unitPrice: 25000 }],
+      }), config);
+
+      const expectedTax = Math.round(25000 - 25000 / (1 + 12 / 100));
+      const expectedDpp = 25000 - expectedTax;
+      expect(result.grandTotal).toBe(25000);
+      expect(result.perItemTax?.['p1']?.serviceCharge).toBe(0);
+      expect(result.perItemTax?.['p1']?.tax).toBe(expectedTax);
+      expect(result.perItemTax?.['p1']?.dpp).toBe(expectedDpp);
+      expect(result.taxBreakdown).toHaveLength(1);
+      expect(result.taxBreakdown[0].taxType).toBe('vat');
+      expect(result.taxBreakdown[0].amount).toBe(expectedTax);
+    });
+
+    it('inclusive with SC only (no PPN): extracts SC from price', () => {
+      const sc = TaxRule.new('SC 10%', 'service_charge', 1, TaxScope.all(),
+        TaxPolicy.create({ type: 'rate', value: 10, roundingMode: 'round', precision: 0 }),
+      );
+      const config = makeConfig({ rules: [sc], pricingMode: 'inclusive' });
+      const result = engine.calculate(input({
+        items: [{ id: 'p1', productId: 'p1', productName: 'Kopi Susu', categoryId: 'cat-drink', quantity: 1, unitPrice: 20000 }],
+      }), config);
+
+      const expectedSC = Math.round(20000 - 20000 / (1 + 10 / 100));
+      const expectedDpp = 20000 - expectedSC;
+      expect(result.grandTotal).toBe(20000);
+      expect(result.perItemTax?.['p1']?.serviceCharge).toBe(expectedSC);
+      expect(result.perItemTax?.['p1']?.tax).toBe(0);
+      expect(result.perItemTax?.['p1']?.dpp).toBe(expectedDpp);
+      expect(result.taxBreakdown).toHaveLength(1);
+      expect(result.taxBreakdown[0].taxType).toBe('service_charge');
+      expect(result.taxBreakdown[0].amount).toBe(expectedSC);
+    });
+
+    it('inclusive SC + PPN: DPP + SC + Tax = price (mathematical invariant)', () => {
+      const sc = TaxRule.new('SC 5%', 'service_charge', 1, TaxScope.all(),
+        TaxPolicy.create({ type: 'rate', value: 5, roundingMode: 'round', precision: 0 }),
+      );
+      const vat = TaxRule.new('PPN 12%', 'vat', 10, TaxScope.all(),
+        TaxPolicy.create({ type: 'rate', value: 12, roundingMode: 'round', precision: 0 }),
+      );
+      const config = makeConfig({ rules: [sc, vat], pricingMode: 'inclusive' });
+
+      const prices = [10000, 20000, 25000, 50000, 100000, 135000];
+      for (const price of prices) {
+        const result = engine.calculate(input({
+          items: [{ id: 'p1', productId: 'p1', productName: 'A', categoryId: 'c1', quantity: 1, unitPrice: price }],
+        }), config);
+
+        const item = result.perItemTax?.['p1']!;
+        expect(result.grandTotal).toBe(price);
+        expect(item.dpp + item.serviceCharge + item.tax).toBe(price);
+      }
+    });
+
+    it('inclusive SC 10% + PPN 12% on Rp 20.000: matches Kopi Susu case', () => {
+      const sc = TaxRule.new('SC 10%', 'service_charge', 1, TaxScope.all(),
+        TaxPolicy.create({ type: 'rate', value: 10, roundingMode: 'round', precision: 0 }),
+      );
+      const vat = TaxRule.new('PPN 12%', 'vat', 10, TaxScope.all(),
+        TaxPolicy.create({ type: 'rate', value: 12, roundingMode: 'round', precision: 0 }),
+      );
+      const config = makeConfig({ rules: [sc, vat], pricingMode: 'inclusive' });
+      const result = engine.calculate(input({
+        items: [{ id: 'p1', productId: 'p1', productName: 'Kopi Susu', categoryId: 'cat-drink', quantity: 1, unitPrice: 20000 }],
+      }), config);
+
+      // SC: 20000 - 20000/1.10 = 20000 - 18181.82 = 1818.18 → round = 1818
+      const expectedSC = Math.round(20000 - 20000 / (1 + 10 / 100));
+      const remainingAfterSc = 20000 - expectedSC;
+      // PPN: remainingAfterSc - remainingAfterSc/1.12
+      const expectedTax = Math.round(remainingAfterSc - remainingAfterSc / (1 + 12 / 100));
+      const expectedDpp = 20000 - expectedSC - expectedTax;
+
+      expect(result.grandTotal).toBe(20000);
+      expect(result.perItemTax?.['p1']?.serviceCharge).toBe(expectedSC);
+      expect(result.perItemTax?.['p1']?.tax).toBe(expectedTax);
+      expect(result.perItemTax?.['p1']?.dpp).toBe(expectedDpp);
+      expect(expectedDpp + expectedSC + expectedTax).toBe(20000);
+    });
+
+    it('inclusive SC + PPN fraction 11/12: cascading extraction from price', () => {
+      const sc = TaxRule.new('SC 5%', 'service_charge', 1, TaxScope.all(),
+        TaxPolicy.create({ type: 'rate', value: 5, roundingMode: 'round', precision: 0 }),
+      );
+      const vat = TaxRule.new('PPN 12% (11/12)', 'vat', 10, TaxScope.all(),
+        TaxPolicy.create({ type: 'rate', value: 12, roundingMode: 'round', precision: 0 }),
+        { modifier: { type: 'fraction', config: { numerator: 11, denominator: 12 } } },
+      );
+      const config = makeConfig({ rules: [sc, vat], pricingMode: 'inclusive' });
+      const result = engine.calculate(input({
+        items: [{ id: 'p1', productId: 'p1', productName: 'A', categoryId: 'c1', quantity: 1, unitPrice: 50000 }],
+      }), config);
+
+      const item = result.perItemTax?.['p1']!;
+      expect(result.grandTotal).toBe(50000);
+      expect(item.dpp + item.serviceCharge + item.tax).toBe(50000);
+      expect(item.serviceCharge).toBeGreaterThan(0);
+      expect(item.tax).toBeGreaterThan(0);
+    });
+
+    it('inclusive with discount: SC and tax extracted from discounted price', () => {
+      const sc = TaxRule.new('SC 5%', 'service_charge', 1, TaxScope.all(),
+        TaxPolicy.create({ type: 'rate', value: 5, roundingMode: 'round', precision: 0 }),
+      );
+      const vat = TaxRule.new('PPN 12%', 'vat', 10, TaxScope.all(),
+        TaxPolicy.create({ type: 'rate', value: 12, roundingMode: 'round', precision: 0 }),
+      );
+      const config = makeConfig({ rules: [sc, vat], pricingMode: 'inclusive' });
+      const result = engine.calculate(input({
+        items: [{ id: 'p1', productId: 'p1', productName: 'A', categoryId: 'c1', quantity: 1, unitPrice: 100000 }],
+        discount: 20000, discountType: 'nominal',
+      }), config);
+
+      // itemAmount = 100000 - 20000 = 80000
+      const item = result.perItemTax?.['p1']!;
+      expect(result.grandTotal).toBe(100000);
+      expect(item.dpp + item.serviceCharge + item.tax).toBe(80000);
+      expect(item.serviceCharge).toBeGreaterThan(0);
+      expect(item.tax).toBeGreaterThan(0);
+    });
+
+    it('inclusive multiple items: each item extracts SC + PPN independently', () => {
+      const sc = TaxRule.new('SC 5%', 'service_charge', 1, TaxScope.all(),
+        TaxPolicy.create({ type: 'rate', value: 5, roundingMode: 'round', precision: 0 }),
+      );
+      const vat = TaxRule.new('PPN 12%', 'vat', 10, TaxScope.all(),
+        TaxPolicy.create({ type: 'rate', value: 12, roundingMode: 'round', precision: 0 }),
+      );
+      const config = makeConfig({ rules: [sc, vat], pricingMode: 'inclusive' });
+      const result = engine.calculate(input({
+        items: [
+          { id: 'p1', productId: 'p1', productName: 'Nasi Goreng', categoryId: 'c1', quantity: 1, unitPrice: 25000 },
+          { id: 'p2', productId: 'p2', productName: 'Kopi Susu', categoryId: 'c2', quantity: 2, unitPrice: 20000 },
+        ],
+      }), config);
+
+      expect(result.grandTotal).toBe(65000);
+
+      // p1: DPP + SC + Tax = 25000
+      const item1 = result.perItemTax?.['p1']!;
+      expect(item1.dpp + item1.serviceCharge + item1.tax).toBe(25000);
+
+      // p2: DPP + SC + Tax = 40000 (2 x 20000)
+      const item2 = result.perItemTax?.['p2']!;
+      expect(item2.dpp + item2.serviceCharge + item2.tax).toBe(40000);
+    });
+
+    it('inclusive with per-item pricingMode override: item-level overrides global', () => {
+      const sc = TaxRule.new('SC 5%', 'service_charge', 1, TaxScope.all(),
+        TaxPolicy.create({ type: 'rate', value: 5, roundingMode: 'round', precision: 0 }),
+      );
+      const vat = TaxRule.new('PPN 12%', 'vat', 10, TaxScope.all(),
+        TaxPolicy.create({ type: 'rate', value: 12, roundingMode: 'round', precision: 0 }),
+      );
+      const config = makeConfig({ rules: [sc, vat], pricingMode: 'exclusive' });
+      const result = engine.calculate(input({
+        items: [
+          { id: 'p1', productId: 'p1', productName: 'A', categoryId: 'c1', quantity: 1, unitPrice: 25000, pricingMode: 'inclusive' },
+          { id: 'p2', productId: 'p2', productName: 'B', categoryId: 'c2', quantity: 1, unitPrice: 30000 },
+        ],
+      }), config);
+
+      // p1 inclusive: grandTotal stays 25000
+      const item1 = result.perItemTax?.['p1']!;
+      expect(item1.dpp + item1.serviceCharge + item1.tax).toBe(25000);
+
+      // p2 exclusive: grandTotal = price + SC + Tax
+      const item2 = result.perItemTax?.['p2']!;
+      expect(item2.serviceCharge).toBeGreaterThan(0);
+      expect(item2.dpp).toBeGreaterThan(30000);
+    });
+
+    it('inclusive breakdown contains both SC and tax entries', () => {
+      const sc = TaxRule.new('SC 5%', 'service_charge', 1, TaxScope.all(),
+        TaxPolicy.create({ type: 'rate', value: 5, roundingMode: 'round', precision: 0 }),
+      );
+      const vat = TaxRule.new('PPN 12%', 'vat', 10, TaxScope.all(),
+        TaxPolicy.create({ type: 'rate', value: 12, roundingMode: 'round', precision: 0 }),
+      );
+      const config = makeConfig({ rules: [sc, vat], pricingMode: 'inclusive' });
+      const result = engine.calculate(input({
+        items: [{ id: 'p1', productId: 'p1', productName: 'A', categoryId: 'c1', quantity: 1, unitPrice: 100000 }],
+      }), config);
+
+      expect(result.taxBreakdown).toHaveLength(2);
+      const scEntry = result.taxBreakdown.find((t) => t.taxType === 'service_charge');
+      const taxEntry = result.taxBreakdown.find((t) => t.taxType === 'vat');
+      expect(scEntry).toBeDefined();
+      expect(taxEntry).toBeDefined();
+      expect(scEntry!.amount).toBeGreaterThan(0);
+      expect(taxEntry!.amount).toBeGreaterThan(0);
     });
 
     it('inclusive with discount: tax extracted from discounted amount', () => {

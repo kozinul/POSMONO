@@ -18,7 +18,7 @@ export class PaymentService {
   async payCash(input: {
     tenantId: string;
     cashierId: string;
-    items: Array<{ productId: string; quantity: number; unitPrice: number }>;
+    items: Array<{ productId: string; productName?: string; quantity: number; unitPrice: number; pricingMode?: 'inclusive' | 'exclusive' }>;
     amountPaid: number;
     method?: PaymentMethod;
     discount?: number;
@@ -70,28 +70,38 @@ export class PaymentService {
       tenantId: input.tenantId,
       items: input.items.map((item) => ({
         productId: item.productId,
-        productName: '',
+        productName: item.productName || '',
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         categoryId: '',
+        pricingMode: item.pricingMode,
       })),
       discount: totalDiscountValue,
-      discountType: 'nominal',
+      discountType: input.discountType || 'nominal',
       customerTags: [],
     });
 
     const total = taxResult.grandTotal;
 
-    const orderItems: IOrderItem[] = input.items.map((item) => ({
-      productId: item.productId,
-      variantId: null,
-      productName: '',
-      quantity: item.quantity,
-      unitPrice: item.unitPrice,
-      totalPrice: item.unitPrice * item.quantity,
-      modifiers: [],
-      tax: { rate: 0, amount: 0 },
-    }));
+    const orderItems: IOrderItem[] = input.items.map((item) => {
+      const itemTax = taxResult.perItemTax?.[item.productId];
+      const taxRate = taxResult.taxBreakdown?.length > 0 ? taxResult.taxBreakdown[0].rate : 0;
+      return {
+        productId: item.productId,
+        variantId: null,
+        productName: item.productName || '',
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        totalPrice: item.unitPrice * item.quantity,
+        modifiers: [],
+        tax: {
+          rate: taxRate,
+          amount: itemTax?.tax || 0,
+        },
+        serviceCharge: itemTax?.serviceCharge || 0,
+        dpp: itemTax?.dpp || 0,
+      };
+    });
 
     const subtotal = taxResult.subtotal;
     const discount = taxResult.discountAmount;

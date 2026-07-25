@@ -17,6 +17,7 @@ export class TaxServiceAdapter {
       unitPrice: number;
       categoryId: string;
       pricingProfileId?: string;
+      pricingMode?: 'inclusive' | 'exclusive';
     }>;
     discount: number;
     discountType: 'percentage' | 'nominal';
@@ -33,6 +34,7 @@ export class TaxServiceAdapter {
         categoryId: item.categoryId,
         quantity: item.quantity,
         unitPrice: item.unitPrice,
+        pricingMode: item.pricingMode,
       })),
       discount: input.discount,
       discountType: input.discountType,

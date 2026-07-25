@@ -23,6 +23,7 @@ export function PaymentModal() {
   const [referenceNumber, setReferenceNumber] = useState('');
   const [discountInput, setDiscountInput] = useState('');
   const [promoInput, setPromoInput] = useState(promoCode);
+  const [paymentMessage, setPaymentMessage] = useState('');
 
   const isCash = selectedMethod?.code === 'cash';
   const paid = parseInt(amountPaid.replace(/\D/g, ''), 10) || 0;
@@ -30,7 +31,7 @@ export function PaymentModal() {
   const canSubmit = selectedMethod !== null
     && (isCash ? paid >= total && total > 0 : true)
     && items.length > 0
-    && paymentState === 'idle';
+    && paymentState !== 'processing';
 
   const handleDiscountChange = (value: string) => {
     setDiscountInput(value);
@@ -56,16 +57,19 @@ export function PaymentModal() {
   const handleSubmit = async () => {
     if (!canSubmit || !selectedMethod) return;
     setPaymentState('processing');
+    setPaymentMessage('');
     try {
       const res = await api.post('/payments/pay-cash', {
         items: items.map((i) => ({
           productId: i.productId,
+          productName: i.name,
           quantity: i.quantity,
           unitPrice: i.price,
+          pricingMode: i.pricingMode || undefined,
         })),
         amountPaid: isCash ? paid : total,
         method: selectedMethod.code,
-        discount: discountType === 'percentage' ? 0 : discount,
+        discount: discount,
         discountType: discount === 0 ? undefined : discountType,
         promoCode: promoCode || undefined,
         referenceNumber: referenceNumber || undefined,
@@ -83,8 +87,10 @@ export function PaymentModal() {
       });
 
       removeItems(items.map((i) => i.productId));
-    } catch {
+    } catch (err: any) {
+      const msg = err.response?.data?.message || err.message || 'Pembayaran gagal.';
       setPaymentState('error');
+      setPaymentMessage(msg);
     }
   };
 
@@ -273,7 +279,7 @@ export function PaymentModal() {
 
             {paymentState === 'error' && (
               <div className="mt-4 bg-red-50 rounded-xl p-3 text-center border border-red-200">
-                <p className="text-sm text-red-600 font-medium">Pembayaran gagal.</p>
+                <p className="text-sm text-red-600 font-medium">{paymentMessage || 'Pembayaran gagal.'}</p>
               </div>
             )}
 

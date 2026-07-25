@@ -16,6 +16,8 @@ export interface IOrderItem {
   totalPrice: number;
   modifiers: Array<{ name: string; price: number }>;
   tax: { rate: number; amount: number };
+  serviceCharge?: number;
+  dpp?: number;
 }
 
 export interface IVoidedItem {
