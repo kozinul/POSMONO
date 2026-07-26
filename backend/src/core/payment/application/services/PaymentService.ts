@@ -18,7 +18,7 @@ export class PaymentService {
   async payCash(input: {
     tenantId: string;
     cashierId: string;
-    items: Array<{ productId: string; productName?: string; quantity: number; unitPrice: number; pricingMode?: 'inclusive' | 'exclusive' }>;
+    items: Array<{ productId: string; productName?: string; categoryId?: string; quantity: number; unitPrice: number; pricingMode?: 'inclusive' | 'exclusive' }>;
     amountPaid: number;
     method?: PaymentMethod;
     discount?: number;
@@ -27,18 +27,23 @@ export class PaymentService {
     referenceNumber?: string;
     cardLastFour?: string;
   }): Promise<{ payment: Payment; order: any }> {
-    let manualDiscountValue = input.discount ?? 0;
+    const roundMoney = (value: number) => Math.round(value);
+    const rawSubtotal = input.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+    const manualDiscountInput = input.discount ?? 0;
+    const manualDiscountValue = input.discountType === 'percentage'
+      ? roundMoney(rawSubtotal * (Math.min(manualDiscountInput, 100) / 100))
+      : Math.min(manualDiscountInput, rawSubtotal);
 
     let promoDiscount = 0;
     let promotionBreakdown: IPromotionBreakdown[] = [];
     let discountBreakdownList: IDiscountBreakdown[] = [];
 
-    if (input.promoCode && this.discountService) {
+    if (this.discountService) {
       const discountResult = await this.discountService.apply({
         tenantId: input.tenantId,
         items: input.items.map((item) => ({
           productId: item.productId,
-          categoryId: '',
+          categoryId: item.categoryId ?? '',
           quantity: item.quantity,
           unitPrice: item.unitPrice,
         })),
@@ -50,7 +55,7 @@ export class PaymentService {
         promotionBreakdown = discountResult.appliedRules.map((rule: any) => ({
           id: rule.ruleId,
           name: rule.ruleName,
-          code: input.promoCode!,
+          code: input.promoCode ?? '',
           totalDiscount: rule.discountAmount,
           description: rule.description,
         }));
@@ -73,15 +78,15 @@ export class PaymentService {
         productName: item.productName || '',
         quantity: item.quantity,
         unitPrice: item.unitPrice,
-        categoryId: '',
+        categoryId: item.categoryId ?? '',
         pricingMode: item.pricingMode,
       })),
       discount: totalDiscountValue,
-      discountType: input.discountType || 'nominal',
+      discountType: 'nominal',
       customerTags: [],
     });
 
-    const total = taxResult.grandTotal;
+    const total = roundMoney(taxResult.grandTotal);
 
     const orderItems: IOrderItem[] = input.items.map((item) => {
       const itemTax = taxResult.perItemTax?.[item.productId];
@@ -103,11 +108,11 @@ export class PaymentService {
       };
     });
 
-    const subtotal = taxResult.subtotal;
-    const discount = taxResult.discountAmount;
-    const dppTotal = taxResult.taxableAmount;
-    const serviceCharge = taxResult.serviceCharge || 0;
-    const tax = taxResult.totalTax;
+    const subtotal = roundMoney(taxResult.subtotal);
+    const discount = roundMoney(taxResult.discountAmount);
+    const dppTotal = roundMoney(taxResult.taxableAmount);
+    const serviceCharge = roundMoney(taxResult.serviceCharge || 0);
+    const tax = roundMoney(taxResult.totalTax);
 
     const order = Order.create({
       tenantId: input.tenantId,

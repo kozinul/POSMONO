@@ -9,7 +9,7 @@ export class DiscountController {
   ) {}
 
   private getTenantId(req: Request): string {
-    return req.params.tenantId || (req as any).user?.tenantId || '';
+    return req.params.tenantId || req.tenantId || (req as any).user?.tenantId || '';
   }
 
   getConfig = async (req: Request, res: Response): Promise<void> => {

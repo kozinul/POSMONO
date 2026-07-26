@@ -130,7 +130,11 @@ export default function PromotionListPage() {
                 <tr key={p.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 text-sm font-medium text-gray-900">{p.name}</td>
                   <td className="px-4 py-3">
-                    <span className="px-2 py-0.5 text-xs font-mono bg-blue-50 text-blue-700 rounded">{p.code}</span>
+                    {p.code ? (
+                      <span className="px-2 py-0.5 text-xs font-mono bg-blue-50 text-blue-700 rounded">{p.code}</span>
+                    ) : (
+                      <span className="px-2 py-0.5 text-xs bg-green-50 text-green-700 rounded">Auto-Apply</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600">
                     {p.effects[0]?.type === 'percentage' ? `${p.effects[0].value}%` :
@@ -193,8 +197,8 @@ export default function PromotionListPage() {
                   <input name="name" required defaultValue={editing?.name} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Kode *</label>
-                  <input name="code" required defaultValue={editing?.code} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono uppercase" />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Kode Promo</label>
+                  <input name="code" defaultValue={editing?.code} placeholder="Kosongkan jika auto-apply" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono uppercase" />
                 </div>
               </div>
 

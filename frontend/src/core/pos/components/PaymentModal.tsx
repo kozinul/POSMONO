@@ -3,6 +3,7 @@ import { usePOSStore } from '../store/posStore';
 import { api } from '../../../@shared/services/api';
 import { useValidatePromoCode } from '../../../@shared/hooks/useDiscountConfiguration';
 import { useActivePaymentMethods, type PaymentMethod } from '../../payment-methods/hooks/usePaymentMethods';
+import { formatIDR } from '../utils/money';
 
 const QUICK_AMOUNTS = [50000, 100000];
 
@@ -63,6 +64,7 @@ export function PaymentModal() {
         items: items.map((i) => ({
           productId: i.productId,
           productName: i.name,
+          categoryId: i.categoryId,
           quantity: i.quantity,
           unitPrice: i.price,
           pricingMode: i.pricingMode || undefined,
@@ -103,7 +105,7 @@ export function PaymentModal() {
             <h2 className="text-lg font-bold text-gray-800">Pembayaran</h2>
             <div className="blue-primary rounded-lg px-4 py-1.5 text-white">
               <span className="text-xs font-medium text-white/80">Total</span>
-              <span className="text-xl font-extrabold ml-2">Rp {total.toLocaleString('id-ID')}</span>
+              <span className="text-xl font-extrabold ml-2">Rp {formatIDR(total)}</span>
             </div>
             <span className="text-sm text-gray-500">{items.length} item</span>
           </div>
@@ -178,7 +180,7 @@ export function PaymentModal() {
                   <div className="flex justify-between text-sm">
                     <span className="text-green-700 font-medium">Diskon</span>
                     <span className="text-green-700 font-bold">
-                      - Rp {(discountAmount || 0).toLocaleString('id-ID')}
+                      - Rp {formatIDR(discountAmount || 0)}
                     </span>
                   </div>
                 </div>
@@ -191,16 +193,16 @@ export function PaymentModal() {
                 {items.slice(0, 4).map((item) => (
                   <div key={item.productId} className="flex justify-between text-xs text-gray-600">
                     <span className="truncate">{item.name} × {item.quantity}</span>
-                    <span className="font-medium shrink-0 ml-2">Rp {(item.price * item.quantity).toLocaleString('id-ID')}</span>
+                    <span className="font-medium shrink-0 ml-2">Rp {formatIDR(item.price * item.quantity)}</span>
                   </div>
                 ))}
                 {items.length > 4 && <p className="text-xs text-gray-400">+{items.length - 4} item lainnya</p>}
               </div>
               <div className="flex justify-between text-xs text-gray-500 mt-2 pt-2 border-t border-gray-100">
-                <span>Subtotal</span><span>Rp {subtotal.toLocaleString('id-ID')}</span>
+                  <span>Subtotal</span><span>Rp {formatIDR(subtotal)}</span>
               </div>
-              {tax > 0 && <div className="flex justify-between text-xs text-gray-500"><span>Pajak</span><span>Rp {tax.toLocaleString('id-ID')}</span></div>}
-              {serviceCharge > 0 && <div className="flex justify-between text-xs text-gray-500"><span>SC</span><span>Rp {serviceCharge.toLocaleString('id-ID')}</span></div>}
+              {tax > 0 && <div className="flex justify-between text-xs text-gray-500"><span>Pajak</span><span>Rp {formatIDR(tax)}</span></div>}
+              {serviceCharge > 0 && <div className="flex justify-between text-xs text-gray-500"><span>SC</span><span>Rp {formatIDR(serviceCharge)}</span></div>}
             </div>
           </div>
 
@@ -255,7 +257,7 @@ export function PaymentModal() {
                 {paid >= total && total > 0 && (
                   <div className="bg-green-50 rounded-xl p-3 text-center mt-3 border border-green-200">
                     <p className="text-xs text-green-700 font-medium">Kembalian</p>
-                    <p className="text-xl font-extrabold text-green-600">Rp {change.toLocaleString('id-ID')}</p>
+                    <p className="text-xl font-extrabold text-green-600">Rp {formatIDR(change)}</p>
                   </div>
                 )}
               </div>
@@ -292,7 +294,7 @@ export function PaymentModal() {
                   canSubmit ? 'blue-primary hover:opacity-90' : 'bg-gray-300 cursor-not-allowed'
                 }`}
               >
-                {paymentState === 'processing' ? 'Memproses...' : `Bayar Rp ${total.toLocaleString('id-ID')}`}
+                {paymentState === 'processing' ? 'Memproses...' : `Bayar Rp ${formatIDR(total)}`}
               </button>
             </div>
           </div>

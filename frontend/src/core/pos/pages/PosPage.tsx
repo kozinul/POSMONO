@@ -1,14 +1,16 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { usePOSStore } from '../store/posStore';
 import { useProducts, useCategories, useBarcodeLookup } from '../hooks/useProducts';
 import { useFamilies } from '../hooks/useFamilies';
 import { useTaxConfiguration } from '../../../@shared/hooks/useTaxConfiguration';
 import { useDiscountConfiguration } from '../../../@shared/hooks/useDiscountConfiguration';
+import { getActiveProductDiscounts, getProductDiscount } from '../../../@shared/utils/discountCalculator';
 import { ProductCard } from '../components/ProductCard';
 import { CartItemRow } from '../components/CartItemRow';
 import { PaymentModal } from '../components/PaymentModal';
 import { ReceiptDisplay } from '../components/ReceiptDisplay';
 import { HeldOrdersPanel } from '../components/HeldOrdersPanel';
+import { formatIDR } from '../utils/money';
 
 export default function PosPage() {
   const {
@@ -105,12 +107,17 @@ export default function PosPage() {
   const { data: categories = [], isError: categoriesError } = useCategories();
   const { data: families = [] } = useFamilies();
 
+  const activeProductDiscounts = useMemo(() => {
+    if (!discountConfig?.rules) return new Map();
+    return getActiveProductDiscounts(discountConfig.rules);
+  }, [discountConfig]);
+
   const filteredCategories = selectedFamily
     ? categories.filter((c) => c.familyId === selectedFamily)
     : categories;
 
   return (
-    <div className="flex-1 flex overflow-hidden">
+    <div className="flex-1 min-h-0 w-full flex overflow-hidden">
       {/* Left: Product Catalog */}
       <section className="flex-1 flex flex-col p-6 overflow-y-auto">
         <div className="space-y-6 mb-6">
@@ -211,24 +218,28 @@ export default function PosPage() {
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {products.map((product) => (
-              <ProductCard
-                key={product.id}
-                id={product.id}
-                name={product.name}
-                price={product.basePrice}
-                imageUrl={product.imageUrls?.[0] || ''}
-                categoryId={product.categoryId}
-                pricingProfileId={product.pricingProfileId}
-                pricingMode={product.pricingMode}
-              />
-            ))}
+            {products.map((product) => {
+              const discount = getProductDiscount(activeProductDiscounts, product.id, product.categoryId);
+              return (
+                <ProductCard
+                  key={product.id}
+                  id={product.id}
+                  name={product.name}
+                  price={product.basePrice}
+                  imageUrl={product.imageUrls?.[0] || ''}
+                  categoryId={product.categoryId}
+                  pricingProfileId={product.pricingProfileId}
+                  pricingMode={product.pricingMode}
+                  discountPercent={discount?.discountPercent}
+                />
+              );
+            })}
           </div>
         )}
       </section>
 
       {/* Right: Cart Sidebar */}
-      <aside className="w-[400px] bg-white border-l border-gray-200 flex flex-col shadow-xl z-20">
+      <aside className="w-[400px] min-h-0 bg-white border-l border-gray-200 flex flex-col shadow-xl z-20">
         <div className="p-4 border-b border-gray-100 shrink-0 space-y-3">
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-bold text-gray-800">Pesanan Baru</h2>
@@ -272,19 +283,19 @@ export default function PosPage() {
           <div className="space-y-2">
             <div className="flex justify-between text-gray-700">
               <span>Subtotal:</span>
-              <span>Rp {subtotal.toLocaleString('id-ID')}</span>
+              <span>Rp {formatIDR(subtotal)}</span>
             </div>
-            {displayBreakdown.length > 0
+                {displayBreakdown.length > 0
               ? displayBreakdown.map((t) => (
                   <div key={t.ruleId} className="flex justify-between text-gray-700 text-sm">
-                    <span>{t.name} ({t.rate}%)</span>
-                    <span>Rp {t.amount.toLocaleString('id-ID')}</span>
+                    <span>{t.name}</span>
+                    <span>Rp {formatIDR(t.amount)}</span>
                   </div>
                 ))
               : tax > 0 && inclusiveTax === 0 && (
                   <div className="flex justify-between text-gray-700">
                     <span>{taxName}:</span>
-                    <span>Rp {tax.toLocaleString('id-ID')}</span>
+                    <span>Rp {formatIDR(tax)}</span>
                   </div>
                 )}
             {promoApplied && promoApplied.appliedRules.length > 0 && (
@@ -292,7 +303,7 @@ export default function PosPage() {
                 {promoApplied.appliedRules.map((r) => (
                   <div key={r.ruleId} className="flex justify-between text-green-600 text-sm">
                     <span>{r.ruleName}:</span>
-                    <span>- Rp {r.discountAmount.toLocaleString('id-ID')}</span>
+                    <span>- Rp {formatIDR(r.discountAmount)}</span>
                   </div>
                 ))}
               </div>
@@ -300,14 +311,14 @@ export default function PosPage() {
             {discount > 0 && (
               <div className="flex justify-between text-green-600">
                 <span>Diskon Manual {discountType === 'percentage' ? `(${discount}%)` : ''}:</span>
-                <span>- Rp {discountAmount.toLocaleString('id-ID')}</span>
+                <span>- Rp {formatIDR(discountAmount)}</span>
               </div>
             )}
           </div>
           <div className="flex justify-between items-end pt-4">
             <span className="text-2xl font-bold text-gray-800">Total:</span>
             <span className="text-3xl font-extrabold text-gray-900">
-              Rp {total.toLocaleString('id-ID')}
+              Rp {formatIDR(total)}
             </span>
           </div>
           <div className="flex gap-4 pt-4">

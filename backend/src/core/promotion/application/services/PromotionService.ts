@@ -1,12 +1,61 @@
 import { Promotion, IPromotionRule, IPromotionEffect, PromotionRuleType, DiscountEffectType } from '../../domain/Promotion';
+import { DiscountConfiguration } from '../../../discount/domain/DiscountConfiguration';
+import { DiscountRule } from '../../../discount/domain/DiscountRule';
+import { promotionToDiscountRule } from '../../infrastructure/sync/PromotionToDiscountMapper';
 
 export class PromotionService {
-  constructor(private readonly promotionRepository: any) {}
+  constructor(
+    private readonly promotionRepository: any,
+    private readonly discountConfigRepo?: any,
+  ) {}
+
+  private async syncToDiscountConfig(promotion: Promotion): Promise<void> {
+    if (!this.discountConfigRepo) return;
+    try {
+      const data = promotion.serialize();
+      let configData = await this.discountConfigRepo.findByTenantId(data.tenantId);
+      if (!configData) {
+        configData = DiscountConfiguration.create({
+          tenantId: data.tenantId,
+          enabled: true,
+          rules: [],
+        }).serialize();
+      }
+
+      const discountRule = promotionToDiscountRule(data);
+      const discConfig = DiscountConfiguration.hydrate(configData);
+      const existingRuleId = `promo_${data.id}`;
+      const existingRule = discConfig.getRule(existingRuleId);
+
+      if (existingRule) {
+        discConfig.updateRule(DiscountRule.create(discountRule));
+      } else {
+        discConfig.addRule(DiscountRule.create(discountRule));
+      }
+
+      await this.discountConfigRepo.save(discConfig.serialize());
+    } catch {
+      // sync failure should not block promotion save
+    }
+  }
+
+  private async removeFromDiscountConfig(tenantId: string, promotionId: string): Promise<void> {
+    if (!this.discountConfigRepo) return;
+    try {
+      const config = await this.discountConfigRepo.findByTenantId(tenantId);
+      if (!config) return;
+      const discConfig = DiscountConfiguration.hydrate(config);
+      discConfig.removeRule(`promo_${promotionId}`);
+      await this.discountConfigRepo.save(discConfig.serialize());
+    } catch {
+      // sync failure should not block promotion delete
+    }
+  }
 
   async create(input: {
     tenantId: string;
     name: string;
-    code: string;
+    code?: string;
     description?: string;
     priority?: number;
     exclusive?: boolean;
@@ -21,13 +70,15 @@ export class PromotionService {
     validUntil?: Date | null;
     metadata?: Record<string, unknown>;
   }): Promise<Promotion> {
-    const existing = await this.promotionRepository.findByCode(input.tenantId, input.code);
-    if (existing) throw new Error('Promotion with this code already exists');
+    if (input.code) {
+      const existing = await this.promotionRepository.findByCode(input.tenantId, input.code);
+      if (existing) throw new Error('Promotion with this code already exists');
+    }
 
     const promotion = Promotion.create({
       tenantId: input.tenantId,
       name: input.name,
-      code: input.code,
+      code: input.code ?? '',
       description: input.description ?? '',
       priority: input.priority ?? 0,
       exclusive: input.exclusive ?? false,
@@ -44,6 +95,7 @@ export class PromotionService {
     });
 
     await this.promotionRepository.save(promotion);
+    await this.syncToDiscountConfig(promotion);
     return promotion;
   }
 
@@ -90,6 +142,7 @@ export class PromotionService {
     });
 
     await this.promotionRepository.save(updated);
+    await this.syncToDiscountConfig(updated);
     return updated;
   }
 
@@ -160,5 +213,6 @@ export class PromotionService {
     if (!promo) throw new Error('Promotion not found');
     if (promo.serialize().tenantId !== tenantId) throw new Error('Promotion not found');
     await this.promotionRepository.delete(id);
+    await this.removeFromDiscountConfig(tenantId, id);
   }
 }

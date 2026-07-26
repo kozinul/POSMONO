@@ -465,7 +465,7 @@ export default function GeneralSettingsPage() {
                     </label>
                   </div>
                   {taxEnabled && ppnEnabled && (
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                       <div className="flex gap-4">
                         <div>
                           <label className="block text-sm font-medium text-gray-600 mb-1.5">Tarif Pajak (%)</label>
@@ -479,23 +479,23 @@ export default function GeneralSettingsPage() {
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-600 mb-1.5">Modifier Dasar Pengenaan</label>
+                          <label className="block text-sm font-medium text-gray-600 mb-1.5">Dasar Pengenaan Pajak (DPP)</label>
                           <select
                             value={ppnModifierType}
                             onChange={(e) => setPpnModifierType(e.target.value as any)}
                             className="block w-44 px-4 py-2.5 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500"
                           >
-                            <option value="none">None (100% DPP)</option>
-                            <option value="fraction">Fraction (a/b)</option>
+                            <option value="none">Tanpa modifier (100%)</option>
+                            <option value="fraction">Pecahan (a/b)</option>
                             <option value="multiplier">Multiplier</option>
-                            <option value="fixed_deduction">Fixed Deduction</option>
+                            <option value="fixed_deduction">Potongan tetap</option>
                           </select>
                         </div>
                       </div>
                       {ppnModifierType === 'fraction' && (
                         <div className="flex gap-3 items-end">
                           <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Numerator</label>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Pembilang (a)</label>
                             <input
                               type="number"
                               value={ppnModifierNumerator}
@@ -504,7 +504,7 @@ export default function GeneralSettingsPage() {
                             />
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Denominator</label>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Penyebut (b)</label>
                             <input
                               type="number"
                               value={ppnModifierDenominator}
@@ -514,9 +514,33 @@ export default function GeneralSettingsPage() {
                           </div>
                         </div>
                       )}
-                      <p className="text-xs text-gray-400">
-                        DPP = amount × modifier. Disimpan saat tekan Simpan.
-                      </p>
+                      {ppnModifierType === 'fraction' && ppnModifierDenominator > 0 && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                          <p className="text-sm font-medium text-blue-800 mb-1">Perhitungan Efektif</p>
+                          <p className="text-sm text-blue-700">
+                            DPP = Harga × {ppnModifierNumerator}/{ppnModifierDenominator}
+                            {ppnModifierDenominator > 0 && (
+                              <> = Harga × {(ppnModifierNumerator / ppnModifierDenominator * 100).toFixed(2)}%</>
+                            )}
+                          </p>
+                          <p className="text-sm text-blue-700 mt-1">
+                            Pajak Efektif = {ppnRate}% × {ppnModifierNumerator}/{ppnModifierDenominator}
+                            {ppnModifierDenominator > 0 && (
+                              <> = {(ppnRate * ppnModifierNumerator / ppnModifierDenominator).toFixed(2)}%</>
+                            )}
+                          </p>
+                        </div>
+                      )}
+                      {ppnModifierType !== 'fraction' && (
+                        <p className="text-xs text-gray-400">
+                          {ppnModifierType === 'none' 
+                            ? `Pajak efektif: ${ppnRate}% dari harga jual.`
+                            : ppnModifierType === 'multiplier'
+                            ? `DPP = Harga × multiplier, lalu pajak ${ppnRate}% dari DPP.`
+                            : `DPP = Harga - potongan tetap, lalu pajak ${ppnRate}% dari DPP.`
+                          }
+                        </p>
+                      )}
                     </div>
                   )}
 
@@ -622,10 +646,10 @@ export default function GeneralSettingsPage() {
                               <p className="text-xs text-gray-400">
                                 {rule.taxType === 'vat' ? 'Pajak' : rule.taxType === 'service_charge' ? 'Service Charge' : rule.taxType === 'withholding' ? 'PPh' : rule.taxType === 'exemption' ? 'Pengecualian' : rule.taxType} — {rule.policy.value}
                                 {rule.policy.type !== 'amount' ? '%' : ''}
+                                {rule.modifier && rule.modifier.type === 'fraction' && rule.modifier.config?.denominator > 0
+                                  ? ` (efektif: ${(rule.policy.value * rule.modifier.config.numerator / rule.modifier.config.denominator).toFixed(2)}%)`
+                                  : ''}
                                 {rule.scope.type !== 'all' && ` · ${rule.scope.entityName}`}
-                                {rule.modifier && rule.modifier.type === 'fraction' && ` · DPP ${rule.modifier.config?.numerator}/${rule.modifier.config?.denominator}`}
-                                {rule.modifier && rule.modifier.type === 'multiplier' && ` · ×${rule.modifier.config?.multiplier}`}
-                                {rule.modifier && rule.modifier.type === 'fixed_deduction' && ` · -${rule.modifier.config?.deduction}`}
                               </p>
                             </div>
                           </div>

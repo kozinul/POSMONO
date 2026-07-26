@@ -730,6 +730,7 @@ export function buildContainer() {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
         promotionRepository: container.resolve('promotionRepository'),
+        discountConfigRepo: container.resolve('discountConfigurationRepository'),
       }),
     }),
     promotionController: asClass(PromotionController, {

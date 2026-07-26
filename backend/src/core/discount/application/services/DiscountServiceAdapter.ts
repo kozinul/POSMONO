@@ -1,4 +1,5 @@
 import { DiscountEngine, DiscountResult } from '../../domain/DiscountEngine';
+import { DiscountRule, IDiscountRule } from '../../domain/DiscountRule';
 import { IDiscountConfigurationRepository } from '../../infrastructure/persistence/IDiscountConfigurationRepository';
 import { IPromoCodeRepository } from '../../infrastructure/persistence/IPromoCodeRepository';
 
@@ -44,13 +45,27 @@ export class DiscountServiceAdapter {
     ruleName?: string;
     error?: string;
   }> {
+    const normalizedCode = code.trim().toUpperCase();
+
+    const config = await this.configRepo.findByTenantId(tenantId);
+    const findSyncedPromotionRule = (): IDiscountRule | undefined => {
+      if (!config?.enabled) return undefined;
+      return config.rules.find((rule) => {
+        if (!rule.active) return false;
+        if (rule.promoCodeId?.toUpperCase() !== normalizedCode) return false;
+        return !DiscountRule.create(rule).isExpired();
+      });
+    };
+
     if (!this.promoCodeRepo) {
-      return { valid: false, error: 'Promo code repository not available' };
+      const rule = findSyncedPromotionRule();
+      return rule ? { valid: true, ruleName: rule.name } : { valid: false, error: 'Kode promo tidak ditemukan' };
     }
 
-    const promoCodeData = await this.promoCodeRepo.findByCode(tenantId, code);
+    const promoCodeData = await this.promoCodeRepo.findByCode(tenantId, normalizedCode);
     if (!promoCodeData) {
-      return { valid: false, error: 'Kode promo tidak ditemukan' };
+      const rule = findSyncedPromotionRule();
+      return rule ? { valid: true, ruleName: rule.name } : { valid: false, error: 'Kode promo tidak ditemukan' };
     }
 
     const { PromoCode } = require('../../domain/PromoCode');
@@ -60,7 +75,6 @@ export class DiscountServiceAdapter {
       return { valid: false, error: 'Kode promo sudah tidak berlaku' };
     }
 
-    const config = await this.configRepo.findByTenantId(tenantId);
     if (!config?.enabled) {
       return { valid: false, error: 'Diskon tidak aktif' };
     }

@@ -113,6 +113,7 @@ function derive(
   discountRules?: IDiscountRule[],
   promoCode?: string,
 ) {
+  const roundMoney = (value: number) => Math.round(value);
   const itemCount = items.reduce((s, i) => s + i.quantity, 0);
   const rawSubtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
   const manualDiscountAmt = rawSubtotal > 0
@@ -132,7 +133,7 @@ function derive(
   }
 
   const totalDiscountAmount = manualDiscountAmt + engineDiscount;
-  const cappedDiscount = Math.min(totalDiscountAmount, rawSubtotal);
+  const cappedDiscount = roundMoney(Math.min(totalDiscountAmount, rawSubtotal));
 
   if (!taxConfig || !taxConfig.taxEnabled) {
     return {
@@ -146,7 +147,7 @@ function derive(
       promoCode: promoCode || '',
       promoApplied,
       discountRules: discountRules || [],
-      total: Math.max(0, rawSubtotal - cappedDiscount),
+      total: roundMoney(Math.max(0, rawSubtotal - cappedDiscount)),
     };
   }
 
@@ -232,21 +233,21 @@ function derive(
   return {
     items,
     itemCount,
-    subtotal: result.subtotal,
-    serviceCharge: result.serviceCharge,
+    subtotal: roundMoney(result.subtotal),
+    serviceCharge: roundMoney(result.serviceCharge),
     serviceChargeName,
-    tax: result.totalTax,
+    tax: roundMoney(result.totalTax),
     taxName,
-    taxBreakdown: result.taxBreakdown,
-    displayBreakdown,
-    inclusiveTax,
+    taxBreakdown: result.taxBreakdown.map((item) => ({ ...item, amount: roundMoney(item.amount), baseAmount: roundMoney(item.baseAmount) })),
+    displayBreakdown: displayBreakdown.map((item) => ({ ...item, amount: roundMoney(item.amount), baseAmount: roundMoney(item.baseAmount) })),
+    inclusiveTax: roundMoney(inclusiveTax),
     discount,
     discountType,
     discountAmount: cappedDiscount,
     promoCode: promoCode || '',
     promoApplied,
     discountRules: discountRules || [],
-    total: result.grandTotal,
+    total: roundMoney(result.grandTotal),
   };
 }
 

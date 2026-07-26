@@ -8,6 +8,7 @@ const payCashSchema = z.object({
   items: z.array(z.object({
     productId: z.string().min(1),
     productName: z.string().optional().default(''),
+    categoryId: z.string().optional().default(''),
     quantity: z.number().int().positive(),
     unitPrice: z.number().nonnegative(),
     pricingMode: z.enum(['inclusive', 'exclusive']).optional().nullable(),

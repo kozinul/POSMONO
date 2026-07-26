@@ -351,12 +351,16 @@ families.view, families.edit
 - **DPP Fraction 11/12**: PPN 12% dengan Dasar Pengenaan Pajak Nilai Lain
   - Rumus: `DPP × 12% × 11/12`
   - Efektif rate: 11%
+  - Modifier type: `fraction` dengan `numerator: 11, denominator: 12`
+  - Frontend preview: "Pajak Efektif = 12% × 11/12 = 11.00%"
 - **Per-product tax**: produk bisa punya pajak berbeda
 - **TaxRule overrides**: rate, DPP fraction, rounding bisa di-override berdasarkan kondisi
 - **Effective date range**: pajak berlaku dari tanggal tertentu
 - **Scope**: all, per kategori, per produk, per jenis transaksi (dine_in, takeaway, dll)
 - **Rounding**: math (standard), floor, ceil
 - **Exempt up to**: batas nilai transaksi bebas pajak
+- **Pricing modes**: `inclusive` (harga sudah termasuk pajak) atau `exclusive` (pajak ditambahkan di atas)
+- **Service charge**: dihitung sebelum pajak, masuk ke DPP
 
 ---
 
@@ -452,6 +456,9 @@ families.view, families.edit
 - **Payment method**: promo berdasarkan metode pembayaran
 - **Time window**: promo berlaku di jam tertentu
 - **Priority**: promo dengan priority lebih tinggi dijalankan lebih dulu
+- **Auto-apply**: promo tanpa `requiresCode` otomatis diterapkan di POS
+- **Discount engine sync**: promo rules disinkronkan ke discount config via `PromotionToDiscountMapper`
+- **Promo code validation**: `DiscountServiceAdapter.validatePromoCode()` mencari synced rules by `promoCodeId`
 
 ---
 

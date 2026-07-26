@@ -23,7 +23,7 @@ const effectSchema = z.object({
 
 const createPromotionSchema = z.object({
   name: z.string().min(1),
-  code: z.string().min(1),
+  code: z.string().optional().default(''),
   description: z.string().optional().default(''),
   priority: z.number().optional().default(0),
   exclusive: z.boolean().optional().default(false),

@@ -1,4 +1,5 @@
 import { usePOSStore } from '../store/posStore';
+import { formatIDR } from '../utils/money';
 
 export function ReceiptDisplay() {
   const { receipt, items, clearCart, openPaymentModal, clearReceipt, displayBreakdown, inclusiveTax } = usePOSStore();
@@ -34,7 +35,7 @@ export function ReceiptDisplay() {
                 {item.name} x{item.quantity}
               </span>
               <span className="font-medium text-gray-800">
-                Rp {(item.price * item.quantity).toLocaleString('id-ID')}
+                Rp {formatIDR(item.price * item.quantity)}
               </span>
             </div>
           ))}
@@ -42,31 +43,31 @@ export function ReceiptDisplay() {
           <div className="border-t pt-3 space-y-1">
             <div className="flex justify-between text-sm text-gray-500">
               <span>Subtotal</span>
-              <span>Rp {receipt.grandTotal.toLocaleString('id-ID')}</span>
+              <span>Rp {formatIDR(receipt.grandTotal)}</span>
             </div>
             {receipt.serviceCharge > 0 && (
               <div className="flex justify-between text-sm text-gray-500">
                 <span>Service Charge</span>
-                <span>Rp {receipt.serviceCharge.toLocaleString('id-ID')}</span>
+                <span>Rp {formatIDR(receipt.serviceCharge)}</span>
               </div>
             )}
             {receipt.taxBreakdown.map((t) => (
               <div key={t.ruleId} className="flex justify-between text-sm text-gray-500">
                 <span>{t.name}</span>
-                <span>Rp {t.amount.toLocaleString('id-ID')}</span>
+                  <span>Rp {formatIDR(t.amount)}</span>
               </div>
             ))}
             <div className="flex justify-between text-lg font-bold text-gray-800 pt-2 border-t">
               <span>Total</span>
-              <span>Rp {receipt.grandTotal.toLocaleString('id-ID')}</span>
+              <span>Rp {formatIDR(receipt.grandTotal)}</span>
             </div>
             <div className="flex justify-between text-sm text-gray-600 pt-1">
               <span>Tunai</span>
-              <span>Rp {receipt.paid.toLocaleString('id-ID')}</span>
+              <span>Rp {formatIDR(receipt.paid)}</span>
             </div>
             <div className="flex justify-between text-sm font-medium text-green-600">
               <span>Kembalian</span>
-              <span>Rp {receipt.change.toLocaleString('id-ID')}</span>
+              <span>Rp {formatIDR(receipt.change)}</span>
             </div>
           </div>
         </div>

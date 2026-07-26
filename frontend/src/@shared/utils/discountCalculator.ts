@@ -7,6 +7,103 @@ export interface DiscountCalcItem {
   unitPrice: number;
 }
 
+export interface ProductDiscountInfo {
+  ruleId: string;
+  ruleName: string;
+  discountPercent: number;
+}
+
+function isRuleTimeActive(rule: IDiscountRule): boolean {
+  const now = new Date();
+
+  for (const condition of rule.conditions) {
+    if (condition.type === 'date_range') {
+      const startDate = condition.config.startDate as string | undefined;
+      const endDate = condition.config.endDate as string | undefined;
+      if (startDate) {
+        const start = new Date(startDate);
+        if (now < start) return false;
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        if (now > end) return false;
+      }
+    }
+    if (condition.type === 'day_of_week') {
+      const days = condition.config.days as number[];
+      if (!days.includes(now.getDay())) return false;
+    }
+  }
+
+  if (rule.maxUsageCount !== undefined && rule.currentUsageCount >= rule.maxUsageCount) return false;
+
+  return true;
+}
+
+export function getActiveProductDiscounts(
+  rules: IDiscountRule[],
+): Map<string, ProductDiscountInfo> {
+  const result = new Map<string, ProductDiscountInfo>();
+
+  const sorted = rules
+    .filter((r) => r.active && !r.promoCodeId)
+    .sort((a, b) => a.priority - b.priority);
+
+  for (const rule of sorted) {
+    if (!isRuleTimeActive(rule)) continue;
+
+    const percentEffect = rule.effects.find((e) => e.type === 'percentage_off');
+    if (!percentEffect) continue;
+
+    const rate = percentEffect.config.rate as number;
+    if (!rate || rate <= 0) continue;
+
+    const info: ProductDiscountInfo = {
+      ruleId: rule.id,
+      ruleName: rule.name,
+      discountPercent: rate,
+    };
+
+    if (rule.scope.type === 'all') {
+      for (const effect of rule.effects) {
+        if (effect.type === 'percentage_off') {
+          const r = effect.config.rate as number;
+          if (r > (info.discountPercent || 0)) {
+            info.discountPercent = r;
+          }
+        }
+      }
+      result.set('__all__', info);
+    } else if (rule.scope.type === 'product') {
+      const entityId = rule.scope.entityId;
+      if (entityId && (!result.has(entityId) || rate > (result.get(entityId)?.discountPercent ?? 0))) {
+        result.set(entityId, info);
+      }
+    } else if (rule.scope.type === 'category') {
+      const catId = rule.scope.entityId;
+      if (catId) {
+        const key = `__cat:${catId}__`;
+        if (!result.has(key) || rate > (result.get(key)?.discountPercent ?? 0)) {
+          result.set(key, info);
+        }
+      }
+    }
+  }
+
+  return result;
+}
+
+export function getProductDiscount(
+  discounts: Map<string, ProductDiscountInfo>,
+  productId: string,
+  categoryId?: string,
+): ProductDiscountInfo | undefined {
+  if (discounts.has(productId)) return discounts.get(productId);
+  if (categoryId && discounts.has(`__cat:${categoryId}__`)) return discounts.get(`__cat:${categoryId}__`);
+  if (discounts.has('__all__')) return discounts.get('__all__');
+  return undefined;
+}
+
 function evaluateConditions(rule: IDiscountRule, items: DiscountCalcItem[], subtotal: number, promoCode?: string): boolean {
   if (rule.promoCodeId && rule.promoCodeId !== promoCode) return false;
 

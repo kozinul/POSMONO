@@ -266,3 +266,179 @@ Option 2 — CSR with Vite.
 - Negative: None for this use case
 
 **Revisit Date:** If we add a public-facing website or customer portal.
+
+---
+
+### DECISION-007
+
+**Date:** 2026-07-26
+
+**Problem:**
+Tax calculation with fraction modifier (DPP Nilai Lain) — how to represent Indonesian PPN 12% with effective 11% rate.
+
+**Context:**
+Indonesian tax regulation (PMK-131/2024) requires PPN 12% with a DPP fraction of 11/12 for certain goods/services. This means the effective tax rate is 11%, not 12%.
+
+**Options Considered:**
+
+1. **Store effective rate directly** — Store 11% as the rate, no fraction modifier.
+   - Pros: Simple, no fraction math
+   - Cons: Doesn't match regulation reference, hard to explain to auditors
+
+2. **Store nominal rate + fraction modifier** — Store 12% rate with 11/12 fraction modifier.
+   - Pros: Matches regulation exactly, auditors can verify
+   - Cons: More complex calculation, UI needs to explain effective rate
+
+3. **Dual display** — Store rate + modifier, but show effective rate in UI.
+   - Pros: Both accurate and user-friendly
+   - Cons: Extra UI complexity
+
+**Chosen Option:**
+Option 3 — Store nominal rate + fraction modifier, show effective rate in UI.
+
+**Reasoning:**
+- Regulatory compliance: auditors need to see 12% rate and 11/12 fraction
+- User experience: POS operators need to see the actual effective rate (11%)
+- The `TaxRule.calculateTax()` applies modifier before rate calculation
+- UI labels now show "Pajak Efektif" with calculated percentage
+
+**Implementation:**
+- Backend: `TaxRule.modifier` stores `{ type: 'fraction', config: { numerator: 11, denominator: 12 } }`
+- Backend: `FractionModifierStrategy.apply()` returns `amount * (numerator / denominator)`
+- Frontend: Settings page shows preview "Pajak Efektif = 12% × 11/12 = 11.00%"
+- Frontend: POS receipt shows rule name only (no confusing rate percentage)
+
+**Consequences:**
+- Positive: Regulatory compliant, user-friendly, extensible to other fraction-based taxes
+- Negative: Slightly more complex than storing effective rate directly
+
+**Revisit Date:** When Indonesian tax regulation changes.
+
+---
+
+### DECISION-008
+
+**Date:** 2026-07-26
+
+**Problem:**
+Promotion → Discount engine sync — how to make POS auto-apply promos created in Promotions page.
+
+**Context:**
+The POS reads discount config from `/api/discount/{tenantId}`, but promos are created in `/api/promotions`. These were two separate systems.
+
+**Options Considered:**
+
+1. **POS reads both endpoints** — Fetch discount config AND promo list separately.
+   - Pros: No sync needed
+   - Cons: Complex POS logic, duplicate evaluation, performance overhead
+
+2. **PromotionToDiscountMapper** — Sync promo rules to discount config on save.
+   - Pros: Single source of truth for POS, existing discount engine works unchanged
+   - Cons: Sync timing, data duplication
+
+3. **Unified discount engine** — Merge promotion and discount into one system.
+   - Pros: Clean architecture
+   - Cons: Major refactor, breaks existing APIs
+
+**Chosen Option:**
+Option 2 — `PromotionToDiscountMapper` syncs promo rules to discount config.
+
+**Reasoning:**
+- POS already has a working discount engine — no need to reinvent
+- Mapper sets `promoCodeId` on synced discount rules for validation
+- `DiscountServiceAdapter.validatePromoCode()` falls back to finding synced rules by `promoCodeId`
+- Auto-apply works because POS always runs discount engine, not just when `promoCode` is provided
+
+**Implementation:**
+- `PromotionToDiscountMapper` converts promotion rules to discount rules
+- `promoCodeId` field links synced rules back to original promotion
+- `PaymentService` always calls `DiscountServiceAdapter.apply()` (removed `if (promoCode)` guard)
+- `PaymentController` accepts `categoryId` for category-based promo conditions
+
+**Consequences:**
+- Positive: Auto-apply promos work, promo code validation works, single discount engine
+- Negative: Sync must be kept in sync (on promotion create/update/delete)
+
+**Revisit Date:** When promotion rules become significantly more complex than discount rules.
+
+---
+
+### DECISION-009
+
+**Date:** 2026-07-26
+
+**Problem:**
+POS currency display — inconsistent formatting with decimal cents in Indonesian Rupiah.
+
+**Context:**
+IDR has no decimal subunits. Previous implementation used `toLocaleString('id-ID')` which sometimes produced `,6` or similar artifacts from floating point arithmetic.
+
+**Options Considered:**
+
+1. **`toLocaleString('id-ID')` everywhere** — Simple, built-in.
+   - Pros: No custom code
+   - Cons: Floating point artifacts, inconsistent display
+
+2. **`formatIDR` helper** — Custom helper that rounds to integer and formats with thousand separator.
+   - Pros: Consistent display, no decimals, proper rounding
+   - Cons: Must use everywhere
+
+3. **Backend returns pre-formatted strings** — API returns formatted currency.
+   - Pros: Client doesn't need formatting logic
+   - Cons: Wrong architecture, API should return numbers
+
+**Chosen Option:**
+Option 2 — `formatIDR` helper in `frontend/src/core/pos/utils/money.ts`.
+
+**Reasoning:**
+- `formatIDR(amount)` = `Math.round(amount).toLocaleString('id-ID')`
+- POS store rounds all monetary values via `roundMoney()` using `Math.round()`
+- All UI components use `formatIDR()` instead of `toLocaleString('id-ID')`
+- Backend `PaymentService` also rounds monetary values before returning
+
+**Consequences:**
+- Positive: No decimal artifacts, consistent display across POS
+- Negative: Must remember to use `formatIDR()` in new components
+
+**Revisit Date:** N/A
+
+---
+
+### DECISION-010
+
+**Date:** 2026-07-26
+
+**Problem:**
+Dashboard navigation — top header bar becoming crowded with menu items.
+
+**Context:**
+As more features were added (Products, Categories, Families, Promotions, Settings, etc.), the top header bar became too crowded to navigate effectively.
+
+**Options Considered:**
+
+1. **Keep header bar, add dropdowns** — Group menu items in dropdown menus.
+   - Pros: Familiar pattern, minimal layout change
+   - Cons: Dropdowns hide items, hard to discover
+
+2. **Left sidebar navigation** — Move menu items to a persistent left sidebar.
+   - Pros: Always visible, grouped by section, industry standard for dashboards
+   - Cons: Reduces content width, requires layout change
+
+3. **Hamburger menu** — Collapsible menu icon.
+   - Pros: Maximizes content width when hidden
+   - Cons: Hidden by default, extra click to navigate
+
+**Chosen Option:**
+Option 2 — Left sidebar navigation in `DashboardLayout.tsx`.
+
+**Reasoning:**
+- Industry standard for SaaS dashboards
+- Always visible — no clicking to discover menu items
+- Groups: Transaksi (POS, Orders), Menu (Products, Categories, Families, Modifiers), Pelanggan (Members), Keuangan (Payments), Promosi, Laporan, Pengaturan
+- POS page renders fullscreen without sidebar (special case)
+
+**Consequences:**
+- Positive: Better navigation, discoverable menu items, professional appearance
+- Negative: Slightly less content width, POS needs special handling
+
+**Revisit Date:** N/A
