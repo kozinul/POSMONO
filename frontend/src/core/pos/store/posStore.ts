@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { ITaxConfiguration } from '../../../@shared/hooks/useTaxConfiguration';
 import type { IDiscountRule, IDiscountResult } from '../../../@shared/hooks/useDiscountConfiguration';
-import { calculateTax, type TaxCalcResult, type TaxBreakdownItem } from '../../../@shared/utils/taxCalculator';
+import { calculateTax, type TaxCalcResult, type TaxLineItem } from '../../../@shared/utils/taxCalculator';
 import { calculateDiscount } from '../../../@shared/utils/discountCalculator';
 
 export interface CartItem {
@@ -36,7 +36,7 @@ interface Receipt {
   displayOrderNumber: string;
   paid: number;
   change: number;
-  taxBreakdown: TaxCalcResult['taxBreakdown'];
+  taxBreakdown: TaxLineItem[];
   totalTax: number;
   serviceCharge: number;
   grandTotal: number;
@@ -50,10 +50,11 @@ interface POSState {
   subtotal: number;
   serviceCharge: number;
   serviceChargeName: string;
+  charges: Array<{ name: string; amount: number; includeInTaxBase: boolean }>;
   tax: number;
   taxName: string;
-  taxBreakdown: TaxCalcResult['taxBreakdown'];
-  displayBreakdown: TaxBreakdownItem[];
+  taxBreakdown: TaxLineItem[];
+  displayBreakdown: TaxLineItem[];
   inclusiveTax: number;
   discount: number;
   discountType: 'percentage' | 'nominal';
@@ -140,6 +141,7 @@ function derive(
       items, itemCount,
       subtotal: rawSubtotal,
       serviceCharge: 0, serviceChargeName: 'Service Charge',
+      charges: [],
       tax: 0, taxName: 'Pajak', taxBreakdown: [],
       displayBreakdown: [], inclusiveTax: 0,
       discount, discountType,
@@ -151,7 +153,6 @@ function derive(
     };
   }
 
-  // Pass total discount as nominal to tax calculator
   const result = calculateTax({
     items: items.map((i) => ({
       productId: i.productId,
@@ -164,24 +165,22 @@ function derive(
     discountType: 'nominal',
   }, taxConfig);
 
-  const scRule = taxConfig.versions
-    .find((v) => v.id === taxConfig.activeVersionId)
-    ?.rules.find((r) => r.taxType === 'service_charge');
-  const serviceChargeName = scRule?.name ?? 'Service Charge';
+  const activeVersion = taxConfig.versions
+    .find((v) => v.id === taxConfig.activeVersionId);
+  const scCharge = activeVersion?.charges?.find((c: any) => c.isActive);
+  const serviceChargeName = scCharge?.name ?? 'Service Charge';
 
-  const firstTax = result.taxBreakdown[0];
-  const taxName = firstTax?.name ?? 'Pajak';
+  const taxName = result.taxes[0]?.name ?? 'Pajak';
+  const totalSC = result.charges.reduce((sum, c) => sum + c.amount, 0);
 
-  // Compute per-item tax to split inclusive vs exclusive
   const hasAnyInclusive = items.some((i) => i.pricingMode === 'inclusive');
   const hasAnyExclusive = items.some((i) => i.pricingMode !== 'inclusive');
   const isMixed = hasAnyInclusive && hasAnyExclusive;
 
-  let displayBreakdown: TaxBreakdownItem[] = result.taxBreakdown;
+  let displayBreakdown: TaxLineItem[] = result.taxes;
   let inclusiveTax = 0;
 
   if (isMixed) {
-    // For mixed carts: recalculate per-item to separate inclusive vs exclusive
     const globalMode = taxConfig.pricingMode;
     const exclusiveSubtotal = items
       .filter((i) => (i.pricingMode ?? globalMode) === 'exclusive')
@@ -207,7 +206,7 @@ function derive(
       discount: exclusiveDiscount,
       discountType: 'nominal' as const,
     }, taxConfig);
-    displayBreakdown = exclusiveItemsResult.taxBreakdown;
+    displayBreakdown = exclusiveItemsResult.taxes;
 
     const inclusiveItemsResult = calculateTax({
       items: items
@@ -222,24 +221,23 @@ function derive(
       discount: inclusiveDiscount,
       discountType: 'nominal' as const,
     }, taxConfig);
-    inclusiveTax = inclusiveItemsResult.totalTax;
+    inclusiveTax = inclusiveItemsResult.taxAmount;
   } else if (hasAnyInclusive) {
-    // All inclusive: show nothing in breakdown (tax is in the price)
     displayBreakdown = [];
-    inclusiveTax = result.totalTax;
+    inclusiveTax = result.taxAmount;
   }
-  // All exclusive: show full breakdown as-is
 
   return {
     items,
     itemCount,
     subtotal: roundMoney(result.subtotal),
-    serviceCharge: roundMoney(result.serviceCharge),
+    serviceCharge: roundMoney(totalSC),
     serviceChargeName,
-    tax: roundMoney(result.totalTax),
+    charges: result.charges.map((c) => ({ ...c, amount: roundMoney(c.amount) })),
+    tax: roundMoney(result.taxAmount),
     taxName,
-    taxBreakdown: result.taxBreakdown.map((item) => ({ ...item, amount: roundMoney(item.amount), baseAmount: roundMoney(item.baseAmount) })),
-    displayBreakdown: displayBreakdown.map((item) => ({ ...item, amount: roundMoney(item.amount), baseAmount: roundMoney(item.baseAmount) })),
+    taxBreakdown: result.taxes.map((t) => ({ ...t, amount: roundMoney(t.amount) })),
+    displayBreakdown: displayBreakdown.map((t) => ({ ...t, amount: roundMoney(t.amount) })),
     inclusiveTax: roundMoney(inclusiveTax),
     discount,
     discountType,
@@ -257,6 +255,7 @@ export const usePOSStore = create<POSState>((set) => ({
   subtotal: 0,
   serviceCharge: 0,
   serviceChargeName: 'Service Charge',
+  charges: [],
   tax: 0,
   taxName: 'Pajak',
   taxBreakdown: [],
@@ -360,6 +359,7 @@ export const usePOSStore = create<POSState>((set) => ({
     set({
       items: [], itemCount: 0, subtotal: 0,
       serviceCharge: 0, serviceChargeName: 'Service Charge',
+      charges: [],
       tax: 0, taxName: 'Pajak', taxBreakdown: [],
       displayBreakdown: [], inclusiveTax: 0,
       discount: 0, discountType: 'nominal', discountAmount: 0,

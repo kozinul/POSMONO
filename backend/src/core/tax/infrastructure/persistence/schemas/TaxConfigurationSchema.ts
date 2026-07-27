@@ -10,7 +10,7 @@ const ModifierConfigSchema = new Schema({
 const TaxRuleSchema = new Schema({
   id: { type: String, required: true },
   name: { type: String, required: true },
-  taxType: { type: String, required: true, enum: ['vat', 'withholding', 'service_charge', 'custom', 'exemption'] },
+  taxType: { type: String, required: true, enum: ['vat', 'withholding', 'custom', 'exemption'] },
   scope: {
     type: { type: String, required: true, enum: ['all', 'category', 'product', 'outlet', 'transaction_type', 'customer', 'service_type'] },
     entityId: { type: String, default: '' },
@@ -40,11 +40,29 @@ const TaxRuleSchema = new Schema({
   metadata: { type: Schema.Types.Mixed },
 }, { _id: false });
 
+const ChargeSchema = new Schema({
+  id: { type: String, required: true },
+  name: { type: String, required: true },
+  rate: { type: Number },
+  amount: { type: Number },
+  includeInTaxBase: { type: Boolean, default: true },
+  scope: {
+    type: { type: String, enum: ['all', 'category', 'product', 'outlet', 'transaction_type', 'customer', 'service_type'], default: 'all' },
+    entityId: { type: String, default: '' },
+    entityName: { type: String, default: '' },
+  },
+  priority: { type: Number, required: true },
+  isActive: { type: Boolean, default: true },
+  effectiveDate: { type: Date },
+  expiresAt: { type: Date },
+}, { _id: false });
+
 const TaxVersionSchema = new Schema({
   id: { type: String, required: true },
   versionNumber: { type: Number, required: true },
   effectiveDate: { type: Date, required: true },
   rules: [TaxRuleSchema],
+  charges: [ChargeSchema],
   status: { type: String, required: true, enum: ['draft', 'active', 'deprecated'] },
   createdAt: { type: Date, required: true },
   deprecatedAt: { type: Date },

@@ -62,6 +62,30 @@ export class TaxController {
     res.json(result);
   }
 
+  // POST /api/tax/charges
+  async addCharge(req: Request, res: Response): Promise<void> {
+    const config = await this.repo.findByTenantIdOrFail(req.tenantId);
+    this.manageRule.addCharge(config, req.body);
+    await this.repo.save(config);
+    res.status(201).json(config.serialize());
+  }
+
+  // PUT /api/tax/charges/:chargeId
+  async updateCharge(req: Request, res: Response): Promise<void> {
+    const config = await this.repo.findByTenantIdOrFail(req.tenantId);
+    config.updateCharge(req.params.chargeId, req.body);
+    await this.repo.save(config);
+    res.json(config.serialize());
+  }
+
+  // DELETE /api/tax/charges/:chargeId
+  async deleteCharge(req: Request, res: Response): Promise<void> {
+    const config = await this.repo.findByTenantIdOrFail(req.tenantId);
+    this.manageRule.removeCharge(config, req.params.chargeId);
+    await this.repo.save(config);
+    res.json(config.serialize());
+  }
+
   // POST /api/tax/validate
   async validateRule(req: Request, res: Response): Promise<void> {
     const errors = new ValidateTaxRuleUseCase().execute(req.body);

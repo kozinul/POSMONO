@@ -19,7 +19,8 @@
 | Product | price, cost, stock, barcode, modifiers, image, taxes, discounts | Product entity + Modifier entity separate | ✅ |
 | Modifier | name, options[], price, per product/family, required | Modifier aggregate + MongoModifierRepository | ✅ |
 | Member | tier, totalOrders, totalSpend, phone search | Customer aggregate with IAddress, loyaltyPoints, recordVisit, search | ✅ |
-| Tax | 35 fields, 9 scopes, TaxRule with conditions, DPP fraction | TaxConfiguration + TaxRule + Engine exist | ✅ |
+| Tax | TaxRule entity + TaxConfiguration aggregate root + PricingEngine + Adjustment Pipeline | TaxConfiguration + TaxRule + Engine exist | ✅ |
+| Charge | Charge entity (first-class): Service Charge, Delivery Fee with includeInTaxBase, sequence | ✅ |
 | Discount | 4 types: percentage, nominal, buy_x_get_y, min_purchase | DiscountConfiguration + Rule + Engine exist | ✅ |
 | Promotion | 14 rule types, exclusive/stackable, usage limits | Promotion aggregate + 14 rule types + evaluator + service + controller | ✅ |
 | Payment Method | split, rounding per method, card last four | Payment domain with split, refund, Midtrans | ✅ |
@@ -76,7 +77,9 @@
 - TopayService ✅ (combined cash+non-cash)
 - RefundService ✅
 - ApplyDiscountService ✅
-- SetServiceChargeService ✅
+- SetServiceChargeService ✅ — now uses `Charge.flat()` or `Charge.new()` instead of `TaxRule.createServiceChargeRule()`
+  - `sequence` (number, default 20) — urutan eksekusi dalam Adjustment Pipeline
+  - API: `POST /api/tax/charges`, `DELETE /api/tax/charges/:chargeId`
 
 **Domain Methods:**
 - applyDiscount(discountBreakdown) ✅

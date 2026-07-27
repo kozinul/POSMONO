@@ -896,3 +896,52 @@ Tax Engine is the most architecturally significant module so far. Compound engin
 **Tests:** 555/572 passing (17 pre-existing failures in Shift/Order/Payment)
 
 **Productivity score:** 8
+
+---
+
+### DATE: 2026-07-26
+
+**Today I worked on:**
+
+- **Charge entity as first-class domain entity** — separated from TaxRule
+  - `Charge.ts`: ICharge interface + Charge class with `new()`, `flat()`, `create()`, `calculate()`, `calculateInclusive()`, `shouldApply()`, `serialize()`
+  - `sequence` field added to ICharge (default 20) and ITaxRule (default 30)
+  - `service_charge` removed from TaxType union
+  - `includeInTaxBase` removed from ITaxRule (now on Charge entity)
+  - CRUD endpoints: `POST /api/tax/charges`, `DELETE /api/tax/charges/:chargeId`
+- **Adjustment Pipeline** — SAP/Oracle/Dynamics-style orchestration layer
+  - `Adjustment.ts`: types (Adjustment, AdjustmentType, AdjustmentStep, PipelineContext)
+  - `AdjustmentPipeline.ts`: orchestrator that sorts steps by sequence, executes in order
+  - 4 step implementations: `DiscountStep`, `ChargeStep`, `TaxStep`, `RoundingStep`
+  - `PricingEngine` refactored to produce `adjustments[]` + legacy fields (charges[], taxes[], taxAmount)
+  - Both inclusive and exclusive modes produce adjustments
+- **Frontend migration**
+  - `taxCalculator.ts`: `Adjustment` type, `adjustments[]` in TaxCalcResult, `sequence` on IChargeConfig
+  - `useTaxConfiguration.ts`: IChargeConfig with sequence, useAddCharge(), useDeleteCharge() hooks
+  - `GeneralSettingsPage.tsx`: migrated from service_charge TaxRule to Charge API
+  - `posStore.ts`: reads SC name from charges instead of rules
+- **Documentation** — updated all docs: POS_CURRENT_FEATURES, API_REFERENCE, DECISIONS (ADR-011), DAILY_LOG, roadmap, README
+
+**Problems encountered:**
+
+- Pipeline test shallow copy issue — `PipelineContext` spread caused steps to modify a copy; fixed by passing original context reference
+- Stub test helper defaulted type to 'CHARGE' when not specified; fixed by adding explicit type in tests
+
+**What I completed:**
+
+- 147 tests passing: 133 backend (9 files) + 14 frontend (1 file)
+- 0 `service_charge` references in source code
+- All 8 documentation files updated
+
+**What I learned:**
+
+- Separating Charge from TaxRule follows the same pattern as separating Discount from Promotion — domain entities should represent one concept
+- Pipeline pattern with configurable sequence is more flexible than hardcoded order
+- Legacy field derivation from new `adjustments[]` ensures backward compatibility without breaking existing consumers
+
+**Tomorrow priority:**
+
+- MVP deployment (VPS + SSL + pilot tenant)
+- Consider adding Adjustment Pipeline tests for edge cases (zero amounts, negative adjustments)
+
+**Productivity score:** 9

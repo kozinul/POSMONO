@@ -8,7 +8,7 @@ Modular SaaS Platform untuk Point of Sale (POS), dirancang untuk restoran, retai
 - **Multi-Outlet**:dukungan beberapa cabang dengan konfigurasi per outlet
 - **POS Terminal**: Transaksi cepat dengan product grid, cart, split payment
 - **Promosi**: 14 tipe rule evaluator, auto-apply, promo code
-- **Pajak**: DPP Fraction 11/12 (PPN 12% efektif 11%), service charge, pricing modes
+- **Pajak**: DPP Fraction 11/12 (PPN 12% efektif 11%), Adjustment Pipeline (Discount→Charge→Tax→Rounding), pricing modes
 - **Inventory**: Multi-gudang, stock movement tracking, low stock alerts
 - **Shift Management**: Open/close shift, cash pickup, cashier reports
 - **Laporan**: Sales, finance, cashier performance reports
@@ -117,7 +117,7 @@ Lihat [docs/API_REFERENCE.md](docs/API_REFERENCE.md) untuk dokumentasi lengkap.
 | `POST /api/discount/:tenantId/validate-promo` | Validate promo code |
 | `POST /api/promotions` | Create promotion |
 
-## Tax Engine
+## Tax Engine & Adjustment Pipeline
 
 POSMono mendukung perhitungan pajak Indonesia dengan DPP Fraction:
 
@@ -135,6 +135,18 @@ Pajak Efektif = 11%
 
 - **Inclusive**: Harga sudah termasuk pajak (pajak di-extract)
 - **Exclusive**: Pajak ditambahkan di atas harga
+
+### Adjustment Pipeline
+
+Pipeline orkestrasi seperti SAP/Oracle/Dynamics ERP:
+
+```
+Discount (seq 10) → Charge (seq 20) → Tax (seq 30) → Rounding (seq 40)
+```
+
+- Setiap step punya `sequence` number yang bisa dikonfigurasi tenant
+- Menghasilkan `adjustments[]` di PricingResult
+- Legacy fields (`charges[]`, `taxes[]`, `taxAmount`) tetap ada untuk backward compatibility
 
 ## Promotion Engine
 

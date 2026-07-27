@@ -36,6 +36,61 @@
 ```
 ---
 
+### DECISION-011
+
+**Date:** 2026-07-26
+
+**Problem:**
+Tax subsystem refactoring — separate Charge from TaxRule as first-class entity, and add Adjustment Pipeline orchestration.
+
+**Context:**
+Previously, Service Charge was modeled as a `TaxRule` with `taxType: 'service_charge'`. This conflated two different concepts: **taxes** (government-mandated levies like PPN) and **charges** (merchant-imposed fees like Service Charge, Delivery Fee). Additionally, the pricing engine had no formal orchestration — Discount, Charge, Tax, and Rounding were computed in hardcoded order with no way for tenants to reorder.
+
+**Options Considered:**
+
+1. **Keep Service Charge as TaxRule** — Add more fields to TaxRule to handle charge-specific logic.
+   - Pros: No schema migration
+   - Cons: TaxRule becomes bloated, violates single responsibility
+
+2. **Separate Charge as first-class entity** — New `Charge` entity with its own domain logic, stored in `TaxConfiguration.charges[]`.
+   - Pros: Clean separation of concerns, each entity handles its own calculation
+   - Cons: Migration needed for existing service_charge rules
+
+3. **Hardcoded pipeline order** — Discount(10) → Charge(20) → Tax(30) → Rounding(40) in PricingEngine.
+   - Pros: Simple, predictable
+   - Cons: No flexibility for tenants who want different ordering
+
+4. **Configurable Adjustment Pipeline** — Steps sorted by `sequence` number, configurable per entity.
+   - Pros: Tenant-configurable, extensible to new adjustment types
+   - Cons: Slightly more complex
+
+**Chosen Option:**
+Options 2 + 4 — Separate Charge entity + Configurable Adjustment Pipeline.
+
+**Reasoning:**
+- **Charge** is semantically different from TaxRule: charges are merchant decisions, taxes are regulatory compliance
+- The pipeline pattern (like SAP/Oracle/Dynamics ERP) is proven for financial calculation engines
+- Sequence numbers on each entity (Discount=10, Charge=20, TaxRule=30, Rounding=40) let tenants reorder without code changes
+- Legacy fields (`charges[]`, `taxes[]`, `taxAmount`) are derived from `adjustments[]` for backward compatibility
+
+**Implementation:**
+- Backend: `Charge.ts` domain entity with `new()`, `flat()`, `create()`, `calculate()`, `calculateInclusive()`, `shouldApply()`
+- Backend: `Adjustment.ts` types (`Adjustment`, `AdjustmentType`, `AdjustmentStep`, `PipelineContext`)
+- Backend: `AdjustmentPipeline.ts` orchestrator — sorts steps by sequence, executes in order
+- Backend: 4 step implementations — `DiscountStep`, `ChargeStep`, `TaxStep`, `RoundingStep`
+- Backend: `PricingEngine` refactored to produce `adjustments[]` + legacy fields
+- Backend: `POST /charges`, `DELETE /charges/:chargeId` API endpoints
+- Frontend: `taxCalculator.ts` updated with `adjustments[]` in `TaxCalcResult`
+- Frontend: `useAddCharge()`, `useDeleteCharge()` hooks; `GeneralSettingsPage` migrated from service_charge TaxRule to Charge API
+
+**Consequences:**
+- Positive: Clean domain model, tenant-configurable ordering, ERP-grade pipeline, backward compatible
+- Negative: Migration needed for existing service_charge rules, slightly more code for pipeline steps
+
+**Revisit Date:** When adding new adjustment types (e.g., surcharges, rebates)
+
+---
+
 ## Decisions
 
 ### DECISION-001

@@ -2,7 +2,8 @@ import { TaxConfiguration } from './TaxConfiguration';
 import { PricingEngine, PricingInput, PricingResult } from './PricingEngine';
 
 export { PricingInput as TaxCalculationInput, PricingResult as TaxCalculationResult };
-export type { TaxItem, TaxBreakdownItem } from './PricingEngine';
+export type { TaxItem, ChargeItem, ModifierInfo, TaxLineItem } from './PricingEngine';
+export type { Adjustment, AdjustmentType } from './Adjustment';
 
 export class TaxEngine {
   private static readonly pricingEngine = new PricingEngine();

@@ -16,7 +16,7 @@ export interface IModifierConfig {
 export interface ITaxRule {
   id: string;
   name: string;
-  taxType: 'vat' | 'withholding' | 'service_charge' | 'custom' | 'exemption';
+  taxType: 'vat' | 'withholding' | 'custom' | 'exemption';
   scope: { type: string; entityId: string; entityName: string };
   policy: {
     type: string;
@@ -32,11 +32,26 @@ export interface ITaxRule {
   conditions?: Record<string, unknown>;
 }
 
+export interface IChargeConfig {
+  id: string;
+  name: string;
+  rate?: number;
+  amount?: number;
+  includeInTaxBase: boolean;
+  scope?: { type: string; entityId: string; entityName: string };
+  priority: number;
+  sequence?: number;
+  isActive: boolean;
+  effectiveDate?: string;
+  expiresAt?: string;
+}
+
 export interface ITaxVersion {
   id: string;
   versionNumber: number;
   effectiveDate: string;
   rules: ITaxRule[];
+  charges: IChargeConfig[];
   status: 'draft' | 'active' | 'deprecated';
   createdAt: string;
   deprecatedAt?: string;
@@ -100,6 +115,38 @@ export function useDeleteTaxRule() {
   return useMutation({
     mutationFn: async (ruleId: string) => {
       await api.delete(`/tax/rules/${ruleId}`);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tax-configuration'] }),
+  });
+}
+
+export function useAddCharge() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (charge: IChargeConfig) => {
+      const { data } = await api.post('/tax/charges', charge);
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tax-configuration'] }),
+  });
+}
+
+export function useUpdateCharge() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ chargeId, partial }: { chargeId: string; partial: Partial<IChargeConfig> }) => {
+      const { data } = await api.put(`/tax/charges/${chargeId}`, partial);
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tax-configuration'] }),
+  });
+}
+
+export function useDeleteCharge() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (chargeId: string) => {
+      await api.delete(`/tax/charges/${chargeId}`);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['tax-configuration'] }),
   });

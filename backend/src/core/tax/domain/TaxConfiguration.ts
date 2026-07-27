@@ -1,6 +1,7 @@
 "use strict";
 
 import { TaxRule, ITaxRule } from './TaxRule';
+import { Charge, ICharge } from './Charge';
 
 export type PricingMode = 'inclusive' | 'exclusive';
 export type TaxVersionStatus = 'draft' | 'active' | 'deprecated';
@@ -10,6 +11,7 @@ export interface ITaxVersion {
   versionNumber: number;
   effectiveDate: Date;
   rules: ITaxRule[];
+  charges: ICharge[];
   status: TaxVersionStatus;
   createdAt: Date;
   deprecatedAt?: Date;
@@ -45,6 +47,7 @@ export class TaxConfiguration {
             versionNumber: 1,
             effectiveDate: now,
             rules: [],
+            charges: [],
             status: 'active' as TaxVersionStatus,
             createdAt: now,
           },
@@ -114,6 +117,11 @@ export class TaxConfiguration {
     return this.getActiveVersion().rules.map((r) => TaxRule.create(r));
   }
 
+  getActiveCharges(): Charge[] {
+    const version = this.getActiveVersion();
+    return (version.charges || []).map((c) => Charge.create(c));
+  }
+
   getAllVersions(): ITaxVersion[] {
     return [...this.data.versions];
   }
@@ -125,6 +133,7 @@ export class TaxConfiguration {
       versionNumber: (lastVersion?.versionNumber ?? 0) + 1,
       effectiveDate,
       rules: lastVersion ? [...lastVersion.rules] : [],
+      charges: lastVersion ? [...(lastVersion.charges || [])] : [],
       status: 'draft',
       createdAt: new Date(),
     };
@@ -176,6 +185,37 @@ export class TaxConfiguration {
     const vIdx = this.data.versions.findIndex((v) => v.id === version.id);
     this.data.versions[vIdx].rules = version.rules.map((r) =>
       r.id === ruleId ? { ...r, ...partial } : r,
+    );
+    this.touch();
+  }
+
+  // --- Charges ---
+
+  addCharge(charge: Charge): void {
+    const version = this.getActiveVersion();
+    const idx = this.data.versions.findIndex((v) => v.id === version.id);
+    this.data.versions[idx] = {
+      ...version,
+      charges: [...(version.charges || []), charge.serialize()],
+    };
+    this.touch();
+  }
+
+  removeCharge(chargeId: string): void {
+    const version = this.getActiveVersion();
+    const idx = this.data.versions.findIndex((v) => v.id === version.id);
+    this.data.versions[idx] = {
+      ...version,
+      charges: (version.charges || []).filter((c) => c.id !== chargeId),
+    };
+    this.touch();
+  }
+
+  updateCharge(chargeId: string, partial: Partial<ICharge>): void {
+    const version = this.getActiveVersion();
+    const vIdx = this.data.versions.findIndex((v) => v.id === version.id);
+    this.data.versions[vIdx].charges = (version.charges || []).map((c) =>
+      c.id === chargeId ? { ...c, ...partial } : c,
     );
     this.touch();
   }

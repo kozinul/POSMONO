@@ -674,7 +674,9 @@ id, tenantId, email, displayName, roleId, isActive, lastLoginAt, createdAt, upda
 | 57 | POST | `/api/tax/rules` | ✓ |
 | 58 | PUT | `/api/tax/rules/:id` | ✓ |
 | 59 | DELETE | `/api/tax/rules/:id` | ✓ |
-| 60 | GET | `/api/discount/:tenantId` | ✓ |
+| 60 | POST | `/api/tax/charges` | ✓ |
+| 61 | DELETE | `/api/tax/charges/:chargeId` | ✓ |
+| 62 | GET | `/api/discount/:tenantId` | ✓ |
 | 61 | POST | `/api/discount/:tenantId` | ✓ |
 | 62 | PUT | `/api/discount/:tenantId` | ✓ |
 | 63 | DELETE | `/api/discount/:tenantId/:ruleId` | ✓ |

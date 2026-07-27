@@ -17,25 +17,63 @@ export interface TaxCalcInput {
   customerTags?: string[];
 }
 
-export interface TaxBreakdownItem {
+export interface IChargeConfig {
+  id: string;
+  name: string;
+  rate?: number;
+  amount?: number;
+  includeInTaxBase: boolean;
+  scope?: { type: string; entityId: string; entityName: string };
+  priority: number;
+  sequence?: number;
+  isActive: boolean;
+  effectiveDate?: string;
+  expiresAt?: string;
+}
+
+export interface ChargeItem {
+  name: string;
+  amount: number;
+  includeInTaxBase: boolean;
+}
+
+export interface ModifierInfo {
+  type: string;
+  before: number;
+  after: number;
+}
+
+export interface TaxLineItem {
   ruleId: string;
   name: string;
-  taxType: string;
   rate: number;
   amount: number;
-  baseAmount: number;
-  priority: number;
+}
+
+export type AdjustmentType = 'DISCOUNT' | 'CHARGE' | 'TAX' | 'ROUNDING';
+
+export interface Adjustment {
+  id: string;
+  type: AdjustmentType;
+  name: string;
+  sequence: number;
+  base: number;
+  rate?: number;
+  amount: number;
+  affectsTaxBase: boolean;
+  affectsGrandTotal: boolean;
+  metadata?: Record<string, unknown>;
 }
 
 export interface TaxCalcResult {
   subtotal: number;
+  adjustments: Adjustment[];
   discount: number;
-  discountType: string;
-  discountAmount: number;
-  taxableAmount: number;
-  taxBreakdown: TaxBreakdownItem[];
-  totalTax: number;
-  serviceCharge: number;
+  charges: ChargeItem[];
+  taxBase: number;
+  modifier: ModifierInfo;
+  taxes: TaxLineItem[];
+  taxAmount: number;
   grandTotal: number;
 }
 
@@ -51,7 +89,43 @@ function getActiveRules(config: ITaxConfiguration): ITaxRule[] {
   });
 }
 
-function scopeMatches(rule: ITaxRule, ctx: {
+function getActiveCharges(config: ITaxConfiguration): IChargeConfig[] {
+  const activeVer = config.versions.find((v) => v.id === config.activeVersionId);
+  if (!activeVer) return [];
+  const charges = (activeVer as any).charges || [];
+  return charges.filter((c: IChargeConfig) => {
+    if (!c.isActive) return false;
+    if (c.expiresAt) {
+      const now = new Date();
+      if (now > new Date(c.expiresAt)) return false;
+    }
+    return true;
+  });
+}
+
+function scopeMatches(
+  scope: { type: string; entityId: string; entityName: string } | undefined,
+  ctx: { items: TaxCalcItem[]; outletId?: string; transactionType?: string; customerTags?: string[] },
+): boolean {
+  if (!scope || !scope.type || scope.type === 'all') return true;
+  switch (scope.type) {
+    case 'category':
+      return !!scope.entityId && ctx.items.some((item) => item.categoryId === scope.entityId);
+    case 'product':
+      return false;
+    case 'outlet':
+      return ctx.outletId === scope.entityId;
+    case 'transaction_type':
+      return ctx.transactionType === scope.entityId;
+    case 'customer':
+    case 'service_type':
+      return !!scope.entityId && !!(ctx.customerTags && ctx.customerTags.includes(scope.entityId));
+    default:
+      return false;
+  }
+}
+
+function ruleScopeMatches(rule: ITaxRule, ctx: {
   items: TaxCalcItem[];
   outletId?: string;
   transactionType?: string;
@@ -127,97 +201,64 @@ function calcInclusiveRuleAmount(price: number, rule: ITaxRule): number {
   return roundValue(rawTax, rule.policy.roundingMode, rule.policy.precision);
 }
 
-function extractInclusiveItemBreakdown(
-  price: number,
-  scRules: ITaxRule[],
-  taxRules: ITaxRule[],
-): { dpp: number; sc: number; tax: number; scBreakdown: TaxBreakdownItem[]; taxBreakdown: TaxBreakdownItem[] } {
-  let remaining = price;
-  let sc = 0;
-  let tax = 0;
-  const scBreakdown: TaxBreakdownItem[] = [];
-  const taxBreakdown: TaxBreakdownItem[] = [];
-
-  for (const rule of scRules) {
-    const amount = calcInclusiveRuleAmount(remaining, rule);
-    scBreakdown.push({
-      ruleId: rule.id,
-      name: rule.name,
-      taxType: rule.taxType,
-      rate: rule.policy.value,
-      amount,
-      baseAmount: Math.round(remaining),
-      priority: rule.priority,
-    });
-    sc += amount;
-    remaining -= amount;
+function calculateCharge(charge: IChargeConfig, base: number): number {
+  if (charge.rate !== undefined) {
+    return Math.round(base * (charge.rate / 100));
   }
-
-  for (const rule of taxRules) {
-    const amount = calcInclusiveRuleAmount(remaining, rule);
-    taxBreakdown.push({
-      ruleId: rule.id,
-      name: rule.name,
-      taxType: rule.taxType,
-      rate: rule.policy.value,
-      amount,
-      baseAmount: Math.round(remaining),
-      priority: rule.priority,
-    });
-    tax += amount;
-    remaining -= amount;
+  if (charge.amount !== undefined) {
+    return Math.round(charge.amount);
   }
-
-  return { dpp: remaining, sc, tax, scBreakdown, taxBreakdown };
+  return 0;
 }
 
-function calcItemTax(
-  itemAmount: number,
-  rules: ITaxRule[],
-  isInclusive: boolean,
-): { tax: number; serviceCharge: number; breakdown: TaxBreakdownItem[] } {
-  let totalTax = 0;
-  let serviceCharge = 0;
-  const breakdown: TaxBreakdownItem[] = [];
-  let dppBase = itemAmount;
+function calculateChargeInclusive(charge: IChargeConfig, price: number): number {
+  if (charge.rate !== undefined) {
+    const divisor = 1 + charge.rate / 100;
+    return Math.round(price - price / divisor);
+  }
+  if (charge.amount !== undefined) {
+    return Math.min(Math.round(charge.amount), price);
+  }
+  return 0;
+}
 
-  for (const rule of rules) {
-    const isExemption = rule.taxType === 'exemption';
-    const isSC = rule.taxType === 'service_charge';
+function accumulateTax(
+  map: Map<string, TaxLineItem>,
+  rule: ITaxRule,
+  amount: number,
+): void {
+  const existing = map.get(rule.id);
+  if (existing) {
+    existing.amount += amount;
+  } else {
+    map.set(rule.id, { ruleId: rule.id, name: rule.name, rate: rule.policy.value, amount });
+  }
+}
 
-    const base = isExemption ? 0 : dppBase;
+function accumulateCharge(
+  map: Map<string, ChargeItem>,
+  charge: IChargeConfig,
+  amount: number,
+): void {
+  const existing = map.get(charge.id);
+  if (existing) {
+    existing.amount += amount;
+  } else {
+    map.set(charge.id, { name: charge.name, amount, includeInTaxBase: charge.includeInTaxBase });
+  }
+}
 
-    let amount = 0;
-    if (isExemption) {
-      amount = 0;
-    } else if (isInclusive && !isSC && rule.policy.type !== 'amount') {
-      const modifiedBase = applyModifier(dppBase, rule.modifier);
-      amount = roundValue(modifiedBase - (modifiedBase / (1 + rule.policy.value / 100)), rule.policy.roundingMode, rule.policy.precision);
-    } else if (rule.policy.type !== 'amount') {
-      const modifiedBase = applyModifier(dppBase, rule.modifier);
-      amount = roundValue(modifiedBase * (rule.policy.value / 100), rule.policy.roundingMode, rule.policy.precision);
-    } else {
-      amount = Math.round(rule.policy.value);
-    }
-
-    breakdown.push({
-      ruleId: rule.id,
-      name: rule.name,
-      taxType: rule.taxType,
-      rate: rule.policy.value,
-      amount,
-      baseAmount: base,
-      priority: rule.priority,
-    });
-
-    totalTax += amount;
-    if (isSC) {
-      serviceCharge += amount;
-      dppBase += amount;
+function calculateGlobalCharges(charges: IChargeConfig[], exclusiveTaxable: number): number[] {
+  const amounts: number[] = [];
+  let base = exclusiveTaxable;
+  for (const charge of charges) {
+    const amount = calculateCharge(charge, base);
+    amounts.push(amount);
+    if (charge.includeInTaxBase) {
+      base += amount;
     }
   }
-
-  return { tax: totalTax, serviceCharge, breakdown };
+  return amounts;
 }
 
 export function calculateTax(input: TaxCalcInput, config: ITaxConfiguration): TaxCalcResult {
@@ -226,56 +267,50 @@ export function calculateTax(input: TaxCalcInput, config: ITaxConfiguration): Ta
     const discountAmount = calcDiscount(subtotal, input.discount ?? 0, input.discountType === 'percentage');
     return {
       subtotal,
-      discount: input.discount ?? 0,
-      discountType: input.discountType ?? 'nominal',
-      discountAmount,
-      taxableAmount: subtotal - discountAmount,
-      taxBreakdown: [],
-      totalTax: 0,
-      serviceCharge: 0,
+      adjustments: [],
+      discount: discountAmount,
+      charges: [],
+      taxBase: subtotal - discountAmount,
+      modifier: { type: 'none', before: 0, after: 0 },
+      taxes: [],
+      taxAmount: 0,
       grandTotal: subtotal - discountAmount,
     };
   }
 
   const subtotal = input.items.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
   const discountAmount = calcDiscount(subtotal, input.discount ?? 0, input.discountType === 'percentage');
-  const taxableAmount = subtotal - discountAmount;
 
   const ctx = { items: input.items, outletId: input.outletId, transactionType: input.transactionType, customerTags: input.customerTags };
 
   const rules = getActiveRules(config)
-    .filter((r) => scopeMatches(r, ctx))
+    .filter((r) => ruleScopeMatches(r, ctx))
     .sort((a, b) => a.priority - b.priority);
 
-  // Resolve each item's effective pricing mode (undefined → use global config)
+  const charges = getActiveCharges(config)
+    .filter((c) => scopeMatches(c.scope, ctx))
+    .sort((a, b) => a.priority - b.priority);
+
   const resolvedModes = input.items.map((i) => i.pricingMode ?? config.pricingMode);
 
-  // --- Line-based pricing engine ---
-  // Per-item: extract DPP, calculate tax, accumulate
-
-  const scRules = rules.filter((r) => r.taxType === 'service_charge');
-  const taxRules = rules.filter((r) => r.taxType !== 'service_charge');
-
-  // 1. Calculate global SC rate on total taxableAmount (exclusive items only)
-  //    SC applies to exclusive items' DPP
   const exclusiveSubtotal = input.items.reduce((sum, item, idx) => {
     if (resolvedModes[idx] === 'exclusive') {
       return sum + item.quantity * item.unitPrice;
     }
     return sum;
   }, 0);
-  // Apply discount proportionally to exclusive items
   const exclusiveDiscount = subtotal > 0 ? (exclusiveSubtotal / subtotal) * discountAmount : 0;
   const exclusiveTaxable = exclusiveSubtotal - exclusiveDiscount;
-  const scResult = calcItemTax(exclusiveTaxable, scRules, false);
-  const globalSC = scResult.serviceCharge;
 
-  // 2. Per-item line-based calculation
-  let totalTax = globalSC;
-  let totalSC = 0;
+  const globalChargeAmounts = calculateGlobalCharges(charges, exclusiveTaxable);
+
+  let totalTax = 0;
   let totalDpp = 0;
+  let totalModifierBase = 0;
   let grandTotal = 0;
-  const allBreakdown: TaxBreakdownItem[] = [...scResult.breakdown];
+  const taxAccumulator = new Map<string, TaxLineItem>();
+  const chargeAccumulator = new Map<string, ChargeItem>();
+  const allAdjustments: Adjustment[] = [];
 
   for (let idx = 0; idx < input.items.length; idx++) {
     const item = input.items[idx];
@@ -285,48 +320,162 @@ export function calculateTax(input: TaxCalcInput, config: ITaxConfiguration): Ta
     const isInclusive = resolvedModes[idx] === 'inclusive';
 
     if (isInclusive) {
-      const { dpp, sc, tax: itemTax, scBreakdown, taxBreakdown: itemTaxBreakdown } = extractInclusiveItemBreakdown(itemAmount, scRules, taxRules);
-      totalDpp += dpp;
-      totalSC += sc;
-      totalTax += itemTax + sc;
+      let remaining = itemAmount;
+
+      for (const charge of charges) {
+        const amount = calculateChargeInclusive(charge, remaining);
+        accumulateCharge(chargeAccumulator, charge, amount);
+        allAdjustments.push({
+          id: charge.id,
+          type: 'CHARGE',
+          name: charge.name,
+          sequence: (charge as any).sequence ?? 20,
+          base: remaining,
+          rate: charge.rate,
+          amount,
+          affectsTaxBase: charge.includeInTaxBase,
+          affectsGrandTotal: true,
+        });
+        remaining -= amount;
+      }
+
+      let itemTax = 0;
+      for (const rule of rules) {
+        const amount = calcInclusiveRuleAmount(remaining, rule);
+        accumulateTax(taxAccumulator, rule, amount);
+        itemTax += amount;
+
+        const metadata: Record<string, unknown> = {};
+        if (rule.modifier && rule.modifier.type !== 'none') {
+          metadata.modifier = rule.modifier.type === 'fraction'
+            ? `${rule.modifier.config?.numerator}/${rule.modifier.config?.denominator}`
+            : rule.modifier.type;
+        }
+
+        allAdjustments.push({
+          id: rule.id,
+          type: 'TAX',
+          name: rule.name,
+          sequence: (rule as any).sequence ?? 30,
+          base: remaining,
+          rate: rule.policy.value,
+          amount,
+          affectsTaxBase: false,
+          affectsGrandTotal: true,
+          metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+        });
+        remaining -= amount;
+      }
+
+      totalDpp += remaining;
+      totalTax += itemTax;
       grandTotal += itemAmount;
-
-      allBreakdown.push(...scBreakdown, ...itemTaxBreakdown);
     } else {
-      const itemSC = exclusiveTaxable > 0 ? (itemAmount / exclusiveTaxable) * globalSC : 0;
-      totalSC += itemSC;
-      const dpp = itemAmount + itemSC;
+      const itemShare = exclusiveTaxable > 0 ? itemAmount / exclusiveTaxable : 0;
+
+      let itemChargeTotal = 0;
+      let itemChargeInDpp = 0;
+      for (let i = 0; i < charges.length; i++) {
+        const proportionalAmount = itemShare * globalChargeAmounts[i];
+        itemChargeTotal += proportionalAmount;
+        if (charges[i].includeInTaxBase) {
+          itemChargeInDpp += proportionalAmount;
+        }
+      }
+
+      const dpp = itemAmount + itemChargeInDpp;
       totalDpp += dpp;
 
-      const taxResult = calcItemTax(dpp, taxRules, false);
-      totalTax += taxResult.tax;
-      allBreakdown.push(...taxResult.breakdown);
-      grandTotal += itemAmount + itemSC + taxResult.tax;
+      let itemTax = 0;
+      for (const rule of rules) {
+        let amount = 0;
+        if (rule.taxType === 'exemption') {
+          amount = 0;
+        } else if (rule.policy.type !== 'amount') {
+          const modifiedBase = applyModifier(dpp, rule.modifier);
+          totalModifierBase += modifiedBase;
+          amount = roundValue(modifiedBase * (rule.policy.value / 100), rule.policy.roundingMode, rule.policy.precision);
+        } else {
+          amount = Math.round(rule.policy.value);
+        }
+        accumulateTax(taxAccumulator, rule, amount);
+        itemTax += amount;
+
+        const metadata: Record<string, unknown> = {};
+        if (rule.modifier && rule.modifier.type !== 'none') {
+          metadata.modifier = rule.modifier.type === 'fraction'
+            ? `${rule.modifier.config?.numerator}/${rule.modifier.config?.denominator}`
+            : rule.modifier.type;
+        }
+
+        allAdjustments.push({
+          id: rule.id,
+          type: 'TAX',
+          name: rule.name,
+          sequence: (rule as any).sequence ?? 30,
+          base: dpp,
+          rate: rule.policy.value,
+          amount,
+          affectsTaxBase: false,
+          affectsGrandTotal: true,
+          metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+        });
+      }
+      totalTax += itemTax;
+      grandTotal += itemAmount + itemChargeTotal + itemTax;
+
+      for (let i = 0; i < charges.length; i++) {
+        const proportionalAmount = itemShare * globalChargeAmounts[i];
+        accumulateCharge(chargeAccumulator, charges[i], proportionalAmount);
+
+        allAdjustments.push({
+          id: charges[i].id,
+          type: 'CHARGE',
+          name: charges[i].name,
+          sequence: (charges[i] as any).sequence ?? 20,
+          base: itemAmount,
+          rate: charges[i].rate,
+          amount: proportionalAmount,
+          affectsTaxBase: charges[i].includeInTaxBase,
+          affectsGrandTotal: true,
+        });
+      }
     }
   }
 
-  // Aggregate breakdown by ruleId (merge entries from multiple items with same rule)
-  const aggregatedMap = new Map<string, TaxBreakdownItem>();
-  for (const entry of allBreakdown) {
-    const existing = aggregatedMap.get(entry.ruleId);
-    if (existing) {
-      existing.amount += entry.amount;
-      existing.baseAmount += entry.baseAmount;
-    } else {
-      aggregatedMap.set(entry.ruleId, { ...entry });
-    }
+  const chargeItems: ChargeItem[] = Array.from(chargeAccumulator.values());
+  const taxes: TaxLineItem[] = Array.from(taxAccumulator.values());
+  const modifierType = rules.length > 0 ? (rules[0].modifier?.type ?? 'none') : 'none';
+
+  if (discountAmount > 0) {
+    allAdjustments.unshift({
+      id: 'discount_global',
+      type: 'DISCOUNT',
+      name: 'Diskon',
+      sequence: 10,
+      base: subtotal,
+      rate: input.discountType === 'percentage' ? input.discount : undefined,
+      amount: -discountAmount,
+      affectsTaxBase: true,
+      affectsGrandTotal: true,
+    });
   }
-  const aggregatedBreakdown = Array.from(aggregatedMap.values());
+
+  allAdjustments.sort((a, b) => a.sequence - b.sequence);
 
   return {
     subtotal,
-    discount: input.discount ?? 0,
-    discountType: input.discountType ?? 'nominal',
-    discountAmount,
-    taxableAmount: totalDpp,
-    taxBreakdown: aggregatedBreakdown,
-    totalTax,
-    serviceCharge: totalSC,
-    grandTotal,
+    adjustments: allAdjustments,
+    discount: discountAmount,
+    charges: chargeItems,
+    taxBase: Math.round(totalDpp),
+    modifier: {
+      type: modifierType,
+      before: Math.round(totalDpp),
+      after: Math.round(totalModifierBase),
+    },
+    taxes,
+    taxAmount: Math.round(totalTax),
+    grandTotal: Math.round(grandTotal),
   };
 }

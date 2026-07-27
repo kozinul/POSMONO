@@ -3,7 +3,7 @@ import { TaxScope, ITaxScope, ScopeMatchContext } from './TaxScope';
 import { IModifierConfig, ModifierEngine } from './ModifierEngine';
 import { RoundingEngine } from './RoundingEngine';
 
-export type TaxType = 'vat' | 'withholding' | 'service_charge' | 'custom' | 'exemption';
+export type TaxType = 'vat' | 'withholding' | 'custom' | 'exemption';
 
 export interface ITaxRule {
   id: string;
@@ -13,6 +13,7 @@ export interface ITaxRule {
   policy: ITaxPolicy;
   modifier?: IModifierConfig;
   priority: number;
+  sequence?: number;
   isActive: boolean;
   effectiveDate: Date;
   expiresAt?: Date;
@@ -52,6 +53,7 @@ export class TaxRule {
       policy: policy.serialize(),
       modifier: overrides?.modifier,
       priority,
+      sequence: overrides?.sequence,
       isActive: overrides?.isActive ?? true,
       effectiveDate: overrides?.effectiveDate ?? new Date(),
       expiresAt: overrides?.expiresAt,
@@ -64,6 +66,7 @@ export class TaxRule {
   getName(): string { return this.data.name; }
   getTaxType(): TaxType { return this.data.taxType; }
   getPriority(): number { return this.data.priority; }
+  getSequence(): number { return this.data.sequence ?? 30; }
   getModifier(): IModifierConfig | undefined { return this.data.modifier; }
 
   getScope(): TaxScope {
@@ -76,10 +79,6 @@ export class TaxRule {
 
   isExemption(): boolean {
     return this.data.taxType === 'exemption';
-  }
-
-  isServiceCharge(): boolean {
-    return this.data.taxType === 'service_charge';
   }
 
   isEnabled(): boolean {

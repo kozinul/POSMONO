@@ -2,6 +2,7 @@ import { TaxConfiguration } from '../../domain/TaxConfiguration';
 import { TaxRule, ITaxRule } from '../../domain/TaxRule';
 import { TaxScope } from '../../domain/TaxScope';
 import { TaxPolicy } from '../../domain/TaxPolicy';
+import { Charge, ICharge } from '../../domain/Charge';
 import { IModifierConfig } from '../../domain/ModifierEngine';
 import { ValidateTaxRuleUseCase } from './ValidateTaxRuleUseCase';
 
@@ -29,6 +30,17 @@ export class ManageTaxRuleUseCase {
     return config;
   }
 
+  addCharge(config: TaxConfiguration, data: ICharge): TaxConfiguration {
+    const charge = Charge.create(data);
+    config.addCharge(charge);
+    return config;
+  }
+
+  removeCharge(config: TaxConfiguration, chargeId: string): TaxConfiguration {
+    config.removeCharge(chargeId);
+    return config;
+  }
+
   createVatRule(name: string, rate: number, priority: number, modifier?: IModifierConfig): TaxRule {
     return TaxRule.new(name, 'vat', priority, TaxScope.all(),
       TaxPolicy.create({ type: 'percentage_of_base', value: rate, roundingMode: 'round', precision: 2 }),
@@ -36,10 +48,8 @@ export class ManageTaxRuleUseCase {
     );
   }
 
-  createServiceChargeRule(name: string, rate: number, priority: number): TaxRule {
-    return TaxRule.new(name, 'service_charge', priority, TaxScope.all(),
-      TaxPolicy.create({ type: 'rate', value: rate, roundingMode: 'round', precision: 2 }),
-    );
+  createCharge(name: string, rate: number, priority: number, includeInTaxBase: boolean): Charge {
+    return Charge.new(name, rate, priority, includeInTaxBase);
   }
 
   createWithholdingRule(name: string, rate: number, priority: number): TaxRule {

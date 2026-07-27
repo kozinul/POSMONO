@@ -110,7 +110,7 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | Discount & promo engine | `[x]` |
 | Tax calculation engine | `[x]` |
 | DPP Nilai Lain (Indonesia PPN 12%) | `[x]` |
-| Compound tax (Service Charge + PPN) | `[x]` |
+| Compound tax (Charge + PPN) via Adjustment Pipeline | `[x]` |
 | Category-based & product-based tax | `[x]` |
 | Tax exemption rules | `[x]` |
 | Split bill | `[ ]` |

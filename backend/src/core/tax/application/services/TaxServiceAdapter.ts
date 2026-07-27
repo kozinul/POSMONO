@@ -22,7 +22,7 @@ export class TaxServiceAdapter {
     discount: number;
     discountType: 'percentage' | 'nominal';
     customerTags?: string[];
-  }): Promise<TaxCalculationResult & { taxes: TaxCalculationResult['taxBreakdown'] }> {
+  }): Promise<TaxCalculationResult> {
     const config = await this.repo.findByTenantIdOrFail(input.tenantId);
 
     const engineInput: TaxCalculationInput = {
@@ -41,7 +41,6 @@ export class TaxServiceAdapter {
       customerTags: input.customerTags,
     };
 
-    // Resolve pricing profiles → allowed ruleIds
     let allowedRuleIds: string[] | undefined;
     if (this.pricingProfileRepo) {
       const profileIds = [...new Set(input.items.map((i) => i.pricingProfileId).filter(Boolean))] as string[];
@@ -51,11 +50,6 @@ export class TaxServiceAdapter {
       }
     }
 
-    const result = TaxEngine.calculate(engineInput, config, allowedRuleIds);
-
-    return {
-      ...result,
-      taxes: result.taxBreakdown,
-    };
+    return TaxEngine.calculate(engineInput, config, allowedRuleIds);
   }
 }

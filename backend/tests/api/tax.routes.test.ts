@@ -50,7 +50,6 @@ describe('Tax Routes', () => {
   });
 
   beforeEach(async () => {
-    // reset state: reinitialize default config
     const existing = await sharedRepo.findByTenantId('tenant-test-1');
     if (existing) {
       const cfg = existing;
@@ -58,6 +57,7 @@ describe('Tax Routes', () => {
       cfg.setPricingMode('exclusive');
       const v = cfg.getActiveVersion();
       v.rules = [];
+      v.charges = [];
       await sharedRepo.save(cfg);
     } else {
       await sharedRepo.initializeDefault('tenant-test-1');
@@ -115,7 +115,6 @@ describe('Tax Routes', () => {
 
   describe('DELETE /api/tax/rules/:ruleId', () => {
     it('removes a rule', async () => {
-      // add rule first
       await request(app)
         .post('/api/tax/rules')
         .set('Authorization', `Bearer ${token}`)
@@ -133,7 +132,6 @@ describe('Tax Routes', () => {
 
   describe('POST /api/tax/calculate', () => {
     it('returns 200 with tax calculation result', async () => {
-      // add a VAT rule
       await request(app)
         .post('/api/tax/rules')
         .set('Authorization', `Bearer ${token}`)
@@ -151,10 +149,10 @@ describe('Tax Routes', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.subtotal).toBe(120000);
-      expect(res.body.totalTax).toBe(13200);
+      expect(res.body.taxAmount).toBe(13200);
       expect(res.body.grandTotal).toBe(133200);
-      expect(res.body.taxBreakdown).toHaveLength(1);
-      expect(res.body.taxBreakdown[0].taxType).toBe('vat');
+      expect(res.body.taxes).toHaveLength(1);
+      expect(res.body.taxes[0].name).toBe('Pajak 12%');
     });
 
     it('returns 200 with multiple items and discount', async () => {
@@ -178,10 +176,10 @@ describe('Tax Routes', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.subtotal).toBe(150000);
-      expect(res.body.discountAmount).toBe(15000);
-      expect(res.body.taxableAmount).toBe(135000);
+      expect(res.body.discount).toBe(15000);
+      expect(res.body.taxBase).toBe(135000);
       const expectedTax = Math.round(135000 * 11 / 12 * 12 / 100 * 100) / 100;
-      expect(res.body.totalTax).toBe(expectedTax);
+      expect(res.body.taxAmount).toBe(expectedTax);
       expect(res.body.grandTotal).toBe(150000 + expectedTax);
     });
   });

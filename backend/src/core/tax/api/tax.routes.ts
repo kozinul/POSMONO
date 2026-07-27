@@ -20,6 +20,9 @@ export function createTaxRoutes(repo: ITaxConfigurationRepository): Router {
   router.put('/configuration', asyncHandler(controller.updateConfiguration.bind(controller)));
   router.post('/rules', asyncHandler(controller.addRule.bind(controller)));
   router.delete('/rules/:ruleId', asyncHandler(controller.deleteRule.bind(controller)));
+  router.post('/charges', asyncHandler(controller.addCharge.bind(controller)));
+  router.put('/charges/:chargeId', asyncHandler(controller.updateCharge.bind(controller)));
+  router.delete('/charges/:chargeId', asyncHandler(controller.deleteCharge.bind(controller)));
   router.post('/calculate', asyncHandler(controller.calculate.bind(controller)));
   router.post('/validate', asyncHandler(controller.validateRule.bind(controller)));
 

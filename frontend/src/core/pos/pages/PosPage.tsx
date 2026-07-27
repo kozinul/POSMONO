@@ -18,6 +18,7 @@ export default function PosPage() {
     subtotal,
     serviceCharge,
     serviceChargeName,
+    charges,
     tax,
     taxName,
     taxBreakdown,
@@ -44,14 +45,14 @@ export default function PosPage() {
     toggleHeldOrdersPanel,
   } = usePOSStore();
 
-  const { data: taxConfig } = useTaxConfiguration();
+  const { data: taxConfig, dataUpdatedAt: taxConfigUpdatedAt } = useTaxConfiguration();
   const { data: discountConfig } = useDiscountConfiguration();
 
   useEffect(() => {
     if (taxConfig) {
       setTaxConfig(taxConfig);
     }
-  }, [taxConfig, setTaxConfig]);
+  }, [taxConfig, taxConfigUpdatedAt, setTaxConfig]);
 
   useEffect(() => {
     if (discountConfig?.rules) {
@@ -285,6 +286,12 @@ export default function PosPage() {
               <span>Subtotal:</span>
               <span>Rp {formatIDR(subtotal)}</span>
             </div>
+            {charges.filter((c) => c.amount > 0).map((charge) => (
+              <div key={charge.name} className="flex justify-between text-gray-700 text-sm">
+                <span>{charge.name}:</span>
+                <span>Rp {formatIDR(charge.amount)}</span>
+              </div>
+            ))}
                 {displayBreakdown.length > 0
               ? displayBreakdown.map((t) => (
                   <div key={t.ruleId} className="flex justify-between text-gray-700 text-sm">

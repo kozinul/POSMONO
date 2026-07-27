@@ -36,7 +36,7 @@ Monorepo (pnpm + Turborepo)
 | 7 | Product | Product | `/api/products` | ✅ |
 | 8 | Modifier | Modifier | `/api/modifiers` | ✅ |
 | 9 | Member | Member | `/api/members` | ✅ |
-| 10 | Tax | Tax, TaxRule | `/api/taxes` | ✅ |
+| 10 | Tax | TaxRule, Charge | `/api/tax` | ✅ |
 | 11 | Discount | Discount | `/api/discounts` | ✅ |
 | 12 | Promotion | Promotion | `/api/promotions` | ✅ |
 | 13 | Payment Method | PaymentMethod | `/api/payment-methods` | ✅ |
@@ -304,48 +304,49 @@ families.view, families.edit
 ## 10. Domain: Tax
 
 ### Models
-- **Tax** (`Tax.ts`)
-  - `name`, `code` (string, unique)
+- **TaxRule** (`TaxRule.ts`)
+  - `name`, `description`
+  - `taxType` (`'vat' | 'withholding' | 'other'`) — note: `service_charge` type removed; use Charge entity instead
   - `rate` (number) — persentase atau nominal
-  - `rateType` ('percentage' | 'nominal')
-  - `taxType` ('vat' | 'withholding' | 'service_charge' | 'other')
+  - `rateType` (`'percentage' | 'nominal'`)
   - `dppFormula` — `{ type: 'full' | 'fraction', fraction?: { numerator, denominator } }`
-  - `rounding` ('math' | 'floor' | 'ceil')
+  - `rounding` (`'math' | 'floor' | 'ceil'`)
   - `roundingPrecision` (number)
-  - `scope` ('all' | 'category' | 'product' | 'transaction_type')
+  - `scope` (`'all' | 'category' | 'product' | 'transaction_type'`)
   - `categoryIds`, `productIds`, `transactionTypes`
   - `includedByDefault` (boolean) — apakah harga sudah termasuk pajak
   - `effectiveFrom`, `effectiveTo` (Date)
   - `priority` (number)
+  - `sequence` (number, default 30) — urutan eksekusi dalam Adjustment Pipeline
   - `outlets` (ObjectId[])
   - `exemptUpTo` (number)
   - `active` (boolean)
 
-- **TaxRule** (`TaxRule.ts`)
-  - `name`, `description`
-  - `taxCode` (string) — reference ke Tax.code
-  - `regulationReference` (string) — e.g. "PMK-131/2024"
-  - `conditions` — `{ applicableFrom, applicableTo, minTransactionValue, maxTransactionValue, outletIds, categoryIds, productIds, transactionTypes, customerTiers }`
-  - `actions` — `{ rateOverride, dppFractionOverride, roundingOverride, statusOverride, includedOverride }`
+- **Charge** (`Charge.ts`) — first-class entity (separate from TaxRule)
+  - `name` (string)
+  - `rateType` (`'percentage' | 'nominal'`)
+  - `amount` (number) — flat amount or percentage value
+  - `includeInTaxBase` (boolean) — whether charge is part of DPP
+  - `includeInGrandTotal` (boolean) — whether charge adds to grand total
+  - `sequence` (number, default 20) — urutan eksekusi dalam Adjustment Pipeline
+  - `isActive` (boolean)
+  - `conditions` — `{ outletIds?, categoryIds?, productIds?, customerTiers? }`
   - `priority` (number)
-  - `active` (boolean)
+  - `outlets` (ObjectId[])
 
 ### API Endpoints
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| GET | `/api/taxes` | ❌ | List taxes |
-| GET | `/api/taxes/:id` | ❌ | Get tax detail |
-| POST | `/api/taxes` | ✅ admin | Create tax |
-| PUT | `/api/taxes/:id` | ✅ admin | Update tax |
-| DELETE | `/api/taxes/:id` | ✅ admin | Delete tax |
-| POST | `/api/taxes/calculate` | ✅ | Calculate transaction tax |
-| GET | `/api/taxes/product/display` | ❌ | Get product tax display |
-| GET | `/api/taxes/validate/:id?` | ✅ admin | Validate tax config |
-| GET | `/api/taxes/rules/list` | ❌ | List tax rules |
-| GET | `/api/taxes/rules/:id` | ❌ | Get tax rule |
-| POST | `/api/taxes/rules` | ✅ admin | Create tax rule |
-| PUT | `/api/taxes/rules/:id` | ✅ admin | Update tax rule |
-| DELETE | `/api/taxes/rules/:id` | ✅ admin | Delete tax rule |
+| GET | `/api/tax/configuration` | ✅ | Get tax configuration |
+| PUT | `/api/tax/configuration` | ✅ | Update tax configuration |
+| POST | `/api/tax/calculate` | ✅ | Calculate transaction tax |
+| GET | `/api/tax/rules/list` | ❌ | List tax rules |
+| GET | `/api/tax/rules/:id` | ❌ | Get tax rule |
+| POST | `/api/tax/rules` | ✅ admin | Create tax rule |
+| PUT | `/api/tax/rules/:id` | ✅ admin | Update tax rule |
+| DELETE | `/api/tax/rules/:id` | ✅ admin | Delete tax rule |
+| POST | `/api/tax/charges` | ✅ admin | Add charge (Service Charge, Delivery Fee, etc.) |
+| DELETE | `/api/tax/charges/:chargeId` | ✅ admin | Remove charge |
 
 ### Business Logic (Tax Engine)
 - **DPP Fraction 11/12**: PPN 12% dengan Dasar Pengenaan Pajak Nilai Lain
@@ -353,6 +354,19 @@ families.view, families.edit
   - Efektif rate: 11%
   - Modifier type: `fraction` dengan `numerator: 11, denominator: 12`
   - Frontend preview: "Pajak Efektif = 12% × 11/12 = 11.00%"
+- **Charge entity** (first-class, separate from TaxRule):
+  - Service Charge, Delivery Fee, dll dikelola sebagai Charge
+  - Charge punya `includeInTaxBase` (masuk DPP atau tidak) dan `includeInGrandTotal`
+  - Charge tipe flat: `Charge.flat(5, 1, true)` → amount=5, includeInTaxBase=true
+  - Charge tipe percentage: `Charge.new({ amount: 5, rateType: 'percentage' })` → 5% dari subtotal
+  - API: `POST /api/tax/charges` (add), `DELETE /api/tax/charges/:chargeId` (remove)
+- **Adjustment Pipeline** (orkestrasi seperti SAP/Oracle/Dynamics ERP):
+  - 4 langkah: Discount → Charge → Tax → Rounding
+  - Setiap langkah punya `sequence` number (bisa dikonfigurasi tenant)
+  - Urutan default: Discount=10, Charge=20, Tax=30, Rounding=40
+  - Pipeline menghasilkan `adjustments[]` di PricingResult
+  - Legacy fields (`charges[]`, `taxes[]`, `taxAmount`, `modifier`) tetap ada untuk backward compatibility
+  - `adjustments[]` structure: `{ id, type, name, sequence, base, rate?, amount, affectsTaxBase, affectsGrandTotal, metadata? }`
 - **Per-product tax**: produk bisa punya pajak berbeda
 - **TaxRule overrides**: rate, DPP fraction, rounding bisa di-override berdasarkan kondisi
 - **Effective date range**: pajak berlaku dari tanggal tertentu
@@ -360,7 +374,6 @@ families.view, families.edit
 - **Rounding**: math (standard), floor, ceil
 - **Exempt up to**: batas nilai transaksi bebas pajak
 - **Pricing modes**: `inclusive` (harga sudah termasuk pajak) atau `exclusive` (pajak ditambahkan di atas)
-- **Service charge**: dihitung sebelum pajak, masuk ke DPP
 
 ---
 
@@ -503,7 +516,7 @@ families.view, families.edit
   - `roundingMethod` (string)
   - `subtotal`, `discountTotal`, `dppTotal`, `taxTotal`
   - `taxDetails` (ITaxDetail[]) — detail per pajak
-  - `serviceCharge`, `serviceChargeRate`
+  - `serviceCharge`, `serviceChargeRate` — legacy field, kept for backward compatibility; new system uses Charge entity + adjustments[]
   - `promotions` (IPromotionBreakdown[]) — promo yang diterapkan
   - `paymentMethod` (ObjectId), `paymentMethodCode`, `paymentMethodName`
   - `paymentBreakdown` (IPaymentBreakdownEntry[]) — split payment detail
@@ -536,7 +549,7 @@ families.view, families.edit
 
 ### Business Logic
 - **Order number auto-generated**: format `ORD-YYYYMMDD-XXXX`
-- **Tax calculation**: hitung DPP + pajak per item, termasuk DPP fraction 11/12
+- **Tax calculation**: hitung DPP + pajak per item via Adjustment Pipeline (Discount→Charge→Tax→Rounding), termasuk DPP fraction 11/12
 - **Inclusive/exclusive pricing**: SC & PPN extracted from price (inclusive) or added on top (exclusive)
 - **Promotion application**: terapkan promo rules ke cart
 - **Split payment**: bayar dengan beberapa metode sekaligus
@@ -967,7 +980,8 @@ export type CreateOrderInput = {
 | Families | Makanan, Minuman, Merchandise |
 | Categories | Makanan Berat, Camilan, Minuman, Kopi |
 | Products | Nasi Goreng (15K), Mie Goreng (12K), Ayam Geprek (18K), Es Teh Manis (5K), Kopi Hitam (8K), Jus Jeruk (10K) |
-| Taxes | PPN 12% (DPP 11/12), Service Charge 5%, Bebas Pajak (0%) |
+| Taxes | PPN 12% (DPP 11/12), Bebas Pajak (0%) |
+| Charges | Service Charge 5% (includeInTaxBase: true) |
 | Tax Rules | PPN 12% - DPP Nilai Lain (PMK-131/2024) |
 | Payment Methods | Tunai, QRIS, Kartu Debit, Kartu Kredit, Transfer Bank |
 
@@ -1007,7 +1021,7 @@ Untuk rewrite ke Modular Monolith + DDD, berikut rekomendasi domain boundaries:
 | **Catalog** | Product | Product, Category, Family, Modifier | Barcode, Price, TaxEntry, ModifierOption | ProductCreated, ProductUpdated |
 | **Inventory** | Stock | StockMovement | StockLevel | StockAdjusted, StockDepleted |
 | **Sales** | Order | Order, OrderItem, VoidedItem | OrderNumber, OrderStatus, TaxDetail, PromotionBreakdown | OrderCreated, OrderPaid, OrderVoided |
-| **Pricing** | Promotion | Promotion, Discount, Tax, TaxRule | Rule, RoundingPolicy, DppFormula | PromotionApplied, TaxCalculated |
+| **Pricing** | Promotion | Promotion, Discount, TaxRule, Charge | Rule, RoundingPolicy, DppFormula, Adjustment | PromotionApplied, TaxCalculated, AdjustmentProcessed |
 | **Payment** | Payment | PaymentMethod | RoundingPolicy, CardLastFour | PaymentProcessed, PaymentRefunded |
 | **Customer** | Member | Member | MemberTier, Phone | MemberRegistered, MemberTierUpgraded |
 | **Organization** | Outlet | Outlet | OutletCode, OutletStatus | OutletCreated, OutletDeactivated |

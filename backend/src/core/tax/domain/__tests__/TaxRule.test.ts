@@ -82,15 +82,6 @@ describe('TaxRule', () => {
     });
   });
 
-  describe('isServiceCharge', () => {
-    it('returns true for service_charge type', () => {
-      const rule = TaxRule.new('Service Charge', 'service_charge', 5, TaxScope.all(),
-        TaxPolicy.create({ type: 'rate', value: 5, roundingMode: 'round', precision: 2 }),
-      );
-      expect(rule.isServiceCharge()).toBe(true);
-    });
-  });
-
   describe('shouldApply', () => {
     it('returns true when scope matches and enabled', () => {
       const rule = makeVatRule();
