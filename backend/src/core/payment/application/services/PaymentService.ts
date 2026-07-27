@@ -87,10 +87,20 @@ export class PaymentService {
     });
 
     const total = roundMoney(taxResult.grandTotal);
+    const serviceChargeTotal = roundMoney(taxResult.charges.reduce((sum: number, c: { amount: number }) => sum + c.amount, 0));
+    const taxRate = taxResult.taxes.length > 0 ? taxResult.taxes[0].rate : 0;
 
     const orderItems: IOrderItem[] = input.items.map((item) => {
-      const itemTax = taxResult.perItemTax?.[item.productId];
-      const taxRate = taxResult.taxBreakdown?.length > 0 ? taxResult.taxBreakdown[0].rate : 0;
+      const itemSubtotal = item.quantity * item.unitPrice;
+      const itemTaxAmount = taxResult.subtotal > 0
+        ? (itemSubtotal / taxResult.subtotal) * taxResult.taxAmount
+        : 0;
+      const itemSC = taxResult.subtotal > 0
+        ? (itemSubtotal / taxResult.subtotal) * serviceChargeTotal
+        : 0;
+      const itemDpp = taxResult.subtotal > 0
+        ? (itemSubtotal / taxResult.subtotal) * taxResult.taxBase
+        : 0;
       return {
         productId: item.productId,
         variantId: null,
@@ -101,18 +111,17 @@ export class PaymentService {
         modifiers: [],
         tax: {
           rate: taxRate,
-          amount: Math.round(itemTax?.tax || 0),
+          amount: Math.round(itemTaxAmount),
         },
-        serviceCharge: Math.round(itemTax?.serviceCharge || 0),
-        dpp: Math.round(itemTax?.dpp || 0),
+        serviceCharge: Math.round(itemSC),
+        dpp: Math.round(itemDpp),
       };
     });
 
     const subtotal = roundMoney(taxResult.subtotal);
-    const discount = roundMoney(taxResult.discountAmount);
-    const dppTotal = roundMoney(taxResult.taxableAmount);
-    const serviceCharge = roundMoney(taxResult.serviceCharge || 0);
-    const tax = roundMoney(taxResult.totalTax);
+    const discount = roundMoney(taxResult.discount);
+    const dppTotal = roundMoney(taxResult.taxBase);
+    const tax = roundMoney(taxResult.taxAmount);
 
     const order = Order.create({
       tenantId: input.tenantId,
@@ -127,7 +136,7 @@ export class PaymentService {
       roundingAdjustment: 0,
       roundedPayable: 0,
       roundingMethod: 'nearest',
-      serviceCharge,
+      serviceCharge: serviceChargeTotal,
       serviceChargeRate: 0,
       paymentBreakdown: [],
       promotions: promotionBreakdown,
@@ -147,7 +156,7 @@ export class PaymentService {
         promoCode: input.promoCode ?? null,
         promoDiscount,
         manualDiscount: manualDiscountValue,
-        serviceCharge,
+      serviceCharge: serviceChargeTotal,
         taxBreakdown: taxResult.taxes,
       },
     });
