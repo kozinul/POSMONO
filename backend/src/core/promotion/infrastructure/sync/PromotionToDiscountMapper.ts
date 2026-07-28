@@ -53,6 +53,23 @@ function mapRules(promo: IPromotion): IDiscountCondition[] {
           config: { minItems: rule.params.count ?? rule.params.minItems ?? 0 },
         });
         break;
+      case 'buy_x_get_y': {
+        const buyIds = (rule.params.buyProductIds as string[]) ?? [];
+        if (buyIds.length > 0) {
+          conditions.push({
+            type: 'product_match',
+            config: { productIds: buyIds },
+          });
+        }
+        const buyQty = (rule.params.buyQuantity as number) ?? 1;
+        if (buyQty > 1) {
+          conditions.push({
+            type: 'min_items',
+            config: { minItems: buyQty },
+          });
+        }
+        break;
+      }
       case 'category_match':
         conditions.push({
           type: 'category_match',
@@ -78,6 +95,23 @@ function mapRules(promo: IPromotion): IDiscountCondition[] {
             startDate: rule.params.startDate ?? promo.validFrom,
             endDate: rule.params.endDate ?? promo.validUntil,
           },
+        });
+        break;
+      case 'time_range':
+        conditions.push({
+          type: 'time_range',
+          config: {
+            fromHour: rule.params.fromHour ?? 0,
+            fromMinute: rule.params.fromMinute ?? 0,
+            toHour: rule.params.toHour ?? 23,
+            toMinute: rule.params.toMinute ?? 59,
+          },
+        });
+        break;
+      case 'customer_tag':
+        conditions.push({
+          type: 'customer_tag',
+          config: { tags: rule.params.tags ?? [] },
         });
         break;
       case 'quantity_threshold':
@@ -125,6 +159,12 @@ function determineScope(promo: IPromotion): { type: DiscountScopeType; entityId:
     }
     if (ruleType === 'product_match') {
       const ids = (rule.params.productIds as string[]) || [];
+      if (ids.length === 1) {
+        return { type: 'product', entityId: ids[0], entityName: '' };
+      }
+    }
+    if (ruleType === 'buy_x_get_y') {
+      const ids = (rule.params.buyProductIds as string[]) || [];
       if (ids.length === 1) {
         return { type: 'product', entityId: ids[0], entityName: '' };
       }

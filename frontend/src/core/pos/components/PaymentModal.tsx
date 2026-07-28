@@ -9,11 +9,10 @@ const QUICK_AMOUNTS = [50000, 100000];
 
 export function PaymentModal() {
   const {
-    items, subtotal, tax, taxBreakdown, serviceCharge, total,
-    paymentState, setPaymentState,
+    items, pricing, paymentState, setPaymentState,
     setReceipt, closePaymentModal, removeItems,
-    discount, discountType, discountAmount, promoCode, promoApplied,
-    setDiscount, setPromoCode,
+    promoCode, manualDiscount, manualDiscountType,
+    setManualDiscount, setPromoCode,
   } = usePOSStore();
 
   const { data: paymentMethods = [] } = useActivePaymentMethods();
@@ -28,22 +27,23 @@ export function PaymentModal() {
 
   const isCash = selectedMethod?.code === 'cash';
   const paid = parseInt(amountPaid.replace(/\D/g, ''), 10) || 0;
-  const change = paid - total;
+  const grandTotal = pricing?.grandTotal ?? 0;
+  const change = paid - grandTotal;
   const canSubmit = selectedMethod !== null
-    && (isCash ? paid >= total && total > 0 : true)
+    && (isCash ? paid >= grandTotal && grandTotal > 0 : true)
     && items.length > 0
     && paymentState !== 'processing';
 
   const handleDiscountChange = (value: string) => {
     setDiscountInput(value);
     const numeric = parseInt(value.replace(/\D/g, ''), 10) || 0;
-    setDiscount(numeric, discountType);
+    setManualDiscount(numeric, manualDiscountType);
   };
 
   const toggleDiscountType = () => {
-    const newType = discountType === 'percentage' ? 'nominal' : 'percentage';
+    const newType = manualDiscountType === 'percentage' ? 'nominal' : 'percentage';
     const numeric = parseInt(discountInput.replace(/\D/g, ''), 10) || 0;
-    setDiscount(numeric, newType);
+    setManualDiscount(numeric, newType);
   };
 
   const handleApplyPromo = () => {
@@ -60,8 +60,9 @@ export function PaymentModal() {
     setPaymentState('processing');
     setPaymentMessage('');
     try {
+      const paidItems = items.filter((i) => !i.isFreeItem);
       const res = await api.post('/payments/pay-cash', {
-        items: items.map((i) => ({
+        items: paidItems.map((i) => ({
           productId: i.productId,
           productName: i.name,
           categoryId: i.categoryId,
@@ -69,10 +70,10 @@ export function PaymentModal() {
           unitPrice: i.price,
           pricingMode: i.pricingMode || undefined,
         })),
-        amountPaid: isCash ? paid : total,
+        amountPaid: isCash ? paid : grandTotal,
         method: selectedMethod.code,
-        discount: discount,
-        discountType: discount === 0 ? undefined : discountType,
+        discount: (pricing?.promotionDiscount ?? 0) + manualDiscount,
+        discountType: 'nominal',
         promoCode: promoCode || undefined,
         referenceNumber: referenceNumber || undefined,
       });
@@ -82,15 +83,16 @@ export function PaymentModal() {
       setReceipt({
         orderNumber: orderData.orderNumber,
         displayOrderNumber: orderData.orderNumber,
-        paid: isCash ? paid : total,
+        paid: isCash ? paid : grandTotal,
         change: isCash ? change : 0,
+        grandTotal,
         paidItems: items,
         hasRemaining: false,
       });
 
       removeItems(items.map((i) => i.productId));
     } catch (err: any) {
-      const msg = err.response?.data?.message || err.message || 'Pembayaran gagal.';
+      const msg = err.response?.data?.error?.message || err.response?.data?.message || err.message || 'Pembayaran gagal.';
       setPaymentState('error');
       setPaymentMessage(msg);
     }
@@ -105,7 +107,7 @@ export function PaymentModal() {
             <h2 className="text-lg font-bold text-gray-800">Pembayaran</h2>
             <div className="blue-primary rounded-lg px-4 py-1.5 text-white">
               <span className="text-xs font-medium text-white/80">Total</span>
-              <span className="text-xl font-extrabold ml-2">Rp {formatIDR(total)}</span>
+              <span className="text-xl font-extrabold ml-2">Rp {formatIDR(grandTotal)}</span>
             </div>
             <span className="text-sm text-gray-500">{items.length} item</span>
           </div>
@@ -122,7 +124,6 @@ export function PaymentModal() {
           <div className="flex-1 flex flex-col bg-white border-r border-gray-200 p-5">
             <h3 className="text-sm font-bold text-gray-700 mb-4">Promo & Diskon</h3>
 
-            {/* Promo Code */}
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1.5">Kode Promo</label>
@@ -150,10 +151,8 @@ export function PaymentModal() {
                 )}
               </div>
 
-              {/* Divider */}
               <div className="border-t border-gray-100" />
 
-              {/* Manual Discount */}
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1.5">Diskon Manual</label>
                 <div className="flex gap-2">
@@ -161,7 +160,7 @@ export function PaymentModal() {
                     type="text"
                     value={discountInput}
                     onChange={(e) => handleDiscountChange(e.target.value)}
-                    placeholder={discountType === 'percentage' ? '0' : '0'}
+                    placeholder="0"
                     className="block flex-1 px-3 py-2.5 text-lg font-bold text-right border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     disabled={paymentState === 'processing'}
                   />
@@ -169,40 +168,69 @@ export function PaymentModal() {
                     onClick={toggleDiscountType}
                     className="px-4 py-2.5 text-sm font-semibold text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors min-w-[50px]"
                   >
-                    {discountType === 'percentage' ? '%' : 'Rp'}
+                    {manualDiscountType === 'percentage' ? '%' : 'Rp'}
                   </button>
                 </div>
               </div>
 
-              {/* Discount Summary */}
-              {(discount > 0 || (promoApplied && promoApplied.totalDiscount > 0)) && (
-                <div className="bg-green-50 rounded-lg p-3 border border-green-200">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-green-700 font-medium">Diskon</span>
-                    <span className="text-green-700 font-bold">
-                      - Rp {formatIDR(discountAmount || 0)}
-                    </span>
-                  </div>
+              {(pricing && (pricing.promotionDiscount > 0 || pricing.appliedRules.length > 0)) && (
+                <div className="bg-green-50 rounded-lg p-3 border border-green-200 space-y-1">
+                  {pricing.appliedRules.map((r) => (
+                    <div key={r.ruleId} className="flex justify-between text-xs">
+                      <span className="text-green-700">{r.ruleName}</span>
+                      <span className="text-green-700 font-medium">{r.description}</span>
+                    </div>
+                  ))}
+                  {pricing.promotionDiscount > 0 && (
+                    <div className="flex justify-between text-sm pt-1 border-t border-green-200">
+                      <span className="text-green-700 font-medium">Total Diskon</span>
+                      <span className="text-green-700 font-bold">- Rp {formatIDR(pricing.promotionDiscount)}</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
 
-            {/* Order Items Summary */}
             <div className="mt-auto pt-4 border-t border-gray-100">
               <div className="space-y-1.5">
                 {items.slice(0, 4).map((item) => (
                   <div key={item.productId} className="flex justify-between text-xs text-gray-600">
-                    <span className="truncate">{item.name} × {item.quantity}</span>
-                    <span className="font-medium shrink-0 ml-2">Rp {formatIDR(item.price * item.quantity)}</span>
+                    <span className="truncate">
+                      {item.name} × {item.quantity}
+                      {item.isFreeItem && <span className="ml-1 text-green-600 font-bold">(GRATIS)</span>}
+                    </span>
+                    <span className="font-medium shrink-0 ml-2">
+                      {item.isFreeItem ? 'GRATIS' : `Rp ${formatIDR(item.price * item.quantity)}`}
+                    </span>
                   </div>
                 ))}
                 {items.length > 4 && <p className="text-xs text-gray-400">+{items.length - 4} item lainnya</p>}
               </div>
-              <div className="flex justify-between text-xs text-gray-500 mt-2 pt-2 border-t border-gray-100">
-                  <span>Subtotal</span><span>Rp {formatIDR(subtotal)}</span>
-              </div>
-              {tax > 0 && <div className="flex justify-between text-xs text-gray-500"><span>Pajak</span><span>Rp {formatIDR(tax)}</span></div>}
-              {serviceCharge > 0 && <div className="flex justify-between text-xs text-gray-500"><span>SC</span><span>Rp {formatIDR(serviceCharge)}</span></div>}
+              {pricing && (
+                <div className="space-y-1 mt-2 pt-2 border-t border-gray-100">
+                  <div className="flex justify-between text-xs text-gray-500">
+                    <span>Original Subtotal</span><span>Rp {formatIDR(pricing.originalSubtotal)}</span>
+                  </div>
+                  {pricing.promotionDiscount > 0 && (
+                    <div className="flex justify-between text-xs text-green-600">
+                      <span>Promotion</span><span>- Rp {formatIDR(pricing.promotionDiscount)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-xs text-gray-700 font-medium">
+                    <span>Net Subtotal</span><span>Rp {formatIDR(pricing.netSubtotal)}</span>
+                  </div>
+                  {pricing.serviceCharge > 0 && (
+                    <div className="flex justify-between text-xs text-gray-500">
+                      <span>{pricing.serviceChargeName}</span><span>Rp {formatIDR(pricing.serviceCharge)}</span>
+                    </div>
+                  )}
+                  {pricing.tax > 0 && (
+                    <div className="flex justify-between text-xs text-gray-500">
+                      <span>{pricing.taxName}</span><span>Rp {formatIDR(pricing.tax)}</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -210,7 +238,6 @@ export function PaymentModal() {
           <div className="flex-1 flex flex-col bg-gray-50 p-5">
             <h3 className="text-sm font-bold text-gray-700 mb-4">Metode Pembayaran</h3>
 
-            {/* Method Grid */}
             <div className="grid grid-cols-2 gap-2">
               {paymentMethods.map((method) => (
                 <button
@@ -233,7 +260,6 @@ export function PaymentModal() {
               <p className="text-sm text-gray-400 text-center py-8">Tidak ada metode pembayaran aktif</p>
             )}
 
-            {/* Cash Input */}
             {isCash && selectedMethod && (
               <div className="mt-4">
                 <label className="block text-xs font-medium text-gray-500 mb-1.5">Jumlah Bayar</label>
@@ -247,14 +273,14 @@ export function PaymentModal() {
                   disabled={paymentState === 'processing'}
                 />
                 <div className="flex gap-2 mt-2">
-                  <button onClick={() => setQuickAmount(total)} className="flex-1 py-2 text-xs font-semibold bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200">Uang Pas</button>
+                  <button onClick={() => setQuickAmount(grandTotal)} className="flex-1 py-2 text-xs font-semibold bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200">Uang Pas</button>
                   {QUICK_AMOUNTS.map((amt) => (
-                    <button key={amt} onClick={() => setQuickAmount(amt)} disabled={amt < total} className="flex-1 py-2 text-xs font-semibold bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-100 disabled:opacity-40">
+                    <button key={amt} onClick={() => setQuickAmount(amt)} disabled={amt < grandTotal} className="flex-1 py-2 text-xs font-semibold bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-100 disabled:opacity-40">
                       {amt === 50000 ? '50rb' : '100rb'}
                     </button>
                   ))}
                 </div>
-                {paid >= total && total > 0 && (
+                {paid >= grandTotal && grandTotal > 0 && (
                   <div className="bg-green-50 rounded-xl p-3 text-center mt-3 border border-green-200">
                     <p className="text-xs text-green-700 font-medium">Kembalian</p>
                     <p className="text-xl font-extrabold text-green-600">Rp {formatIDR(change)}</p>
@@ -263,7 +289,6 @@ export function PaymentModal() {
               </div>
             )}
 
-            {/* Non-cash reference */}
             {!isCash && selectedMethod && selectedMethod.requiresReference && (
               <div className="mt-4">
                 <label className="block text-xs font-medium text-gray-500 mb-1.5">Nomor Referensi</label>
@@ -285,7 +310,6 @@ export function PaymentModal() {
               </div>
             )}
 
-            {/* Pay Button */}
             <div className="mt-auto pt-4">
               <button
                 onClick={handleSubmit}
@@ -294,7 +318,7 @@ export function PaymentModal() {
                   canSubmit ? 'blue-primary hover:opacity-90' : 'bg-gray-300 cursor-not-allowed'
                 }`}
               >
-                {paymentState === 'processing' ? 'Memproses...' : `Bayar Rp ${formatIDR(total)}`}
+                {paymentState === 'processing' ? 'Memproses...' : `Bayar Rp ${formatIDR(grandTotal)}`}
               </button>
             </div>
           </div>

@@ -24,6 +24,7 @@ import { createUploadRoutes } from '../core/upload/interfaces/http/routes/upload
 import { createPromotionRoutes } from '../core/promotion/interfaces/http/routes/promotion.routes';
 import { createPaymentMethodRoutes } from '../core/payment/interfaces/http/routes/paymentMethod.routes';
 import { createMenuTypeRoutes } from '../core/catalog/interfaces/http/routes/menuType.routes';
+import { createPricingRouter } from '../core/pricing/api/pricing.routes';
 
 export function registerRoutes(app: Express, container: DIContainer): void {
   app.get('/health', (_req, res) => {
@@ -102,4 +103,6 @@ export function registerRoutes(app: Express, container: DIContainer): void {
 
   const menuTypeController = container.resolve('menuTypeController');
   app.use('/api/menu-types', createMenuTypeRoutes(menuTypeController));
+
+  app.use('/api/pricing', createPricingRouter(discountConfigRepo, taxConfigRepo, promoCodeRepo));
 }

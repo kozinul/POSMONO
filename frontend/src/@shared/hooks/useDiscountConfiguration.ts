@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 
 export interface IDiscountCondition {
-  type: 'min_purchase' | 'min_items' | 'category_match' | 'product_match' | 'day_of_week' | 'date_range' | 'quantity_threshold';
+  type: 'min_purchase' | 'min_items' | 'category_match' | 'product_match' | 'day_of_week' | 'date_range' | 'quantity_threshold' | 'time_range' | 'customer_tag';
   config: Record<string, unknown>;
 }
 
@@ -48,7 +48,7 @@ export interface IDiscountConfiguration {
 export interface IDiscountResult {
   totalDiscount: number;
   appliedRules: Array<{ ruleId: string; ruleName: string; discountAmount: number; description: string }>;
-  freeItems: Array<{ productId: string; quantity: number }>;
+  freeItems: Array<{ productId: string; quantity: number; ruleId: string }>;
   finalSubtotal: number;
   breakdown: Array<{ ruleId: string; ruleName: string; discountAmount: number; description: string }>;
 }

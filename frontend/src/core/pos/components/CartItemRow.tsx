@@ -15,39 +15,54 @@ export function CartItemRow({ item }: CartItemRowProps) {
           <h4 className="font-bold text-gray-800 truncate">
             {item.name} x{item.quantity}
           </h4>
-          {item.pricingMode && (
-            <span className={`inline-block text-[10px] font-medium px-1.5 py-0.5 rounded ${
-              item.pricingMode === 'inclusive'
-                ? 'bg-green-50 text-green-600'
-                : 'bg-orange-50 text-orange-600'
-            }`}>
-              {item.pricingMode === 'inclusive' ? 'Nett (pajak termasuk)' : '++ (pajak terpisah)'}
-            </span>
-          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            {item.isFreeItem && (
+              <span className="inline-block text-[10px] font-bold px-1.5 py-0.5 rounded bg-green-100 text-green-700">
+                GRATIS
+              </span>
+            )}
+            {item.pricingMode && (
+              <span className={`inline-block text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                item.pricingMode === 'inclusive'
+                  ? 'bg-green-50 text-green-600'
+                  : 'bg-orange-50 text-orange-600'
+              }`}>
+                {item.pricingMode === 'inclusive' ? 'Nett (pajak termasuk)' : '++ (pajak terpisah)'}
+              </span>
+            )}
+          </div>
           {item.notes && (
             <p className="text-sm text-gray-400 truncate">{item.notes}</p>
           )}
         </div>
         <div className="flex items-center gap-3 shrink-0 ml-4">
-          <span className="font-medium text-gray-800">
-            Rp {(item.price * item.quantity).toLocaleString('id-ID')}
-          </span>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => updateQuantity(item.productId, -1)}
-              className="w-6 h-6 flex items-center justify-center rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors text-sm font-bold"
-            >
-              −
-            </button>
-            <span className="w-6 text-center text-sm font-medium text-gray-700">
-              {item.quantity}
+          {item.isFreeItem ? (
+            <span className="font-medium text-green-600">GRATIS</span>
+          ) : (
+            <span className="font-medium text-gray-800">
+              Rp {(item.price * item.quantity).toLocaleString('id-ID')}
             </span>
-            <button
-              onClick={() => updateQuantity(item.productId, 1)}
-              className="w-6 h-6 flex items-center justify-center rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors text-sm font-bold"
-            >
-              +
-            </button>
+          )}
+          <div className="flex items-center gap-1">
+            {!item.isFreeItem && (
+              <>
+                <button
+                  onClick={() => updateQuantity(item.productId, -1)}
+                  className="w-6 h-6 flex items-center justify-center rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors text-sm font-bold"
+                >
+                  −
+                </button>
+                <span className="w-6 text-center text-sm font-medium text-gray-700">
+                  {item.quantity}
+                </span>
+                <button
+                  onClick={() => updateQuantity(item.productId, 1)}
+                  className="w-6 h-6 flex items-center justify-center rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors text-sm font-bold"
+                >
+                  +
+                </button>
+              </>
+            )}
           </div>
           <button
             onClick={() => removeItem(item.productId)}

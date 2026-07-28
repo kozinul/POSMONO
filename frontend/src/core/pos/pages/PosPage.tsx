@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { usePOSStore } from '../store/posStore';
 import { useProducts, useCategories, useBarcodeLookup } from '../hooks/useProducts';
 import { useFamilies } from '../hooks/useFamilies';
-import { useTaxConfiguration } from '../../../@shared/hooks/useTaxConfiguration';
 import { useDiscountConfiguration } from '../../../@shared/hooks/useDiscountConfiguration';
 import { getActiveProductDiscounts, getProductDiscount } from '../../../@shared/utils/discountCalculator';
 import { ProductCard } from '../components/ProductCard';
@@ -15,44 +14,30 @@ import { formatIDR } from '../utils/money';
 export default function PosPage() {
   const {
     items,
-    subtotal,
-    serviceCharge,
-    serviceChargeName,
-    charges,
-    tax,
-    taxName,
-    taxBreakdown,
-    displayBreakdown,
-    inclusiveTax,
-    discount,
-    discountType,
-    discountAmount,
+    pricing,
+    pricingLoading,
     promoCode,
-    promoApplied,
-    total,
+    manualDiscount,
+    manualDiscountType,
     paymentModalOpen,
     receipt,
     heldOrders,
     customerName,
     tableNumber,
-    openPaymentModal,
-    setTaxConfig,
+    addItem,
+    setProductPrices,
     setDiscountRules,
     setPromoCode,
+    setManualDiscount,
     setCustomerName,
     setTableNumber,
+    openPaymentModal,
+    recalculate,
     holdOrder,
     toggleHeldOrdersPanel,
   } = usePOSStore();
 
-  const { data: taxConfig, dataUpdatedAt: taxConfigUpdatedAt } = useTaxConfiguration();
   const { data: discountConfig } = useDiscountConfiguration();
-
-  useEffect(() => {
-    if (taxConfig) {
-      setTaxConfig(taxConfig);
-    }
-  }, [taxConfig, taxConfigUpdatedAt, setTaxConfig]);
 
   useEffect(() => {
     if (discountConfig?.rules) {
@@ -108,6 +93,20 @@ export default function PosPage() {
   const { data: categories = [], isError: categoriesError } = useCategories();
   const { data: families = [] } = useFamilies();
 
+  useEffect(() => {
+    if (products.length > 0) {
+      const prices: Record<string, number> = {};
+      for (const p of products) {
+        prices[p.id] = p.basePrice;
+      }
+      setProductPrices(prices);
+    }
+  }, [products, setProductPrices]);
+
+  useEffect(() => {
+    recalculate();
+  }, [items, promoCode, manualDiscount, manualDiscountType, recalculate]);
+
   const activeProductDiscounts = useMemo(() => {
     if (!discountConfig?.rules) return new Map();
     return getActiveProductDiscounts(discountConfig.rules);
@@ -116,6 +115,9 @@ export default function PosPage() {
   const filteredCategories = selectedFamily
     ? categories.filter((c) => c.familyId === selectedFamily)
     : categories;
+
+  const p = pricing;
+  const itemCount = items.reduce((s, i) => s + i.quantity, 0);
 
   return (
     <div className="flex-1 min-h-0 w-full flex overflow-hidden">
@@ -149,14 +151,9 @@ export default function PosPage() {
           {families.length > 0 && (
             <div className="flex gap-3 flex-wrap">
               <button
-                onClick={() => {
-                  setSelectedFamily(null);
-                  setSelectedCategory(null);
-                }}
+                onClick={() => { setSelectedFamily(null); setSelectedCategory(null); }}
                 className={`px-6 py-2 rounded-full font-medium text-sm transition-colors ${
-                  !selectedFamily
-                    ? 'blue-primary text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  !selectedFamily ? 'blue-primary text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                 }`}
               >
                 Semua
@@ -164,14 +161,9 @@ export default function PosPage() {
               {families.map((fam) => (
                 <button
                   key={fam.id}
-                  onClick={() => {
-                    setSelectedFamily(fam.id);
-                    setSelectedCategory(null);
-                  }}
+                  onClick={() => { setSelectedFamily(fam.id); setSelectedCategory(null); }}
                   className={`px-6 py-2 rounded-full font-medium text-sm transition-colors ${
-                    selectedFamily === fam.id
-                      ? 'blue-primary text-white'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    selectedFamily === fam.id ? 'blue-primary text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                   }`}
                 >
                   {fam.name}
@@ -185,9 +177,7 @@ export default function PosPage() {
             <button
               onClick={() => setSelectedCategory(null)}
               className={`px-8 py-2 rounded-full font-medium transition-colors ${
-                !selectedCategory
-                  ? 'blue-primary text-white'
-                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                !selectedCategory ? 'blue-primary text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
               }`}
             >
               Semua
@@ -197,9 +187,7 @@ export default function PosPage() {
                 key={cat.id}
                 onClick={() => setSelectedCategory(cat.id)}
                 className={`px-8 py-2 rounded-full font-medium transition-colors ${
-                  selectedCategory === cat.id
-                    ? 'blue-primary text-white'
-                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  selectedCategory === cat.id ? 'blue-primary text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                 }`}
               >
                 {cat.name}
@@ -244,7 +232,7 @@ export default function PosPage() {
         <div className="p-4 border-b border-gray-100 shrink-0 space-y-3">
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-bold text-gray-800">Pesanan Baru</h2>
-            <span className="text-gray-400 font-medium text-sm">{items.length} item</span>
+            <span className="text-gray-400 font-medium text-sm">{itemCount} item</span>
           </div>
           <div className="flex gap-2">
             <input
@@ -282,50 +270,62 @@ export default function PosPage() {
 
         <div className="p-6 bg-white border-t border-gray-100 shrink-0 space-y-4">
           <div className="space-y-2">
-            <div className="flex justify-between text-gray-700">
-              <span>Subtotal:</span>
-              <span>Rp {formatIDR(subtotal)}</span>
-            </div>
-            {charges.filter((c) => c.amount > 0).map((charge) => (
-              <div key={charge.name} className="flex justify-between text-gray-700 text-sm">
-                <span>{charge.name}:</span>
-                <span>Rp {formatIDR(charge.amount)}</span>
-              </div>
-            ))}
-                {displayBreakdown.length > 0
-              ? displayBreakdown.map((t) => (
-                  <div key={t.ruleId} className="flex justify-between text-gray-700 text-sm">
-                    <span>{t.name}</span>
-                    <span>Rp {formatIDR(t.amount)}</span>
-                  </div>
-                ))
-              : tax > 0 && inclusiveTax === 0 && (
-                  <div className="flex justify-between text-gray-700">
-                    <span>{taxName}:</span>
-                    <span>Rp {formatIDR(tax)}</span>
+            {p ? (
+              <>
+                <div className="flex justify-between text-gray-700">
+                  <span>Original Subtotal:</span>
+                  <span>Rp {formatIDR(p.originalSubtotal)}</span>
+                </div>
+                {p.promotionDiscount > 0 && (
+                  <div className="flex justify-between text-green-600 text-sm">
+                    <span>Promotion:</span>
+                    <span>- Rp {formatIDR(p.promotionDiscount)}</span>
                   </div>
                 )}
-            {promoApplied && promoApplied.appliedRules.length > 0 && (
-              <div className="space-y-1">
-                {promoApplied.appliedRules.map((r) => (
-                  <div key={r.ruleId} className="flex justify-between text-green-600 text-sm">
-                    <span>{r.ruleName}:</span>
-                    <span>- Rp {formatIDR(r.discountAmount)}</span>
+                {manualDiscount > 0 && (
+                  <div className="flex justify-between text-green-600 text-sm">
+                    <span>Diskon Manual:</span>
+                    <span>- Rp {formatIDR(manualDiscount)}</span>
                   </div>
-                ))}
-              </div>
-            )}
-            {discount > 0 && (
-              <div className="flex justify-between text-green-600">
-                <span>Diskon Manual {discountType === 'percentage' ? `(${discount}%)` : ''}:</span>
-                <span>- Rp {formatIDR(discountAmount)}</span>
+                )}
+                <div className="flex justify-between text-gray-700 font-medium">
+                  <span>Net Subtotal:</span>
+                  <span>Rp {formatIDR(p.netSubtotal)}</span>
+                </div>
+                {p.serviceCharge > 0 && (
+                  <div className="flex justify-between text-gray-700 text-sm">
+                    <span>{p.serviceChargeName} ({p.taxRate > 0 ? `${Math.round((p.serviceCharge / p.netSubtotal) * 100)}%` : ''}):</span>
+                    <span>Rp {formatIDR(p.serviceCharge)}</span>
+                  </div>
+                )}
+                {p.tax > 0 && (
+                  <div className="flex justify-between text-gray-700 text-sm">
+                    <span>{p.taxName} ({p.taxRate}%):</span>
+                    <span>Rp {formatIDR(p.tax)}</span>
+                  </div>
+                )}
+                {p.appliedRules.length > 0 && (
+                  <div className="space-y-1">
+                    {p.appliedRules.map((r) => (
+                      <div key={r.ruleId} className="flex justify-between text-green-600 text-xs">
+                        <span>{r.ruleName}:</span>
+                        <span>{r.description}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="flex justify-between text-gray-700">
+                <span>Subtotal:</span>
+                <span>Rp {formatIDR(items.reduce((s, i) => s + i.price * i.quantity, 0))}</span>
               </div>
             )}
           </div>
           <div className="flex justify-between items-end pt-4">
             <span className="text-2xl font-bold text-gray-800">Total:</span>
             <span className="text-3xl font-extrabold text-gray-900">
-              Rp {formatIDR(total)}
+              Rp {formatIDR(p?.grandTotal ?? 0)}
             </span>
           </div>
           <div className="flex gap-4 pt-4">

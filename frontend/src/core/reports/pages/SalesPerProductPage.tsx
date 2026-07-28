@@ -68,7 +68,7 @@ export default function SalesPerProductPage() {
             <tbody className="divide-y divide-gray-100">
               {data.rows.map((row) => {
                 const isExpanded = expandedProduct === row.productId;
-                const grandTotal = row.dpp + row.tax + row.serviceCharge;
+                const grandTotal = row.totalSales + row.tax + row.serviceCharge;
 
                 return (
                   <Fragment key={row.productId}>
@@ -92,7 +92,7 @@ export default function SalesPerProductPage() {
                       </td>
                     </tr>
                     {isExpanded && row.transactions.map((tx, idx) => {
-                      const txGrandTotal = tx.dpp + tx.serviceCharge + tx.tax;
+                      const txGrandTotal = tx.unitPrice * tx.quantity + tx.serviceCharge + tx.tax;
                       return (
                         <tr key={`${row.productId}-${idx}`} className="bg-gray-50">
                           <td />

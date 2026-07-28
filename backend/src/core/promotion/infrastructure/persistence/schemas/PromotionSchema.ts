@@ -40,7 +40,7 @@ export const PromotionSchema = new Schema(
     _id: { type: String },
     tenantId: { type: String, required: true, index: true },
     name: { type: String, required: true },
-    code: { type: String, default: '' },
+    code: { type: String, default: null },
     description: { type: String, default: '' },
     priority: { type: Number, default: 0 },
     exclusive: { type: Boolean, default: false },

@@ -6,6 +6,8 @@ import { ProductMatchCondition } from './strategies/conditions/ProductMatchCondi
 import { DayOfWeekCondition } from './strategies/conditions/DayOfWeekCondition';
 import { DateRangeCondition } from './strategies/conditions/DateRangeCondition';
 import { QuantityThresholdCondition } from './strategies/conditions/QuantityThresholdCondition';
+import { TimeRangeCondition } from './strategies/conditions/TimeRangeCondition';
+import { CustomerTagCondition } from './strategies/conditions/CustomerTagCondition';
 
 export class ConditionEvaluator {
   private strategies: Map<string, ConditionStrategy> = new Map();
@@ -18,6 +20,8 @@ export class ConditionEvaluator {
     this.register(new DayOfWeekCondition());
     this.register(new DateRangeCondition());
     this.register(new QuantityThresholdCondition());
+    this.register(new TimeRangeCondition());
+    this.register(new CustomerTagCondition());
   }
 
   register(strategy: ConditionStrategy): void {

@@ -945,3 +945,57 @@ Tax Engine is the most architecturally significant module so far. Compound engin
 - Consider adding Adjustment Pipeline tests for edge cases (zero amounts, negative adjustments)
 
 **Productivity score:** 9
+
+---
+
+### DATE: 2026-07-27
+
+**Today I worked on:**
+
+- **Biaya Tambahan (Charges) CRUD in Settings** — full management UI in GeneralSettingsPage
+  - Per-charge toggle (activate/deactivate) without deleting
+  - Inline edit form: name, rate/amount, type (persen/nominal), DPP toggle
+  - Add form with DPP (includeInTaxBase) toggle
+  - Delete button per charge
+- **POS cart charges display** — charges rendered individually between Subtotal and Pajak
+  - Added `charges[]` to POSState interface, derive() return, clearCart()
+  - Cart shows each charge with name and amount before tax
+- **Backend: PUT /api/tax/charges/:chargeId** — new route + controller handler for charge updates
+  - `useUpdateCharge()` hook added to frontend
+- **Fixed: Charges not appearing in POS cart** (root cause: scope.type missing)
+  - Backend `ChargeSchema` scope.type had no `default: 'all'` — Mongoose stored scope without type
+  - Frontend `scopeMatches()` returned `false` for undefined type (fell through to `default: return false`)
+  - Fixed backend schema default + frontend scopeMatches() treats missing type as 'all'
+- **Fixed: handleSave deleting charges** — old SC sync logic in Settings `handleSave()` used `serviceChargeEnabled` (always `false` after UI removal) and deleted any active charge on every save
+  - Removed dead SC sync block + 4 unused state variables
+- **Fixed: PaymentService 500 error on pay-cash** — PricingResult refactoring changed field names
+  - `discountAmount` → `discount`, `taxableAmount` → `taxBase`, `totalTax` → `taxAmount`
+  - Removed `perItemTax` (no longer exists), replaced with proportional per-item calculation
+  - `serviceCharge` → sum of `charges[]`, `taxBreakdown` → `taxes`
+- **Fixed: Sales per Product report grand total** — was double-counting SC when included in tax base
+  - Changed from `dpp + tax + serviceCharge` to `totalSales + tax + serviceCharge`
+  - Fixed in 3 places: summary, per-product row, per-transaction row
+
+**Problems encountered:**
+
+- Scope type bug was subtle — MongoDB stored `{ entityId: '', entityName: '' }` without `type`, frontend scopeMatches() silently filtered out the charge
+- PricingResult interface changed names but PaymentService wasn't updated → NaN values → MongoDB rejected save → 500
+
+**What I completed:**
+
+- 4 commits pushed to origin/master
+- Biaya Tambahan full CRUD with toggle/edit/delete/DPP
+- POS cart individual charge display
+- All payment, tax, and report bugs fixed
+
+**What I learned:**
+
+- Always set `default` values in Mongoose schemas for nested enum fields — undefined enum values silently break switch/match logic downstream
+- When refactoring return types (PricingResult), grep for all consumers before deploying
+
+**Tomorrow priority:**
+
+- Test payment flow end-to-end with charges active
+- MVP deployment
+
+**Productivity score:** 8

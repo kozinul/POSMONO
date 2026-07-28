@@ -33,6 +33,16 @@ function isRuleTimeActive(rule: IDiscountRule): boolean {
       const days = condition.config.days as number[];
       if (!days.includes(now.getDay())) return false;
     }
+    if (condition.type === 'time_range') {
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      const fromHour = (condition.config.fromHour as number) ?? 0;
+      const fromMinute = (condition.config.fromMinute as number) ?? 0;
+      const toHour = (condition.config.toHour as number) ?? 23;
+      const toMinute = (condition.config.toMinute as number) ?? 59;
+      const fromMinutes = fromHour * 60 + fromMinute;
+      const toMinutes = toHour * 60 + toMinute;
+      if (currentMinutes < fromMinutes || currentMinutes > toMinutes) return false;
+    }
   }
 
   if (rule.maxUsageCount !== undefined && rule.currentUsageCount >= rule.maxUsageCount) return false;
@@ -149,13 +159,61 @@ function evaluateConditions(rule: IDiscountRule, items: DiscountCalcItem[], subt
         if (!item || item.quantity < minQty) return false;
         break;
       }
+      case 'time_range': {
+        const now = new Date();
+        const currentMinutes = now.getHours() * 60 + now.getMinutes();
+        const fromHour = (condition.config.fromHour as number) ?? 0;
+        const fromMinute = (condition.config.fromMinute as number) ?? 0;
+        const toHour = (condition.config.toHour as number) ?? 23;
+        const toMinute = (condition.config.toMinute as number) ?? 59;
+        const fromMinutes = fromHour * 60 + fromMinute;
+        const toMinutes = toHour * 60 + toMinute;
+        if (currentMinutes < fromMinutes || currentMinutes > toMinutes) return false;
+        break;
+      }
+      case 'customer_tag': {
+        const requiredTags = (condition.config.tags as string[]) ?? [];
+        const customerTags = (condition.config._customerTags as string[]) ?? [];
+        if (!requiredTags.some((t) => customerTags.includes(t))) return false;
+        break;
+      }
     }
   }
 
   return true;
 }
 
-function applyEffects(rule: IDiscountRule, subtotal: number, appliedDiscounts: number): { amount: number; description: string } {
+function countQualifyingSets(rule: IDiscountRule, items: DiscountCalcItem[]): number {
+  let minQty = 1;
+  let matchProductIds: string[] | null = null;
+
+  for (const cond of rule.conditions) {
+    if (cond.type === 'min_items') {
+      minQty = (cond.config.minItems as number) ?? 1;
+    }
+    if (cond.type === 'product_match') {
+      matchProductIds = (cond.config.productIds as string[]) ?? null;
+    }
+  }
+
+  if (matchProductIds && matchProductIds.length > 0) {
+    const matchCount = items
+      .filter((i) => matchProductIds!.includes(i.productId))
+      .reduce((s, i) => s + i.quantity, 0);
+    return Math.floor(matchCount / minQty);
+  }
+
+  const totalQty = items.reduce((s, i) => s + i.quantity, 0);
+  return Math.floor(totalQty / minQty);
+}
+
+function applyEffects(
+  rule: IDiscountRule,
+  subtotal: number,
+  appliedDiscounts: number,
+  freeItemValue: number,
+  freeItemCount: number,
+): { amount: number; description: string } {
   let total = 0;
   const descParts: string[] = [];
 
@@ -180,7 +238,12 @@ function applyEffects(rule: IDiscountRule, subtotal: number, appliedDiscounts: n
         break;
       }
       case 'free_item':
-        descParts.push('Free item');
+        if (freeItemValue > 0) {
+          total += freeItemValue;
+          descParts.push(`Gratis item (Rp${freeItemValue.toLocaleString()})`);
+        } else {
+          descParts.push(`Gratis item x${freeItemCount}`);
+        }
         break;
       case 'fixed_price':
         descParts.push('Fixed price');
@@ -198,6 +261,7 @@ export function calculateDiscount(
   items: DiscountCalcItem[],
   rules: IDiscountRule[],
   promoCode?: string,
+  productPriceLookup?: (productId: string) => number,
 ): IDiscountResult {
   const subtotal = items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
 
@@ -207,12 +271,30 @@ export function calculateDiscount(
 
   let totalDiscount = 0;
   const appliedRules: IDiscountResult['appliedRules'] = [];
-  const freeItems: Array<{ productId: string; quantity: number }> = [];
+  const freeItems: Array<{ productId: string; quantity: number; ruleId: string }> = [];
 
   for (const rule of sorted) {
     if (!evaluateConditions(rule, items, subtotal, promoCode)) continue;
 
-    const result = applyEffects(rule, subtotal, totalDiscount);
+    const freeEffect = rule.effects.find((e) => e.type === 'free_item');
+    let freeItemValue = 0;
+    let freeItemCount = 0;
+
+    if (freeEffect) {
+      const productId = freeEffect.config.productId as string;
+      const qtyPerSet = (freeEffect.config.quantity as number) || 1;
+      const sets = countQualifyingSets(rule, items);
+      freeItemCount = sets * qtyPerSet;
+
+      if (productPriceLookup && freeItemCount > 0) {
+        const freeItemPrice = productPriceLookup(productId);
+        freeItemValue = freeItemPrice * freeItemCount;
+      }
+
+      freeItems.push({ productId, quantity: freeItemCount, ruleId: rule.id });
+    }
+
+    const result = applyEffects(rule, subtotal, totalDiscount, freeItemValue, freeItemCount);
     totalDiscount += result.amount;
 
     appliedRules.push({
@@ -221,13 +303,6 @@ export function calculateDiscount(
       discountAmount: result.amount,
       description: result.description,
     });
-
-    const freeEffect = rule.effects.find((e) => e.type === 'free_item');
-    if (freeEffect) {
-      const productId = freeEffect.config.productId as string;
-      const qty = (freeEffect.config.quantity as number) || 1;
-      freeItems.push({ productId, quantity: qty });
-    }
 
     if (!rule.stackable) break;
   }

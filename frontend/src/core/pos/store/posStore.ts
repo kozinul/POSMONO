@@ -1,8 +1,7 @@
 import { create } from 'zustand';
-import type { ITaxConfiguration } from '../../../@shared/hooks/useTaxConfiguration';
-import type { IDiscountRule, IDiscountResult } from '../../../@shared/hooks/useDiscountConfiguration';
-import { calculateTax, type TaxCalcResult, type TaxLineItem } from '../../../@shared/utils/taxCalculator';
-import { calculateDiscount } from '../../../@shared/utils/discountCalculator';
+import type { IDiscountRule } from '../../../@shared/hooks/useDiscountConfiguration';
+import type { PricingResult, PricingLineItem } from '../../../@shared/hooks/usePricing';
+import { api } from '../../../@shared/services/api';
 
 export interface CartItem {
   productId: string;
@@ -14,6 +13,8 @@ export interface CartItem {
   categoryId?: string;
   pricingProfileId?: string;
   pricingMode?: 'inclusive' | 'exclusive';
+  isFreeItem?: boolean;
+  freeByRuleId?: string;
 }
 
 export type PaymentState = 'idle' | 'processing' | 'success' | 'error';
@@ -36,9 +37,6 @@ interface Receipt {
   displayOrderNumber: string;
   paid: number;
   change: number;
-  taxBreakdown: TaxLineItem[];
-  totalTax: number;
-  serviceCharge: number;
   grandTotal: number;
   paidItems: CartItem[];
   hasRemaining: boolean;
@@ -46,28 +44,17 @@ interface Receipt {
 
 interface POSState {
   items: CartItem[];
-  itemCount: number;
-  subtotal: number;
-  serviceCharge: number;
-  serviceChargeName: string;
-  charges: Array<{ name: string; amount: number; includeInTaxBase: boolean }>;
-  tax: number;
-  taxName: string;
-  taxBreakdown: TaxLineItem[];
-  displayBreakdown: TaxLineItem[];
-  inclusiveTax: number;
-  discount: number;
-  discountType: 'percentage' | 'nominal';
-  discountAmount: number;
+  pricing: PricingResult | null;
+  pricingLoading: boolean;
   promoCode: string;
-  promoApplied: IDiscountResult | null;
+  manualDiscount: number;
+  manualDiscountType: 'percentage' | 'nominal';
   discountRules: IDiscountRule[];
-  total: number;
+  productPrices: Record<string, number>;
 
   paymentModalOpen: boolean;
   paymentState: PaymentState;
   receipt: Receipt | null;
-  taxConfig: ITaxConfiguration | null;
 
   customerName: string;
   tableNumber: string;
@@ -82,18 +69,19 @@ interface POSState {
   removeItem: (productId: string) => void;
   updateQuantity: (productId: string, delta: number) => void;
   setItemNotes: (productId: string, notes: string) => void;
-  setDiscount: (value: number, type: 'percentage' | 'nominal') => void;
+  setManualDiscount: (value: number, type: 'percentage' | 'nominal') => void;
   setPromoCode: (code: string) => void;
   setDiscountRules: (rules: IDiscountRule[]) => void;
+  setProductPrices: (prices: Record<string, number>) => void;
   clearCart: () => void;
-  setTaxConfig: (config: ITaxConfiguration) => void;
+  recalculate: () => Promise<void>;
   setCustomerName: (name: string) => void;
   setTableNumber: (table: string) => void;
 
   openPaymentModal: () => void;
   closePaymentModal: () => void;
   setPaymentState: (state: PaymentState) => void;
-  setReceipt: (receipt: Omit<Receipt, 'taxBreakdown' | 'totalTax' | 'serviceCharge' | 'grandTotal'>) => void;
+  setReceipt: (receipt: Receipt) => void;
   clearReceipt: () => void;
 
   holdOrder: () => Promise<void>;
@@ -106,285 +94,146 @@ interface POSState {
   resetSplit: () => void;
 }
 
-function derive(
-  items: CartItem[],
-  discount: number,
-  discountType: 'percentage' | 'nominal',
-  taxConfig: ITaxConfiguration | null,
-  discountRules?: IDiscountRule[],
-  promoCode?: string,
-) {
-  const roundMoney = (value: number) => Math.round(value);
-  const itemCount = items.reduce((s, i) => s + i.quantity, 0);
-  const rawSubtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
-  const manualDiscountAmt = rawSubtotal > 0
-    ? (discountType === 'percentage' ? rawSubtotal * (Math.min(discount, 100) / 100) : Math.min(discount, rawSubtotal))
-    : 0;
+let recalcTimer: ReturnType<typeof setTimeout> | null = null;
 
-  // Apply discount engine
-  let promoApplied: IDiscountResult | null = null;
-  let engineDiscount = 0;
-  if (discountRules && discountRules.length > 0) {
-    promoApplied = calculateDiscount(
-      items.map((i) => ({ productId: i.productId, categoryId: i.categoryId || '', quantity: i.quantity, unitPrice: i.price })),
-      discountRules,
-      promoCode,
-    );
-    engineDiscount = promoApplied.totalDiscount;
-  }
-
-  const totalDiscountAmount = manualDiscountAmt + engineDiscount;
-  const cappedDiscount = roundMoney(Math.min(totalDiscountAmount, rawSubtotal));
-
-  if (!taxConfig || !taxConfig.taxEnabled) {
-    return {
-      items, itemCount,
-      subtotal: rawSubtotal,
-      serviceCharge: 0, serviceChargeName: 'Service Charge',
-      charges: [],
-      tax: 0, taxName: 'Pajak', taxBreakdown: [],
-      displayBreakdown: [], inclusiveTax: 0,
-      discount, discountType,
-      discountAmount: cappedDiscount,
-      promoCode: promoCode || '',
-      promoApplied,
-      discountRules: discountRules || [],
-      total: roundMoney(Math.max(0, rawSubtotal - cappedDiscount)),
-    };
-  }
-
-  const result = calculateTax({
-    items: items.map((i) => ({
-      productId: i.productId,
-      categoryId: i.categoryId || '',
-      quantity: i.quantity,
-      unitPrice: i.price,
-      pricingMode: i.pricingMode,
-    })),
-    discount: cappedDiscount,
-    discountType: 'nominal',
-  }, taxConfig);
-
-  const activeVersion = taxConfig.versions
-    .find((v) => v.id === taxConfig.activeVersionId);
-  const scCharge = activeVersion?.charges?.find((c: any) => c.isActive);
-  const serviceChargeName = scCharge?.name ?? 'Service Charge';
-
-  const taxName = result.taxes[0]?.name ?? 'Pajak';
-  const totalSC = result.charges.reduce((sum, c) => sum + c.amount, 0);
-
-  const hasAnyInclusive = items.some((i) => i.pricingMode === 'inclusive');
-  const hasAnyExclusive = items.some((i) => i.pricingMode !== 'inclusive');
-  const isMixed = hasAnyInclusive && hasAnyExclusive;
-
-  let displayBreakdown: TaxLineItem[] = result.taxes;
-  let inclusiveTax = 0;
-
-  if (isMixed) {
-    const globalMode = taxConfig.pricingMode;
-    const exclusiveSubtotal = items
-      .filter((i) => (i.pricingMode ?? globalMode) === 'exclusive')
-      .reduce((sum, i) => sum + i.price * i.quantity, 0);
-    const inclusiveSubtotal = items
-      .filter((i) => (i.pricingMode ?? globalMode) === 'inclusive')
-      .reduce((sum, i) => sum + i.price * i.quantity, 0);
-    const allSubtotal = exclusiveSubtotal + inclusiveSubtotal;
-
-    const exclusiveDiscount = allSubtotal > 0 ? (exclusiveSubtotal / allSubtotal) * cappedDiscount : 0;
-    const inclusiveDiscount = allSubtotal > 0 ? (inclusiveSubtotal / allSubtotal) * cappedDiscount : 0;
-
-    const exclusiveItemsResult = calculateTax({
-      items: items
-        .filter((i) => (i.pricingMode ?? globalMode) === 'exclusive')
-        .map((i) => ({
-          productId: i.productId,
-          categoryId: i.categoryId || '',
-          quantity: i.quantity,
-          unitPrice: i.price,
-          pricingMode: 'exclusive' as const,
-        })),
-      discount: exclusiveDiscount,
-      discountType: 'nominal' as const,
-    }, taxConfig);
-    displayBreakdown = exclusiveItemsResult.taxes;
-
-    const inclusiveItemsResult = calculateTax({
-      items: items
-        .filter((i) => (i.pricingMode ?? globalMode) === 'inclusive')
-        .map((i) => ({
-          productId: i.productId,
-          categoryId: i.categoryId || '',
-          quantity: i.quantity,
-          unitPrice: i.price,
-          pricingMode: 'inclusive' as const,
-        })),
-      discount: inclusiveDiscount,
-      discountType: 'nominal' as const,
-    }, taxConfig);
-    inclusiveTax = inclusiveItemsResult.taxAmount;
-  } else if (hasAnyInclusive) {
-    displayBreakdown = [];
-    inclusiveTax = result.taxAmount;
-  }
-
-  return {
-    items,
-    itemCount,
-    subtotal: roundMoney(result.subtotal),
-    serviceCharge: roundMoney(totalSC),
-    serviceChargeName,
-    charges: result.charges.map((c) => ({ ...c, amount: roundMoney(c.amount) })),
-    tax: roundMoney(result.taxAmount),
-    taxName,
-    taxBreakdown: result.taxes.map((t) => ({ ...t, amount: roundMoney(t.amount) })),
-    displayBreakdown: displayBreakdown.map((t) => ({ ...t, amount: roundMoney(t.amount) })),
-    inclusiveTax: roundMoney(inclusiveTax),
-    discount,
-    discountType,
-    discountAmount: cappedDiscount,
-    promoCode: promoCode || '',
-    promoApplied,
-    discountRules: discountRules || [],
-    total: roundMoney(result.grandTotal),
-  };
+function scheduleRecalculation(get: () => POSState, set: (fn: (s: POSState) => Partial<POSState>) => void) {
+  if (recalcTimer) clearTimeout(recalcTimer);
+  recalcTimer = setTimeout(() => {
+    get().recalculate();
+  }, 50);
 }
 
-export const usePOSStore = create<POSState>((set) => ({
+export const usePOSStore = create<POSState>((set, get) => ({
   items: [],
-  itemCount: 0,
-  subtotal: 0,
-  serviceCharge: 0,
-  serviceChargeName: 'Service Charge',
-  charges: [],
-  tax: 0,
-  taxName: 'Pajak',
-  taxBreakdown: [],
-  displayBreakdown: [],
-  inclusiveTax: 0,
-  discount: 0,
-  discountType: 'nominal',
-  discountAmount: 0,
+  pricing: null,
+  pricingLoading: false,
   promoCode: '',
-  promoApplied: null,
+  manualDiscount: 0,
+  manualDiscountType: 'nominal',
   discountRules: [],
-  total: 0,
+  productPrices: {},
+
   paymentModalOpen: false,
   paymentState: 'idle',
   receipt: null,
-  taxConfig: null,
+
   customerName: '',
   tableNumber: '',
+
   heldOrders: [],
   heldOrdersPanelOpen: false,
 
   splitNumber: 0,
   splitBaseOrderNumber: null,
 
-  addItem: (item) =>
+  addItem: (item) => {
     set((state) => {
       const existing = state.items.find((i) => i.productId === item.productId);
       if (existing) {
-        return derive(
-          state.items.map((i) =>
+        return {
+          items: state.items.map((i) =>
             i.productId === item.productId ? { ...i, quantity: i.quantity + 1 } : i,
           ),
-          state.discount,
-          state.discountType,
-          state.taxConfig,
-          state.discountRules,
-          state.promoCode,
-        );
+        };
       }
-      return derive(
-        [...state.items, { ...item, quantity: item.quantity ?? 1 }],
-        state.discount,
-        state.discountType,
-        state.taxConfig,
-        state.discountRules,
-        state.promoCode,
-      );
-    }),
+      return {
+        items: [...state.items, { ...item, quantity: item.quantity ?? 1 }],
+      };
+    });
+    scheduleRecalculation(get, set);
+  },
 
-  removeItem: (productId) =>
-    set((state) => derive(
-      state.items.filter((i) => i.productId !== productId),
-      state.discount, state.discountType, state.taxConfig,
-      state.discountRules, state.promoCode,
-    )),
+  removeItem: (productId) => {
+    set((state) => ({
+      items: state.items.filter((i) => i.productId !== productId),
+    }));
+    scheduleRecalculation(get, set);
+  },
 
-  updateQuantity: (productId, delta) =>
-    set((state) =>
-      derive(
-        state.items
-          .map((i) =>
-            i.productId === productId ? { ...i, quantity: Math.max(0, i.quantity + delta) } : i,
-          )
-          .filter((i) => i.quantity > 0),
-        state.discount,
-        state.discountType,
-        state.taxConfig,
-        state.discountRules,
-        state.promoCode,
-      ),
-    ),
+  updateQuantity: (productId, delta) => {
+    set((state) => ({
+      items: state.items
+        .map((i) =>
+          i.productId === productId ? { ...i, quantity: Math.max(0, i.quantity + delta) } : i,
+        )
+        .filter((i) => i.quantity > 0),
+    }));
+    scheduleRecalculation(get, set);
+  },
 
   setItemNotes: (productId, notes) =>
     set((state) => ({
-      ...state,
       items: state.items.map((i) =>
         i.productId === productId ? { ...i, notes } : i,
       ),
     })),
 
-  setDiscount: (value, type) =>
-    set((state) => derive(state.items, value, type, state.taxConfig, state.discountRules, state.promoCode)),
+  setManualDiscount: (value, type) => {
+    set({ manualDiscount: value, manualDiscountType: type });
+    scheduleRecalculation(get, set);
+  },
 
-  setPromoCode: (code) =>
-    set((state) => derive(state.items, state.discount, state.discountType, state.taxConfig, state.discountRules, code)),
+  setPromoCode: (code) => {
+    set({ promoCode: code });
+    scheduleRecalculation(get, set);
+  },
 
-  setDiscountRules: (rules) =>
-    set((state) => derive(state.items, state.discount, state.discountType, state.taxConfig, rules, state.promoCode)),
+  setDiscountRules: (rules) => set({ discountRules: rules }),
 
-  setTaxConfig: (config) => {
-    set((state) => ({
-      taxConfig: config,
-      ...derive(state.items, state.discount, state.discountType, config, state.discountRules, state.promoCode),
-    }));
+  setProductPrices: (prices) => set({ productPrices: prices }),
+
+  clearCart: () =>
+    set({
+      items: [],
+      pricing: null,
+      promoCode: '',
+      manualDiscount: 0,
+      manualDiscountType: 'nominal',
+      receipt: null,
+      paymentState: 'idle',
+      customerName: '',
+      tableNumber: '',
+      splitNumber: 0,
+      splitBaseOrderNumber: null,
+    }),
+
+  recalculate: async () => {
+    const state = get();
+    const paidItems = state.items.filter((i) => !i.isFreeItem);
+    if (paidItems.length === 0) {
+      set({ pricing: null, pricingLoading: false });
+      return;
+    }
+
+    set({ pricingLoading: true });
+    try {
+      const { data } = await api.post('/pricing/calculate', {
+        items: paidItems.map((i) => ({
+          productId: i.productId,
+          productName: i.name,
+          categoryId: i.categoryId || '',
+          quantity: i.quantity,
+          unitPrice: i.price,
+          pricingMode: i.pricingMode,
+        })),
+        promoCode: state.promoCode || undefined,
+        manualDiscount: state.manualDiscount || undefined,
+        manualDiscountType: state.manualDiscount > 0 ? state.manualDiscountType : undefined,
+      });
+      set({ pricing: data, pricingLoading: false });
+    } catch {
+      set({ pricingLoading: false });
+    }
   },
 
   setCustomerName: (name) => set({ customerName: name }),
   setTableNumber: (table) => set({ tableNumber: table }),
 
-  clearCart: () =>
-    set({
-      items: [], itemCount: 0, subtotal: 0,
-      serviceCharge: 0, serviceChargeName: 'Service Charge',
-      charges: [],
-      tax: 0, taxName: 'Pajak', taxBreakdown: [],
-      displayBreakdown: [], inclusiveTax: 0,
-      discount: 0, discountType: 'nominal', discountAmount: 0,
-      promoCode: '', promoApplied: null, discountRules: [],
-      total: 0,
-      receipt: null, paymentState: 'idle',
-      customerName: '', tableNumber: '',
-      splitNumber: 0, splitBaseOrderNumber: null,
-    }),
-
   openPaymentModal: () => set({ paymentModalOpen: true }),
   closePaymentModal: () => set({ paymentModalOpen: false, paymentState: 'idle' }),
 
   setPaymentState: (paymentState) => set({ paymentState }),
-  setReceipt: (receipt) => set((state) => ({
-    receipt: {
-      ...receipt,
-      taxBreakdown: state.taxBreakdown,
-      totalTax: state.tax,
-      serviceCharge: state.serviceCharge,
-      grandTotal: state.total,
-    },
-    paymentState: 'success',
-    paymentModalOpen: false,
-  })),
+  setReceipt: (receipt) => set({ receipt, paymentState: 'success', paymentModalOpen: false }),
   clearReceipt: () => set({ receipt: null }),
 
   holdOrder: async () => {
@@ -392,24 +241,18 @@ export const usePOSStore = create<POSState>((set) => ({
     if (state.items.length === 0) return;
 
     const snapshotItems = [...state.items];
-    const snapshotTotal = state.total;
-    const snapshotSubtotal = state.subtotal;
-    const snapshotTax = state.tax;
-    const snapshotServiceCharge = state.serviceCharge;
-    const snapshotCustomerName = state.customerName;
-    const snapshotTableNumber = state.tableNumber;
     const tempId = `hold-${Date.now()}`;
 
     const heldOrder: HeldOrder = {
       id: tempId,
       orderNumber: `HOLD-${Date.now().toString(36).toUpperCase()}`,
       items: snapshotItems,
-      total: snapshotTotal,
-      subtotal: snapshotSubtotal,
-      tax: snapshotTax,
-      serviceCharge: snapshotServiceCharge,
-      customerName: snapshotCustomerName,
-      tableNumber: snapshotTableNumber,
+      total: state.pricing?.grandTotal ?? 0,
+      subtotal: state.pricing?.originalSubtotal ?? 0,
+      tax: state.pricing?.tax ?? 0,
+      serviceCharge: state.pricing?.serviceCharge ?? 0,
+      customerName: state.customerName,
+      tableNumber: state.tableNumber,
       createdAt: new Date().toISOString(),
     };
 
@@ -419,7 +262,6 @@ export const usePOSStore = create<POSState>((set) => ({
     usePOSStore.getState().clearCart();
 
     try {
-      const { api } = await import('../../../@shared/services/api');
       const res = await api.post('/orders', {
         items: snapshotItems.map((i) => ({
           productId: i.productId,
@@ -430,8 +272,8 @@ export const usePOSStore = create<POSState>((set) => ({
           modifiers: [],
           tax: { rate: 0, amount: 0 },
         })),
-        customerName: snapshotCustomerName || null,
-        tableNumber: snapshotTableNumber || null,
+        customerName: state.customerName || null,
+        tableNumber: state.tableNumber || null,
         source: 'pos',
         transactionType: 'dine_in',
         notes: '',
@@ -447,7 +289,7 @@ export const usePOSStore = create<POSState>((set) => ({
         ),
       }));
     } catch {
-      // local held order stays, cashier can recall later
+      // local held order stays
     }
   },
 
@@ -470,11 +312,8 @@ export const usePOSStore = create<POSState>((set) => ({
       tableNumber: heldOrder.tableNumber || '',
     }));
 
-    // Background: notify backend
     if (!heldOrder.id.startsWith('hold-')) {
-      import('../../../@shared/services/api').then(({ api }) =>
-        api.patch(`/orders/${heldOrder.id}/recall`).catch(() => {}),
-      );
+      api.patch(`/orders/${heldOrder.id}/recall`).catch(() => {});
     }
   },
 
@@ -484,9 +323,8 @@ export const usePOSStore = create<POSState>((set) => ({
     }));
   },
 
-  loadHeldOrders: async (tenantId: string) => {
+  loadHeldOrders: async (_tenantId: string) => {
     try {
-      const { api } = await import('../../../@shared/services/api');
       const res = await api.get('/orders', { params: { status: 'held', limit: 50 } });
       const orders = res.data.data || [];
       const heldOrders: HeldOrder[] = orders.map((o: any) => ({
@@ -515,14 +353,11 @@ export const usePOSStore = create<POSState>((set) => ({
   toggleHeldOrdersPanel: () => set((s) => ({ heldOrdersPanelOpen: !s.heldOrdersPanelOpen })),
 
   removeItems: (productIds) =>
-    set((state) => {
-      const remaining = state.items.filter((i) => !productIds.includes(i.productId));
-      return {
-        ...derive(remaining, state.discount, state.discountType, state.taxConfig, state.discountRules, state.promoCode),
-        splitNumber: remaining.length === 0 ? 0 : state.splitNumber,
-        splitBaseOrderNumber: remaining.length === 0 ? null : state.splitBaseOrderNumber,
-      };
-    }),
+    set((state) => ({
+      items: state.items.filter((i) => !productIds.includes(i.productId)),
+      splitNumber: state.items.filter((i) => !productIds.includes(i.productId)).length === 0 ? 0 : state.splitNumber,
+      splitBaseOrderNumber: state.items.filter((i) => !productIds.includes(i.productId)).length === 0 ? null : state.splitBaseOrderNumber,
+    })),
 
   resetSplit: () => set({ splitNumber: 0, splitBaseOrderNumber: null }),
 }));

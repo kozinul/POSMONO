@@ -5,7 +5,9 @@ export type ConditionType =
   | 'product_match'
   | 'day_of_week'
   | 'date_range'
-  | 'quantity_threshold';
+  | 'quantity_threshold'
+  | 'time_range'
+  | 'customer_tag';
 
 export interface IDiscountCondition {
   type: ConditionType;
@@ -17,6 +19,7 @@ export interface ConditionContext {
   items: Array<{ productId: string; categoryId: string; quantity: number; unitPrice: number }>;
   currentDate?: Date;
   customerGroupId?: string;
+  customerTags?: string[];
   promoCode?: string;
 }
 

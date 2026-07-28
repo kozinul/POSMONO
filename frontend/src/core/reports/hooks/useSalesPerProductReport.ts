@@ -47,7 +47,7 @@ export function useSalesPerProductReport(dateFrom: string, dateTo: string) {
           dpp: acc.dpp + r.dpp,
           serviceCharge: acc.serviceCharge + r.serviceCharge,
           tax: acc.tax + r.tax,
-          grandTotal: acc.grandTotal + r.dpp + r.tax + r.serviceCharge,
+          grandTotal: acc.grandTotal + r.totalSales + r.tax + r.serviceCharge,
         }),
         { quantity: 0, totalSales: 0, dpp: 0, serviceCharge: 0, tax: 0, grandTotal: 0 },
       );

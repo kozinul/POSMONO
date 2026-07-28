@@ -58,7 +58,7 @@ export class MongoPromotionRepository {
       _id: data.id,
       tenantId: data.tenantId,
       name: data.name,
-      code: data.code,
+      code: data.code || null,
       description: data.description,
       priority: data.priority,
       exclusive: data.exclusive,
@@ -92,6 +92,7 @@ export class MongoPromotionRepository {
   }
 
   async findByCode(tenantId: string, code: string): Promise<Promotion | null> {
+    if (!code) return null;
     const doc = await this.model.findOne({ tenantId, code }).exec();
     if (!doc) return null;
     return this.toDomain(doc);
