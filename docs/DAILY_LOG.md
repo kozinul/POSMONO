@@ -36,6 +36,88 @@ Copy this block for each new day:
 
 ## Entries
 
+### DATE: 2026-07-28
+
+**Today I worked on:**
+
+- **Unified Pricing Engine** — single backend service orchestrating all pricing calculations, frontend purely renders results
+- Replaced local `derive()` in POS store with async `recalculate()` calling `POST /pricing/calculate`
+
+**Backend changes:**
+
+- `core/pricing/application/services/PricingService.ts` — new orchestrator: DiscountEngineAdapter → Charges → TaxEngine → Rounding → PricingResult
+- `core/pricing/api/pricing.controller.ts` — POST /pricing/calculate handler
+- `core/pricing/api/pricing.routes.ts` — route factory with DI
+- `bootstrap/routes.ts` — registered `/api/pricing` with discountRepo, taxConfigRepo, promoCodeRepo
+- `DiscountServiceAdapter` — added free item multiplier (`qualifyingSets = floor(matchCount / minimumQuantity)`)
+- `PromotionToDiscountMapper` — added `buy_x_get_y` (→ product_match + min_items), `time_range`, `customer_tag` condition mapping
+- `ConditionStrategy.ts` — extended ConditionType union with `time_range` and `customer_tag`
+- `TimeRangeCondition.ts` — new strategy: checks `startHour/startMinute/endHour/endMinute` against current time
+- `CustomerTagCondition.ts` — new strategy: checks customer tags against rule's `customerTags[]`
+- `ConditionEvaluator.ts` — registered TimeRangeCondition and CustomerTagCondition
+
+**Frontend changes:**
+
+- `posStore.ts` — rewritten: removed `derive()`, `calculateTax`, `calculateDiscount` imports; added `recalculate()` async (calls pricing API with debounce 50ms); simplified state to `pricing: PricingResult | null`
+- `PosPage.tsx` — rewritten: uses `pricing` from store for all display; useEffect calls `recalculate()` on items/promoCode/manualDiscount changes; shows originalSubtotal → promotion → netSubtotal → SC → tax → grandTotal
+- `PaymentModal.tsx` — rewritten: uses pricing result; filters free items from payment request; sends pricing data to payment API; shows full breakdown in modal
+- `ReceiptDisplay.tsx` — updated: renders from PricingResult (originalSubtotal, promotion, netSubtotal, SC, tax, grandTotal)
+- `CartItemRow.tsx` — shows "GRATIS" badge for free items, hides quantity controls
+- `usePricing.ts` — new hook: `useCalculatePricing` mutation calling `POST /pricing/calculate`
+- `useDiscountConfiguration.ts` — extended types: `time_range`, `customer_tag` in ConditionType; `ruleId` in FreeItemConfiguration
+- `discountCalculator.ts` — added `countQualifyingSets()` for multiply promos; `productPriceLookup` param; `freeItemCount` in `applyEffects()`
+- Auto free items: useEffect in PosPage auto-adds/removes/updates free items based on `pricing.lineItems` where `isFreeItem: true`
+
+**Pricing pipeline order:**
+
+```
+Original Subtotal
+  → Promotion/Discount (percentage, nominal, buy_x_get_y, free items, promo codes)
+  → Net Subtotal
+  → Service Charge (from net subtotal)
+  → Tax (on netSubtotal + serviceCharge)
+  → Rounding
+  → Grand Total
+```
+
+**PricingResult shape:**
+
+```typescript
+{
+  originalSubtotal: number;
+  promotionDiscount: number;
+  netSubtotal: number;
+  serviceCharge: number;
+  serviceChargeName: string;
+  taxBase: number;
+  tax: number;
+  taxName: string;
+  taxRate: number;
+  rounding: number;
+  grandTotal: number;
+  lineItems: PricingLineItem[];
+  appliedRules: Array<{ ruleId, ruleName, discountAmount, description }>;
+  adjustments: Array<{ id, type, name, sequence, base, rate?, amount, affectsTaxBase, affectsGrandTotal }>;
+}
+```
+
+**TypeScript:** Backend 0 errors (in pricing files), Frontend 0 errors
+
+**What I learned:**
+
+- Free items tracked via `isFreeItem` + `freeByRuleId` on CartItem; backend PricingService splits line items (free portion gets discount = unitPrice × freeQty)
+- `qualifyingSets = floor(matchCount / minimumQuantity)` enables "buy 2 get 1 free" multiply behavior (buy 4 get 2 free)
+- Debounced async recalculation (50ms) after cart changes prevents excessive API calls during rapid user interaction
+
+**Tomorrow priority:**
+
+- End-to-end test of full pricing flow (create promo → add items → verify pricing API → complete payment)
+- MVP deployment
+
+**Productivity score:** 9
+
+---
+
 ### DATE: 2026-07-23
 
 **Today I worked on:**

@@ -46,6 +46,7 @@ Monorepo (pnpm + Turborepo)
 | 17 | Summary | (aggregation) | `/api/summary` | ✅ |
 | 18 | Setting | Setting | `/api/settings` | ✅ |
 | 19 | Upload | (file) | `/api/upload` | ✅ |
+| 20 | Pricing | PricingResult | `/api/pricing` | ✅ |
 
 ---
 
@@ -472,6 +473,72 @@ families.view, families.edit
 - **Auto-apply**: promo tanpa `requiresCode` otomatis diterapkan di POS
 - **Discount engine sync**: promo rules disinkronkan ke discount config via `PromotionToDiscountMapper`
 - **Promo code validation**: `DiscountServiceAdapter.validatePromoCode()` mencari synced rules by `promoCodeId`
+
+---
+
+## 12b. Domain: Pricing (Unified Pricing Engine)
+
+### Models
+- **PricingService** (`core/pricing/application/services/PricingService.ts`)
+  - Single backend orchestrator for all pricing calculations
+  - Pipeline: Discount → Charges → Tax → Rounding → PricingResult
+  - Replaces frontend local `derive()` function
+
+### API Endpoints
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/api/pricing/calculate` | ✅ | Calculate full pricing breakdown for cart |
+
+### PricingResult Shape
+```typescript
+{
+  originalSubtotal: number;        // Sum of unitPrice × quantity
+  promotionDiscount: number;       // Total discount from promos
+  netSubtotal: number;             // originalSubtotal - promotionDiscount
+  serviceCharge: number;           // From Charge entity (percentage of netSubtotal)
+  serviceChargeName: string;       // "Service Charge"
+  taxBase: number;                 // netSubtotal + serviceCharge
+  tax: number;                     // Calculated tax amount
+  taxName: string;                 // "PPN"
+  taxRate: number;                 // 12
+  rounding: number;                // Rounding adjustment
+  grandTotal: number;              // Final amount
+  lineItems: PricingLineItem[];    // Per-item breakdown with discounts
+  appliedRules: AppliedRule[];     // Which promo rules were applied
+  adjustments: Adjustment[];       // Full adjustment pipeline output
+}
+```
+
+### Pipeline Order
+```
+1. Original Subtotal → sum of unitPrice × quantity
+2. Promotion/Discount → promo codes, auto-apply, manual discount, free items
+3. Net Subtotal → originalSubtotal - promotionDiscount
+4. Service Charge → percentage of netSubtotal (from Charge entity)
+5. Tax → calculated on (netSubtotal + serviceCharge)
+6. Rounding → configurable rounding to nearest value
+7. Grand Total → netSubtotal + serviceCharge + tax + rounding
+```
+
+### Free Items
+- When promo produces free items, they appear in `lineItems[]` with `isFreeItem: true`
+- `discount: unitPrice × freeQty`, `lineTotal: 0`
+- `qualifyingSets = floor(matchCount / minimumQuantity)` — "buy 2 get 1 free" with qty 4 = 2 free items
+- Frontend auto-adds/removes free items via useEffect based on `pricing.lineItems`
+
+### Frontend Integration
+- `usePricing.ts` hook calls `POST /pricing/calculate`
+- `posStore.ts` `recalculate()` debounced 50ms after cart changes
+- `PosPage.tsx` renders from `pricing` from store (no local calculations)
+- `PaymentModal.tsx` uses pricing result, filters free items from payment
+- `CartItemRow.tsx` shows "GRATIS" badge, hides qty controls for free items
+
+### Business Logic
+- **Single source of truth**: backend PricingService is the only calculation engine
+- **Frontend is pure renderer**: no tax/discount calculation in frontend
+- **Debounced recalculation**: 50ms debounce prevents excessive API calls
+- **Condition strategies**: TimeRangeCondition (hour/minute window), CustomerTagCondition (customer tags)
+- **Multiplier promos**: buy_x_get_y with multiply behavior via `countQualifyingSets()`
 
 ---
 
@@ -1020,6 +1087,7 @@ Untuk rewrite ke Modular Monolith + DDD, berikut rekomendasi domain boundaries:
 | **Access Control** | Role | Role | Permission | RoleCreated, RoleUpdated |
 | **Catalog** | Product | Product, Category, Family, Modifier | Barcode, Price, TaxEntry, ModifierOption | ProductCreated, ProductUpdated |
 | **Inventory** | Stock | StockMovement | StockLevel | StockAdjusted, StockDepleted |
+| **Pricing** | PricingService | PricingLineItem, AppliedRule | PricingResult, Adjustment | PricingCalculated |
 | **Sales** | Order | Order, OrderItem, VoidedItem | OrderNumber, OrderStatus, TaxDetail, PromotionBreakdown | OrderCreated, OrderPaid, OrderVoided |
 | **Pricing** | Promotion | Promotion, Discount, TaxRule, Charge | Rule, RoundingPolicy, DppFormula, Adjustment | PromotionApplied, TaxCalculated, AdjustmentProcessed |
 | **Payment** | Payment | PaymentMethod | RoundingPolicy, CardLastFour | PaymentProcessed, PaymentRefunded |

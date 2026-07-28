@@ -576,6 +576,85 @@ Process a cash payment with optional promo code and manual discount.
 
 ---
 
+## Pricing (`/api/pricing`)
+
+### `POST /api/pricing/calculate`
+
+Unified pricing calculation — single source of truth for all frontend totals. Returns the complete pricing breakdown: originalSubtotal → promotion/discount → netSubtotal → service charge → tax → rounding → grandTotal.
+
+**Body:**
+```json
+{
+  "items": [
+    { "productId": "uuid", "productName": "Kopi Hitam", "categoryId": "cat-id", "quantity": 2, "unitPrice": 8000, "pricingMode": "exclusive" }
+  ],
+  "promoCode": "HEMAT10",
+  "manualDiscount": 5000,
+  "manualDiscountType": "nominal",
+  "customerGroupId": "group-id"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| items | array | yes | Cart items with productId, productName, categoryId, quantity, unitPrice, pricingMode |
+| promoCode | string | no | Promo code to apply |
+| manualDiscount | number | no | Manual discount value (default 0) |
+| manualDiscountType | string | no | `"percentage"` or `"nominal"` (default nominal) |
+| customerGroupId | string | no | Customer group for tier-based promos |
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "data": {
+    "originalSubtotal": 16000,
+    "promotionDiscount": 1600,
+    "netSubtotal": 14400,
+    "serviceCharge": 720,
+    "serviceChargeName": "Service Charge",
+    "taxBase": 15120,
+    "tax": 1663,
+    "taxName": "PPN",
+    "taxRate": 12,
+    "rounding": 0,
+    "grandTotal": 16783,
+    "lineItems": [
+      {
+        "productId": "uuid",
+        "productName": "Kopi Hitam",
+        "categoryId": "cat-id",
+        "quantity": 2,
+        "unitPrice": 8000,
+        "originalUnitPrice": 8000,
+        "discount": 1600,
+        "lineTotal": 14400,
+        "isFreeItem": false
+      }
+    ],
+    "appliedRules": [
+      { "ruleId": "rule-1", "ruleName": "Hemat 10%", "discountAmount": 1600, "description": "10% off all items" }
+    ],
+    "adjustments": [
+      { "id": "adj-1", "type": "DISCOUNT", "name": "Hemat 10%", "sequence": 10, "base": 16000, "rate": 10, "amount": 1600, "affectsTaxBase": true, "affectsGrandTotal": true }
+    ]
+  }
+}
+```
+
+**Pipeline order:**
+1. **Original Subtotal** — sum of unitPrice × quantity for all items
+2. **Promotion/Discount** — promo code, auto-apply, manual discount, free items
+3. **Net Subtotal** — originalSubtotal - promotionDiscount
+4. **Service Charge** — percentage of netSubtotal (from Charge entity)
+5. **Tax** — calculated on (netSubtotal + serviceCharge)
+6. **Rounding** — configurable rounding to nearest value
+7. **Grand Total** — netSubtotal + serviceCharge + tax + rounding
+
+**Free items:** When a promo produces free items, the response includes them in `lineItems[]` with `isFreeItem: true`, `discount: unitPrice`, and `lineTotal: 0`.
+
+---
+
 ## Domain Entity Shapes
 
 ### Product
@@ -696,3 +775,4 @@ id, tenantId, email, displayName, roleId, isActive, lastLoginAt, createdAt, upda
 | 77 | POST | `/api/pricing-profiles` | ✓ |
 | 78 | PUT | `/api/pricing-profiles/:id` | ✓ |
 | 79 | DELETE | `/api/pricing-profiles/:id` | ✓ |
+| 80 | POST | `/api/pricing/calculate` | ✓ |

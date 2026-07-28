@@ -91,6 +91,63 @@ Options 2 + 4 — Separate Charge entity + Configurable Adjustment Pipeline.
 
 ---
 
+### DECISION-012
+
+**Date:** 2026-07-28
+
+**Problem:**
+POS frontend had local pricing calculation (`derive()` in Zustand store) duplicating backend logic, causing inconsistency between frontend display and actual payment processing.
+
+**Context:**
+The POS frontend calculated subtotal, tax, discount, and service charge locally in the `posStore.ts` `derive()` function using `taxCalculator.ts` and `discountCalculator.ts`. This meant:
+- Two separate calculation codebases (frontend + backend) that could drift
+- Free item handling was incomplete — backend had full promo engine but frontend couldn't properly track free items
+- Service charge calculation differed between frontend (from TaxRule) and backend (from Charge entity)
+- Promo code validation happened at payment time but frontend showed stale estimates
+
+**Options Considered:**
+
+1. **Keep local derive() + sync at payment** — Frontend estimates, backend recalculates at pay time.
+   - Pros: No API dependency for display
+   - Cons: User sees wrong totals until payment, "surprise" changes at checkout
+
+2. **Unified backend PricingEngine + async frontend recalc** — Single `POST /pricing/calculate` endpoint, frontend calls on every cart change.
+   - Pros: Frontend always shows correct totals, single source of truth
+   - Cons: API dependency for every cart display update, network latency
+
+3. **WebSocket real-time pricing** — Backend pushes pricing updates via WebSocket.
+   - Pros: True real-time, no polling
+   - Cons: Complex infrastructure, overkill for POS
+
+**Chosen Option:**
+Option 2 — Unified backend PricingEngine + debounced async frontend recalc.
+
+**Reasoning:**
+- Single source of truth prevents calculation drift
+- Debounced recalculation (50ms after last cart change) prevents excessive API calls
+- Backend `PricingService` orchestrates: DiscountServiceAdapter → Charges → TaxEngine → Rounding → PricingResult
+- Frontend becomes a pure renderer — no calculation logic, just display
+- Free items handled correctly: backend tracks `originalUnitPrice`, `discount`, `lineTotal` per line item
+- `qualifyingSets = floor(matchCount / minimumQuantity)` enables "buy X get Y" multiply behavior
+
+**Implementation:**
+- Backend: `PricingService.ts` — orchestrates discount + tax engines into PricingResult
+- Backend: `POST /api/pricing/calculate` endpoint
+- Frontend: `usePricing.ts` hook with `useCalculatePricing` mutation
+- Frontend: `posStore.ts` rewritten — `recalculate()` async, `scheduleRecalculation()` debounced 50ms
+- Frontend: `PosPage.tsx` uses `pricing` from store, calls `recalculate()` on items/promoCode/manualDiscount changes
+- Frontend: `PaymentModal.tsx` uses pricing result, filters free items from payment
+- Frontend: Free items auto-added via useEffect based on `pricing.lineItems` where `isFreeItem: true`
+- Frontend: `CartItemRow.tsx` shows GRATIS badge, hides qty controls for free items
+
+**Consequences:**
+- Positive: Single source of truth, correct free item handling, consistent display, frontend simplification
+- Negative: API dependency for cart display, network latency (mitigated by 50ms debounce)
+
+**Revisit Date:** When adding offline POS support or when latency becomes an issue
+
+---
+
 ## Decisions
 
 ### DECISION-001

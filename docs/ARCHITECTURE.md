@@ -285,6 +285,14 @@ backend/
 │   │   │   ├── infrastructure/
 │   │   │   └── interfaces/
 │   │   │
+│   │   ├── pricing/                      # Bounded Context: Unified Pricing Engine
+│   │   │   ├── application/
+│   │   │   │   └── services/
+│   │   │   │       └── PricingService.ts  #   Orchestrator: discount → charges → tax → rounding → PricingResult
+│   │   │   └── api/
+│   │   │       ├── pricing.controller.ts  #   POST /pricing/calculate handler
+│   │   │       └── pricing.routes.ts      #   Route factory with DI
+│   │   │
 │   │   ├── customer/                  # Bounded Context: Customer Management
 │   │   │   ├── domain/
 │   │   │   │   ├── Customer.ts
@@ -534,10 +542,14 @@ frontend/
 │   │   │   ├── useTenant.ts
 │   │   │   ├── useSocket.ts
 │   │   │   ├── usePagination.ts
-│   │   │   └── useDebounce.ts
+│   │   │   ├── useDebounce.ts
+│   │   │   ├── useDiscountConfiguration.ts
+│   │   │   └── usePricing.ts
 │   │   ├── utils/                          #   Utility functions
 │   │   │   ├── formatters.ts               #     Currency, date, phone formatters
-│   │   │   └── validators.ts
+│   │   │   ├── validators.ts
+│   │   │   ├── discountCalculator.ts        #     Client-side discount evaluation + free item logic
+│   │   │   └── taxCalculator.ts             #     Client-side tax calculation with adjustments
 │   │   ├── types/                          #   Shared frontend types
 │   │   │   ├── api.ts                      #     API response/request types
 │   │   │   ├── ui.ts                       #     UI state types
@@ -586,18 +598,21 @@ frontend/
 │   │   │   ├── components/
 │   │   │   │   ├── ProductGrid.tsx
 │   │   │   │   ├── CartPanel.tsx
-│   │   │   │   ├── PaymentModal.tsx
+│   │   │   │   ├── CartItemRow.tsx           #     GRATIS badge, qty controls, free item handling
+│   │   │   │   ├── PaymentModal.tsx          #     Uses pricing result, filters free items
+│   │   │   │   ├── ReceiptDisplay.tsx        #     Renders from PricingResult
+│   │   │   │   ├── HeldOrdersPanel.tsx       #     Collapsible sidebar for held orders
 │   │   │   │   ├── Numpad.tsx
 │   │   │   │   ├── BarcodeInput.tsx
-│   │   │   │   └── ReceiptPreview.tsx
+│   │   │   │   └── ProductCard.tsx
 │   │   │   ├── hooks/
-│   │   │   │   ├── useCart.ts
-│   │   │   │   └── usePayment.ts
+│   │   │   │   ├── useProducts.ts
+│   │   │   │   └── useFamilies.ts
 │   │   │   ├── services/
 │   │   │   ├── pages/
-│   │   │   │   └── PosPage.tsx
+│   │   │   │   └── PosPage.tsx               #     Uses pricing from store, calls recalculate()
 │   │   │   └── store/
-│   │   │       └── posStore.ts
+│   │   │       └── posStore.ts               #     Async recalculate() calling pricing API
 │   │   │
 │   │   ├── orders/                         # Feature: Order Management
 │   │   │   ├── components/
