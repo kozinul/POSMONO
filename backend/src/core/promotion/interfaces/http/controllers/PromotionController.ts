@@ -6,7 +6,7 @@ import { ValidationError } from '../../../../../@shared/infrastructure/error/App
 
 const ruleSchema = z.object({
   type: z.enum([
-    'min_purchase', 'min_items', 'buy_x_get_y', 'percentage_off', 'nominal_off',
+    'min_purchase', 'min_items', 'buy_x_get_y', 'buy_x_pay_y', 'percentage_off', 'nominal_off',
     'fixed_price', 'free_item', 'bundle_price', 'product_match', 'category_match',
     'day_of_week', 'date_range', 'time_range', 'customer_tag',
   ]),

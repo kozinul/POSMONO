@@ -275,6 +275,7 @@ export function buildContainer() {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
         productRepository: container.resolve('productRepository'),
+        eventBus: container.resolve('eventBus'),
       }),
     }),
     categoryService: asClass(CategoryService, {
@@ -731,6 +732,7 @@ export function buildContainer() {
       injector: () => ({
         promotionRepository: container.resolve('promotionRepository'),
         discountConfigRepo: container.resolve('discountConfigurationRepository'),
+        eventBus: container.resolve('eventBus'),
       }),
     }),
     promotionController: asClass(PromotionController, {

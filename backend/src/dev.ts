@@ -244,9 +244,15 @@ async function main() {
   }
 
   if (forceSeed) {
-    const Tenant = mongoose.model('Tenant', TenantSchema);
-    await Tenant.deleteMany({});
-    console.log('[DEV] Cleared existing data for re-seed.');
+    const collections = await mongoose.connection.db?.listCollections().toArray() ?? [];
+    for (const col of collections) {
+      try {
+        await mongoose.connection.db?.dropCollection(col.name);
+      } catch {
+        // ignore system collections
+      }
+    }
+    console.log('[DEV] Cleared all collections for re-seed.');
   }
 
   await seedData();

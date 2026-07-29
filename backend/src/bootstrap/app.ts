@@ -1,6 +1,8 @@
+import http from 'http';
 import { createServer } from './server';
 import { buildContainer } from './container';
 import { registerEventHandlers } from './eventBus';
+import { initSocketServer } from './socket';
 import { logger } from '../@shared/infrastructure/logger/Logger';
 import { env } from '../@shared/config/env';
 import { validateEnv } from '../@shared/config/validateEnv';
@@ -14,8 +16,11 @@ async function main() {
   registerEventHandlers(eventBus);
 
   const app = createServer(container);
+  const httpServer = http.createServer(app);
 
-  app.listen(env.PORT, () => {
+  initSocketServer(httpServer);
+
+  httpServer.listen(env.PORT, () => {
     logger.info(
       { port: env.PORT, env: env.NODE_ENV },
       'POSMono server started',

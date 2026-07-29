@@ -8,7 +8,8 @@ export class PercentageOffEffect implements EffectStrategy {
     const maxCap = effect.config.maxCap as number | undefined;
     const target = effect.config.target as 'subtotal' | 'remaining' | undefined;
 
-    const base = target === 'remaining' ? context.subtotal - context.appliedDiscounts : context.subtotal;
+    const scopeSubtotal = context.matchingSubtotal ?? context.subtotal;
+    const base = target === 'remaining' ? scopeSubtotal - context.appliedDiscounts : scopeSubtotal;
     let amount = base * (rate / 100);
     if (maxCap !== undefined) amount = Math.min(amount, maxCap);
 

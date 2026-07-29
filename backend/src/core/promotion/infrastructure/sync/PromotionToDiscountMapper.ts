@@ -11,6 +11,7 @@ function mapEffectType(type: string): IDiscountEffect['type'] {
     case 'free_item': return 'free_item';
     case 'fixed_price': return 'fixed_price';
     case 'bundle_price': return 'bundle_price';
+    case 'buy_x_pay_y': return 'buy_x_pay_y';
     default: return 'percentage_off';
   }
 }
@@ -53,7 +54,8 @@ function mapRules(promo: IPromotion): IDiscountCondition[] {
           config: { minItems: rule.params.count ?? rule.params.minItems ?? 0 },
         });
         break;
-      case 'buy_x_get_y': {
+      case 'buy_x_get_y':
+      case 'buy_x_pay_y': {
         const buyIds = (rule.params.buyProductIds as string[]) ?? [];
         if (buyIds.length > 0) {
           conditions.push({
@@ -163,7 +165,7 @@ function determineScope(promo: IPromotion): { type: DiscountScopeType; entityId:
         return { type: 'product', entityId: ids[0], entityName: '' };
       }
     }
-    if (ruleType === 'buy_x_get_y') {
+    if (ruleType === 'buy_x_get_y' || ruleType === 'buy_x_pay_y') {
       const ids = (rule.params.buyProductIds as string[]) || [];
       if (ids.length === 1) {
         return { type: 'product', entityId: ids[0], entityName: '' };
@@ -178,6 +180,20 @@ export function promotionToDiscountRule(promo: IPromotion): IDiscountRule {
   const discountType = mainEffect?.type === 'nominal' ? 'nominal' : 'percentage';
   const discountValue = mainEffect?.value ?? 0;
   const promoCode = promo.code.trim().toUpperCase();
+
+  const buyXPayYRule = promo.rules.find((r) => r.type === 'buy_x_pay_y');
+  const finalEffects = buyXPayYRule
+    ? [
+        {
+          type: 'buy_x_pay_y' as IDiscountEffect['type'],
+          config: {
+            minQty: (buyXPayYRule.params.buyQuantity as number) ?? 1,
+            payQty: (buyXPayYRule.params.payQuantity as number) ?? 0,
+            applyTo: (buyXPayYRule.params.applyTo as string) ?? 'cheapest',
+          },
+        },
+      ]
+    : mapEffects(promo.effects);
 
   return {
     id: `promo_${promo.id}`,
@@ -195,11 +211,20 @@ export function promotionToDiscountRule(promo: IPromotion): IDiscountRule {
       precision: 2,
     },
     conditions: mapRules(promo),
-    effects: mapEffects(promo.effects),
+    effects: finalEffects,
     promoCodeId: promoCode || undefined,
     currentUsageCount: promo.usedCount,
     maxUsageCount: promo.usageLimit ?? undefined,
     startDate: promo.validFrom ? new Date(promo.validFrom).toISOString() : undefined,
-    endDate: promo.validUntil ? new Date(promo.validUntil).toISOString() : undefined,
+    endDate: promo.validUntil
+      ? (() => {
+          const d = new Date(promo.validUntil);
+          const hasTime = d.getHours() !== 0 || d.getMinutes() !== 0 || d.getSeconds() !== 0;
+          if (!hasTime) {
+            d.setHours(23, 59, 59, 999);
+          }
+          return d.toISOString();
+        })()
+      : undefined,
   };
 }

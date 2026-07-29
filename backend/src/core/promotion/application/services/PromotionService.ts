@@ -2,17 +2,26 @@ import { Promotion, IPromotionRule, IPromotionEffect, PromotionRuleType, Discoun
 import { DiscountConfiguration } from '../../../discount/domain/DiscountConfiguration';
 import { DiscountRule } from '../../../discount/domain/DiscountRule';
 import { promotionToDiscountRule } from '../../infrastructure/sync/PromotionToDiscountMapper';
+import { logger } from '../../../../@shared/infrastructure/logger/Logger';
+import { EventBus } from '../../../../@shared/infrastructure/eventBus/EventBus';
+import { DomainEvent } from '../../../../@shared/domain/DomainEvent';
+import { DOMAIN_EVENTS } from '@posmono/shared';
 
 export class PromotionService {
   constructor(
     private readonly promotionRepository: any,
     private readonly discountConfigRepo?: any,
+    private readonly eventBus?: EventBus,
   ) {}
+
+  private publish(eventName: string, aggregateId: string, tenantId: string, payload: Record<string, unknown>): void {
+    this.eventBus?.publish(new DomainEvent({ eventName, aggregateId, aggregateType: 'promotion', tenantId, payload }));
+  }
 
   private async syncToDiscountConfig(promotion: Promotion): Promise<void> {
     if (!this.discountConfigRepo) return;
+    const data = promotion.serialize();
     try {
-      const data = promotion.serialize();
       let configData = await this.discountConfigRepo.findByTenantId(data.tenantId);
       if (!configData) {
         configData = DiscountConfiguration.create({
@@ -34,8 +43,9 @@ export class PromotionService {
       }
 
       await this.discountConfigRepo.save(discConfig.serialize());
-    } catch {
-      // sync failure should not block promotion save
+      this.publish(DOMAIN_EVENTS.DISCOUNT_CONFIG_UPDATED, data.id, data.tenantId, { promotionId: data.id, name: data.name });
+    } catch (err) {
+      logger.error({ err, promotionId: data.id }, 'Failed to sync promotion to discount config');
     }
   }
 
@@ -47,8 +57,10 @@ export class PromotionService {
       const discConfig = DiscountConfiguration.hydrate(config);
       discConfig.removeRule(`promo_${promotionId}`);
       await this.discountConfigRepo.save(discConfig.serialize());
-    } catch {
-      // sync failure should not block promotion delete
+      this.publish(DOMAIN_EVENTS.DISCOUNT_CONFIG_UPDATED, promotionId, tenantId, { promotionId });
+      logger.info({ promotionId }, 'Promotion removed from discount config');
+    } catch (err) {
+      logger.error({ err, promotionId }, 'Failed to remove promotion from discount config');
     }
   }
 
@@ -96,6 +108,7 @@ export class PromotionService {
 
     await this.promotionRepository.save(promotion);
     await this.syncToDiscountConfig(promotion);
+    logger.info({ promotionId: promotion.serialize().id, name: input.name }, 'Promotion created');
     return promotion;
   }
 
@@ -143,6 +156,7 @@ export class PromotionService {
 
     await this.promotionRepository.save(updated);
     await this.syncToDiscountConfig(updated);
+    logger.info({ promotionId: updated.serialize().id, name: input.name }, 'Promotion updated');
     return updated;
   }
 
@@ -214,5 +228,6 @@ export class PromotionService {
     if (promo.serialize().tenantId !== tenantId) throw new Error('Promotion not found');
     await this.promotionRepository.delete(id);
     await this.removeFromDiscountConfig(tenantId, id);
+    logger.info({ promotionId: id }, 'Promotion deleted');
   }
 }

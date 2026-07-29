@@ -3,7 +3,8 @@ export type EffectType =
   | 'nominal_off'
   | 'free_item'
   | 'fixed_price'
-  | 'bundle_price';
+  | 'bundle_price'
+  | 'buy_x_pay_y';
 
 export interface IDiscountEffect {
   type: EffectType;
@@ -14,6 +15,8 @@ export interface EffectContext {
   subtotal: number;
   items: Array<{ productId: string; categoryId: string; quantity: number; unitPrice: number; lineTotal: number }>;
   appliedDiscounts: number;
+  matchingSubtotal?: number;
+  matchingItems?: Array<{ productId: string; categoryId: string; quantity: number; unitPrice: number; lineTotal: number }>;
 }
 
 export interface EffectResult {

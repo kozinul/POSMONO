@@ -20,6 +20,8 @@ Monorepo (pnpm + Turborepo)
 **Validation:** Zod
 **Image Processing:** Sharp
 **File Uploads:** Multer
+**Real-time:** Socket.io (tenant-isolated rooms, domain event bridge)
+**Logging:** Pino (console + file transport to `backend/logs/app.log`)
 
 ---
 
@@ -441,7 +443,7 @@ families.view, families.edit
 | 6 | `nth_item` | Diskon item ke-N |
 | 7 | `bundle` | Bundle price |
 | 8 | `buy_x_get_y` | Beli X gratis Y |
-| 9 | `buy_x_pay_y` | Beli X bayar Y |
+| 9 | `buy_x_pay_y` | Beli X bayar Y (min qty, bayar untuk qty lebih sedikit) |
 | 10 | `free_gift` | Gratis hadiah |
 | 11 | `min_spend` | Minimal total belanja |
 | 12 | `multiplier` | Pengali harga |
@@ -464,7 +466,7 @@ families.view, families.edit
 - **Exclusive vs Stackable**: exclusive = tidak bisa digabung, stackable = bisa digabung
 - **Promo code**: bisa require kode promo saat transaksi
 - **Usage limits**: batas pemakaian per promo dan per customer
-- **Date-based**: promo berlaku dari tanggal tertentu
+- **Date-based**: promo berlaku dari tanggal tertentu (date + time via `datetime-local` picker)
 - **Outlet-scoped**: promo hanya berlaku di outlet tertentu
 - **Customer tier**: promo berdasarkan tier member
 - **Payment method**: promo berdasarkan metode pembayaran
@@ -473,6 +475,8 @@ families.view, families.edit
 - **Auto-apply**: promo tanpa `requiresCode` otomatis diterapkan di POS
 - **Discount engine sync**: promo rules disinkronkan ke discount config via `PromotionToDiscountMapper`
 - **Promo code validation**: `DiscountServiceAdapter.validatePromoCode()` mencari synced rules by `promoCodeId`
+- **Real-time sync**: perubahan promo langsung di-sync ke POS via Socket.io (`DISCOUNT_CONFIG_UPDATED` event)
+- **Buy X Pay Y**: mirip buy_x_get_y tapi tanpa free item — diskon applied ke item dengan price = 0 untuk item yang "dibayar"
 
 ---
 
@@ -532,6 +536,25 @@ families.view, families.edit
 - `PosPage.tsx` renders from `pricing` from store (no local calculations)
 - `PaymentModal.tsx` uses pricing result, filters free items from payment
 - `CartItemRow.tsx` shows "GRATIS" badge, hides qty controls for free items
+
+### Real-Time Sync (Socket.io)
+- `useRealtimeSync.ts` hook di PosPage — listen `domain-event` events via Socket.io
+- Event → query mapping:
+  | Event | Query invalidated |
+  |-------|-------------------|
+  | `catalog.product.created` | `['products']` |
+  | `catalog.product.updated` | `['products']` |
+  | `catalog.product.deleted` | `['products']` |
+  | `discount.config.updated` | `['discount-config']` |
+  | `tax.config.updated` | `['tax-config']` |
+- Zero polling — Socket.io hanya kirim saat ada perubahan
+- Tenant-isolated via Socket.io rooms (join room by tenantId)
+
+### Logging
+- **Pino-based structured logging** (`backend/src/@shared/infrastructure/logger/Logger.ts`)
+- Dual output: console pretty-print (dev) + JSON lines to `backend/logs/app.log`
+- All domain events, pricing calculations, and HTTP requests logged
+- Configurable log level via environment
 
 ### Business Logic
 - **Single source of truth**: backend PricingService is the only calculation engine

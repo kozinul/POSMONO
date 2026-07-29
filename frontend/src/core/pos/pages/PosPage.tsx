@@ -10,8 +10,10 @@ import { PaymentModal } from '../components/PaymentModal';
 import { ReceiptDisplay } from '../components/ReceiptDisplay';
 import { HeldOrdersPanel } from '../components/HeldOrdersPanel';
 import { formatIDR } from '../utils/money';
+import { useRealtimeSync } from '../../../@shared/hooks/useRealtimeSync';
 
 export default function PosPage() {
+  useRealtimeSync();
   const {
     items,
     pricing,
@@ -105,7 +107,7 @@ export default function PosPage() {
 
   useEffect(() => {
     recalculate();
-  }, [items, promoCode, manualDiscount, manualDiscountType, recalculate]);
+  }, [promoCode, manualDiscount, manualDiscountType, recalculate]);
 
   const activeProductDiscounts = useMemo(() => {
     if (!discountConfig?.rules) return new Map();
@@ -259,12 +261,17 @@ export default function PosPage() {
           {items.length === 0 ? (
             <p className="text-gray-400 text-center mt-8">Belum ada item</p>
           ) : (
-            items.map((item) => (
-              <div key={item.productId}>
-                <CartItemRow item={item} />
-                <div className="border-t border-gray-100 mt-6" />
-              </div>
-            ))
+            items.map((item) => {
+              const lineItem = pricing?.lineItems?.find(
+                (li) => li.productId === item.productId && li.isFreeItem === !!item.isFreeItem
+              );
+              return (
+                <div key={`${item.productId}_${item.isFreeItem ? 'free' : 'paid'}`}>
+                  <CartItemRow item={item} lineItem={lineItem} />
+                  <div className="border-t border-gray-100 mt-6" />
+                </div>
+              );
+            })
           )}
         </div>
 
@@ -272,29 +279,19 @@ export default function PosPage() {
           <div className="space-y-2">
             {p ? (
               <>
-                <div className="flex justify-between text-gray-700">
-                  <span>Original Subtotal:</span>
-                  <span>Rp {formatIDR(p.originalSubtotal)}</span>
+                <div className="flex justify-between text-gray-800 font-medium">
+                  <span>Subtotal</span>
+                  <span>Rp {formatIDR(p.originalSubtotal - p.promotionDiscount)}</span>
                 </div>
-                {p.promotionDiscount > 0 && (
-                  <div className="flex justify-between text-green-600 text-sm">
-                    <span>Promotion:</span>
-                    <span>- Rp {formatIDR(p.promotionDiscount)}</span>
-                  </div>
-                )}
                 {manualDiscount > 0 && (
                   <div className="flex justify-between text-green-600 text-sm">
-                    <span>Diskon Manual:</span>
+                    <span>Diskon Manual</span>
                     <span>- Rp {formatIDR(manualDiscount)}</span>
                   </div>
                 )}
-                <div className="flex justify-between text-gray-700 font-medium">
-                  <span>Net Subtotal:</span>
-                  <span>Rp {formatIDR(p.netSubtotal)}</span>
-                </div>
                 {p.serviceCharge > 0 && (
                   <div className="flex justify-between text-gray-700 text-sm">
-                    <span>{p.serviceChargeName} ({p.taxRate > 0 ? `${Math.round((p.serviceCharge / p.netSubtotal) * 100)}%` : ''}):</span>
+                    <span>{p.serviceChargeName}</span>
                     <span>Rp {formatIDR(p.serviceCharge)}</span>
                   </div>
                 )}
@@ -304,14 +301,10 @@ export default function PosPage() {
                     <span>Rp {formatIDR(p.tax)}</span>
                   </div>
                 )}
-                {p.appliedRules.length > 0 && (
-                  <div className="space-y-1">
-                    {p.appliedRules.map((r) => (
-                      <div key={r.ruleId} className="flex justify-between text-green-600 text-xs">
-                        <span>{r.ruleName}:</span>
-                        <span>{r.description}</span>
-                      </div>
-                    ))}
+                {p.rounding !== 0 && (
+                  <div className="flex justify-between text-gray-500 text-sm">
+                    <span>Pembulatan</span>
+                    <span>{p.rounding > 0 ? '+' : ''}Rp {formatIDR(p.rounding)}</span>
                   </div>
                 )}
               </>

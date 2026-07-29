@@ -5,8 +5,9 @@ export class NominalOffEffect implements EffectStrategy {
 
   apply(effect: IDiscountEffect, context: EffectContext): EffectResult {
     const amount = effect.config.amount as number;
+    const scopeSubtotal = context.matchingSubtotal ?? context.subtotal;
     return {
-      discountAmount: Math.min(amount, context.subtotal - context.appliedDiscounts),
+      discountAmount: Math.min(amount, Math.max(0, scopeSubtotal - context.appliedDiscounts)),
       description: `Rp${amount.toLocaleString()} off`,
     };
   }

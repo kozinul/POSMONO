@@ -133,7 +133,7 @@ export default function OrderListPage() {
                       <td className="px-6 py-4 text-sm font-medium text-gray-900">{formatCurrency(order.total)}</td>
                       <td className="px-6 py-4 text-sm text-gray-500">{order.paymentStatus}</td>
                       <td className="px-6 py-4 text-sm text-gray-500">
-                        {new Date(order.createdAt).toLocaleDateString('id-ID')}
+                        {new Date(order.createdAt).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </td>
                       <td className="px-6 py-4 text-right">
                         {isVoidable && (

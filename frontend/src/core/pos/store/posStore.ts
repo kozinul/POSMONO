@@ -40,6 +40,7 @@ interface Receipt {
   grandTotal: number;
   paidItems: CartItem[];
   hasRemaining: boolean;
+  createdAt: string;
 }
 
 interface POSState {
@@ -220,7 +221,49 @@ export const usePOSStore = create<POSState>((set, get) => ({
         manualDiscount: state.manualDiscount || undefined,
         manualDiscountType: state.manualDiscount > 0 ? state.manualDiscountType : undefined,
       });
-      set({ pricing: data, pricingLoading: false });
+
+      const freeItems: CartItem[] = [];
+      const updatedItems = state.items
+        .filter((i) => !i.isFreeItem)
+        .map((item) => {
+          const freeLi = data.lineItems?.find(
+            (li: PricingLineItem) => li.productId === item.productId && li.isFreeItem
+          );
+          if (freeLi) {
+            freeItems.push({
+              productId: item.productId,
+              name: item.name,
+              price: 0,
+              quantity: freeLi.quantity,
+              categoryId: item.categoryId,
+              pricingMode: item.pricingMode,
+              isFreeItem: true,
+              freeByRuleId: freeLi.freeByRuleId,
+            });
+            return { ...item, quantity: item.quantity - freeLi.quantity };
+          }
+          return item;
+        });
+
+      for (const li of data.lineItems ?? []) {
+        if (
+          li.isFreeItem &&
+          !updatedItems.some((i) => i.productId === li.productId) &&
+          !freeItems.some((i) => i.productId === li.productId)
+        ) {
+          freeItems.push({
+            productId: li.productId,
+            name: li.productName,
+            price: 0,
+            quantity: li.quantity,
+            categoryId: li.categoryId,
+            isFreeItem: true,
+            freeByRuleId: li.freeByRuleId,
+          });
+        }
+      }
+
+      set({ pricing: data, items: [...updatedItems, ...freeItems], pricingLoading: false });
     } catch {
       set({ pricingLoading: false });
     }

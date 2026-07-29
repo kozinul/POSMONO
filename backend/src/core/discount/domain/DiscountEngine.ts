@@ -4,6 +4,8 @@ import { EffectApplier } from './EffectApplier';
 import { ConditionContext } from './strategies/conditions/ConditionStrategy';
 import { EffectContext } from './strategies/effects/EffectStrategy';
 import { RoundingEngine } from '../../tax/domain/RoundingEngine';
+import { DiscountScope } from './DiscountScope';
+import { logger } from '../../../@shared/infrastructure/logger/Logger';
 
 export interface DiscountContext {
   subtotal: number;
@@ -19,6 +21,7 @@ export interface DiscountResult {
   freeItems: Array<{ productId: string; quantity: number }>;
   finalSubtotal: number;
   breakdown: Array<{ ruleId: string; ruleName: string; discountAmount: number; description: string }>;
+  itemDiscounts: Array<{ productId: string; discountAmount: number }>;
 }
 
 export class DiscountEngine {
@@ -30,6 +33,41 @@ export class DiscountEngine {
     this.conditionEvaluator = new ConditionEvaluator();
     this.effectApplier = new EffectApplier();
     this.roundingEngine = new RoundingEngine();
+  }
+
+  private resolveScopeItems(
+    items: DiscountContext['items'],
+    scope: DiscountScope,
+  ): { matchingItems: DiscountContext['items']; matchingSubtotal: number } {
+    const scopeType = scope.getType();
+    const scopeEntityId = scope.getEntityId();
+
+    switch (scopeType) {
+      case 'all':
+        return {
+          matchingItems: items,
+          matchingSubtotal: items.reduce((s, i) => s + i.lineTotal, 0),
+        };
+      case 'category': {
+        const matching = items.filter((i) => i.categoryId === scopeEntityId);
+        return {
+          matchingItems: matching,
+          matchingSubtotal: matching.reduce((s, i) => s + i.lineTotal, 0),
+        };
+      }
+      case 'product': {
+        const matching = items.filter((i) => i.productId === scopeEntityId);
+        return {
+          matchingItems: matching,
+          matchingSubtotal: matching.reduce((s, i) => s + i.lineTotal, 0),
+        };
+      }
+      default:
+        return {
+          matchingItems: items,
+          matchingSubtotal: items.reduce((s, i) => s + i.lineTotal, 0),
+        };
+    }
   }
 
   applyDiscounts(
@@ -45,14 +83,21 @@ export class DiscountEngine {
     const appliedRules: DiscountRuleResult[] = [];
     const freeItems: Array<{ productId: string; quantity: number }> = [];
     let totalDiscount = 0;
+    const itemDiscounts = new Map<string, number>();
 
     for (const ruleData of sorted) {
       const rule = DiscountRule.create(ruleData);
 
-      if (rule.isExpired()) continue;
+      if (rule.isExpired()) {
+        logger.debug({ ruleId: rule.getId(), ruleName: rule.getName() }, 'Discount rule skipped: expired');
+        continue;
+      }
 
       const promoCode = contextOverrides?.promoCode;
-      if (rule.getPromoCodeId() && rule.getPromoCodeId() !== promoCode) continue;
+      if (rule.getPromoCodeId() && rule.getPromoCodeId() !== promoCode) {
+        logger.debug({ ruleId: rule.getId(), ruleName: rule.getName() }, 'Discount rule skipped: promo code mismatch');
+        continue;
+      }
 
       const conditionContext: ConditionContext = {
         subtotal,
@@ -62,18 +107,40 @@ export class DiscountEngine {
         promoCode,
       };
 
-      if (!this.conditionEvaluator.evaluate(rule.getConditions(), conditionContext)) continue;
+      if (!this.conditionEvaluator.evaluate(rule.getConditions(), conditionContext)) {
+        logger.debug({ ruleId: rule.getId(), ruleName: rule.getName() }, 'Discount rule skipped: conditions not met');
+        continue;
+      }
+
+      const { matchingItems, matchingSubtotal } = this.resolveScopeItems(items, rule.getScope());
+      if (matchingItems.length === 0) {
+        logger.debug({ ruleId: rule.getId(), ruleName: rule.getName() }, 'Discount rule skipped: no matching items');
+        continue;
+      }
 
       const effectContext: EffectContext = {
         subtotal,
         items,
         appliedDiscounts: totalDiscount,
+        matchingSubtotal,
+        matchingItems,
       };
 
       const effectResult = this.effectApplier.apply(rule.getEffects(), effectContext);
 
+      logger.info({ ruleId: rule.getId(), ruleName: rule.getName(), discountAmount: effectResult.discountAmount }, 'Discount rule applied');
+
       if (effectResult.freeItems) {
         freeItems.push(...effectResult.freeItems);
+      }
+
+      // Distribute discount across matching items proportionally
+      if (effectResult.discountAmount > 0 && matchingSubtotal > 0) {
+        for (const mi of matchingItems) {
+          const share = mi.lineTotal / matchingSubtotal;
+          const itemDisc = Math.round(effectResult.discountAmount * share * 100) / 100;
+          itemDiscounts.set(mi.productId, (itemDiscounts.get(mi.productId) || 0) + itemDisc);
+        }
       }
 
       const result: DiscountRuleResult = {
@@ -98,6 +165,10 @@ export class DiscountEngine {
       freeItems,
       finalSubtotal: subtotal - totalDiscount,
       breakdown: appliedRules,
+      itemDiscounts: Array.from(itemDiscounts.entries()).map(([productId, discountAmount]) => ({
+        productId,
+        discountAmount,
+      })),
     };
   }
 }

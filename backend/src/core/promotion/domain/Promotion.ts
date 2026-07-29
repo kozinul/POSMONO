@@ -6,6 +6,7 @@ export type PromotionRuleType =
   | 'min_purchase'
   | 'min_items'
   | 'buy_x_get_y'
+  | 'buy_x_pay_y'
   | 'percentage_off'
   | 'nominal_off'
   | 'fixed_price'
@@ -20,7 +21,7 @@ export type PromotionRuleType =
 
 export type PromotionLogic = 'AND' | 'OR';
 
-export type DiscountEffectType = 'percentage' | 'nominal' | 'fixed_price' | 'free_item' | 'bundle_price';
+export type DiscountEffectType = 'percentage' | 'nominal' | 'fixed_price' | 'free_item' | 'bundle_price' | 'buy_x_pay_y';
 
 export interface IPromotionRule {
   type: PromotionRuleType;

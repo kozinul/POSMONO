@@ -4,6 +4,7 @@ import { NominalOffEffect } from './strategies/effects/NominalOffEffect';
 import { FreeItemEffect } from './strategies/effects/FreeItemEffect';
 import { FixedPriceEffect } from './strategies/effects/FixedPriceEffect';
 import { BundlePriceEffect } from './strategies/effects/BundlePriceEffect';
+import { BuyXPayYEffect } from './strategies/effects/BuyXPayYEffect';
 
 export class EffectApplier {
   private strategies: Map<string, EffectStrategy> = new Map();
@@ -14,6 +15,7 @@ export class EffectApplier {
     this.register(new FreeItemEffect());
     this.register(new FixedPriceEffect());
     this.register(new BundlePriceEffect());
+    this.register(new BuyXPayYEffect());
   }
 
   register(strategy: EffectStrategy): void {

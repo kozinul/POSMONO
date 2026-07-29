@@ -1,5 +1,8 @@
 import { ConflictError, NotFoundError } from '../../../../@shared/infrastructure/error/AppError';
 import { Product, IProduct } from '../../domain/Product';
+import { EventBus } from '../../../../@shared/infrastructure/eventBus/EventBus';
+import { DomainEvent } from '../../../../@shared/domain/DomainEvent';
+import { DOMAIN_EVENTS } from '@posmono/shared';
 
 interface CreateProductInput {
   tenantId: string;
@@ -45,7 +48,14 @@ interface ListProductsOptions {
 }
 
 export class ProductService {
-  constructor(private readonly productRepository: any) {}
+  constructor(
+    private readonly productRepository: any,
+    private readonly eventBus?: EventBus,
+  ) {}
+
+  private publish(eventName: string, aggregateId: string, tenantId: string, payload: Record<string, unknown>): void {
+    this.eventBus?.publish(new DomainEvent({ eventName, aggregateId, aggregateType: 'product', tenantId, payload }));
+  }
 
   async create(input: CreateProductInput): Promise<Product> {
     const existing = await this.productRepository.findBySku(input.tenantId, input.sku);
@@ -74,6 +84,8 @@ export class ProductService {
     });
 
     await this.productRepository.save(product);
+    const data = product.serialize();
+    this.publish(DOMAIN_EVENTS.PRODUCT_CREATED, data.id, data.tenantId, { productId: data.id, name: data.name });
     return product;
   }
 
@@ -92,6 +104,8 @@ export class ProductService {
 
     product.update(input);
     await this.productRepository.save(product);
+    const data = product.serialize();
+    this.publish(DOMAIN_EVENTS.PRODUCT_UPDATED, data.id, data.tenantId, { productId: data.id, name: data.name });
     return product;
   }
 
@@ -118,5 +132,6 @@ export class ProductService {
     const product = await this.getById(id, tenantId);
     product.update({ isActive: false });
     await this.productRepository.save(product);
+    this.publish(DOMAIN_EVENTS.PRODUCT_DELETED, id, tenantId, { productId: id });
   }
 }

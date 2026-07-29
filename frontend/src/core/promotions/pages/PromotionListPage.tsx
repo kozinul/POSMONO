@@ -5,7 +5,7 @@ import PromotionForm from '../components/PromotionForm';
 
 function formatDate(d: string | null) {
   if (!d) return '-';
-  return new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+  return new Date(d).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 export default function PromotionListPage() {

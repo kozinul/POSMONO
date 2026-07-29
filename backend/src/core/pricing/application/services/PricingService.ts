@@ -2,6 +2,7 @@ import { DiscountServiceAdapter } from '../../../discount/application/services/D
 import { PricingEngine, PricingInput, PricingResult as TaxPricingResult } from '../../../tax/domain/PricingEngine';
 import { TaxConfiguration } from '../../../tax/domain/TaxConfiguration';
 import { ITaxConfigurationRepository } from '../../../tax/infrastructure/persistence/ITaxConfigurationRepository';
+import { logger } from '../../../../@shared/infrastructure/logger/Logger';
 
 export interface PricingLineItem {
   productId: string;
@@ -146,6 +147,22 @@ export class PricingService {
     const totalDiscount = discountResult.totalDiscount + manualDiscountAmount;
     const netSubtotal = originalSubtotal - totalDiscount;
 
+    const itemDiscountMap = new Map(discountResult.itemDiscounts.map((d) => [d.productId, d.discountAmount]));
+    const paidItems = lineItems.filter((i) => !i.isFreeItem);
+    const paidSubtotal = paidItems.reduce((s, i) => s + i.lineTotal, 0);
+    for (const li of paidItems) {
+      const origLineTotal = li.lineTotal;
+      const autoDisc = itemDiscountMap.get(li.productId) || 0;
+      const manualDisc = manualDiscountAmount > 0 && paidSubtotal > 0
+        ? Math.round((origLineTotal / paidSubtotal) * manualDiscountAmount)
+        : 0;
+      const itemDisc = autoDisc + manualDisc;
+      const newLineTotal = origLineTotal - itemDisc;
+      li.discount = 0;
+      li.unitPrice = li.quantity > 0 ? newLineTotal / li.quantity : 0;
+      li.lineTotal = newLineTotal;
+    }
+
     const taxConfig = await this.taxConfigRepo.findByTenantId(input.tenantId);
     let serviceCharge = 0;
     let serviceChargeName = 'Service Charge';
@@ -192,6 +209,8 @@ export class PricingService {
     }
 
     grandTotal = Math.round(grandTotal);
+
+    logger.info({ originalSubtotal, promotionDiscount: discountResult.totalDiscount, tax, taxRate, serviceCharge, grandTotal }, 'Pricing calculated');
 
     return {
       originalSubtotal,

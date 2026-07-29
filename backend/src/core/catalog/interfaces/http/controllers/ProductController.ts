@@ -4,6 +4,16 @@ import { ProductService } from '../../../application/services/ProductService';
 import { createProductSchema, updateProductSchema } from '@posmono/shared';
 import { ValidationError } from '../../../../../@shared/infrastructure/error/AppError';
 
+function sanitize<T extends Record<string, unknown>>(input: T): T {
+  const out = { ...input };
+  for (const [k, v] of Object.entries(out)) {
+    if (v === null) {
+      (out as Record<string, unknown>)[k] = undefined;
+    }
+  }
+  return out;
+}
+
 export class ProductController extends BaseController {
   constructor(private readonly productService: ProductService) {
     super();
@@ -17,7 +27,7 @@ export class ProductController extends BaseController {
 
     const product = await this.productService.create({
       tenantId: req.tenantId,
-      ...parsed.data,
+      ...sanitize(parsed.data),
     });
 
     this.created(res, product.serialize());
@@ -29,7 +39,7 @@ export class ProductController extends BaseController {
       throw new ValidationError('Invalid input');
     }
 
-    const product = await this.productService.update(req.params.id, req.tenantId, parsed.data);
+    const product = await this.productService.update(req.params.id, req.tenantId, sanitize(parsed.data));
     this.ok(res, product.serialize());
   }
 

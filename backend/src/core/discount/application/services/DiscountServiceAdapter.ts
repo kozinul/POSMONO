@@ -28,6 +28,7 @@ export class DiscountServiceAdapter {
         freeItems: [],
         finalSubtotal: subtotal,
         breakdown: [],
+        itemDiscounts: [],
       };
     }
 

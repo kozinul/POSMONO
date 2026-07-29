@@ -1081,3 +1081,104 @@ Tax Engine is the most architecturally significant module so far. Compound engin
 - MVP deployment
 
 **Productivity score:** 8
+
+---
+
+### DATE: 2026-07-28 (session 2) — Promotion Time + Buy X Pay Y
+
+**Today I worked on:**
+
+- **Time support for promotion validity** — `validFrom`/`validUntil` changed from `<input type="date">` to `<input type="datetime-local">` so users can pick both date and time
+- **PromotionToDiscountMapper endDate fix** — `23:59:59.999` override only applies when time is midnight (no time specified); preserves user-specified time otherwise
+- **Buy X Pay Y rule type** — created `BuyXPayYEditor.tsx` frontend, registered in registry, mapped in backend `PromotionToDiscountMapper`
+
+**Files changed:**
+
+- `frontend/src/core/promotions/components/PromotionForm.tsx` — `datetime-local` inputs + `toDatetimeLocal()` helper
+- `backend/src/core/promotion/infrastructure/sync/PromotionToDiscountMapper.ts` — endDate time-preserving logic, buy_x_pay_y mapping
+- `frontend/src/core/promotions/components/rules/BuyXPayYEditor.tsx` — new rule editor
+- `frontend/src/core/promotions/components/rules/registry.ts` — registered buy_x_pay_y
+
+**Productivity score:** 9
+
+---
+
+### DATE: 2026-07-29 — Logging System + Real-Time POS Sync
+
+**Today I worked on:**
+
+- **File-based structured logging** — `Logger.ts` rewritten with `pino/file` transport that writes JSON lines to `backend/logs/app.log` in addition to console pretty-print in dev mode
+- **Real-time POS sync via Socket.io** — complete event-driven pipeline for auto-refreshing POS when products/discounts/taxes change
+
+**Backend changes:**
+
+- `backend/src/bootstrap/socket.ts` — **new** Socket.io server init with JWT auth, tenant room isolation
+- `backend/src/bootstrap/app.ts` — `http.createServer` + `initSocketServer` attachment
+- `backend/src/bootstrap/eventBus.ts` — bridge subscribes to 10 domain event types and forwards to Socket.io clients (filtered by tenant room)
+- `backend/.../ProductService.ts` — injects `eventBus`, publishes `PRODUCT_CREATED/UPDATED/DELETED` on CRUD
+- `backend/.../PromotionService.ts` — injects `eventBus`, publishes `DISCOUNT_CONFIG_UPDATED` on sync/remove
+- `backend/.../container.ts` — injects `eventBus` into ProductService & PromotionService
+
+**Frontend changes:**
+
+- `frontend/src/@shared/hooks/useRealtimeSync.ts` — **new** hook listens for `domain-event` on socket, maps event name to React Query key, calls `invalidateQueries()`
+- `frontend/src/core/pos/pages/PosPage.tsx` — calls `useRealtimeSync()` hook on mount
+- `shared/src/constants/events.ts` — added `DISCOUNT_CONFIG_UPDATED`, `TAX_CONFIG_UPDATED`
+
+**Bug fixes:**
+
+- `backend/src/dev.ts` — fixed `mongoose.connection.db` possibly undefined with optional chaining
+- `backend/src/.../ProductController.ts` — fixed null→undefined conversion for backward compatibility (pricingMode)
+- `shared/src/validation/schemas/product-schemas.ts` — removed `.nullable()` from `pricingMode` enum
+
+**Verification:**
+
+- Frontend `npx tsc --noEmit` — 0 errors
+- Backend `npx tsc --noEmit` — 0 errors
+- Server starts on port 3000 with Socket.io ready
+- Logs written to both console (pretty) and `backend/logs/app.log` (JSON)
+
+**Event → Socket flow:**
+
+```
+ProductService.create/update/delete
+  └─ publish DomainEvent ke EventBus
+PromotionService.syncDiscountConfig/removeDiscountConfigById
+  └─ publish DomainEvent ke EventBus
+       │
+       ▼
+    eventBus.ts
+  subscription → getIO().to(tenantId).emit('domain-event', event)
+       │
+       ▼ (WebSocket, filtered by tenantId)
+    Frontend useRealtimeSync()
+  eventName → queryKey → invalidateQueries()
+       │
+       ▼
+    POS auto-refresh (no polling)
+```
+
+### DATE: 2026-07-29
+
+**Today I worked on:**
+
+- **Buy X Pay Y — cheapest & most expensive item mode** — added `applyTo: 'cheapest' | 'most_expensive'` config toggle
+- **Fixed infinite pricing calculation loop** — `useEffect` watching `[items]` caused `recalculate()` → `set(items: [...])` → new ref → trigger again
+- **Fixed zod validation** — `ruleSchema` enum missing `buy_x_pay_y` causing 400 on promotion create
+
+**Changes:**
+
+- `backend/.../BuyXPayYEffect.ts` — reads `applyTo` from config; sort asc for `cheapest`, desc for `most_expensive`
+- `frontend/.../BuyXPayYEditor.tsx` — radio toggle "Termurah / Termahal" with dynamic label
+- `frontend/.../registry.ts` — default `applyTo: 'cheapest'`
+- `frontend/.../discountCalculator.ts` — sort by `applyTo` mode
+- `backend/.../PromotionToDiscountMapper.ts` — passes `applyTo` through to effect config
+- `frontend/.../PosPage.tsx` — removed `items` from `useEffect` dependency (break infinite loop)
+- `backend/.../PromotionController.ts` — added `buy_x_pay_y` to zod rule enum
+
+**Problems encountered:**
+
+- Infinite pricing loop: `useEffect([items]) → recalculate() → set(items: [...updatedItems, ...freeItems]) → new array ref → useEffect fires again`
+- 400 on promotion create: zod `ruleSchema` didn't include `buy_x_pay_y`
+
+**Productivity score:** 9

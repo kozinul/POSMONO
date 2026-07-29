@@ -36,6 +36,10 @@ export class DiscountScope {
     return new DiscountScope({ type: 'customer_group', entityId: groupId, entityName: groupName });
   }
 
+  getType(): DiscountScopeType { return this.data.type; }
+
+  getEntityId(): string { return this.data.entityId; }
+
   matches(context: ScopeMatchContext): boolean {
     switch (this.data.type) {
       case 'all':

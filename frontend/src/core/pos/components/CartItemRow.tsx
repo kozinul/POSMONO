@@ -1,22 +1,33 @@
 import { CartItem, usePOSStore } from '../store/posStore';
+import type { PricingLineItem } from '../../../@shared/hooks/usePricing';
 
 interface CartItemRowProps {
   item: CartItem;
+  lineItem?: PricingLineItem;
 }
 
-export function CartItemRow({ item }: CartItemRowProps) {
+export function CartItemRow({ item, lineItem }: CartItemRowProps) {
   const updateQuantity = usePOSStore((s) => s.updateQuantity);
   const removeItem = usePOSStore((s) => s.removeItem);
+
+  const origTotal = item.price * item.quantity;
+  const isFree = item.isFreeItem;
+  const displayTotal = lineItem && !isFree
+    ? lineItem.lineTotal
+    : isFree ? 0 : origTotal;
+  const itemDiscount = lineItem && !isFree
+    ? (lineItem.originalUnitPrice * lineItem.quantity) - lineItem.lineTotal
+    : 0;
 
   return (
     <div className="space-y-1">
       <div className="flex justify-between items-start">
         <div className="flex-1 min-w-0">
           <h4 className="font-bold text-gray-800 truncate">
-            {item.name} x{item.quantity}
+            {item.name}
           </h4>
           <div className="flex items-center gap-2 flex-wrap">
-            {item.isFreeItem && (
+            {isFree && (
               <span className="inline-block text-[10px] font-bold px-1.5 py-0.5 rounded bg-green-100 text-green-700">
                 GRATIS
               </span>
@@ -34,17 +45,22 @@ export function CartItemRow({ item }: CartItemRowProps) {
           {item.notes && (
             <p className="text-sm text-gray-400 truncate">{item.notes}</p>
           )}
+          <p className="text-gray-500 text-sm mt-0.5">
+            Rp {item.price.toLocaleString('id-ID')} × {item.quantity}
+          </p>
         </div>
         <div className="flex items-center gap-3 shrink-0 ml-4">
-          {item.isFreeItem ? (
+          {isFree ? (
             <span className="font-medium text-green-600">GRATIS</span>
           ) : (
-            <span className="font-medium text-gray-800">
-              Rp {(item.price * item.quantity).toLocaleString('id-ID')}
-            </span>
+            <div className="text-right">
+              <span className="font-semibold text-gray-800">
+                Rp {origTotal.toLocaleString('id-ID')}
+              </span>
+            </div>
           )}
           <div className="flex items-center gap-1">
-            {!item.isFreeItem && (
+            {!isFree && (
               <>
                 <button
                   onClick={() => updateQuantity(item.productId, -1)}
@@ -74,6 +90,20 @@ export function CartItemRow({ item }: CartItemRowProps) {
           </button>
         </div>
       </div>
+
+      {itemDiscount > 0 && (
+        <div className="flex justify-between items-center pl-2 pt-1 text-xs">
+          <span className="text-green-700 font-medium">🏷 Promo</span>
+          <span className="text-green-600 font-semibold">- Rp {itemDiscount.toLocaleString('id-ID')}</span>
+        </div>
+      )}
+
+      {!isFree && (itemDiscount > 0 || lineItem) && (
+        <div className="flex justify-between items-center pl-2 pt-0.5 text-sm font-semibold text-gray-800 border-t border-dashed border-gray-200">
+          <span>Subtotal</span>
+          <span>Rp {displayTotal.toLocaleString('id-ID')}</span>
+        </div>
+      )}
     </div>
   );
 }

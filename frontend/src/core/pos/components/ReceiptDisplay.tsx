@@ -1,5 +1,16 @@
 import { usePOSStore } from '../store/posStore';
 import { formatIDR } from '../utils/money';
+import type { PricingResult } from '../../../@shared/hooks/usePricing';
+
+function getChargeRate(adjustments: PricingResult['adjustments']): number {
+  const charge = adjustments.find((a) => a.type === 'CHARGE');
+  return charge?.rate ?? 0;
+}
+
+function getTaxRate(adjustments: PricingResult['adjustments']): number {
+  const tax = adjustments.find((a) => a.type === 'TAX');
+  return tax?.rate ?? 0;
+}
 
 export function ReceiptDisplay() {
   const { receipt, clearCart, openPaymentModal, clearReceipt, pricing } = usePOSStore();
@@ -7,6 +18,10 @@ export function ReceiptDisplay() {
   if (!receipt) return null;
 
   const p = pricing;
+  const isInclusive = receipt.paidItems.some((i) => i.pricingMode === 'inclusive');
+
+  const scRate = p ? getChargeRate(p.adjustments) : 0;
+  const txRate = p ? getTaxRate(p.adjustments) : 0;
 
   const handleNewOrder = () => {
     if (receipt.hasRemaining) {
@@ -23,6 +38,9 @@ export function ReceiptDisplay() {
         <div className="p-6 border-b border-gray-100 text-center">
           <h2 className="text-lg font-bold text-gray-800">POSMono</h2>
           <p className="text-sm text-gray-500 mt-1">Pesanan {receipt.displayOrderNumber}</p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {new Date(receipt.createdAt).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+          </p>
           {receipt.hasRemaining && (
             <p className="text-xs text-amber-600 font-medium mt-1">
               Item tersisa di keranjang
@@ -46,30 +64,49 @@ export function ReceiptDisplay() {
           <div className="border-t pt-3 space-y-1">
             {p ? (
               <>
-                <div className="flex justify-between text-sm text-gray-500">
-                  <span>Original Subtotal</span>
-                  <span>Rp {formatIDR(p.originalSubtotal)}</span>
-                </div>
+                {/* Promotions */}
                 {p.promotionDiscount > 0 && (
-                  <div className="flex justify-between text-sm text-green-600">
-                    <span>Promotion</span>
-                    <span>- Rp {formatIDR(p.promotionDiscount)}</span>
+                  <div className="bg-green-50 rounded-lg p-2 border border-green-200 space-y-0.5 mb-2">
+                    {p.appliedRules.map((r) => (
+                      <div key={r.ruleId} className="flex justify-between text-xs">
+                        <span className="text-green-700">{r.ruleName}</span>
+                        <span className="text-green-700 font-medium">{r.description}</span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between text-xs pt-0.5 border-t border-green-200 font-medium">
+                      <span className="text-green-700">Total Diskon</span>
+                      <span className="text-green-700">- Rp {formatIDR(p.promotionDiscount)}</span>
+                    </div>
                   </div>
                 )}
+
+                {/* Inclusive notice */}
+                {isInclusive && (scRate > 0 || txRate > 0) && (
+                  <p className="text-[11px] text-gray-400 text-center -mb-1">
+                    Harga sudah termasuk pajak &amp; service ({txRate > 0 ? `${txRate}%` : ''}{txRate > 0 && scRate > 0 ? ' + ' : ''}{scRate > 0 ? `${scRate}%` : ''}{txRate > 0 || scRate > 0 ? ` = ${txRate + scRate}%` : ''})
+                  </p>
+                )}
+
                 <div className="flex justify-between text-sm text-gray-700 font-medium">
-                  <span>Net Subtotal</span>
-                  <span>Rp {formatIDR(p.netSubtotal)}</span>
+                  <span>Subtotal</span>
+                  <span>Rp {formatIDR(p.originalSubtotal - p.promotionDiscount)}</span>
                 </div>
                 {p.serviceCharge > 0 && (
                   <div className="flex justify-between text-sm text-gray-500">
-                    <span>{p.serviceChargeName}</span>
+                    <span>{p.serviceChargeName}{scRate > 0 ? ` (${scRate}%)` : ''}</span>
                     <span>Rp {formatIDR(p.serviceCharge)}</span>
                   </div>
                 )}
                 {p.tax > 0 && (
                   <div className="flex justify-between text-sm text-gray-500">
-                    <span>{p.taxName}</span>
+                    <span>{p.taxName}{txRate > 0 ? ` (${txRate}%)` : ''}</span>
                     <span>Rp {formatIDR(p.tax)}</span>
+                  </div>
+                )}
+                {p.rounding !== 0 && (
+                  <div className="flex justify-between text-sm text-gray-400">
+                    <span>Pembulatan</span>
+                    <span>{p.rounding > 0 ? '+' : ''}Rp {formatIDR(p.rounding)}</span>
                   </div>
                 )}
               </>

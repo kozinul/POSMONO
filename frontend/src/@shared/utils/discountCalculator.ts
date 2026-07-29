@@ -213,6 +213,7 @@ function applyEffects(
   appliedDiscounts: number,
   freeItemValue: number,
   freeItemCount: number,
+  items: DiscountCalcItem[],
 ): { amount: number; description: string } {
   let total = 0;
   const descParts: string[] = [];
@@ -245,6 +246,26 @@ function applyEffects(
           descParts.push(`Gratis item x${freeItemCount}`);
         }
         break;
+      case 'buy_x_pay_y': {
+        const minQty = (effect.config.minQty as number) ?? 1;
+        const payQty = (effect.config.payQty as number) ?? 0;
+        const applyTo = (effect.config.applyTo as string) ?? 'cheapest';
+        const freeCount = minQty - payQty;
+        const totalQty = items.reduce((s, i) => s + i.quantity, 0);
+        if (totalQty >= minQty && freeCount > 0) {
+          const sets = Math.floor(totalQty / minQty);
+          const toDiscount = sets * freeCount;
+          const sorted = items
+            .flatMap((i) => Array.from({ length: i.quantity }, () => i.unitPrice))
+            .sort((a, b) => (applyTo === 'most_expensive' ? b - a : a - b));
+          const target = sorted.slice(0, toDiscount);
+          const amount = target.reduce((s, p) => s + p, 0);
+          const label = applyTo === 'most_expensive' ? 'termahal' : 'termurah';
+          total += amount;
+          descParts.push(`Beli ${minQty} bayar ${payQty} (${freeCount} ${label} gratis x${sets})`);
+        }
+        break;
+      }
       case 'fixed_price':
         descParts.push('Fixed price');
         break;
@@ -294,7 +315,7 @@ export function calculateDiscount(
       freeItems.push({ productId, quantity: freeItemCount, ruleId: rule.id });
     }
 
-    const result = applyEffects(rule, subtotal, totalDiscount, freeItemValue, freeItemCount);
+    const result = applyEffects(rule, subtotal, totalDiscount, freeItemValue, freeItemCount, items);
     totalDiscount += result.amount;
 
     appliedRules.push({

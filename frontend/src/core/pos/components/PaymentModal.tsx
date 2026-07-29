@@ -88,6 +88,7 @@ export function PaymentModal() {
         grandTotal,
         paidItems: items,
         hasRemaining: false,
+        createdAt: orderData.createdAt,
       });
 
       removeItems(items.map((i) => i.productId));
@@ -208,17 +209,14 @@ export function PaymentModal() {
               </div>
               {pricing && (
                 <div className="space-y-1 mt-2 pt-2 border-t border-gray-100">
-                  <div className="flex justify-between text-xs text-gray-500">
-                    <span>Original Subtotal</span><span>Rp {formatIDR(pricing.originalSubtotal)}</span>
+                  <div className="flex justify-between text-xs text-gray-700 font-medium">
+                    <span>Subtotal</span><span>Rp {formatIDR(pricing.originalSubtotal - pricing.promotionDiscount)}</span>
                   </div>
-                  {pricing.promotionDiscount > 0 && (
+                  {manualDiscount > 0 && (
                     <div className="flex justify-between text-xs text-green-600">
-                      <span>Promotion</span><span>- Rp {formatIDR(pricing.promotionDiscount)}</span>
+                      <span>Diskon Manual</span><span>- Rp {formatIDR(manualDiscount)}</span>
                     </div>
                   )}
-                  <div className="flex justify-between text-xs text-gray-700 font-medium">
-                    <span>Net Subtotal</span><span>Rp {formatIDR(pricing.netSubtotal)}</span>
-                  </div>
                   {pricing.serviceCharge > 0 && (
                     <div className="flex justify-between text-xs text-gray-500">
                       <span>{pricing.serviceChargeName}</span><span>Rp {formatIDR(pricing.serviceCharge)}</span>
@@ -227,6 +225,12 @@ export function PaymentModal() {
                   {pricing.tax > 0 && (
                     <div className="flex justify-between text-xs text-gray-500">
                       <span>{pricing.taxName}</span><span>Rp {formatIDR(pricing.tax)}</span>
+                    </div>
+                  )}
+                  {pricing.rounding !== 0 && (
+                    <div className="flex justify-between text-xs text-gray-400">
+                      <span>Pembulatan</span>
+                      <span>{pricing.rounding > 0 ? '+' : ''}Rp {formatIDR(pricing.rounding)}</span>
                     </div>
                   )}
                 </div>

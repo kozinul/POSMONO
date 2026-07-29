@@ -7,7 +7,7 @@ export interface IDiscountCondition {
 }
 
 export interface IDiscountEffect {
-  type: 'percentage_off' | 'nominal_off' | 'free_item' | 'fixed_price' | 'bundle_price';
+  type: 'percentage_off' | 'nominal_off' | 'free_item' | 'fixed_price' | 'bundle_price' | 'buy_x_pay_y';
   config: Record<string, unknown>;
 }
 

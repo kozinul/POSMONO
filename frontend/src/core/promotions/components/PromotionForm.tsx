@@ -100,6 +100,14 @@ interface FormState {
   effects: EffectInput[];
 }
 
+function toDatetimeLocal(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function getInitialState(editing: Promotion | null): FormState {
   if (!editing) {
     return {
@@ -130,8 +138,8 @@ function getInitialState(editing: Promotion | null): FormState {
     ruleLogic: editing.ruleLogic as 'AND' | 'OR',
     usageLimit: editing.usageLimit,
     isActive: editing.isActive,
-    validFrom: editing.validFrom?.split('T')[0] ?? '',
-    validUntil: editing.validUntil?.split('T')[0] ?? '',
+    validFrom: toDatetimeLocal(editing.validFrom),
+    validUntil: toDatetimeLocal(editing.validUntil),
     rules,
     effects,
   };
@@ -288,7 +296,7 @@ export default function PromotionForm({ editing, onClose }: PromotionFormProps) 
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Dari</label>
                 <input
-                  type="date"
+                  type="datetime-local"
                   value={state.validFrom}
                   onChange={(e) => update('validFrom', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
@@ -297,7 +305,7 @@ export default function PromotionForm({ editing, onClose }: PromotionFormProps) 
               <div>
                 <label className="block text-xs text-gray-500 mb-1">Sampai</label>
                 <input
-                  type="date"
+                  type="datetime-local"
                   value={state.validUntil}
                   onChange={(e) => update('validUntil', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"

@@ -62,4 +62,8 @@ export const DOMAIN_EVENTS = {
   GUEST_CHECKED_OUT: 'hospitality.booking.checked_out',
   HOUSEKEEPING_TASK_CREATED: 'hospitality.housekeeping.task_created',
   HOUSEKEEPING_TASK_COMPLETED: 'hospitality.housekeeping.task_completed',
+
+  // Discount & Tax Config
+  DISCOUNT_CONFIG_UPDATED: 'discount.config.updated',
+  TAX_CONFIG_UPDATED: 'tax.config.updated',
 } as const;

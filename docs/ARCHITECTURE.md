@@ -108,8 +108,8 @@ backend/
 │   │   │   │   ├── EventBus.ts           #     Pub/sub implementation
 │   │   │   │   └── EventBusMiddleware.ts #     Logging, tracing middleware
 │   │   │   ├── messaging/                #     Real-time messaging
-│   │   │   │   ├── SocketManager.ts      #     Socket.IO server manager
-│   │   │   │   └── room/                 #     Tenant-isolated rooms
+│   │   │   │   ├── SocketManager.ts      #     Socket.IO server manager (legacy — now in bootstrap/socket.ts)
+│   │   │   │   └── room/                 #     Tenant-isolated rooms (legacy)
 │   │   │   ├── queue/                    #     Background job processing
 │   │   │   │   ├── QueueManager.ts       #     BullMQ queue factory
 │   │   │   │   ├── workers/              #     Worker definitions
@@ -471,11 +471,12 @@ backend/
 │   │
 │   └── bootstrap/                               # Application Composition Root
 │       ├── container.ts                         #   DI container setup (Awilix)
-│       ├── eventBus.ts                          #   Wire domain events → handlers
+│       ├── eventBus.ts                          #   Wire domain events → handlers + Socket.io bridge
+│       ├── socket.ts                            #   Socket.IO server init, JWT auth, tenant rooms
 │       ├── moduleLoader.ts                      #   Scan & load enabled modules
 │       ├── routes.ts                            #   Aggregate all module routes
 │       ├── server.ts                            #   Express app factory
-│       └── app.ts                               #   Entry point
+│       └── app.ts                               #   Entry point (creates http.Server, attaches socket)
 │
 ├── tests/
 │   ├── unit/                                     # Pure domain logic tests
@@ -543,6 +544,7 @@ frontend/
 │   │   │   ├── useSocket.ts
 │   │   │   ├── usePagination.ts
 │   │   │   ├── useDebounce.ts
+│   │   │   ├── useRealtimeSync.ts           #     Socket.io → query invalidation
 │   │   │   ├── useDiscountConfiguration.ts
 │   │   │   └── usePricing.ts
 │   │   ├── utils/                          #   Utility functions
@@ -828,7 +830,7 @@ shared/                                              # Cross-platform shared cod
 │
 ├── constants/                                        # Shared constants
 │   ├── permissions.ts                                #   Permission strings enum
-│   ├── events.ts                                     #   Event name constants
+│   ├── events.ts                                     #   Event name constants (PRODUCT_CREATED, PRODUCT_UPDATED, PRODUCT_DELETED, DISCOUNT_CONFIG_UPDATED, TAX_CONFIG_UPDATED)
 │   ├── errors.ts                                     #   Error code constants
 │   ├── modules.ts                                    #   Module identifiers
 │   └── business-types.ts                             #   Retail | Restaurant | Hospitality
@@ -880,6 +882,15 @@ Events are the backbone of inter-context communication. Each domain publishes ev
 │                                                                     │
 │   inventory ──► StockAdjusted ────► catalog (update availability)  │
 │                ► LowStockAlert ───► notification (reorder alert)   │
+│                                                                     │
+│   catalog ────► ProductCreated ───┬─► pos (auto-refresh product grid)│
+│               ► ProductUpdated ───┤  (via Socket.io real-time sync) │
+│               ► ProductDeleted ───┘                                 │
+│                                                                     │
+│   promotion ──► DiscountConfigUpdated ──► pos (refresh discount rules)│
+│                                                                     │
+│   tax ────────► TaxConfigUpdated ────────► pos (refresh tax rules)  │
+│                                                                     │
 │                                                                     │
 │   tenant ─────► TenantCreated ────► billing (create subscription)  │
 │                                                                     │
@@ -1048,10 +1059,13 @@ This makes each module fully pluggable — you can drop a new business type by a
 ├──────────────┼────────────────────────────────────────────────────┤
 │ DI Container  │ Awilix — lightweight, TS-native, no decorators    │
 │ Validation    │ Zod — compile-time inference, shared with frontend│
-│ Event Bus     │ In-process EventEmitter — simple, fast. Swap to   │
-│               │ RabbitMQ when extracting microservices            │
+│ Event Bus     │ In-process EventEmitter + Socket.io bridge. Domain    │
+│               │ events published to EventBus → forwarded to Socket.io │
+│               │ clients by eventBus.ts subscription. Swap to RabbitMQ │
+│               │ when extracting microservices                        │
 │ Queue         │ BullMQ — Redis-backed, delayed jobs, rate limits  │
-│ Real-time     │ Socket.IO — rooms per tenant, per context         │
+│ Real-time     │ Socket.IO — rooms per tenant, JWT auth, domain       │
+│               │ event bridge (eventBus → socket) for POS auto-refresh│
 │ Auth          │ JWT (access) + Refresh token (httpOnly cookie)    │
 │ ORM/ODM       │ Mongoose — mature, middleware for tenant isolation│
 │ State mgmt    │ Zustand — minimal boilerplate, no providers       │

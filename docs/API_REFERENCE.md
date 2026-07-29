@@ -6,7 +6,39 @@
 > { "success": true, "data": <payload>, "meta": { "total": 100, "page": 1, "limit": 50 } }
 > ```
 
-**Auth:** All endpoints except `/health`, `/api/auth/login`, `/api/auth/register`, `/api/auth/refresh`, `/api/auth/logout`, and `GET /api/tenants/slug/:slug` require a JWT in the `Authorization: Bearer <token>` header.
+**Auth:** All endpoints except `/health`, `/api/auth/login`, `/api/auth/register`, `/api/auth/refresh`, `/api/auth/logout`, `GET /api/tenants/slug/:slug`, and **WebSocket (Socket.io)** connections require a JWT in the `Authorization: Bearer <token>` header.
+
+---
+
+## WebSocket (Socket.io)
+
+Server socket tersedia di path `/socket.io/` pada port yang sama. Klien harus mengirim JWT sebagai `auth.token` saat koneksi.
+
+### Event: `domain-event`
+
+Diterima oleh klien saat ada perubahan data. Event name ada di payload `event.eventName`.
+
+**Contoh event:**
+```json
+{
+  "eventName": "catalog.product.created",
+  "aggregateId": "uuid",
+  "aggregateType": "Product",
+  "occurredAt": "2026-07-29T12:00:00.000Z"
+}
+```
+
+**Event yang didukung:**
+
+| Event Name | Trigger | Auto-refresh POS |
+|------------|---------|-----------------|
+| `catalog.product.created` | Produk baru dibuat | ✅ |
+| `catalog.product.updated` | Produk diupdate | ✅ |
+| `catalog.product.deleted` | Produk dinonaktifkan | ✅ |
+| `discount.config.updated` | Promosi di-sync atau dihapus | ✅ |
+| `tax.config.updated` | Konfigurasi pajak diubah | ✅ |
+
+Klien frontend cukup menggunakan hook `useRealtimeSync()` yang otomatis listen dan invalidate React Query caches.
 
 ---
 
