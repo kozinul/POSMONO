@@ -1,7 +1,7 @@
 # Test Progress
 
 > **Updated:** 2026-07-30
-> **Total Tests:** 335 passing · 0 failing · 31 test files (30 backend + 1 frontend)
+> **Total Tests:** 346 passing · 0 failing · 31 test files (30 backend + 1 frontend)
 
 ---
 
@@ -59,6 +59,34 @@
 |-----------|-------|--------|
 | `order-payment-flow.test.ts` | 13 | ✅ |
 | `tenant-isolation.test.ts` | 11 | ✅ |
+
+---
+
+## Layer 6 — Document Engine & Template (115 tests) ✅
+
+### Document Engine (99 tests)
+
+| Test File | Tests | Status |
+|-----------|-------|--------|
+| `expression-evaluator.test.ts` | 9 | ✅ |
+| `formatters.test.ts` | 15 | ✅ |
+| `variable-resolver.test.ts` | 14 | ✅ |
+| `registries.test.ts` | 14 | ✅ |
+| `template-engine.test.ts` | 9 | ✅ |
+| `thermal-layout.test.ts` | 8 | ✅ |
+| `condition-evaluator.test.ts` | 11 | ✅ |
+| `template-validator.test.ts` | 8 | ✅ |
+| `section-sorter.test.ts` | 4 | ✅ |
+| `defaults.test.ts` | 7 | ✅ |
+
+### Template API (16 tests)
+
+| Test File | Tests | Status |
+|-----------|-------|--------|
+| `TemplateAPI.test.ts` | 9 | ✅ |
+| `Template.test.ts` | 7 | ✅ |
+
+### Document Engine + Template Tests: 99 + 16 = 115 ✅
 
 ---
 

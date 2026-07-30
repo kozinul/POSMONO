@@ -24,7 +24,9 @@
 - `[x]` Cash payment
 - `[x]` Basic reporting (daily sales)
 - `[x]` Bug fixing & polish
-- `[~]` Receipt printing *(WIP — thermal integration pending)*
+- `[x]` Receipt printing *(thermal integration complete — ESC/POS renderer + PDF renderer)*
+- `[x]` Template designer *(complete — React 3-panel designer with toolbox, canvas, properties, preview)*
+- `[x]` Template CRUD API *(complete — endpoints for create, read, update, delete, publish, duplicate, export, import, rollback)*
 - `[~]` MVP deployment
 - `[x]` Barcode scanning
 - `[x]` Tax engine (compound tax, DPP modifiers, 5 rule types)

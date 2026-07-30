@@ -5,6 +5,7 @@ import { AuthLayout } from '../layouts/AuthLayout';
 import { ProtectedRoute } from '../@shared/components/ProtectedRoute';
 import NotFoundPage from '../@shared/pages/NotFoundPage';
 
+// Lazy-loaded pages
 const LoginPage = lazy(() => import('../core/auth/pages/LoginPage'));
 const DashboardPage = lazy(() => import('../core/dashboard/pages/DashboardPage'));
 const PosPage = lazy(() => import('../core/pos/pages/PosPage'));
@@ -20,6 +21,8 @@ const ShiftPage = lazy(() => import('../core/shifts/pages/ShiftPage'));
 const MemberListPage = lazy(() => import('../core/members/pages/MemberListPage'));
 const PromotionListPage = lazy(() => import('../core/promotions/pages/PromotionListPage'));
 const PaymentMethodListPage = lazy(() => import('../core/payment-methods/pages/PaymentMethodListPage'));
+const TemplateListPage = lazy(() => import('../core/templates/pages/TemplateListPage'));
+const DesignerPage = lazy(() => import('../core/templates/pages/DesignerPage'));
 
 const Loading = () => (
   <div className="flex items-center justify-center min-h-screen">
@@ -52,6 +55,8 @@ export function AppRouter() {
               <Route path="/members" element={<MemberListPage />} />
               <Route path="/promotions" element={<PromotionListPage />} />
               <Route path="/payment-methods" element={<PaymentMethodListPage />} />
+              <Route path="/templates" element={<TemplateListPage />} />
+              <Route path="/templates/:id/designer" element={<DesignerPage />} />
             </Route>
           </Route>
           <Route path="*" element={<NotFoundPage />} />

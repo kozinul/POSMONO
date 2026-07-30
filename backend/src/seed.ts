@@ -8,6 +8,7 @@ import { ProductSchema } from './core/catalog/infrastructure/persistence/schemas
 import { CategorySchema } from './core/catalog/infrastructure/persistence/schemas/CategorySchema';
 import { StockSchema } from './core/inventory/infrastructure/persistence/schemas/StockSchema';
 import { PaymentMethodSchema } from './core/payment/infrastructure/persistence/schemas/PaymentMethodSchema';
+import { TemplateSchema } from './core/template/infrastructure/persistence/schemas/TemplateSchema';
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27018';
 const SYSTEM_DB = 'posmono_system';
@@ -28,6 +29,7 @@ async function seed() {
   const Category = systemConn.model('Category', CategorySchema);
   const Stock = systemConn.model('Stock', StockSchema);
   const PaymentMethodModel = systemConn.model('PaymentMethod', PaymentMethodSchema);
+  const Template = systemConn.model('Template', TemplateSchema);
 
   const tenantId = id('ten');
   const adminUserId = id('usr');
@@ -254,6 +256,110 @@ async function seed() {
   }));
   await Stock.create(stockEntries);
 
+  console.log('Seeding templates...');
+  const kotSections = [
+    { id: 'sec-header', type: 'header', enabled: true, order: 1, nodes: [
+      { id: 'n1', type: 'field', field: 'store.name', style: { font: { size: 14, weight: 'bold', align: 'center' } } },
+      { id: 'n2', type: 'divider', style: {} },
+    ]},
+    { id: 'sec-order', type: 'order_info', enabled: true, order: 2, nodes: [
+      { id: 'n3', type: 'text', text: 'KOT #{{ order.referenceNumber }}', style: { font: { size: 12, weight: 'bold' } } },
+      { id: 'n4', type: 'field', field: 'order.table', label: 'Table', style: {} },
+    ]},
+    { id: 'sec-items', type: 'items', enabled: true, order: 3, nodes: [
+      { id: 'n5', type: 'repeater', dataSource: 'items', template: [
+        { id: 'n6', type: 'text', text: '{{ item.qty }}x {{ item.name }}', style: { font: { size: 10 } } },
+      ]},
+    ]},
+    { id: 'sec-footer', type: 'footer', enabled: true, order: 4, nodes: [
+      { id: 'n7', type: 'divider', style: {} },
+      { id: 'n8', type: 'text', text: '{{ order.date }} {{ order.time }}', style: { font: { align: 'center' } } },
+    ]},
+  ];
+
+  const invoiceSections = [
+    { id: 'sec-header', type: 'header', enabled: true, order: 1, nodes: [
+      { id: 'n1', type: 'field', field: 'store.name', style: { font: { size: 18, weight: 'bold', align: 'center' } } },
+      { id: 'n2', type: 'field', field: 'store.address', style: { font: { align: 'center' } } },
+      { id: 'n3', type: 'field', field: 'store.phone', style: { font: { align: 'center' } } },
+      { id: 'n4', type: 'divider', style: {} },
+    ]},
+    { id: 'sec-invoice', type: 'order_info', enabled: true, order: 2, nodes: [
+      { id: 'n5', type: 'field', field: 'order.documentNumber', label: 'Invoice', style: { font: { size: 12, weight: 'bold' } } },
+      { id: 'n6', type: 'text', text: 'Date: {{ order.date }}', style: {} },
+      { id: 'n7', type: 'field', field: 'customer.name', label: 'Customer', style: {} },
+    ]},
+    { id: 'sec-items', type: 'items', enabled: true, order: 3, nodes: [
+      { id: 'n8', type: 'table', dataSource: 'items', columns: [
+        { field: 'name', header: 'Item', align: 'left' },
+        { field: 'qty', header: 'Qty', align: 'right' },
+        { field: 'unitPrice', header: 'Price', align: 'right', format: 'number(0)' },
+        { field: 'totalPrice', header: 'Total', align: 'right', format: 'number(0)' },
+      ]},
+    ]},
+    { id: 'sec-summary', type: 'summary', enabled: true, order: 4, nodes: [
+      { id: 'n9', type: 'field', field: 'summary.subtotal', label: 'Subtotal', format: 'number(0)', style: {} },
+      { id: 'n10', type: 'field', field: 'summary.tax', label: 'Tax', format: 'number(0)', style: {} },
+      { id: 'n11', type: 'divider', style: {} },
+      { id: 'n12', type: 'field', field: 'summary.grandTotal', label: 'Grand Total', format: 'number(0)', style: { font: { size: 14, weight: 'bold' } } },
+    ]},
+    { id: 'sec-footer', type: 'footer', enabled: true, order: 5, nodes: [
+      { id: 'n13', type: 'divider', style: {} },
+      { id: 'n14', type: 'text', text: 'Thank you for your business!', style: { font: { align: 'center' } } },
+    ]},
+  ];
+
+  await Template.create([
+    {
+      _id: id('tpl'),
+      tenantId,
+      name: 'Standard Receipt 58mm',
+      description: 'Standard thermal receipt for 58mm paper (2-inch)',
+      schemaVersion: 1,
+      documentType: 'receipt',
+      paper: { type: 'thermal58', width: 58, height: 'auto', margin: { top: 2, right: 3, bottom: 2, left: 3 } },
+      sections: [],
+      metadata: { createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), version: 1, createdBy: 'system' },
+      isActive: true,
+    },
+    {
+      _id: id('tpl'),
+      tenantId,
+      name: 'Standard Receipt 80mm',
+      description: 'Standard thermal receipt for 80mm paper (3-inch)',
+      schemaVersion: 1,
+      documentType: 'receipt',
+      paper: { type: 'thermal80', width: 80, height: 'auto', margin: { top: 2, right: 3, bottom: 2, left: 3 } },
+      sections: [],
+      metadata: { createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), version: 1, createdBy: 'system' },
+      isActive: true,
+    },
+    {
+      _id: id('tpl'),
+      tenantId,
+      name: 'Standard KOT 80mm',
+      description: 'Kitchen Order Ticket for 80mm thermal paper',
+      schemaVersion: 1,
+      documentType: 'kot',
+      paper: { type: 'thermal80', width: 80, height: 'auto', margin: { top: 2, right: 3, bottom: 2, left: 3 } },
+      sections: kotSections,
+      metadata: { createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), version: 1, createdBy: 'system' },
+      isActive: true,
+    },
+    {
+      _id: id('tpl'),
+      tenantId,
+      name: 'Standard Invoice A4',
+      description: 'Standard A4 invoice with line items table',
+      schemaVersion: 1,
+      documentType: 'invoice',
+      paper: { type: 'a4-portrait', width: 210, height: 297, margin: { top: 15, right: 15, bottom: 15, left: 15 } },
+      sections: invoiceSections,
+      metadata: { createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), version: 1, createdBy: 'system' },
+      isActive: true,
+    },
+  ]);
+
   console.log('\n✅ Seed complete!');
   console.log(`   Tenant: toko-abc (${tenantId})`);
   console.log(`   Owner: admin@demo.com / admin123`);
@@ -261,6 +367,8 @@ async function seed() {
   console.log(`   Categories: ${categories.length}`);
   console.log(`   Products: ${products.length}`);
   console.log(`   Payment Methods: 6`);
+  console.log(`   Templates: 4`);
+  console.log(`   Stock items: ${stockEntries.length}`);
   console.log(`   Stock items: ${stockEntries.length}`);
 
   await systemConn.close();

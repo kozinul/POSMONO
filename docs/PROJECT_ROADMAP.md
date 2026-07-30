@@ -71,8 +71,16 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | Settings (key-value store) | `[x]` |
 | Member/Customer domain | `[x]` |
 | Promotion domain (14 rule types) | `[x]` |
+| Document template engine (core) | `[x]` |
+| Expression engine & formatters | `[x]` |
+| Template CRUD REST API | `[x]` |
+| Print output (ESC/POS thermal + PDF) | `[x]` |
+| Template versioning + rollback | `[x]` |
+| Render API (render, preview, validate) | `[x]` |
+| Template export/import | `[x]` |
+| Receipt template designer UI | `[x]` |
 
-**Completion:** ~98%
+**Completion:** ~100%
 
 ---
 
@@ -96,8 +104,10 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | Member management UI | `[x]` |
 | Promotion management UI | `[x]` |
 | Payment method management UI (presets, color picker) | `[x]` |
+| Template list page | `[x]` |
+| Template designer (3-panel drag-drop canvas) | `[x]` |
 
-**Completion:** ~95%
+**Completion:** ~100%
 
 ---
 

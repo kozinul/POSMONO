@@ -1182,3 +1182,56 @@ PromotionService.syncDiscountConfig/removeDiscountConfigById
 - 400 on promotion create: zod `ruleSchema` didn't include `buy_x_pay_y`
 
 **Productivity score:** 9
+
+### DATE: 2026-07-30
+
+**Today I worked on:**
+
+- **Document Template Engine — entire backend + frontend**
+  - Backend: Expression Engine (arithmetic parser + AST evaluator), Formatter pipeline (6 default formatters + plugin registry), Expression + Format integration into VariableResolver
+  - Backend: TableNode support (columnar data rendering with headers), RepeaterNode (scoped field resolution per item using Proxy)
+  - Backend: ThermalRenderer (ESC/POS binary buffer generation), PdfRenderer (pdfkit PDF generation), wired into DocumentRenderer
+  - Backend: Template versioning (saveVersion, listVersions, rollback in repository + service), export/import endpoints
+  - Backend: Render API (POST /api/templates/render, /render/preview, /validate), 3 new endpoints on TemplateController
+  - Backend: KOT and Invoice A4 default templates in seed, 4 templates total
+  - Frontend: Template list page (CRUD cards, edit, duplicate, export, publish, delete, modal for create/edit)
+  - Frontend: Designer page with 3-panel layout — ToolboxPanel (Sections/Fields/Components tabs with drag), CanvasPanel (drop zone, zoom, paper preview, section/node rendering, empty state), PropertiesPanel (dynamic form for font, align, transform, field path, label, format)
+  - Frontend: DesignerContext with useReducer (ADD_SECTION, TOGGLE_SECTION, ADD_NODE, REMOVE_NODE, UPDATE_NODE, MOVE_NODE, LOAD_TEMPLATE, SET_SELECTED)
+  - Frontend: Route `/templates` and `/templates/:id/designer`, sidebar navigation entry
+
+**Changes:**
+
+- `backend/src/core/document-engine/engine/ExpressionEvaluator.ts` — NEW
+- `backend/src/core/document-engine/engine/formatters.ts` — NEW (FormatterRegistry, 6 default formatters, pipe syntax)
+- `backend/src/core/document-engine/engine/VariableResolver.ts` — UPDATED (expr(), pipe format, RepeaterNode with Proxy scoping, TableNode with column rendering)
+- `backend/src/core/document-engine/renderer/thermal/ThermalLayoutCalculator.ts` — UPDATED (flattenNode for children, table content rendering)
+- `backend/src/core/document-engine/renderer/thermal/ThermalRenderer.ts` — NEW (ESC/POS binary buffer)
+- `backend/src/core/document-engine/renderer/pdf/PdfRenderer.ts` — NEW (pdfkit PDF buffer)
+- `backend/src/core/document-engine/renderer/DocumentRenderer.ts` — UPDATED (renderThermal, renderPdf)
+- `backend/src/core/document-engine/engine/TemplateEngine.ts` — UPDATED (renderThermal, renderPdf)
+- `backend/src/core/template/application/services/RenderService.ts` — NEW
+- `backend/src/core/template/application/services/TemplateService.ts` — UPDATED (saveVersion on create/update/publish/duplicate, rollback, listVersions)
+- `backend/src/core/template/interfaces/http/controllers/TemplateController.ts` — UPDATED (render, renderPreview, validate, exportTemplate, importTemplate, listVersions, rollback)
+- `backend/src/core/template/interfaces/http/routes/template.routes.ts` — UPDATED (export, versions, rollback, render, render/preview, validate endpoints)
+- `backend/src/bootstrap/container.ts` — UPDATED (RenderService, versionModel injection, renderService)
+- `backend/src/bootstrap/routes.ts` — NO CHANGE (already has template routes)
+- `backend/src/seed.ts` — UPDATED (KOT and Invoice A4 templates)
+- `frontend/src/core/templates/pages/TemplateListPage.tsx` — NEW
+- `frontend/src/core/templates/pages/DesignerPage.tsx` — NEW
+- `frontend/src/modules/designer/context/DesignerContext.tsx` — NEW
+- `frontend/src/modules/designer/components/ToolboxPanel.tsx` — NEW
+- `frontend/src/modules/designer/components/CanvasPanel.tsx` — NEW
+- `frontend/src/modules/designer/components/PropertiesPanel.tsx` — NEW
+- `frontend/src/@shared/hooks/useSweetAlert.ts` — NEW
+- `frontend/src/app/router.tsx` — UPDATED (TemplateListPage, DesignerPage routes)
+- `frontend/src/layouts/DashboardLayout.tsx` — UPDATED (Templates sidebar)
+
+**Problems encountered:**
+
+- TableNode field resolution needed dual lookup (scoped item first, then root data fallback) — solved with `resolveFieldInTable` helper
+- ThermalLayoutCalculator needed `flattenNode` to handle children from repeaters and containers — replaced inline content resolution
+- `Loading` duplicate declaration in router.tsx after edits — fixed by removing extra
+- CanvasPanel import path pointing to backend — fixed to use local type definition
+- TemplateListPage had wrong hook reference (`useSweetAlert` returned `fire` not `Swal`) — fixed to use Swal directly or updated hook correctly
+
+**Productivity score:** 10

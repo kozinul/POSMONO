@@ -106,6 +106,12 @@ import { MenuTypeSchema } from '../core/catalog/infrastructure/persistence/schem
 import { MongoMenuTypeRepository } from '../core/catalog/infrastructure/persistence/MongoMenuTypeRepository';
 import { MenuTypeService } from '../core/catalog/application/services/MenuTypeService';
 import { MenuTypeController } from '../core/catalog/interfaces/http/controllers/MenuTypeController';
+import { TemplateSchema } from '../core/template/infrastructure/persistence/schemas/TemplateSchema';
+import { TemplateVersionSchema } from '../core/template/infrastructure/persistence/schemas/TemplateVersionSchema';
+import { MongoTemplateRepository } from '../core/template/infrastructure/persistence/MongoTemplateRepository';
+import { TemplateService } from '../core/template/application/services/TemplateService';
+import { RenderService } from '../core/template/application/services/RenderService';
+import { TemplateController } from '../core/template/interfaces/http/controllers/TemplateController';
 
 export type DIContainer = ReturnType<typeof buildContainer>;
 
@@ -139,6 +145,8 @@ export function buildContainer() {
   const PromotionModel = systemConnection.model('Promotion', PromotionSchema);
   const PaymentMethodModel = systemConnection.model('PaymentMethod', PaymentMethodSchema);
   const MenuTypeModel = systemConnection.model('MenuType', MenuTypeSchema);
+  const TemplateModel = systemConnection.model('Template', TemplateSchema);
+  const TemplateVersionModel = systemConnection.model('TemplateVersion', TemplateVersionSchema);
 
   const eventBus = new EventBus();
 
@@ -172,6 +180,8 @@ export function buildContainer() {
     promotionModel: asValue(PromotionModel),
     paymentMethodModel: asValue(PaymentMethodModel),
     menuTypeModel: asValue(MenuTypeModel),
+    templateModel: asValue(TemplateModel),
+    templateVersionModel: asValue(TemplateVersionModel),
     userRepository: asClass(MongoUserRepository, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
@@ -739,6 +749,32 @@ export function buildContainer() {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
         promotionService: container.resolve('promotionService'),
+      }),
+    }),
+    templateRepository: asClass(MongoTemplateRepository, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        model: TemplateModel,
+        versionModel: TemplateVersionModel,
+      }),
+    }),
+    templateService: asClass(TemplateService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        templateRepository: container.resolve('templateRepository'),
+      }),
+    }),
+    renderService: asClass(RenderService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        templateService: container.resolve('templateService'),
+      }),
+    }),
+    templateController: asClass(TemplateController, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        templateService: container.resolve('templateService'),
+        renderService: container.resolve('renderService'),
       }),
     }),
   });

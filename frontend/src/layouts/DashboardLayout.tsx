@@ -14,6 +14,7 @@ const navigation = [
   { name: 'Promotions', href: '/promotions' },
   { name: 'Payment', href: '/payment-methods' },
   { name: 'Inventory', href: '/inventory' },
+  { name: 'Templates', href: '/templates' },
   { name: 'Reports', href: '/reports' },
   { name: 'Shifts', href: '/shifts' },
   { name: 'Settings', href: '/settings' },
