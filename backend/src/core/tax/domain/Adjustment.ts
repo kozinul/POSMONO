@@ -1,4 +1,5 @@
-import { TaxItem, ScopeMatchContext } from './PricingEngine';
+import { TaxItem } from './PricingEngine';
+import { ScopeMatchContext } from './TaxScope';
 
 export type AdjustmentType = 'DISCOUNT' | 'CHARGE' | 'TAX' | 'ROUNDING';
 

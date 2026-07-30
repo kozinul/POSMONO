@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useDesigner } from '../context/DesignerContext';
 
 interface SectionItem {
   id: string;
@@ -79,30 +80,79 @@ type ActiveTab = 'sections' | 'fields' | 'components';
 
 export default function ToolboxPanel() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('sections');
+  const { state, dispatch } = useDesigner();
+
+  const handleAddSection = (sectionType: string) => {
+    dispatch({
+      type: 'ADD_SECTION',
+      section: {
+        id: `sec-${Date.now()}`,
+        type: sectionType,
+        enabled: true,
+        order: state.template.sections.length + 1,
+        nodes: [],
+      },
+    });
+  };
+
+  const handleAddFieldOrComponent = (payload: { field?: string; label?: string; componentType?: string }) => {
+    let targetSectionId = state.selectedIds[0];
+    if (!targetSectionId && state.template.sections.length > 0) {
+      targetSectionId = state.template.sections[0].id;
+    }
+    if (!targetSectionId) {
+      const newSecId = `sec-${Date.now()}`;
+      dispatch({
+        type: 'ADD_SECTION',
+        section: { id: newSecId, type: 'header', enabled: true, order: 1, nodes: [] },
+      });
+      targetSectionId = newSecId;
+    }
+
+    const newNode: any = {
+      id: `node-${Date.now()}`,
+      type: payload.field ? 'field' : (payload.componentType ?? 'text'),
+      style: {},
+      visibility: [],
+    };
+    if (payload.field) {
+      newNode.field = payload.field;
+      newNode.label = payload.label ?? '';
+    } else if (payload.componentType === 'text') {
+      newNode.text = 'Static text';
+    } else if (payload.componentType === 'spacer') {
+      newNode.height = 4;
+    }
+
+    dispatch({ type: 'ADD_NODE', sectionId: targetSectionId, node: newNode });
+  };
 
   return (
-    <div className="w-64 shrink-0 border-r border-gray-200 bg-white overflow-y-auto flex flex-col">
+    <div className="w-72 shrink-0 border-r border-gray-200 bg-white overflow-y-auto flex flex-col">
+      <div className="p-2 border-b bg-gray-50 text-xs text-gray-500 font-medium text-center">
+        💡 Drag or click item to add
+      </div>
       <div className="flex border-b border-gray-200">
         <button
           onClick={() => setActiveTab('sections')}
-          className={`flex-1 py-2 text-sm font-medium ${activeTab === 'sections' ? 'blue-primary text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+          className={`flex-1 py-2 text-xs font-semibold ${activeTab === 'sections' ? 'blue-primary text-white' : 'text-gray-500 hover:bg-gray-50'}`}
         >
           Sections
         </button>
         <button
           onClick={() => setActiveTab('fields')}
-          className={`flex-1 py-2 text-sm font-medium ${activeTab === 'fields' ? 'blue-primary text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+          className={`flex-1 py-2 text-xs font-semibold ${activeTab === 'fields' ? 'blue-primary text-white' : 'text-gray-500 hover:bg-gray-50'}`}
         >
           Fields
         </button>
         <button
           onClick={() => setActiveTab('components')}
-          className={`flex-1 py-2 text-sm font-medium ${activeTab === 'components' ? 'blue-primary text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+          className={`flex-1 py-2 text-xs font-semibold ${activeTab === 'components' ? 'blue-primary text-white' : 'text-gray-500 hover:bg-gray-50'}`}
         >
           Components
         </button>
       </div>
-      <div className="p-3 space-y-1">
+      <div className="p-3 space-y-1.5">
         {activeTab === 'sections' && sections.map((s) => (
           <div
             key={s.id}
@@ -110,9 +160,11 @@ export default function ToolboxPanel() {
             onDragStart={(e) => {
               e.dataTransfer.setData('application/designer', JSON.stringify({ type: 'section', sectionType: s.id }));
             }}
-            className="px-3 py-2 text-sm bg-gray-50 rounded-lg cursor-grab hover:bg-gray-100 border border-gray-200 transition-colors"
+            onClick={() => handleAddSection(s.id)}
+            className="px-3 py-2 text-xs bg-gray-50 rounded-lg cursor-pointer hover:bg-blue-50 hover:border-blue-300 border border-gray-200 transition-all flex items-center justify-between font-medium text-gray-700"
           >
-            {s.label}
+            <span>{s.label}</span>
+            <span className="text-gray-400 text-xs">+</span>
           </div>
         ))}
         {activeTab === 'fields' && fields.map((f) => (
@@ -122,10 +174,11 @@ export default function ToolboxPanel() {
             onDragStart={(e) => {
               e.dataTransfer.setData('application/designer', JSON.stringify({ type: 'field', field: f.path, label: f.label }));
             }}
-            className="px-3 py-2 text-sm bg-gray-50 rounded-lg cursor-grab hover:bg-gray-100 border border-gray-200 transition-colors font-mono text-xs"
+            onClick={() => handleAddFieldOrComponent({ field: f.path, label: f.label })}
+            className="px-3 py-2 text-xs bg-gray-50 rounded-lg cursor-pointer hover:bg-blue-50 hover:border-blue-300 border border-gray-200 transition-all font-mono flex items-center justify-between text-gray-700"
           >
-            {f.path}
-            <span className="text-gray-400 ml-2">{f.label}</span>
+            <span className="truncate">{f.path}</span>
+            <span className="text-gray-400 text-[10px] ml-1">{f.label}</span>
           </div>
         ))}
         {activeTab === 'components' && components.map((c) => (
@@ -135,7 +188,8 @@ export default function ToolboxPanel() {
             onDragStart={(e) => {
               e.dataTransfer.setData('application/designer', JSON.stringify({ type: 'component', componentType: c.type }));
             }}
-            className="px-3 py-2 text-sm bg-gray-50 rounded-lg cursor-grab hover:bg-gray-100 border border-gray-200 transition-colors flex items-center justify-between"
+            onClick={() => handleAddFieldOrComponent({ componentType: c.type })}
+            className="px-3 py-2 text-xs bg-gray-50 rounded-lg cursor-pointer hover:bg-blue-50 hover:border-blue-300 border border-gray-200 transition-all flex items-center justify-between font-medium text-gray-700"
           >
             <span>{c.label}</span>
             <span className="text-xs text-gray-400">{c.hasChildren ? '▣' : '◻'}</span>

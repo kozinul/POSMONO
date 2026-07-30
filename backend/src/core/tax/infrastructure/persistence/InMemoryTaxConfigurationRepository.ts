@@ -38,6 +38,7 @@ export class InMemoryTaxConfigurationRepository implements ITaxConfigurationRepo
           versionNumber: 1,
           effectiveDate: now,
           rules: [],
+          charges: [],
           status: 'active',
           createdAt: now,
         },

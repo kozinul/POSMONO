@@ -98,12 +98,7 @@ export function CartItemRow({ item, lineItem }: CartItemRowProps) {
         </div>
       )}
 
-      {!isFree && (itemDiscount > 0 || lineItem) && (
-        <div className="flex justify-between items-center pl-2 pt-0.5 text-sm font-semibold text-gray-800 border-t border-dashed border-gray-200">
-          <span>Subtotal</span>
-          <span>Rp {displayTotal.toLocaleString('id-ID')}</span>
-        </div>
-      )}
+
     </div>
   );
 }

@@ -120,7 +120,7 @@ export class TemplateController extends BaseController {
     const parsed = renderSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors.map((e) => e.message).join(', '));
     const { templateId, template, data } = parsed.data as any;
-    const result = templateId
+    const result = templateId && templateId !== 'new'
       ? await this.renderService.render(templateId, req.tenantId, data)
       : await this.renderService.renderInline(template, data);
     this.ok(res, result);
@@ -131,7 +131,7 @@ export class TemplateController extends BaseController {
     const parsed = renderSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError(parsed.error.errors.map((e) => e.message).join(', '));
     const { templateId, template, data } = parsed.data as any;
-    const result = templateId
+    const result = templateId && templateId !== 'new'
       ? await this.renderService.renderPreview(templateId, req.tenantId, data)
       : await this.renderService.renderPreviewInline(template, data);
     this.ok(res, result);
