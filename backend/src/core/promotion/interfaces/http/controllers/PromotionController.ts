@@ -6,7 +6,7 @@ import { ValidationError } from '../../../../../@shared/infrastructure/error/App
 
 const ruleSchema = z.object({
   type: z.enum([
-    'min_purchase', 'min_items', 'buy_x_get_y', 'buy_x_pay_y', 'percentage_off', 'nominal_off',
+    'min_purchase', 'min_items', 'percentage_off', 'nominal_off',
     'fixed_price', 'free_item', 'bundle_price', 'product_match', 'category_match',
     'day_of_week', 'date_range', 'time_range', 'customer_tag',
   ]),
@@ -14,11 +14,12 @@ const ruleSchema = z.object({
 });
 
 const effectSchema = z.object({
-  type: z.enum(['percentage', 'nominal', 'fixed_price', 'free_item', 'bundle_price']),
+  type: z.enum(['percentage', 'nominal', 'fixed_price', 'free_item', 'bundle_price', 'buy_x_pay_y', 'buy_x_get_y']),
   value: z.number(),
   target: z.enum(['order', 'item', 'cheapest_item', 'specific_product']).default('order'),
   targetProductId: z.string().optional(),
   maxDiscount: z.number().optional(),
+  params: z.record(z.unknown()).optional(),
 });
 
 const createPromotionSchema = z.object({

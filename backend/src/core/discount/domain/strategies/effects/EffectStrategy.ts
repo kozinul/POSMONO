@@ -4,7 +4,8 @@ export type EffectType =
   | 'free_item'
   | 'fixed_price'
   | 'bundle_price'
-  | 'buy_x_pay_y';
+  | 'buy_x_pay_y'
+  | 'buy_x_get_y';
 
 export interface IDiscountEffect {
   type: EffectType;
@@ -19,10 +20,19 @@ export interface EffectContext {
   matchingItems?: Array<{ productId: string; categoryId: string; quantity: number; unitPrice: number; lineTotal: number }>;
 }
 
+export interface GeneratedLineItem {
+  productId: string;
+  productName: string;
+  categoryId: string;
+  quantity: number;
+  unitPrice: number;
+}
+
 export interface EffectResult {
   discountAmount: number;
   description: string;
   freeItems?: Array<{ productId: string; quantity: number }>;
+  generatedLineItems?: GeneratedLineItem[];
 }
 
 export interface EffectStrategy {

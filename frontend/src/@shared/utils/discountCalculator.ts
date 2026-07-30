@@ -249,20 +249,47 @@ function applyEffects(
       case 'buy_x_pay_y': {
         const minQty = (effect.config.minQty as number) ?? 1;
         const payQty = (effect.config.payQty as number) ?? 0;
-        const applyTo = (effect.config.applyTo as string) ?? 'cheapest';
+        const strategy = (effect.config.allocationStrategy as string) ?? 'cheapest';
         const freeCount = minQty - payQty;
         const totalQty = items.reduce((s, i) => s + i.quantity, 0);
         if (totalQty >= minQty && freeCount > 0) {
           const sets = Math.floor(totalQty / minQty);
-          const toDiscount = sets * freeCount;
-          const sorted = items
-            .flatMap((i) => Array.from({ length: i.quantity }, () => i.unitPrice))
-            .sort((a, b) => (applyTo === 'most_expensive' ? b - a : a - b));
-          const target = sorted.slice(0, toDiscount);
-          const amount = target.reduce((s, p) => s + p, 0);
-          const label = applyTo === 'most_expensive' ? 'termahal' : 'termurah';
+          const qualifiedQty = sets * minQty;
+          const pickCount = sets * freeCount;
+          let amount: number;
+          if (strategy === 'proportional') {
+            const sorted = [...items].sort((a, b) => a.productId.localeCompare(b.productId));
+            let taken = 0;
+            let totalPrice = 0;
+            for (const item of sorted) {
+              const qty = Math.min(item.quantity, qualifiedQty - taken);
+              if (qty <= 0) break;
+              totalPrice += item.unitPrice * qty;
+              taken += qty;
+            }
+            amount = (totalPrice * freeCount) / minQty;
+          } else {
+            const sorted = items
+              .flatMap((i) => Array.from({ length: i.quantity }, () => i.unitPrice))
+              .sort((a, b) => (strategy === 'most_expensive' ? b - a : a - b));
+            const target = sorted.slice(0, pickCount);
+            amount = target.reduce((s, p) => s + p, 0);
+          }
+          const label = strategy === 'cheapest' ? 'termurah' : strategy === 'most_expensive' ? 'termahal' : 'semua item';
           total += amount;
           descParts.push(`Beli ${minQty} bayar ${payQty} (${freeCount} ${label} gratis x${sets})`);
+        }
+        break;
+      }
+      case 'buy_x_get_y': {
+        const buyQty = (effect.config.buyQuantity as number) ?? 2;
+        const getQty = (effect.config.getQuantity as number) ?? 1;
+        const strategy = (effect.config.allocationStrategy as string) ?? 'cheapest';
+        const totalQty = items.reduce((s, i) => s + i.quantity, 0);
+        if (totalQty >= buyQty) {
+          const sets = Math.floor(totalQty / buyQty);
+          const label = strategy === 'cheapest' ? 'termurah' : strategy === 'most_expensive' ? 'termahal' : 'proporsional';
+          descParts.push(`Beli ${buyQty} dapat ${getQty} (${getQty} ${label} gratis x${sets})`);
         }
         break;
       }

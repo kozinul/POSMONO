@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Swal from 'sweetalert2';
 import { usePromotions, useDeletePromotion } from '../hooks/usePromotions';
 import type { Promotion } from '../hooks/usePromotions';
 import PromotionForm from '../components/PromotionForm';
@@ -20,8 +21,24 @@ export default function PromotionListPage() {
   const total = data?.meta?.total ?? 0;
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Hapus promosi ini?')) return;
+    const result = await Swal.fire({
+      title: 'Hapus promosi?',
+      text: 'Promosi yang dihapus tidak bisa dikembalikan.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#dc2626',
+      cancelButtonColor: '#6b7280',
+      confirmButtonText: 'Ya, hapus',
+      cancelButtonText: 'Batal',
+    });
+    if (!result.isConfirmed) return;
     await deletePromotion.mutateAsync(id);
+    Swal.fire({
+      title: 'Berhasil dihapus',
+      icon: 'success',
+      timer: 1500,
+      showConfirmButton: false,
+    });
   };
 
   const openEdit = (promo: Promotion) => {

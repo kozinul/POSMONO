@@ -135,6 +135,22 @@ export class PricingService {
       }
     }
 
+    for (const gli of discountResult.generatedLineItems) {
+      if (!lineItems.some((li) => li.productId === gli.productId)) {
+        lineItems.push({
+          productId: gli.productId,
+          productName: gli.productName,
+          categoryId: gli.categoryId,
+          quantity: gli.quantity,
+          unitPrice: 0,
+          originalUnitPrice: gli.unitPrice,
+          discount: gli.unitPrice * gli.quantity,
+          lineTotal: 0,
+          isFreeItem: true,
+        });
+      }
+    }
+
     let manualDiscountAmount = 0;
     if (input.manualDiscount && input.manualDiscount > 0) {
       if (input.manualDiscountType === 'percentage') {

@@ -12,21 +12,56 @@ function mapEffectType(type: string): IDiscountEffect['type'] {
     case 'fixed_price': return 'fixed_price';
     case 'bundle_price': return 'bundle_price';
     case 'buy_x_pay_y': return 'buy_x_pay_y';
+    case 'buy_x_get_y': return 'buy_x_get_y';
     default: return 'percentage_off';
   }
 }
 
 function mapEffects(promoEffects: IPromotionEffect[]): IDiscountEffect[] {
-  return promoEffects.map((e) => ({
-    type: mapEffectType(e.type),
-    config: {
-      rate: e.type === 'percentage' ? e.value : undefined,
-      amount: e.type === 'nominal' ? e.value : undefined,
-      target: e.target,
-      productId: e.targetProductId,
-      maxCap: e.maxDiscount,
-    },
-  }));
+  return promoEffects.map((e) => {
+    if (e.type === 'buy_x_pay_y') {
+      return {
+        type: 'buy_x_pay_y' as IDiscountEffect['type'],
+        config: {
+          minQty: (e.params?.buyQuantity as number) ?? 1,
+          payQty: (e.params?.payQuantity as number) ?? 0,
+          allocationStrategy: (e.params?.allocationStrategy as string) ?? 'cheapest',
+        },
+      };
+    }
+    if (e.type === 'buy_x_get_y') {
+      const targetType = (e.params?.targetType as string) ?? 'cart_item';
+      const target: Record<string, unknown> = { type: targetType };
+      if (targetType === 'cart_item' || targetType === 'category') {
+        target.allocationStrategy = (e.params?.allocationStrategy as string) ?? 'cheapest';
+      }
+      if (targetType === 'product') {
+        target.productId = e.params?.targetProductId as string;
+        target.productName = e.params?.targetProductName as string;
+      }
+      if (targetType === 'category') {
+        target.categoryId = e.params?.targetCategoryId as string;
+      }
+      return {
+        type: 'buy_x_get_y' as IDiscountEffect['type'],
+        config: {
+          buyQuantity: (e.params?.buyQuantity as number) ?? 2,
+          getQuantity: (e.params?.getQuantity as number) ?? 1,
+          target,
+        },
+      };
+    }
+    return {
+      type: mapEffectType(e.type),
+      config: {
+        rate: e.type === 'percentage' ? e.value : undefined,
+        amount: e.type === 'nominal' ? e.value : undefined,
+        target: e.target,
+        productId: e.targetProductId,
+        maxCap: e.maxDiscount,
+      },
+    };
+  });
 }
 
 function mapRules(promo: IPromotion): IDiscountCondition[] {
@@ -54,24 +89,6 @@ function mapRules(promo: IPromotion): IDiscountCondition[] {
           config: { minItems: rule.params.count ?? rule.params.minItems ?? 0 },
         });
         break;
-      case 'buy_x_get_y':
-      case 'buy_x_pay_y': {
-        const buyIds = (rule.params.buyProductIds as string[]) ?? [];
-        if (buyIds.length > 0) {
-          conditions.push({
-            type: 'product_match',
-            config: { productIds: buyIds },
-          });
-        }
-        const buyQty = (rule.params.buyQuantity as number) ?? 1;
-        if (buyQty > 1) {
-          conditions.push({
-            type: 'min_items',
-            config: { minItems: buyQty },
-          });
-        }
-        break;
-      }
       case 'category_match':
         conditions.push({
           type: 'category_match',
@@ -165,12 +182,6 @@ function determineScope(promo: IPromotion): { type: DiscountScopeType; entityId:
         return { type: 'product', entityId: ids[0], entityName: '' };
       }
     }
-    if (ruleType === 'buy_x_get_y' || ruleType === 'buy_x_pay_y') {
-      const ids = (rule.params.buyProductIds as string[]) || [];
-      if (ids.length === 1) {
-        return { type: 'product', entityId: ids[0], entityName: '' };
-      }
-    }
   }
   return { type: 'all', entityId: '', entityName: 'Semua' };
 }
@@ -181,19 +192,7 @@ export function promotionToDiscountRule(promo: IPromotion): IDiscountRule {
   const discountValue = mainEffect?.value ?? 0;
   const promoCode = promo.code.trim().toUpperCase();
 
-  const buyXPayYRule = promo.rules.find((r) => r.type === 'buy_x_pay_y');
-  const finalEffects = buyXPayYRule
-    ? [
-        {
-          type: 'buy_x_pay_y' as IDiscountEffect['type'],
-          config: {
-            minQty: (buyXPayYRule.params.buyQuantity as number) ?? 1,
-            payQty: (buyXPayYRule.params.payQuantity as number) ?? 0,
-            applyTo: (buyXPayYRule.params.applyTo as string) ?? 'cheapest',
-          },
-        },
-      ]
-    : mapEffects(promo.effects);
+  const finalEffects = mapEffects(promo.effects);
 
   return {
     id: `promo_${promo.id}`,

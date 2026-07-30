@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Swal from 'sweetalert2';
 import { useMembers, useCreateMember, useUpdateMember, useDeleteMember } from '../hooks/useMembers';
 import type { Customer } from '../hooks/useMembers';
 import { formatCurrency } from '../../../@shared/utils/format';
@@ -38,8 +39,24 @@ export default function MemberListPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Hapus member ini?')) return;
+    const result = await Swal.fire({
+      title: 'Hapus member?',
+      text: 'Member yang dihapus tidak bisa dikembalikan.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#dc2626',
+      cancelButtonColor: '#6b7280',
+      confirmButtonText: 'Ya, hapus',
+      cancelButtonText: 'Batal',
+    });
+    if (!result.isConfirmed) return;
     await deleteMember.mutateAsync(id);
+    Swal.fire({
+      title: 'Berhasil dihapus',
+      icon: 'success',
+      timer: 1500,
+      showConfirmButton: false,
+    });
   };
 
   const filtered = search

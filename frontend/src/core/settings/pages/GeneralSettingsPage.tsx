@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import Swal from 'sweetalert2';
 import { useTenant, useUpdateSettings, useUpdateProfile } from '../../../@shared/hooks/useTenant';
 import { useTaxConfiguration, useUpdateTaxConfiguration, useAddTaxRule, useDeleteTaxRule, useAddCharge, useUpdateCharge, useDeleteCharge, useCalculateTax } from '../../../@shared/hooks/useTaxConfiguration';
 import type { IModifierConfig, IChargeConfig } from '../../../@shared/hooks/useTaxConfiguration';
@@ -1337,9 +1338,24 @@ export default function GeneralSettingsPage() {
                           </button>
                           <button
                             onClick={async () => {
-                              if (window.confirm(`Hapus profil "${profile.name}"?`)) {
-                                await deletePricingProfile.mutateAsync(profile.id);
-                              }
+                              const result = await Swal.fire({
+                                title: 'Hapus profil?',
+                                text: `Profil "${profile.name}" akan dihapus.`,
+                                icon: 'warning',
+                                showCancelButton: true,
+                                confirmButtonColor: '#dc2626',
+                                cancelButtonColor: '#6b7280',
+                                confirmButtonText: 'Ya, hapus',
+                                cancelButtonText: 'Batal',
+                              });
+                              if (!result.isConfirmed) return;
+                              await deletePricingProfile.mutateAsync(profile.id);
+                              Swal.fire({
+                                title: 'Berhasil dihapus',
+                                icon: 'success',
+                                timer: 1500,
+                                showConfirmButton: false,
+                              });
                             }}
                             className="text-xs px-2.5 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
                           >

@@ -5,8 +5,6 @@ import { DomainEvent } from '../../../@shared/domain/DomainEvent';
 export type PromotionRuleType =
   | 'min_purchase'
   | 'min_items'
-  | 'buy_x_get_y'
-  | 'buy_x_pay_y'
   | 'percentage_off'
   | 'nominal_off'
   | 'fixed_price'
@@ -21,7 +19,7 @@ export type PromotionRuleType =
 
 export type PromotionLogic = 'AND' | 'OR';
 
-export type DiscountEffectType = 'percentage' | 'nominal' | 'fixed_price' | 'free_item' | 'bundle_price' | 'buy_x_pay_y';
+export type DiscountEffectType = 'percentage' | 'nominal' | 'fixed_price' | 'free_item' | 'bundle_price' | 'buy_x_pay_y' | 'buy_x_get_y';
 
 export interface IPromotionRule {
   type: PromotionRuleType;
@@ -34,6 +32,7 @@ export interface IPromotionEffect {
   target: 'order' | 'item' | 'cheapest_item' | 'specific_product';
   targetProductId?: string;
   maxDiscount?: number;
+  params?: Record<string, unknown>;
 }
 
 export interface IPromotion {
@@ -162,8 +161,6 @@ export class Promotion extends AggregateRoot<PromotionId> {
         return context.subtotal >= (rule.params.amount as number);
       case 'min_items':
         return context.itemCount >= (rule.params.count as number);
-      case 'buy_x_get_y':
-        return context.itemCount >= (rule.params.buyQuantity as number);
       case 'product_match':
         return context.productIds.includes(rule.params.productId as string);
       case 'category_match':

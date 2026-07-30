@@ -91,6 +91,52 @@ describe('DiscountEngine', () => {
     expect(result.appliedRules).toHaveLength(0);
   });
 
+  it('applies buy_x_get_y with cart_item target', () => {
+    const engine = new DiscountEngine();
+    const items = [
+      makeItem('roti', 'makanan', 3, 5000),
+      makeItem('kopi', 'minuman', 2, 10000),
+      makeItem('teh', 'minuman', 1, 7000),
+    ];
+    const subtotal = 50000;
+    const rules: IDiscountRule[] = [{
+      id: 'r1', name: 'Beli 2 Gratis 1', priority: 10, stackable: true, active: true,
+      scope: { type: 'all', entityId: '', entityName: 'Semua' },
+      policy: { type: 'percentage', value: 0, application: 'per_order', roundingMode: 'round', precision: 2 },
+      conditions: [],
+      effects: [{ type: 'buy_x_get_y', config: { buyQuantity: 2, getQuantity: 1, target: { type: 'cart_item', allocationStrategy: 'cheapest' } } }],
+      currentUsageCount: 0,
+    }];
+
+    const result = engine.applyDiscounts(items, subtotal, rules);
+    expect(result.totalDiscount).toBe(0);
+    expect(result.freeItems).toBeDefined();
+    expect(result.freeItems!.length).toBeGreaterThan(0);
+    expect(result.generatedLineItems).toEqual([]);
+  });
+
+  it('applies buy_x_get_y with product target (generated line items)', () => {
+    const engine = new DiscountEngine();
+    const items = [
+      makeItem('roti', 'makanan', 2, 5000),
+    ];
+    const subtotal = 10000;
+    const rules: IDiscountRule[] = [{
+      id: 'r1', name: 'Beli Roti Gratis Teh', priority: 10, stackable: true, active: true,
+      scope: { type: 'all', entityId: '', entityName: 'Semua' },
+      policy: { type: 'percentage', value: 0, application: 'per_order', roundingMode: 'round', precision: 2 },
+      conditions: [],
+      effects: [{ type: 'buy_x_get_y', config: { buyQuantity: 2, getQuantity: 1, target: { type: 'product', productId: 'teh', productName: 'Es Teh' } } }],
+      currentUsageCount: 0,
+    }];
+
+    const result = engine.applyDiscounts(items, subtotal, rules);
+    expect(result.totalDiscount).toBe(0);
+    expect(result.generatedLineItems).toHaveLength(1);
+    expect(result.generatedLineItems[0].productId).toBe('teh');
+    expect(result.generatedLineItems[0].quantity).toBe(1);
+  });
+
   it('caps total discount at subtotal', () => {
     const rules: IDiscountRule[] = [{
       id: 'r1', name: '200% off', priority: 10, stackable: true, active: true,

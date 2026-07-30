@@ -60,7 +60,31 @@ Semua kondisi menggunakan **AND logic**. Jika ruleLogic=OR (dari Promotion), mak
 | `free_item` | `{ productId, quantity }` | Tidak menghasilkan diskon tunai, menghasilkan `freeItems[]` |
 | `fixed_price` | `{ productId, fixedPrice }` | `(unitPrice - fixedPrice) × qty` |
 | `bundle_price` | `{ productIds[], bundlePrice }` | `originalTotal - bundlePrice` |
-| `buy_x_pay_y` | `{ minQty, payQty }` | Mirip free item tapi item "gratis" dihitung dengan price 0 — hasil diskon = `unitPrice × (minQty - payQty) × qualifyingSets` |
+| `buy_x_pay_y` | `{ buyQuantity, payQuantity, allocationStrategy }` | Memilih item termurah/termahal/proporsional via `AllocationStrategy`. Diskon = `unitPrice × (buyQuantity - payQuantity) × qualifyingSets` |
+| `buy_x_get_y` | `{ buyQuantity, getQuantity, target }` | Tidak menghasilkan diskon tunai. `target.type` menentukan sumber item gratis: `cart_item` / `product` / `category` / `same_product`. Untuk `product` → `generatedLineItems[]`, sisanya → `freeItems[]`. `AllocationStrategy` digunakan untuk memilih item gratis (cheapest/most_expensive/proportional) |
+
+### 4.4.1 AllocationStrategy
+
+Digunakan oleh `buy_x_pay_y` dan `buy_x_get_y` untuk memilih item mana yang di-free kan:
+
+| Strategy | Behavior |
+|----------|----------|
+| `cheapest` | Sort items by price ascending, pick first N units |
+| `most_expensive` | Sort items by price descending, pick first N units |
+| `proportional` | Sort items by `productId` (deterministic), distribute free count proportionally across items. Diskon = `Σprice × freeCount / minQty` |
+
+### 4.4.2 Target System (BuyXGetYEffect)
+
+`buy_x_get_y` memiliki 4 target types untuk menentukan item gratis:
+
+| Target Type | Behavior | Output |
+|-------------|----------|--------|
+| `cart_item` | Pilih item gratis dari cart items (berdasarkan allocationStrategy) | `freeItems[]` |
+| `product` | Generate line item baru untuk produk tertentu | `generatedLineItems[]` |
+| `category` | Pilih item gratis dari kategori tertentu | `freeItems[]` |
+| `same_product` | Gratis produk yang sama dengan yang dibeli (per-product) | `freeItems[]` |
+
+`generatedLineItems` digunakan saat promo menghasilkan item yang tidak ada di cart asli (misal: beli roti gratis teh). Items ini akan ditambahkan ke cart oleh PricingService setelah loop line item utama.
 
 ## 4.5 Scope Resolution
 
@@ -145,5 +169,11 @@ PromotionService.create()
                 ├── FreeItemEffect
                 ├── FixedPriceEffect
                 ├── BundlePriceEffect
-                └── BuyXPayYEffect
+                ├── BuyXPayYEffect ──────┐
+                └── BuyXGetYEffect ──────┤
+                                         ▼
+                                  AllocationStrategy
+                                    ├── CheapestAllocation
+                                    ├── MostExpensiveAllocation
+                                    └── ProportionalAllocation
 ```

@@ -1,11 +1,11 @@
 import { useProducts } from '../../../pos/hooks/useProducts';
-import type { RuleEditorProps } from './MinPurchaseEditor';
+import type { EffectEditorProps } from '../effects/PercentageEditor';
 
-export default function BuyXPayYEditor({ params, onChange }: RuleEditorProps) {
+export default function BuyXPayYEditor({ params, onChange }: EffectEditorProps) {
   const { data: products } = useProducts();
   const buyQuantity = (params.buyQuantity as number) ?? '';
   const payQuantity = (params.payQuantity as number) ?? '';
-  const applyTo = (params.applyTo as string) ?? 'cheapest';
+  const allocationStrategy = (params.allocationStrategy as string) ?? 'cheapest';
   const buyProductIds = (params.buyProductIds as string[]) ?? [];
 
   const toggle = (id: string) => {
@@ -16,7 +16,7 @@ export default function BuyXPayYEditor({ params, onChange }: RuleEditorProps) {
   };
 
   const freeCount = buyQuantity && payQuantity ? Math.max(0, Number(buyQuantity) - Number(payQuantity)) : 0;
-  const label = applyTo === 'most_expensive' ? 'termahal' : 'termurah';
+  const label = allocationStrategy === 'cheapest' ? 'termurah' : allocationStrategy === 'most_expensive' ? 'termahal' : 'semua item';
 
   return (
     <div className="space-y-3">
@@ -49,9 +49,9 @@ export default function BuyXPayYEditor({ params, onChange }: RuleEditorProps) {
         <div className="flex gap-2">
           <button
             type="button"
-            onClick={() => onChange({ ...params, applyTo: 'cheapest' })}
+            onClick={() => onChange({ ...params, allocationStrategy: 'cheapest' })}
             className={`flex-1 px-3 py-1.5 text-xs rounded-lg border transition-colors ${
-              applyTo === 'cheapest'
+              allocationStrategy === 'cheapest'
                 ? 'bg-blue-600 text-white border-blue-600'
                 : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'
             }`}
@@ -60,14 +60,25 @@ export default function BuyXPayYEditor({ params, onChange }: RuleEditorProps) {
           </button>
           <button
             type="button"
-            onClick={() => onChange({ ...params, applyTo: 'most_expensive' })}
+            onClick={() => onChange({ ...params, allocationStrategy: 'most_expensive' })}
             className={`flex-1 px-3 py-1.5 text-xs rounded-lg border transition-colors ${
-              applyTo === 'most_expensive'
+              allocationStrategy === 'most_expensive'
                 ? 'bg-blue-600 text-white border-blue-600'
                 : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'
             }`}
           >
             Termahal
+          </button>
+          <button
+            type="button"
+            onClick={() => onChange({ ...params, allocationStrategy: 'proportional' })}
+            className={`flex-1 px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+              allocationStrategy === 'proportional'
+                ? 'bg-blue-600 text-white border-blue-600'
+                : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'
+            }`}
+          >
+            Proporsional
           </button>
         </div>
       </div>

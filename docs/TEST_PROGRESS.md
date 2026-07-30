@@ -1,11 +1,11 @@
 # Test Progress
 
-> **Updated:** 2026-07-08
-> **Total Tests:** 297 passing · 0 failing · 29 test files (28 backend + 1 frontend)
+> **Updated:** 2026-07-30
+> **Total Tests:** 335 passing · 0 failing · 31 test files (30 backend + 1 frontend)
 
 ---
 
-## Layer 1 — Domain Testing (93 tests) ✅
+## Layer 1 — Domain Testing (108 tests) ✅
 
 | Module | Test File | Tests | Status |
 |--------|-----------|-------|--------|
@@ -18,6 +18,8 @@
 | Ordering | `Order.test.ts` | 15 | ✅ |
 | Payment | `Payment.test.ts` | 7 | ✅ |
 | POS | `Shift.test.ts` | 7 | ✅ |
+| Discount | `AllocationStrategy.test.ts` | 10 | ✅ |
+| Discount | `BuyXGetYEffect.test.ts` | 16 | ✅ |
 
 ## Layer 2 — Service Testing (85 tests) ✅
 

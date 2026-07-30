@@ -5,7 +5,7 @@ import RuleBuilder from './RuleBuilder';
 import EffectBuilder from './EffectBuilder';
 import PreviewSummary from './PreviewSummary';
 import { RULE_REGISTRY } from './rules/registry';
-import { EFFECT_REGISTRY } from './effects/registry';
+import { EFFECT_REGISTRY, EFFECT_TYPE_OPTIONS } from './effects/registry';
 
 export interface RuleInput {
   id: string;
@@ -57,6 +57,14 @@ function formStateToPayload(state: FormState) {
     .filter((e) => e.enabled)
     .map((e) => {
       const p = e.params;
+      if (e.type === 'buy_x_pay_y' || e.type === 'buy_x_get_y') {
+        return {
+          type: e.type,
+          value: 0,
+          target: 'order' as const,
+          params: p as Record<string, unknown>,
+        };
+      }
       return {
         type: e.type,
         value: (p.value as number) ?? 0,
@@ -123,7 +131,7 @@ function getInitialState(editing: Promotion | null): FormState {
       validFrom: '',
       validUntil: '',
       rules: [],
-      effects: [{ id: 'effect_init', enabled: true, type: 'percentage', params: { value: 0, target: 'order' }, position: 0 }],
+      effects: [],
     };
   }
 
@@ -178,6 +186,19 @@ export default function PromotionForm({ editing, onClose }: PromotionFormProps) 
       const config = EFFECT_REGISTRY[e.type];
       if (!config) errs[`effect_${i}`] = `Effect type "${e.type}" tidak dikenal`;
       if (e.type === 'percentage' && !(e.params.value as number > 0)) errs[`effect_${i}_value`] = 'Persentase harus > 0';
+      if (e.type === 'buy_x_pay_y') {
+        const minQty = e.params.buyQuantity as number;
+        const payQty = e.params.payQuantity as number;
+        if (!minQty || minQty < 1) errs[`effect_${i}_minQty`] = 'Min. Beli harus diisi';
+        if (payQty === undefined || payQty < 0) errs[`effect_${i}_payQty`] = 'Bayar harus diisi';
+        if (minQty <= payQty) errs[`effect_${i}_invalid`] = 'Min. Beli harus > Bayar';
+      }
+      if (e.type === 'buy_x_get_y') {
+        const buyQty = e.params.buyQuantity as number;
+        const getQty = e.params.getQuantity as number;
+        if (!buyQty || buyQty < 1) errs[`effect_${i}_buyQty`] = 'Beli Qty harus diisi';
+        if (!getQty || getQty < 1) errs[`effect_${i}_getQty`] = 'Dapat Qty harus diisi';
+      }
     });
 
     if (enabledEffects.length === 0) errs.effects = 'Minimal 1 effect aktif';
@@ -203,8 +224,8 @@ export default function PromotionForm({ editing, onClose }: PromotionFormProps) 
   const isSaving = createPromotion.isPending || updatePromotion.isPending;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl p-6 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center pt-6">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl p-8 max-h-[95vh] overflow-y-auto">
         <h2 className="text-lg font-semibold mb-4">{editing ? 'Edit Promosi' : 'Tambah Promosi'}</h2>
         <form onSubmit={handleSubmit} className="space-y-5">
           {errors._global && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{errors._global}</p>}
@@ -263,53 +284,53 @@ export default function PromotionForm({ editing, onClose }: PromotionFormProps) 
             </div>
           </div>
 
-          {/* Rules */}
-          <div className="border-t pt-4">
-            <RuleBuilder
+          {/* Rules + Effects side by side */}
+          <div className="grid grid-cols-2 gap-6">
+            <div className="border-t pt-4">
+              <RuleBuilder
+                rules={state.rules}
+                ruleLogic={state.ruleLogic}
+                onChange={(rules) => update('rules', rules)}
+                onLogicChange={(ruleLogic) => update('ruleLogic', ruleLogic)}
+              />
+            </div>
+            <div className="border-t pt-4">
+              <EffectBuilder
+                effects={state.effects}
+                onChange={(effects) => update('effects', effects)}
+              />
+              {errors.effects && <p className="text-xs text-red-500 mt-1">{errors.effects}</p>}
+            </div>
+          </div>
+
+          {/* Preview + Validity side by side */}
+          <div className="grid grid-cols-2 gap-6">
+            <PreviewSummary
               rules={state.rules}
-              ruleLogic={state.ruleLogic}
-              onChange={(rules) => update('rules', rules)}
-              onLogicChange={(ruleLogic) => update('ruleLogic', ruleLogic)}
-            />
-          </div>
-
-          {/* Effects */}
-          <div className="border-t pt-4">
-            <EffectBuilder
               effects={state.effects}
-              onChange={(effects) => update('effects', effects)}
+              ruleLogic={state.ruleLogic}
             />
-            {errors.effects && <p className="text-xs text-red-500 mt-1">{errors.effects}</p>}
-          </div>
-
-          {/* Preview */}
-          <PreviewSummary
-            rules={state.rules}
-            effects={state.effects}
-            ruleLogic={state.ruleLogic}
-          />
-
-          {/* Validity */}
-          <div className="border-t pt-4">
-            <h3 className="text-sm font-medium text-gray-700 mb-2">Berlaku</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Dari</label>
-                <input
-                  type="datetime-local"
-                  value={state.validFrom}
-                  onChange={(e) => update('validFrom', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">Sampai</label>
-                <input
-                  type="datetime-local"
-                  value={state.validUntil}
-                  onChange={(e) => update('validUntil', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                />
+            <div className="border-t pt-4">
+              <h3 className="text-sm font-medium text-gray-700 mb-2">Berlaku</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Dari</label>
+                  <input
+                    type="datetime-local"
+                    value={state.validFrom}
+                    onChange={(e) => update('validFrom', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Sampai</label>
+                  <input
+                    type="datetime-local"
+                    value={state.validUntil}
+                    onChange={(e) => update('validUntil', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  />
+                </div>
               </div>
             </div>
           </div>

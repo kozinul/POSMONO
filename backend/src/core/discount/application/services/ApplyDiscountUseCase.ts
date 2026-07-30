@@ -22,7 +22,7 @@ export class ApplyDiscountUseCase {
   async execute(input: DiscountInput): Promise<DiscountResult> {
     const config = await this.repo.findByTenantId(input.tenantId);
     if (!config || !config.enabled) {
-      return { totalDiscount: 0, appliedRules: [], freeItems: [], finalSubtotal: 0, breakdown: [], itemDiscounts: [] };
+      return { totalDiscount: 0, appliedRules: [], freeItems: [], generatedLineItems: [], finalSubtotal: 0, breakdown: [], itemDiscounts: [] };
     }
 
     const subtotal = input.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);

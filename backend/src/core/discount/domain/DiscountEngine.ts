@@ -19,6 +19,7 @@ export interface DiscountResult {
   totalDiscount: number;
   appliedRules: DiscountRuleResult[];
   freeItems: Array<{ productId: string; quantity: number }>;
+  generatedLineItems: Array<{ productId: string; productName: string; categoryId: string; quantity: number; unitPrice: number }>;
   finalSubtotal: number;
   breakdown: Array<{ ruleId: string; ruleName: string; discountAmount: number; description: string }>;
   itemDiscounts: Array<{ productId: string; discountAmount: number }>;
@@ -82,6 +83,7 @@ export class DiscountEngine {
 
     const appliedRules: DiscountRuleResult[] = [];
     const freeItems: Array<{ productId: string; quantity: number }> = [];
+    const generatedLineItems: Array<{ productId: string; productName: string; categoryId: string; quantity: number; unitPrice: number }> = [];
     let totalDiscount = 0;
     const itemDiscounts = new Map<string, number>();
 
@@ -133,6 +135,9 @@ export class DiscountEngine {
       if (effectResult.freeItems) {
         freeItems.push(...effectResult.freeItems);
       }
+      if (effectResult.generatedLineItems) {
+        generatedLineItems.push(...effectResult.generatedLineItems);
+      }
 
       // Distribute discount across matching items proportionally
       if (effectResult.discountAmount > 0 && matchingSubtotal > 0) {
@@ -163,6 +168,7 @@ export class DiscountEngine {
       totalDiscount,
       appliedRules,
       freeItems,
+      generatedLineItems,
       finalSubtotal: subtotal - totalDiscount,
       breakdown: appliedRules,
       itemDiscounts: Array.from(itemDiscounts.entries()).map(([productId, discountAmount]) => ({

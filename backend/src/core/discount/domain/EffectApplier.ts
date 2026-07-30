@@ -5,6 +5,7 @@ import { FreeItemEffect } from './strategies/effects/FreeItemEffect';
 import { FixedPriceEffect } from './strategies/effects/FixedPriceEffect';
 import { BundlePriceEffect } from './strategies/effects/BundlePriceEffect';
 import { BuyXPayYEffect } from './strategies/effects/BuyXPayYEffect';
+import { BuyXGetYEffect } from './strategies/effects/BuyXGetYEffect';
 
 export class EffectApplier {
   private strategies: Map<string, EffectStrategy> = new Map();
@@ -16,6 +17,7 @@ export class EffectApplier {
     this.register(new FixedPriceEffect());
     this.register(new BundlePriceEffect());
     this.register(new BuyXPayYEffect());
+    this.register(new BuyXGetYEffect());
   }
 
   register(strategy: EffectStrategy): void {
@@ -26,6 +28,7 @@ export class EffectApplier {
     let totalDiscount = 0;
     let description = '';
     const allFreeItems: EffectResult['freeItems'] = [];
+    const allGeneratedLineItems: EffectResult['generatedLineItems'] = [];
 
     for (const effect of effects) {
       const strategy = this.strategies.get(effect.type);
@@ -43,12 +46,16 @@ export class EffectApplier {
       if (result.freeItems) {
         allFreeItems.push(...result.freeItems);
       }
+      if (result.generatedLineItems) {
+        allGeneratedLineItems.push(...result.generatedLineItems);
+      }
     }
 
     return {
       discountAmount: Math.round(totalDiscount * 100) / 100,
       description,
       freeItems: allFreeItems.length > 0 ? allFreeItems : undefined,
+      generatedLineItems: allGeneratedLineItems.length > 0 ? allGeneratedLineItems : undefined,
     };
   }
 }

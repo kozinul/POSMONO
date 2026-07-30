@@ -1,4 +1,5 @@
 import { EffectStrategy, IDiscountEffect, EffectContext, EffectResult } from './EffectStrategy';
+import { allocateDiscount, describeAllocation, AllocationType } from '../allocation';
 
 export class BuyXPayYEffect implements EffectStrategy {
   readonly type = 'buy_x_pay_y' as const;
@@ -6,7 +7,7 @@ export class BuyXPayYEffect implements EffectStrategy {
   apply(effect: IDiscountEffect, context: EffectContext): EffectResult {
     const minQty = (effect.config.minQty as number) ?? 1;
     const payQty = (effect.config.payQty as number) ?? 0;
-    const applyTo = (effect.config.applyTo as string) ?? 'cheapest';
+    const strategy = (effect.config.allocationStrategy as AllocationType) ?? 'cheapest';
     const matchItems = context.matchingItems ?? context.items;
 
     if (minQty <= payQty) return { discountAmount: 0, description: 'Buy X Pay Y: invalid config' };
@@ -16,19 +17,25 @@ export class BuyXPayYEffect implements EffectStrategy {
     if (totalQty < minQty) return { discountAmount: 0, description: 'Buy X Pay Y: insufficient items' };
 
     const qualifyingSets = Math.floor(totalQty / minQty);
-    const itemsToDiscount = qualifyingSets * freeCount;
+    const qualifiedQty = qualifyingSets * minQty;
+    const pickCount = qualifyingSets * freeCount;
 
-    const sortedByPrice = matchItems
-      .flatMap((i) => Array.from({ length: i.quantity }, () => i.unitPrice))
-      .sort((a, b) => (applyTo === 'most_expensive' ? b - a : a - b));
+    const allocationItems = matchItems.map((i) => ({
+      productId: i.productId,
+      unitPrice: i.unitPrice,
+      quantity: i.quantity,
+    }));
 
-    const target = sortedByPrice.slice(0, itemsToDiscount);
-    const discountAmount = target.reduce((s, p) => s + p, 0);
-    const label = applyTo === 'most_expensive' ? 'termahal' : 'termurah';
+    const result = allocateDiscount(strategy, allocationItems, {
+      pickCount,
+      qualifiedQty,
+      minQty,
+      freeCount,
+    });
 
     return {
-      discountAmount,
-      description: `Beli ${minQty} bayar ${payQty} (${freeCount} ${label} gratis x${qualifyingSets})`,
+      discountAmount: result.discountAmount,
+      description: describeAllocation(strategy, minQty, payQty, freeCount, qualifyingSets),
     };
   }
 }
