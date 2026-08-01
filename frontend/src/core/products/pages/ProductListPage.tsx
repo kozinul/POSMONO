@@ -323,6 +323,13 @@ export default function ProductListPage() {
                       <img
                         src={product.imageUrls[0]}
                         alt={product.name}
+                        onError={(e) => {
+                          const img = e.currentTarget;
+                          if (img.src !== window.location.origin + '/placeholder.svg') {
+                            img.onerror = null;
+                            img.src = '/placeholder.svg';
+                          }
+                        }}
                         className="h-10 w-10 rounded-lg object-cover"
                       />
                     ) : (
@@ -598,7 +605,18 @@ export default function ProductListPage() {
                 <div className="flex gap-3 flex-wrap">
                   {formData.imageUrls.map((url, idx) => (
                     <div key={idx} className="relative group">
-                      <img src={url} alt="" className="h-20 w-20 rounded-lg object-cover border border-gray-200" />
+                      <img
+                        src={url}
+                        alt=""
+                        onError={(e) => {
+                          const img = e.currentTarget;
+                          if (img.src !== window.location.origin + '/placeholder.svg') {
+                            img.onerror = null;
+                            img.src = '/placeholder.svg';
+                          }
+                        }}
+                        className="h-20 w-20 rounded-lg object-cover border border-gray-200"
+                      />
                       <button
                         type="button"
                         onClick={() => removeImage(idx)}

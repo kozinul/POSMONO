@@ -97,6 +97,9 @@ async function deleteProduct(id: string): Promise<void> {
 async function uploadFile(file: File): Promise<{ url: string }> {
   const formData = new FormData();
   formData.append('file', file);
+  formData.append('folder', 'products');
+  formData.append('width', '800');
+  formData.append('quality', '80');
   const res = await api.post<{ success: boolean; data: { url: string } }>('/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });

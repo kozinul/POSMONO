@@ -7,6 +7,7 @@ import { tenantContext } from '../@shared/interfaces/middleware/tenantContext';
 import { errorHandler } from '../@shared/interfaces/middleware/errorHandler';
 import { registerRoutes } from './routes';
 import type { DIContainer } from './container';
+import { UPLOAD_DIR } from '../core/upload/application/services/UploadService';
 
 export function createServer(container: DIContainer): Express {
   const app = express();
@@ -19,6 +20,9 @@ export function createServer(container: DIContainer): Express {
 
   const frontendDist = path.resolve(__dirname, '../../../frontend/dist');
   app.use(express.static(frontendDist));
+
+  const uploadsDir = UPLOAD_DIR;
+  app.use('/uploads', express.static(uploadsDir, { maxAge: '7d' }));
 
   app.use(tenantContext);
 

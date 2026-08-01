@@ -4,7 +4,7 @@ import path from 'path';
 import fs from 'fs/promises';
 import { v4 as uuidv4 } from 'uuid';
 
-const UPLOAD_DIR = path.resolve(__dirname, '../../../../uploads');
+export const UPLOAD_DIR = path.resolve(__dirname, '../../../../uploads');
 
 export interface UploadResult {
   id: string;
