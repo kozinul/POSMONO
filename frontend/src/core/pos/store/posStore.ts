@@ -341,8 +341,6 @@ export const usePOSStore = create<POSState>((set, get) => ({
     const snapshotCustomerName = state.customerName;
     const snapshotTableNumber = state.tableNumber;
 
-    state.clearCart();
-
     try {
       const res = await api.post('/orders', {
         items: snapshotItems
@@ -375,9 +373,6 @@ export const usePOSStore = create<POSState>((set, get) => ({
           : [...s.dismissedHeldOrderIds, billId],
       }));
     } catch {
-      for (const item of snapshotItems) {
-        usePOSStore.getState().addItem(item);
-      }
       set({ customerName: snapshotCustomerName, tableNumber: snapshotTableNumber });
     }
   },
