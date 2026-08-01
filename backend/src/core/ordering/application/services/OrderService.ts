@@ -127,6 +127,14 @@ interface RecallOrderInput {
   id: string;
 }
 
+interface ReplaceOrderItemsInput {
+  id: string;
+  items: IOrderItem[];
+  tableNumber?: string | null;
+  customerName?: string | null;
+  notes?: string;
+}
+
 export class CreateOrderService implements UseCase<CreateOrderInput, Order> {
   constructor(
     private readonly orderRepository: any,
@@ -214,6 +222,33 @@ export class UpdateOrderService implements UseCase<UpdateOrderInput, Order> {
     if (input.cashierName) (order as any)['cashierName'] = input.cashierName;
     if (input.transactionType) (order as any)['transactionType'] = input.transactionType;
     if (input.metadata) (order as any)['metadata'] = input.metadata;
+    (order as any)['updatedAt'] = new Date();
+
+    await this.orderRepository.save(order);
+
+    for (const event of order.domainEvents) {
+      this.eventBus.publish(event);
+    }
+
+    return order;
+  }
+}
+
+export class ReplaceOrderItemsService implements UseCase<ReplaceOrderItemsInput, Order> {
+  constructor(
+    private readonly orderRepository: any,
+    private readonly eventBus: any,
+  ) {}
+
+  async execute(input: ReplaceOrderItemsInput): Promise<Order> {
+    const order = await this.orderRepository.findById(input.id);
+    if (!order) throw new Error('Order not found');
+
+    order.replaceItems(input.items);
+
+    if (input.tableNumber !== undefined) (order as any)['tableNumber'] = input.tableNumber;
+    if (input.customerName !== undefined) (order as any)['customerName'] = input.customerName;
+    if (input.notes !== undefined) (order as any).notes = input.notes;
     (order as any)['updatedAt'] = new Date();
 
     await this.orderRepository.save(order);

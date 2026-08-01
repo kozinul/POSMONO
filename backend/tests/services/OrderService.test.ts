@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { CreateOrderService } from '../../src/core/ordering/application/services/OrderService';
+import { CreateOrderService, ReplaceOrderItemsService, HoldOrderService } from '../../src/core/ordering/application/services/OrderService';
 import { validOrderInput } from '../fixtures/ordering.fixtures';
 
 function createMockRepo() {
@@ -87,5 +87,63 @@ describe('CreateOrderService', () => {
     const order1 = await service.execute(validOrderInput);
     const order2 = await service.execute(validOrderInput);
     expect(order1.id.toValue()).not.toBe(order2.id.toValue());
+  });
+});
+
+describe('ReplaceOrderItemsService', () => {
+  function createService() {
+    let saved: any = null;
+    const orderRepo = {
+      save: vi.fn((order: any) => {
+        saved = order;
+      }),
+      findById: vi.fn(() => saved),
+    };
+    const eventBus = { publish: vi.fn() };
+    return { orderRepo, eventBus };
+  }
+
+  it('replaces all items on a held order and publishes an updated event', async () => {
+    const { orderRepo, eventBus } = createService();
+    const createOrderService = new CreateOrderService(orderRepo, eventBus);
+    const created = await createOrderService.execute(validOrderInput);
+
+    const holdService = new HoldOrderService(orderRepo, eventBus);
+    const held = await holdService.execute({ id: created.id.toValue() });
+    expect(held.serialize().status).toBe('held');
+
+    const replaceService = new ReplaceOrderItemsService(orderRepo, eventBus);
+    const updated = await replaceService.execute({
+      id: created.id.toValue(),
+      items: [
+        { productId: 'p9', variantId: null, productName: 'Mie Goreng', quantity: 1, unitPrice: 12000, totalPrice: 12000, modifiers: [], tax: { rate: 0, amount: 0 } },
+        { productId: 'p10', variantId: null, productName: 'Es Teh', quantity: 2, unitPrice: 5000, totalPrice: 10000, modifiers: [], tax: { rate: 0, amount: 0 } },
+      ],
+      tableNumber: '5',
+    });
+
+    const serialized = updated.serialize();
+    expect(serialized.status).toBe('held');
+    expect(serialized.items).toHaveLength(2);
+    expect(serialized.items[0].productName).toBe('Mie Goreng');
+    expect(serialized.subtotal).toBe(22000);
+    expect(serialized.total).toBe(22000);
+    expect(serialized.tableNumber).toBe('5');
+
+    const updatedEvents = updated.domainEvents.filter((e) => e.eventName === 'ordering.order.updated');
+    expect(updatedEvents).toHaveLength(1);
+    expect(updatedEvents[0].payload.items).toHaveLength(2);
+    expect(updatedEvents[0].payload.total).toBe(22000);
+  });
+
+  it('throws when the order is not found', async () => {
+    const { orderRepo, eventBus } = createService();
+    const replaceService = new ReplaceOrderItemsService(orderRepo, eventBus);
+    await expect(
+      replaceService.execute({
+        id: 'missing',
+        items: [],
+      }),
+    ).rejects.toThrow('Order not found');
   });
 });

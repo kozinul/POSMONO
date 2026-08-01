@@ -55,7 +55,7 @@ import { UserController } from '../core/identity/interfaces/http/controllers/Use
 import { PermissionController } from '../core/identity/interfaces/http/controllers/PermissionController';
 import { OrderSchema } from '../core/ordering/infrastructure/persistence/schemas/OrderSchema';
 import { MongoOrderRepository } from '../core/ordering/infrastructure/persistence/MongoOrderRepository';
-import { CreateOrderService, UpdateOrderService, VoidOrderService, VoidItemService, PayOrderService, VoidPaymentService, ReopenOrderService, SplitItemService, RemoveItemService, UpdateItemQuantityService, VoidAndRollbackService, TopayService, RefundService, ApplyDiscountService, SetServiceChargeService, HoldOrderService, RecallOrderService } from '../core/ordering/application/services/OrderService';
+import { CreateOrderService, UpdateOrderService, ReplaceOrderItemsService, VoidOrderService, VoidItemService, PayOrderService, VoidPaymentService, ReopenOrderService, SplitItemService, RemoveItemService, UpdateItemQuantityService, VoidAndRollbackService, TopayService, RefundService, ApplyDiscountService, SetServiceChargeService, HoldOrderService, RecallOrderService } from '../core/ordering/application/services/OrderService';
 import { OrderController } from '../core/ordering/interfaces/http/controllers/OrderController';
 import { ShiftSchema } from '../core/pos/infrastructure/persistence/schemas/ShiftSchema';
 import { MongoShiftRepository } from '../core/pos/infrastructure/persistence/MongoShiftRepository';
@@ -513,11 +513,19 @@ export function buildContainer() {
         eventBus: container.resolve('eventBus'),
       }),
     }),
+    replaceOrderItemsService: asClass(ReplaceOrderItemsService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        orderRepository: container.resolve('orderRepository'),
+        eventBus: container.resolve('eventBus'),
+      }),
+    }),
     orderController: asClass(OrderController, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
         createOrderService: container.resolve('createOrderService'),
         updateOrderService: container.resolve('updateOrderService'),
+        replaceOrderItemsService: container.resolve('replaceOrderItemsService'),
         voidOrderService: container.resolve('voidOrderService'),
         voidItemService: container.resolve('voidItemService'),
         payOrderService: container.resolve('payOrderService'),

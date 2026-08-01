@@ -35,6 +35,10 @@ async function onOrderRecalled(event: DomainEvent): Promise<void> {
   getIO()?.to(event.tenantId).emit('domain-event', event);
 }
 
+async function onOrderUpdated(event: DomainEvent): Promise<void> {
+  getIO()?.to(event.tenantId).emit('domain-event', event);
+}
+
 async function onProductChanged(event: DomainEvent): Promise<void> {
   getIO()?.to(event.tenantId).emit('domain-event', event);
 }
@@ -62,6 +66,7 @@ export function registerEventHandlers(eventBus: EventBus): void {
   eventBus.subscribe('ordering.order.paid', onOrderPaid);
   eventBus.subscribe('ordering.order.held', onOrderHeld);
   eventBus.subscribe('ordering.order.recalled', onOrderRecalled);
+  eventBus.subscribe('ordering.order.updated', onOrderUpdated);
   eventBus.subscribe(DOMAIN_EVENTS.PAYMENT_COMPLETED, onPaymentCompleted);
   eventBus.subscribe(DOMAIN_EVENTS.PAYMENT_FAILED, onPaymentFailed);
   eventBus.subscribe(DOMAIN_EVENTS.PRODUCT_CREATED, onProductChanged);

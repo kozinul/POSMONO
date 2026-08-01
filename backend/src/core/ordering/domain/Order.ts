@@ -427,6 +427,7 @@ export class Order extends AggregateRoot<OrderId> {
     this.items.push(item);
     this.recalculateTotals();
     this.updatedAt = new Date();
+    this.emitUpdated();
   }
 
   removeItem(itemIndex: number): void {
@@ -440,6 +441,7 @@ export class Order extends AggregateRoot<OrderId> {
     this.items.splice(itemIndex, 1);
     this.recalculateTotals();
     this.updatedAt = new Date();
+    this.emitUpdated();
   }
 
   updateItemQuantity(itemIndex: number, newQuantity: number): void {
@@ -461,6 +463,39 @@ export class Order extends AggregateRoot<OrderId> {
 
     this.recalculateTotals();
     this.updatedAt = new Date();
+    this.emitUpdated();
+  }
+
+  replaceItems(items: IOrderItem[]): void {
+    if (this.status === 'voided' || this.status === 'cancelled' || this.status === 'paid') {
+      throw new Error('Cannot replace items on a voided/cancelled/paid order');
+    }
+
+    this.items = items.map(item => ({ ...item }));
+    this.recalculateTotals();
+    this.updatedAt = new Date();
+    this.emitUpdated();
+  }
+
+  private emitUpdated(): void {
+    this.addDomainEvent(
+      new DomainEvent({
+        eventName: 'ordering.order.updated',
+        aggregateId: this.id.toValue(),
+        aggregateType: 'Order',
+        tenantId: this.tenantId,
+        payload: {
+          orderId: this.id.toValue(),
+          orderNumber: this.orderNumber,
+          status: this.status,
+          items: this.items,
+          subtotal: this.subtotal,
+          tax: this.tax,
+          serviceCharge: this.serviceCharge,
+          total: this.total,
+        },
+      }),
+    );
   }
 
   applyDiscount(discountBreakdown: IDiscountBreakdown[]): void {

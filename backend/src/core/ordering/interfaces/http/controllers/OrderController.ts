@@ -3,6 +3,7 @@ import { BaseController } from '../../../../../@shared/interfaces/BaseController
 import {
   CreateOrderService,
   UpdateOrderService,
+  ReplaceOrderItemsService,
   VoidOrderService,
   VoidItemService,
   PayOrderService,
@@ -63,6 +64,22 @@ const updateOrderSchema = z.object({
   transactionType: z.enum(['dine_in', 'takeaway', 'delivery', 'online']).optional(),
   metadata: z.record(z.unknown()).optional(),
 }).optional();
+
+const replaceOrderItemsSchema = z.object({
+  items: z.array(z.object({
+    productId: z.string().min(1),
+    variantId: z.string().nullable().optional(),
+    productName: z.string().min(1),
+    quantity: z.number().int().positive(),
+    unitPrice: z.number().nonnegative(),
+    totalPrice: z.number().nonnegative(),
+    modifiers: z.array(z.object({ name: z.string(), price: z.number() })).optional().default([]),
+    tax: z.object({ rate: z.number(), amount: z.number() }).optional().default({ rate: 0, amount: 0 }),
+  })).min(1),
+  tableNumber: z.string().nullable().optional(),
+  customerName: z.string().nullable().optional(),
+  notes: z.string().optional(),
+});
 
 const voidOrderSchema = z.object({
   reason: z.string().min(1, 'Reason is required'),
@@ -145,6 +162,7 @@ export class OrderController extends BaseController {
   constructor(
     private readonly createOrderService: CreateOrderService,
     private readonly updateOrderService: UpdateOrderService,
+    private readonly replaceOrderItemsService: ReplaceOrderItemsService,
     private readonly voidOrderService: VoidOrderService,
     private readonly voidItemService: VoidItemService,
     private readonly payOrderService: PayOrderService,
@@ -197,6 +215,21 @@ export class OrderController extends BaseController {
       tableNumber: tableNumber ?? undefined,
       ...rest,
       cashierName: rest.cashierName || '',
+    });
+
+    this.ok(res, order.serialize());
+  }
+
+  async replaceItems(req: Request, res: Response): Promise<void> {
+    const parsed = replaceOrderItemsSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
+
+    const order = await this.replaceOrderItemsService.execute({
+      id: req.params.id,
+      items: parsed.data.items.map((item) => ({ ...item, variantId: item.variantId ?? null })),
+      tableNumber: parsed.data.tableNumber ?? null,
+      customerName: parsed.data.customerName ?? null,
+      notes: parsed.data.notes,
     });
 
     this.ok(res, order.serialize());
