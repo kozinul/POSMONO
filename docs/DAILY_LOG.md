@@ -36,6 +36,37 @@ Copy this block for each new day:
 
 ## Entries
 
+### DATE: 2026-08-01 — Inventory (stok) dual-scheme + auto-decrement on payment
+
+**Today I worked on:**
+
+- Defined the **dual stock-tracking scheme**: `quantity == 0` (or no stock record) → product is *untracked*, sells unlimited, sales only counted; `quantity > 0` → *tracked*, validated + decremented on payment
+- Backend: `InventoryService.decrementForSale` / `incrementForReturn` (skip untracked, reject insufficient tracked stock), `stockOut`/`stockIn` now accept `referenceType` (`sale`/`refund` for accurate movement audit)
+- Backend: `PaymentService` now auto-deducts stock on `payCash`, `processByOrderId`, `payOpenBill`, `splitBill` (only when the order transitions unpaid → paid, via `paymentBreakdown.length === 0` guard), and restores stock on `refund` (single-payment orders only)
+- Backend: published `inventory.stock.adjusted` / `inventory.stock.low_alert` domain events (they were being cleared by `save()` and never emitted); eventBus now broadcasts them over socket.io
+- Frontend: `useInventory` hooks (stock list, movements, stock-in/out, adjust); POS cart clamps quantity to available stock (`CartItem.stock`); `ProductCard` shows `Stok: ∞` for untracked and `Stok: N`/`Habis` for tracked
+- Frontend: replaced the Inventory stub with a full page — product×stock table, status badges (Tidak dilacak / Stok rendah / Aman), low-stock filter, stock-in/out/adjust modal, and movement history table
+
+**Files changed:**
+
+- `backend/src/core/inventory/application/services/InventoryService.ts`
+- `backend/src/core/payment/application/services/PaymentService.ts`
+- `backend/src/bootstrap/container.ts`, `backend/src/bootstrap/eventBus.ts`
+- `frontend/src/core/inventory/hooks/useInventory.ts` (new)
+- `frontend/src/core/inventory/pages/StockListPage.tsx` (full UI)
+- `frontend/src/core/pos/store/posStore.ts`, `ProductCard.tsx`, `PosPage.tsx`, `hooks/useProducts.ts`
+- `docs/API_REFERENCE.md` — dual scheme + pay-cash stock side-effect
+
+**What I learned:**
+
+- Domain events added in an aggregate are silently dropped if the repo's `save()` calls `clearEvents()` and nothing publishes them — the events existed in `Stock.adjust()` but were never broadcast until now
+- "Once per order" stock deduction is safest keyed on the order's `paymentBreakdown` going from empty → non-empty, not on payment amount
+- Free/promo items must never decrement stock — keep them out of `pay-cash` items
+
+**Productivity score:** 9
+
+---
+
 ### DATE: 2026-08-01 — Receipt vs Cart Discount Double-Counting Fix
 
 **Today I worked on:**

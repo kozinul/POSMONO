@@ -31,6 +31,14 @@ async function onDiscountConfigUpdated(event: DomainEvent): Promise<void> {
   getIO()?.to(event.tenantId).emit('domain-event', event);
 }
 
+async function onStockAdjusted(event: DomainEvent): Promise<void> {
+  getIO()?.to(event.tenantId).emit('domain-event', event);
+}
+
+async function onStockLowAlert(event: DomainEvent): Promise<void> {
+  getIO()?.to(event.tenantId).emit('domain-event', event);
+}
+
 async function onTaxConfigUpdated(event: DomainEvent): Promise<void> {
   getIO()?.to(event.tenantId).emit('domain-event', event);
 }
@@ -46,4 +54,6 @@ export function registerEventHandlers(eventBus: EventBus): void {
   eventBus.subscribe(DOMAIN_EVENTS.PRODUCT_DELETED, onProductChanged);
   eventBus.subscribe(DOMAIN_EVENTS.DISCOUNT_CONFIG_UPDATED, onDiscountConfigUpdated);
   eventBus.subscribe(DOMAIN_EVENTS.TAX_CONFIG_UPDATED, onTaxConfigUpdated);
+  eventBus.subscribe('inventory.stock.adjusted', onStockAdjusted);
+  eventBus.subscribe('inventory.stock.low_alert', onStockLowAlert);
 }

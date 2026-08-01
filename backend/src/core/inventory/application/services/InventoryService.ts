@@ -6,7 +6,15 @@ export class InventoryService {
   constructor(
     private readonly stockRepository: any,
     private readonly stockMovementRepository: any,
+    private readonly eventBus?: any,
   ) {}
+
+  private publishEvents(stock: Stock): void {
+    if (!this.eventBus) return;
+    for (const event of stock.domainEvents) {
+      this.eventBus.publish(event);
+    }
+  }
 
   async getStock(tenantId: string, productId: string): Promise<Stock> {
     const stock = await this.stockRepository.findByProduct(tenantId, productId);
@@ -33,6 +41,7 @@ export class InventoryService {
     reason?: string;
     referenceId?: string;
     userId?: string;
+    referenceType?: string;
   }): Promise<Stock> {
     if (input.quantity <= 0) {
       throw new ValidationError('Quantity must be positive');
@@ -66,13 +75,14 @@ export class InventoryService {
       quantity: input.quantity,
       beforeQuantity: beforeQty,
       afterQuantity: stock.serialize().quantity,
-      referenceType: 'stock_in',
+      referenceType: input.referenceType || 'stock_in',
       referenceId: input.referenceId || '',
       notes: input.reason || 'Stock in',
       userId: input.userId || '',
     });
 
     await this.stockMovementRepository.save(movement);
+    this.publishEvents(stock);
     return stock;
   }
 
@@ -85,6 +95,7 @@ export class InventoryService {
     reason?: string;
     referenceId?: string;
     userId?: string;
+    referenceType?: string;
   }): Promise<Stock> {
     if (input.quantity <= 0) {
       throw new ValidationError('Quantity must be positive');
@@ -113,14 +124,65 @@ export class InventoryService {
       quantity: input.quantity,
       beforeQuantity: beforeQty,
       afterQuantity: stock.serialize().quantity,
-      referenceType: 'stock_out',
+      referenceType: input.referenceType || 'stock_out',
       referenceId: input.referenceId || '',
       notes: input.reason || 'Stock out',
       userId: input.userId || '',
     });
 
     await this.stockMovementRepository.save(movement);
+    this.publishEvents(stock);
     return stock;
+  }
+
+  async decrementForSale(input: {
+    tenantId: string;
+    productId: string;
+    quantity: number;
+    referenceId?: string;
+    userId?: string;
+  }): Promise<void> {
+    if (input.quantity <= 0) return;
+
+    const stock = await this.stockRepository.findByProduct(input.tenantId, input.productId);
+
+    if (!stock || stock.serialize().quantity <= 0) {
+      return;
+    }
+
+    if (stock.serialize().quantity < input.quantity) {
+      throw new ValidationError('Insufficient stock');
+    }
+
+    await this.stockOut({
+      tenantId: input.tenantId,
+      productId: input.productId,
+      quantity: input.quantity,
+      reason: 'sale',
+      referenceId: input.referenceId,
+      userId: input.userId,
+      referenceType: 'sale',
+    });
+  }
+
+  async incrementForReturn(input: {
+    tenantId: string;
+    productId: string;
+    quantity: number;
+    referenceId?: string;
+    userId?: string;
+  }): Promise<void> {
+    if (input.quantity <= 0) return;
+
+    await this.stockIn({
+      tenantId: input.tenantId,
+      productId: input.productId,
+      quantity: input.quantity,
+      reason: 'refund',
+      referenceId: input.referenceId,
+      userId: input.userId,
+      referenceType: 'refund',
+    });
   }
 
   async adjust(input: {
@@ -167,6 +229,7 @@ export class InventoryService {
     });
 
     await this.stockMovementRepository.save(movement);
+    this.publishEvents(stock);
     return stock;
   }
 

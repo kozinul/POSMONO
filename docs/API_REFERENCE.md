@@ -318,6 +318,8 @@ Update payment method fields (all optional).
 
 ## Inventory (`/api/inventory`)
 
+> **Dual stock-tracking scheme:** a product is **tracked** when its stock record has `quantity > 0`; it is **untracked** when there is no stock record or `quantity == 0`. Untracked products sell unlimited (sales are only counted — stock is never deducted); tracked products are validated and decremented on payment. Once a tracked product sells down to `0`, it automatically becomes untracked and stays sellable.
+
 ### `GET /api/inventory`
 
 List stock records for current tenant.
@@ -608,6 +610,17 @@ Process a cash payment with optional promo code and manual discount.
 5. Order stores `promotions[]` and `discountBreakdown[]` for receipt/reporting
 
 > ⚠️ **Contract:** sending the pre-computed `promotionDiscount` here AND a `promoCode` (or having auto-apply rules) causes the discount to be applied **twice**, producing a receipt total that is lower than the cart total. Only the manual discount belongs in `discount`.
+
+**Stock deduction side-effect:**
+
+After a successful `pay-cash`, the backend automatically deducts stock per paid item (see Inventory → dual scheme). Free items (`isFreeItem`) are never sent here, so they never deduct stock.
+
+| Condition | Behavior |
+|---|---|
+| Product has no stock record, or `quantity == 0` | **Untracked** — stock is NOT deducted; product sells unlimited (sales only counted) |
+| Product stock `quantity > 0` | **Tracked** — stock deducted by item quantity; if quantity exceeds available stock, payment is rejected with `ValidationError` ("Insufficient stock") |
+
+Same deduction applies on `POST /api/payments/process` (first full payment only), `pay-open-bill`, and `split-bill` when the order transitions from unpaid → paid. On `POST /api/payments/:id/refund`, stock is restored only for single-payment orders.
 
 ---
 

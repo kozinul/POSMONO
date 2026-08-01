@@ -15,6 +15,7 @@ export interface CartItem {
   pricingMode?: 'inclusive' | 'exclusive';
   isFreeItem?: boolean;
   freeByRuleId?: string;
+  stock?: number;
 }
 
 export type PaymentState = 'idle' | 'processing' | 'success' | 'error';
@@ -138,11 +139,17 @@ export const usePOSStore = create<POSState>((set, get) => ({
 
   addItem: (item) => {
     set((state) => {
-      const existing = state.items.find((i) => i.productId === item.productId);
+      const existing = state.items.find((i) => i.productId === item.productId && !i.isFreeItem);
+      const currentQty = existing?.quantity ?? 0;
+      if (item.stock !== undefined && item.stock > 0 && currentQty >= item.stock) {
+        return state;
+      }
       if (existing) {
         return {
           items: state.items.map((i) =>
-            i.productId === item.productId ? { ...i, quantity: i.quantity + 1 } : i,
+            i.productId === item.productId
+              ? { ...i, quantity: i.quantity + 1, stock: item.stock ?? i.stock }
+              : i,
           ),
         };
       }
@@ -163,9 +170,13 @@ export const usePOSStore = create<POSState>((set, get) => ({
   updateQuantity: (productId, delta) => {
     set((state) => ({
       items: state.items
-        .map((i) =>
-          i.productId === productId ? { ...i, quantity: Math.max(0, i.quantity + delta) } : i,
-        )
+        .map((i) => {
+          if (i.productId !== productId) return i;
+          if (!i.isFreeItem && i.stock !== undefined && i.stock > 0) {
+            return { ...i, quantity: Math.min(Math.max(0, i.quantity + delta), i.stock) };
+          }
+          return { ...i, quantity: Math.max(0, i.quantity + delta) };
+        })
         .filter((i) => i.quantity > 0),
     }));
     scheduleRecalculation(get, set);

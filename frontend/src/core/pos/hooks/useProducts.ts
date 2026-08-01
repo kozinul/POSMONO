@@ -69,22 +69,26 @@ export function useProducts(search?: string, categoryId?: string) {
 export function useBarcodeLookup() {
   const addItem = usePOSStore((s) => s.addItem);
 
-  const lookupBarcode = useCallback(async (barcode: string) => {
-    const product = await fetchProductByBarcode(barcode);
-    if (product) {
-      addItem({
-        productId: product.id,
-        name: product.name,
-        price: product.basePrice,
-        imageUrl: product.imageUrls?.[0],
-        categoryId: product.categoryId,
-        pricingProfileId: product.pricingProfileId,
-        pricingMode: product.pricingMode,
-      });
-      return product;
-    }
-    return null;
-  }, [addItem]);
+  const lookupBarcode = useCallback(
+    async (barcode: string, getStock?: (productId: string) => number | undefined) => {
+      const product = await fetchProductByBarcode(barcode);
+      if (product) {
+        addItem({
+          productId: product.id,
+          name: product.name,
+          price: product.basePrice,
+          imageUrl: product.imageUrls?.[0],
+          categoryId: product.categoryId,
+          pricingProfileId: product.pricingProfileId,
+          pricingMode: product.pricingMode,
+          stock: getStock ? getStock(product.id) : undefined,
+        });
+        return product;
+      }
+      return null;
+    },
+    [addItem],
+  );
 
   return { lookupBarcode };
 }

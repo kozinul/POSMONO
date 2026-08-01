@@ -15,7 +15,36 @@ export class PaymentService {
     private readonly discountService: any,
     private readonly eventBus: any,
     private readonly receiptRenderService?: any,
+    private readonly inventoryService?: any,
   ) {}
+
+  private async applyStockDeductions(order: Order, tenantId: string, userId: string): Promise<void> {
+    if (!this.inventoryService) return;
+    const orderData = order.serialize();
+    for (const item of orderData.items) {
+      await this.inventoryService.decrementForSale({
+        tenantId,
+        productId: item.productId,
+        quantity: item.quantity,
+        referenceId: orderData.id,
+        userId,
+      });
+    }
+  }
+
+  private async applyStockRestore(order: Order, tenantId: string, userId: string): Promise<void> {
+    if (!this.inventoryService) return;
+    const orderData = order.serialize();
+    for (const item of orderData.items) {
+      await this.inventoryService.incrementForReturn({
+        tenantId,
+        productId: item.productId,
+        quantity: item.quantity,
+        referenceId: orderData.id,
+        userId,
+      });
+    }
+  }
 
   async payCash(input: {
     tenantId: string;
@@ -200,6 +229,8 @@ export class PaymentService {
     await this.orderRepository.save(order);
     await this.paymentRepository.save(payment);
 
+    await this.applyStockDeductions(order, input.tenantId, input.cashierId);
+
     for (const event of order.domainEvents) {
       this.eventBus.publish(event);
     }
@@ -247,6 +278,8 @@ export class PaymentService {
     if (orderData.tenantId !== input.tenantId) throw new NotFoundError('Order not found');
     if (orderData.paymentStatus === 'completed') throw new ValidationError('Order is already paid');
 
+    const wasUnpaid = orderData.paymentBreakdown.length === 0;
+
     const totalDue = orderData.total - orderData.paymentBreakdown.reduce((s: number, p: { amount: number }) => s + p.amount, 0);
     if (input.amount < totalDue) {
       throw new ValidationError(`Insufficient amount. Need ${totalDue}, got ${input.amount}`);
@@ -283,6 +316,10 @@ export class PaymentService {
 
     await this.orderRepository.save(order);
     await this.paymentRepository.save(payment);
+
+    if (wasUnpaid) {
+      await this.applyStockDeductions(order, input.tenantId, input.cashierId);
+    }
 
     for (const event of order.domainEvents) {
       this.eventBus.publish(event);
@@ -325,6 +362,11 @@ export class PaymentService {
     await this.paymentRepository.save(payment);
     await this.refundRepository.save(refund);
 
+    const order = await this.orderRepository.findById(paymentData.orderId);
+    if (order && order.serialize().paymentBreakdown.length === 1) {
+      await this.applyStockRestore(order, input.tenantId, input.refundedBy);
+    }
+
     for (const event of payment.domainEvents) {
       this.eventBus.publish(event);
     }
@@ -348,9 +390,15 @@ export class PaymentService {
     const orderData = order.serialize();
     if (orderData.tenantId !== input.tenantId) throw new NotFoundError('Order not found');
 
+    const wasUnpaid = orderData.paymentBreakdown.length === 0;
+
     order.pay(input.paymentBreakdown, input.cashierId, input.cashierName);
 
     await this.orderRepository.save(order);
+
+    if (wasUnpaid) {
+      await this.applyStockDeductions(order, input.tenantId, input.cashierId);
+    }
 
     for (const event of order.domainEvents) {
       this.eventBus.publish(event);
@@ -370,6 +418,8 @@ export class PaymentService {
 
     const orderData = order.serialize();
     if (orderData.tenantId !== input.tenantId) throw new NotFoundError('Order not found');
+
+    const wasUnpaid = orderData.paymentBreakdown.length === 0;
 
     const totalSplit = input.splitBills.reduce((s, b) => s + b.amount, 0);
     if (totalSplit < orderData.total) {
@@ -414,6 +464,10 @@ export class PaymentService {
 
     order.pay(breakdown, input.cashierId, '');
     await this.orderRepository.save(order);
+
+    if (wasUnpaid) {
+      await this.applyStockDeductions(order, input.tenantId, input.cashierId);
+    }
 
     for (const event of order.domainEvents) {
       this.eventBus.publish(event);

@@ -11,6 +11,7 @@ import { ReceiptDisplay } from '../components/ReceiptDisplay';
 import { HeldOrdersPanel } from '../components/HeldOrdersPanel';
 import { formatIDR } from '../utils/money';
 import { useRealtimeSync } from '../../../@shared/hooks/useRealtimeSync';
+import { useStockList } from '../../inventory/hooks/useInventory';
 
 export default function PosPage() {
   useRealtimeSync();
@@ -56,13 +57,40 @@ export default function PosPage() {
   const barcodeTimer = useRef<ReturnType<typeof setTimeout>>();
 
   const { lookupBarcode } = useBarcodeLookup();
+  const { data: stocks = [] } = useStockList();
 
-  const handleBarcodeInput = useCallback(async (barcode: string) => {
-    const product = await lookupBarcode(barcode);
-    if (product) {
-      searchRef.current?.blur();
+  const stockMap = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const s of stocks) m[s.productId] = s.availableQuantity;
+    return m;
+  }, [stocks]);
+
+  const cartQtyByProduct = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const item of items) {
+      if (item.isFreeItem) continue;
+      m[item.productId] = (m[item.productId] ?? 0) + item.quantity;
     }
-  }, [lookupBarcode]);
+    return m;
+  }, [items]);
+
+  const getAvailableStock = useCallback(
+    (productId: string) => {
+      const available = stockMap[productId] ?? 0;
+      return available > 0 ? available : undefined;
+    },
+    [stockMap],
+  );
+
+  const handleBarcodeInput = useCallback(
+    async (barcode: string) => {
+      const product = await lookupBarcode(barcode, getAvailableStock);
+      if (product) {
+        searchRef.current?.blur();
+      }
+    },
+    [lookupBarcode, getAvailableStock],
+  );
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -211,6 +239,10 @@ export default function PosPage() {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {products.map((product) => {
               const discount = getProductDiscount(activeProductDiscounts, product.id, product.categoryId);
+              const stock = getAvailableStock(product.id);
+              const remaining = stock !== undefined
+                ? Math.max(0, stock - (cartQtyByProduct[product.id] ?? 0))
+                : undefined;
               return (
                 <ProductCard
                   key={product.id}
@@ -222,6 +254,8 @@ export default function PosPage() {
                   pricingProfileId={product.pricingProfileId}
                   pricingMode={product.pricingMode}
                   discountPercent={discount?.discountPercent}
+                  stock={stock}
+                  remaining={remaining}
                 />
               );
             })}

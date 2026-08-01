@@ -366,6 +366,7 @@ export function buildContainer() {
       injector: () => ({
         stockRepository: container.resolve('stockRepository'),
         stockMovementRepository: container.resolve('stockMovementRepository'),
+        eventBus: container.resolve('eventBus'),
       }),
     }),
     warehouseService: asClass(WarehouseService, {
@@ -576,6 +577,7 @@ export function buildContainer() {
         discountService: container.resolve('discountService'),
         eventBus: container.resolve('eventBus'),
         receiptRenderService: container.resolve('receiptRenderService'),
+        inventoryService: container.resolve('inventoryService'),
       }),
     }),
     paymentController: asClass(PaymentController, {
