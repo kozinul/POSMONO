@@ -30,15 +30,15 @@ export interface StockMovement {
   createdAt: string;
 }
 
-export function useStockList() {
+export function useStockList(options?: { refetchInterval?: number }) {
   return useQuery({
     queryKey: ['inventory', 'stocks'],
     queryFn: async () => {
       const res = await api.get<{ success: boolean; data: Stock[] }>('/inventory');
       return res.data.data;
     },
-    staleTime: 10_000,
-    refetchInterval: 15_000,
+    staleTime: 5_000,
+    refetchInterval: options?.refetchInterval ?? 5_000,
   });
 }
 

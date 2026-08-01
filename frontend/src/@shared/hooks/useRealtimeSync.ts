@@ -8,6 +8,8 @@ const EVENT_TO_QUERY: Record<string, Array<Array<string>>> = {
   'catalog.product.deleted': [['products']],
   'discount.config.updated': [['discount-config']],
   'tax.config.updated': [['tax-config']],
+  'inventory.stock.adjusted': [['inventory']],
+  'inventory.stock.low_alert': [['inventory']],
 };
 
 export function useRealtimeSync() {

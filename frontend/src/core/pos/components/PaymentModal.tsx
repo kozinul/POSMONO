@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { usePOSStore } from '../store/posStore';
 import { api } from '../../../@shared/services/api';
 import { useValidatePromoCode } from '../../../@shared/hooks/useDiscountConfiguration';
@@ -17,6 +18,7 @@ export function PaymentModal() {
 
   const { data: paymentMethods = [] } = useActivePaymentMethods();
   const validatePromo = useValidatePromoCode();
+  const queryClient = useQueryClient();
 
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null);
   const [amountPaid, setAmountPaid] = useState('');
@@ -97,6 +99,7 @@ export function PaymentModal() {
       });
 
       removeItems(items.map((i) => i.productId));
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
     } catch (err: any) {
       const msg = err.response?.data?.error?.message || err.response?.data?.message || err.message || 'Pembayaran gagal.';
       setPaymentState('error');
