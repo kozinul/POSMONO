@@ -10,7 +10,7 @@ export function HeldOrdersPanel() {
       {heldOrders.length > 0 && (
         <button
           onClick={toggleHeldOrdersPanel}
-          className={`fixed left-0 top-4 z-40 flex items-center gap-2 bg-amber-500 text-white pl-4 pr-3 py-2 rounded-r-lg shadow-lg hover:bg-amber-600 transition-all font-bold text-sm ${
+          className={`fixed left-0 top-16 z-40 flex items-center gap-2 bg-amber-500 text-white pl-4 pr-3 py-2 rounded-r-lg shadow-lg hover:bg-amber-600 transition-all font-bold text-sm ${
             heldOrdersPanelOpen ? 'translate-x-[280px]' : ''
           }`}
         >
