@@ -63,10 +63,12 @@ export default function PosPage() {
 
   const { lookupBarcode } = useBarcodeLookup();
   const { data: stocks = [] } = useStockList();
-  const { data: heldOrdersQuery = [] } = useHeldOrders();
+  const { data: heldOrdersQuery } = useHeldOrders();
 
   useEffect(() => {
-    mergeHeldOrders(heldOrdersQuery);
+    if (heldOrdersQuery) {
+      mergeHeldOrders(heldOrdersQuery);
+    }
   }, [heldOrdersQuery, mergeHeldOrders]);
 
   const stockMap = useMemo(() => {

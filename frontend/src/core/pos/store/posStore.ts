@@ -485,7 +485,11 @@ export const usePOSStore = create<POSState>((set, get) => ({
     set((s) => {
       const remote = orders.filter((o) => !s.dismissedHeldOrderIds.includes(o.id));
       const local = s.heldOrders.filter((o) => o.id.startsWith('hold-'));
-      return { heldOrders: [...remote, ...local] };
+      const merged = [...remote, ...local];
+      const current = s.heldOrders.map((o) => o.id).join('|');
+      const next = merged.map((o) => o.id).join('|');
+      if (current === next) return {};
+      return { heldOrders: merged };
     });
   },
 
