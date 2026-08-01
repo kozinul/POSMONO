@@ -14,8 +14,28 @@ export function getSocket(): Socket {
   return socket;
 }
 
+export function connectSocket(): Socket {
+  if (!socket) {
+    socket = getSocket();
+    socket.connect();
+  }
+  return socket;
+}
+
+export function updateSocketAuth(): void {
+  const token = localStorage.getItem('accessToken');
+  if (socket) {
+    socket.auth = { token };
+    if (socket.connected) {
+      socket.disconnect();
+      socket.connect();
+    }
+  }
+}
+
 export function disconnectSocket(): void {
   if (socket) {
+    socket.removeAllListeners();
     socket.disconnect();
     socket = null;
   }

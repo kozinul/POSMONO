@@ -10,11 +10,10 @@ import { PaymentModal } from '../components/PaymentModal';
 import { ReceiptDisplay } from '../components/ReceiptDisplay';
 import { HeldOrdersPanel } from '../components/HeldOrdersPanel';
 import { formatIDR } from '../utils/money';
-import { useRealtimeSync } from '../../../@shared/hooks/useRealtimeSync';
+import { useHeldOrders } from '../hooks/useHeldOrders';
 import { useStockList } from '../../inventory/hooks/useInventory';
 
 export default function PosPage() {
-  useRealtimeSync();
   const {
     items,
     pricing,
@@ -24,7 +23,6 @@ export default function PosPage() {
     manualDiscountType,
     paymentModalOpen,
     receipt,
-    heldOrders,
     customerName,
     tableNumber,
     addItem,
@@ -38,6 +36,8 @@ export default function PosPage() {
     recalculate,
     holdOrder,
     toggleHeldOrdersPanel,
+    mergeHeldOrders,
+    refreshItemPrices,
   } = usePOSStore();
 
   const { data: discountConfig } = useDiscountConfiguration();
@@ -58,6 +58,11 @@ export default function PosPage() {
 
   const { lookupBarcode } = useBarcodeLookup();
   const { data: stocks = [] } = useStockList();
+  const { data: heldOrdersQuery = [] } = useHeldOrders();
+
+  useEffect(() => {
+    mergeHeldOrders(heldOrdersQuery);
+  }, [heldOrdersQuery, mergeHeldOrders]);
 
   const stockMap = useMemo(() => {
     const m: Record<string, number> = {};
@@ -130,8 +135,11 @@ export default function PosPage() {
         prices[p.id] = p.basePrice;
       }
       setProductPrices(prices);
+      if (refreshItemPrices(prices)) {
+        recalculate();
+      }
     }
-  }, [products, setProductPrices]);
+  }, [products, setProductPrices, refreshItemPrices, recalculate]);
 
   useEffect(() => {
     recalculate();

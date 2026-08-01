@@ -24,5 +24,6 @@ export function useFamilies() {
     queryKey: ['families'],
     queryFn: fetchFamilies,
     staleTime: 30_000,
+    refetchInterval: 30_000,
   });
 }

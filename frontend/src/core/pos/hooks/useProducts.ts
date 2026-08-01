@@ -63,6 +63,7 @@ export function useProducts(search?: string, categoryId?: string) {
     queryKey: ['products', search, categoryId],
     queryFn: () => fetchProducts(search, categoryId),
     staleTime: 15_000,
+    refetchInterval: 10_000,
   });
 }
 
@@ -98,5 +99,6 @@ export function useCategories() {
     queryKey: ['categories'],
     queryFn: fetchCategories,
     staleTime: 30_000,
+    refetchInterval: 30_000,
   });
 }

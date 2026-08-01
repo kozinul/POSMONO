@@ -1,5 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../@shared/hooks/useAuth';
+import { useRealtimeSync } from '../@shared/hooks/useRealtimeSync';
 import { ErrorBoundary } from '../@shared/components/ErrorBoundary';
 import clsx from 'clsx';
 
@@ -24,6 +25,8 @@ export function DashboardLayout() {
   const location = useLocation();
   const { user, logout } = useAuthStore();
   const isPOSPage = location.pathname === '/pos';
+
+  useRealtimeSync();
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">

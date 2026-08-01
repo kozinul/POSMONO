@@ -1,17 +1,5 @@
-import { usePOSStore, CartItem } from '../store/posStore';
-
-interface HeldOrder {
-  id: string;
-  orderNumber: string;
-  items: CartItem[];
-  total: number;
-  subtotal: number;
-  tax: number;
-  serviceCharge: number;
-  customerName: string;
-  tableNumber: string;
-  createdAt: string;
-}
+import { usePOSStore } from '../store/posStore';
+import type { HeldOrder } from '../hooks/useHeldOrders';
 
 export function HeldOrdersPanel() {
   const { heldOrders, heldOrdersPanelOpen, toggleHeldOrdersPanel, recallOrder, dismissHeldOrder } = usePOSStore();

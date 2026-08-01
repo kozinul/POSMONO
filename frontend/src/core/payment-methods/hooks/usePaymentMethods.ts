@@ -59,6 +59,7 @@ export function useActivePaymentMethods() {
     queryKey: ['payment-methods', 'active'],
     queryFn: fetchActivePaymentMethods,
     staleTime: 30_000,
+    refetchInterval: 30_000,
   });
 }
 

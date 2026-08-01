@@ -72,6 +72,7 @@ interface POSState {
 
   heldOrders: HeldOrder[];
   heldOrdersPanelOpen: boolean;
+  dismissedHeldOrderIds: string[];
 
   splitNumber: number;
   splitBaseOrderNumber: string | null;
@@ -84,6 +85,7 @@ interface POSState {
   setPromoCode: (code: string) => void;
   setDiscountRules: (rules: IDiscountRule[]) => void;
   setProductPrices: (prices: Record<string, number>) => void;
+  refreshItemPrices: (prices: Record<string, number>) => boolean;
   clearCart: () => void;
   recalculate: () => Promise<void>;
   setCustomerName: (name: string) => void;
@@ -98,7 +100,7 @@ interface POSState {
   holdOrder: () => Promise<void>;
   recallOrder: (heldOrder: HeldOrder) => void;
   dismissHeldOrder: (orderId: string) => void;
-  loadHeldOrders: (tenantId: string) => Promise<void>;
+  mergeHeldOrders: (orders: HeldOrder[]) => void;
   toggleHeldOrdersPanel: () => void;
 
   removeItems: (productIds: string[]) => void;
@@ -133,6 +135,7 @@ export const usePOSStore = create<POSState>((set, get) => ({
 
   heldOrders: [],
   heldOrdersPanelOpen: false,
+  dismissedHeldOrderIds: [],
 
   splitNumber: 0,
   splitBaseOrderNumber: null,
@@ -202,6 +205,23 @@ export const usePOSStore = create<POSState>((set, get) => ({
   setDiscountRules: (rules) => set({ discountRules: rules }),
 
   setProductPrices: (prices) => set({ productPrices: prices }),
+
+  refreshItemPrices: (prices) => {
+    let changed = false;
+    set((s) => {
+      const items = s.items.map((i) => {
+        if (i.isFreeItem) return i;
+        const p = prices[i.productId];
+        if (p !== undefined && p !== i.price) {
+          changed = true;
+          return { ...i, price: p };
+        }
+        return i;
+      });
+      return changed ? { items } : {};
+    });
+    return changed;
+  },
 
   clearCart: () =>
     set({
@@ -384,34 +404,18 @@ export const usePOSStore = create<POSState>((set, get) => ({
   dismissHeldOrder: (orderId: string) => {
     set((s) => ({
       heldOrders: s.heldOrders.filter((o) => o.id !== orderId),
+      dismissedHeldOrderIds: s.dismissedHeldOrderIds.includes(orderId) ? s.dismissedHeldOrderIds : [...s.dismissedHeldOrderIds, orderId],
     }));
   },
 
-  loadHeldOrders: async (_tenantId: string) => {
-    try {
-      const res = await api.get('/orders', { params: { status: 'held', limit: 50 } });
-      const orders = res.data.data || [];
-      const heldOrders: HeldOrder[] = orders.map((o: any) => ({
-        id: o.id,
-        orderNumber: o.orderNumber,
-        items: (o.items || []).map((item: any) => ({
-          productId: item.productId,
-          name: item.productName,
-          price: item.unitPrice,
-          quantity: item.quantity,
-        })),
-        total: o.total,
-        subtotal: o.subtotal,
-        tax: o.tax,
-        serviceCharge: o.serviceCharge,
-        customerName: o.customerName || '',
-        tableNumber: o.tableNumber || '',
-        createdAt: o.createdAt,
-      }));
-      set({ heldOrders });
-    } catch {
-      // silent fail
-    }
+  mergeHeldOrders: (orders) => {
+    set((s) => {
+      const remote = orders.filter((o) => !s.dismissedHeldOrderIds.includes(o.id));
+      const local = s.heldOrders.filter(
+        (o) => o.id.startsWith('hold-') || !remote.some((r) => r.id === o.id),
+      );
+      return { heldOrders: [...remote, ...local] };
+    });
   },
 
   toggleHeldOrdersPanel: () => set((s) => ({ heldOrdersPanelOpen: !s.heldOrdersPanelOpen })),
