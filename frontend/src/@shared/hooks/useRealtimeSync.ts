@@ -19,6 +19,8 @@ const EVENT_TO_QUERY: Record<string, Array<Array<string>>> = {
   'ordering.order.created': [['held-orders']],
   'ordering.order.held': [['held-orders']],
   'ordering.order.recalled': [['held-orders']],
+  'ordering.order.updated': [['held-orders']],
+  'ordering.order.voided': [['held-orders']],
   'ordering.order.cancelled': [['held-orders']],
   // Payment & POS
   'ordering.order.paid': [['inventory']],

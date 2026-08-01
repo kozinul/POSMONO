@@ -2,7 +2,7 @@ import { usePOSStore } from '../store/posStore';
 import type { HeldOrder } from '../hooks/useHeldOrders';
 
 export function HeldOrdersPanel() {
-  const { heldOrders, heldOrdersPanelOpen, toggleHeldOrdersPanel, recallOrder, dismissHeldOrder } = usePOSStore();
+  const { heldOrders, heldOrdersPanelOpen, toggleHeldOrdersPanel, tapBill, dismissHeldOrder } = usePOSStore();
 
   return (
     <>
@@ -53,7 +53,7 @@ export function HeldOrdersPanel() {
                   <path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
                 </svg>
                 <p className="text-gray-400 text-sm font-medium">Belum ada</p>
-                <p className="text-gray-400 text-xs mt-1">Tekan "Hold" untuk menunda</p>
+                <p className="text-gray-400 text-xs mt-1">Tekan "Buka Bill" untuk membuka</p>
               </div>
             ) : (
               heldOrders.map((order) => (
@@ -99,10 +99,10 @@ export function HeldOrdersPanel() {
                   {/* Buttons */}
                   <div className="flex gap-2">
                     <button
-                      onClick={() => recallOrder(order)}
+                      onClick={() => tapBill(order)}
                       className="flex-1 blue-primary text-white py-1.5 rounded-lg text-xs font-bold hover:opacity-90 transition-opacity"
                     >
-                      Recall
+                      Buka
                     </button>
                     <button
                       onClick={() => dismissHeldOrder(order.id)}

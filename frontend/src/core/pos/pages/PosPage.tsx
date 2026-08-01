@@ -34,10 +34,15 @@ export default function PosPage() {
     setTableNumber,
     openPaymentModal,
     recalculate,
-    holdOrder,
+    openBill,
+    saveBill,
+    cancelActiveBill,
+    activeBillId,
+    activeBillNumber,
     toggleHeldOrdersPanel,
     mergeHeldOrders,
     refreshItemPrices,
+    clearCart,
   } = usePOSStore();
 
   const { data: discountConfig } = useDiscountConfiguration();
@@ -278,6 +283,27 @@ export default function PosPage() {
             <h2 className="text-lg font-bold text-gray-800">Pesanan Baru</h2>
             <span className="text-gray-400 font-medium text-sm">{itemCount} item</span>
           </div>
+          {activeBillNumber && (
+            <div className="flex items-center justify-between gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <svg className="w-4 h-4 shrink-0 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+                </svg>
+                <span className="text-sm font-bold text-amber-800 truncate">Bill {activeBillNumber} terbuka</span>
+              </div>
+              <button
+                onClick={() => {
+                  if (items.length > 0 && !window.confirm('Tutup bill ini? Item di keranjang yang belum disimpan akan hilang.')) return;
+                  clearCart();
+                  cancelActiveBill();
+                  setHoldError('');
+                }}
+                className="shrink-0 text-xs font-semibold text-amber-700 hover:text-amber-900 underline"
+              >
+                Tutup
+              </button>
+            </div>
+          )}
           <div className="flex gap-2">
             <input
               value={customerName}
@@ -364,21 +390,34 @@ export default function PosPage() {
             </span>
           </div>
           <div className="flex gap-4 pt-4">
-            <button
-              onClick={() => {
-                if (items.length === 0) return;
-                if (!customerName.trim() && !tableNumber.trim()) {
-                  setHoldError('Isi nama customer atau nomor meja');
-                  return;
-                }
-                setHoldError('');
-                holdOrder();
-              }}
-              disabled={items.length === 0}
-              className="flex-1 bg-[#9E9E9E] text-white py-4 rounded-xl font-bold hover:bg-gray-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Hold
-            </button>
+            {activeBillId ? (
+              <button
+                onClick={async () => {
+                  const ok = await saveBill();
+                  setHoldError(ok ? '' : 'Gagal menyimpan bill. Coba lagi.');
+                }}
+                disabled={items.length === 0}
+                className="flex-1 bg-[#9E9E9E] text-white py-4 rounded-xl font-bold hover:bg-gray-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Simpan Bill
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  if (items.length === 0) return;
+                  if (!customerName.trim() && !tableNumber.trim()) {
+                    setHoldError('Isi nama customer atau nomor meja');
+                    return;
+                  }
+                  setHoldError('');
+                  openBill();
+                }}
+                disabled={items.length === 0}
+                className="flex-1 bg-[#9E9E9E] text-white py-4 rounded-xl font-bold hover:bg-gray-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Buka Bill
+              </button>
+            )}
             <button
               onClick={openPaymentModal}
               disabled={items.length === 0}

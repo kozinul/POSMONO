@@ -13,7 +13,7 @@ export function PaymentModal() {
     items, pricing, paymentState, setPaymentState,
     setReceipt, closePaymentModal, removeItems,
     promoCode, manualDiscount, manualDiscountType,
-    setManualDiscount, setPromoCode,
+    setManualDiscount, setPromoCode, closeBillAfterPayment,
   } = usePOSStore();
 
   const { data: paymentMethods = [] } = useActivePaymentMethods();
@@ -100,6 +100,7 @@ export function PaymentModal() {
 
       removeItems(items.map((i) => i.productId));
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      closeBillAfterPayment();
     } catch (err: any) {
       const msg = err.response?.data?.error?.message || err.response?.data?.message || err.message || 'Pembayaran gagal.';
       setPaymentState('error');

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { IDiscountRule } from '../../../@shared/hooks/useDiscountConfiguration';
 import type { PricingResult, PricingLineItem } from '../../../@shared/hooks/usePricing';
 import { api } from '../../../@shared/services/api';
+import { useAuthStore } from '../../../@shared/hooks/useAuth';
 
 export interface CartItem {
   productId: string;
@@ -74,6 +75,9 @@ interface POSState {
   heldOrdersPanelOpen: boolean;
   dismissedHeldOrderIds: string[];
 
+  activeBillId: string | null;
+  activeBillNumber: string | null;
+
   splitNumber: number;
   splitBaseOrderNumber: string | null;
 
@@ -97,11 +101,15 @@ interface POSState {
   setReceipt: (receipt: Receipt) => void;
   clearReceipt: () => void;
 
-  holdOrder: () => Promise<void>;
-  recallOrder: (heldOrder: HeldOrder) => void;
   dismissHeldOrder: (orderId: string) => void;
   mergeHeldOrders: (orders: HeldOrder[]) => void;
   toggleHeldOrdersPanel: () => void;
+
+  openBill: () => Promise<void>;
+  saveBill: () => Promise<boolean>;
+  tapBill: (heldOrder: HeldOrder) => void;
+  cancelActiveBill: () => void;
+  closeBillAfterPayment: () => Promise<void>;
 
   removeItems: (productIds: string[]) => void;
   resetSplit: () => void;
@@ -136,6 +144,9 @@ export const usePOSStore = create<POSState>((set, get) => ({
   heldOrders: [],
   heldOrdersPanelOpen: false,
   dismissedHeldOrderIds: [],
+
+  activeBillId: null,
+  activeBillNumber: null,
 
   splitNumber: 0,
   splitBaseOrderNumber: null,
@@ -234,6 +245,8 @@ export const usePOSStore = create<POSState>((set, get) => ({
       paymentState: 'idle',
       customerName: '',
       tableNumber: '',
+      activeBillId: null,
+      activeBillNumber: null,
       splitNumber: 0,
       splitBaseOrderNumber: null,
     }),
@@ -320,64 +333,84 @@ export const usePOSStore = create<POSState>((set, get) => ({
   setReceipt: (receipt) => set({ receipt, paymentState: 'success', paymentModalOpen: false }),
   clearReceipt: () => set({ receipt: null }),
 
-  holdOrder: async () => {
+  openBill: async () => {
     const state = usePOSStore.getState();
     if (state.items.length === 0) return;
 
     const snapshotItems = [...state.items];
-    const tempId = `hold-${Date.now()}`;
+    const snapshotCustomerName = state.customerName;
+    const snapshotTableNumber = state.tableNumber;
 
-    const heldOrder: HeldOrder = {
-      id: tempId,
-      orderNumber: `HOLD-${Date.now().toString(36).toUpperCase()}`,
-      items: snapshotItems,
-      total: state.pricing?.grandTotal ?? 0,
-      subtotal: state.pricing?.originalSubtotal ?? 0,
-      tax: state.pricing?.tax ?? 0,
-      serviceCharge: state.pricing?.serviceCharge ?? 0,
-      customerName: state.customerName,
-      tableNumber: state.tableNumber,
-      createdAt: new Date().toISOString(),
-    };
-
-    set((s) => ({
-      heldOrders: [...s.heldOrders, heldOrder],
-    }));
-    usePOSStore.getState().clearCart();
+    state.clearCart();
 
     try {
       const res = await api.post('/orders', {
-        items: snapshotItems.map((i) => ({
-          productId: i.productId,
-          productName: i.name,
-          quantity: i.quantity,
-          unitPrice: i.price,
-          totalPrice: i.price * i.quantity,
-          modifiers: [],
-          tax: { rate: 0, amount: 0 },
-        })),
-        customerName: state.customerName || null,
-        tableNumber: state.tableNumber || null,
+        items: snapshotItems
+          .filter((i) => !i.isFreeItem)
+          .map((i) => ({
+            productId: i.productId,
+            productName: i.name,
+            quantity: i.quantity,
+            unitPrice: i.price,
+            totalPrice: i.price * i.quantity,
+            modifiers: [],
+            tax: { rate: 0, amount: 0 },
+          })),
+        customerName: snapshotCustomerName || null,
+        tableNumber: snapshotTableNumber || null,
         source: 'pos',
         transactionType: 'dine_in',
         notes: '',
       });
-      const realOrderId = res.data.data.id;
-      const realOrderNumber = res.data.data.orderNumber;
+      const billId = res.data.data.id;
+      const billNumber = res.data.data.orderNumber;
 
-      await api.post(`/orders/${realOrderId}/hold`);
+      await api.post(`/orders/${billId}/hold`);
 
       set((s) => ({
-        heldOrders: s.heldOrders.map((o) =>
-          o.id === tempId ? { ...o, id: realOrderId, orderNumber: realOrderNumber } : o,
-        ),
+        activeBillId: billId,
+        activeBillNumber: billNumber,
+        dismissedHeldOrderIds: s.dismissedHeldOrderIds.includes(billId)
+          ? s.dismissedHeldOrderIds
+          : [...s.dismissedHeldOrderIds, billId],
       }));
     } catch {
-      // local held order stays
+      for (const item of snapshotItems) {
+        usePOSStore.getState().addItem(item);
+      }
+      set({ customerName: snapshotCustomerName, tableNumber: snapshotTableNumber });
     }
   },
 
-  recallOrder: (heldOrder: HeldOrder) => {
+  saveBill: async (): Promise<boolean> => {
+    const state = usePOSStore.getState();
+    const billId = state.activeBillId;
+    if (!billId || state.items.length === 0) return false;
+
+    const paidItems = state.items.filter((i) => !i.isFreeItem);
+    if (paidItems.length === 0) return false;
+
+    try {
+      await api.put(`/orders/${billId}/items`, {
+        items: paidItems.map((i) => ({
+          productId: i.productId,
+          productName: i.name,
+          quantity: i.quantity,
+          unitPrice: i.price,
+          totalPrice: Math.round(i.price * i.quantity * 100) / 100,
+          modifiers: [],
+          tax: { rate: 0, amount: 0 },
+        })),
+        tableNumber: state.tableNumber || null,
+        customerName: state.customerName || null,
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  tapBill: (heldOrder: HeldOrder) => {
     const state = usePOSStore.getState();
     if (state.items.length > 0) {
       const confirmed = window.confirm('Pesanan saat ini akan digantikan. Lanjutkan?');
@@ -390,14 +423,54 @@ export const usePOSStore = create<POSState>((set, get) => ({
       usePOSStore.getState().addItem(item);
     }
 
+    const isTemp = heldOrder.id.startsWith('hold-');
+
     set((s) => ({
       heldOrders: s.heldOrders.filter((o) => o.id !== heldOrder.id),
       customerName: heldOrder.customerName || '',
       tableNumber: heldOrder.tableNumber || '',
+      activeBillId: isTemp ? null : heldOrder.id,
+      activeBillNumber: isTemp ? null : heldOrder.orderNumber,
+      dismissedHeldOrderIds: isTemp || s.dismissedHeldOrderIds.includes(heldOrder.id)
+        ? s.dismissedHeldOrderIds
+        : [...s.dismissedHeldOrderIds, heldOrder.id],
+    }));
+  },
+
+  cancelActiveBill: () => {
+    const state = usePOSStore.getState();
+    const billId = state.activeBillId;
+    if (!billId) return;
+
+    set({ activeBillId: null, activeBillNumber: null });
+
+    if (!billId.startsWith('hold-')) {
+      const userName = useAuthStore.getState().user?.displayName || 'Kasir';
+      api
+        .post(`/orders/${billId}/void`, { reason: 'Bill ditutup tanpa pembayaran', voidedByName: userName })
+        .catch(() => {});
+    }
+  },
+
+  closeBillAfterPayment: async () => {
+    const state = usePOSStore.getState();
+    const billId = state.activeBillId;
+    if (!billId) return;
+
+    set((s) => ({
+      heldOrders: s.heldOrders.filter((o) => o.id !== billId),
+      dismissedHeldOrderIds: s.dismissedHeldOrderIds.includes(billId)
+        ? s.dismissedHeldOrderIds
+        : [...s.dismissedHeldOrderIds, billId],
+      activeBillId: null,
+      activeBillNumber: null,
     }));
 
-    if (!heldOrder.id.startsWith('hold-')) {
-      api.patch(`/orders/${heldOrder.id}/recall`).catch(() => {});
+    if (!billId.startsWith('hold-')) {
+      const userName = useAuthStore.getState().user?.displayName || 'Kasir';
+      api
+        .post(`/orders/${billId}/void`, { reason: 'Bill ditutup setelah pembayaran', voidedByName: userName })
+        .catch(() => {});
     }
   },
 
@@ -411,9 +484,7 @@ export const usePOSStore = create<POSState>((set, get) => ({
   mergeHeldOrders: (orders) => {
     set((s) => {
       const remote = orders.filter((o) => !s.dismissedHeldOrderIds.includes(o.id));
-      const local = s.heldOrders.filter(
-        (o) => o.id.startsWith('hold-') || !remote.some((r) => r.id === o.id),
-      );
+      const local = s.heldOrders.filter((o) => o.id.startsWith('hold-'));
       return { heldOrders: [...remote, ...local] };
     });
   },
