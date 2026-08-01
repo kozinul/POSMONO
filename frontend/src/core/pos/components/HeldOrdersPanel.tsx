@@ -10,12 +10,11 @@ export function HeldOrdersPanel() {
       {heldOrders.length > 0 && (
         <button
           onClick={toggleHeldOrdersPanel}
-          className={`fixed left-0 top-1/2 -translate-y-1/2 z-40 flex items-center gap-1 bg-amber-500 text-white px-2 py-4 rounded-r-lg shadow-lg hover:bg-amber-600 transition-all font-bold text-sm ${
+          className={`fixed left-0 top-4 z-40 flex items-center gap-2 bg-amber-500 text-white pl-4 pr-3 py-2 rounded-r-lg shadow-lg hover:bg-amber-600 transition-all font-bold text-sm ${
             heldOrdersPanelOpen ? 'translate-x-[280px]' : ''
           }`}
-          style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
         >
-          <svg className="w-4 h-4 rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
           </svg>
           {heldOrders.length} Hold
