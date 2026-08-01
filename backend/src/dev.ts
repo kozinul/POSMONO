@@ -418,9 +418,11 @@ async function main() {
   const { createServer } = await import('./bootstrap/server');
   const { buildContainer } = await import('./bootstrap/container');
   const { registerEventHandlers } = await import('./bootstrap/eventBus');
+  const { initSocketServer } = await import('./bootstrap/socket');
   const { logger } = await import('./@shared/infrastructure/logger/Logger');
   const { env } = await import('./@shared/config/env');
   const { validateEnv } = await import('./@shared/config/validateEnv');
+  const http = await import('http');
 
   validateEnv();
 
@@ -430,9 +432,12 @@ async function main() {
   registerEventHandlers(eventBus);
 
   const app = createServer(container);
+  const httpServer = http.createServer(app);
+
+  initSocketServer(httpServer);
 
   const dbMode = mongod ? 'in-memory' : 'persistent';
-  app.listen(env.PORT, () => {
+  httpServer.listen(env.PORT, () => {
     logger.info(
       { port: env.PORT, env: env.NODE_ENV, db: dbMode },
       'POSMono dev server started',
