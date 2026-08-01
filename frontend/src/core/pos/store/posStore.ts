@@ -365,12 +365,35 @@ export const usePOSStore = create<POSState>((set, get) => ({
 
       await api.post(`/orders/${billId}/hold`);
 
+      const billData = res.data.data;
+      const heldOrder: HeldOrder = {
+        id: billData.id,
+        orderNumber: billData.orderNumber,
+        items: snapshotItems
+          .filter((i) => !i.isFreeItem)
+          .map((i) => ({
+            productId: i.productId,
+            name: i.name,
+            price: i.price,
+            quantity: i.quantity,
+            categoryId: i.categoryId,
+            pricingMode: i.pricingMode,
+          })),
+        total: billData.total,
+        subtotal: billData.subtotal,
+        tax: billData.tax,
+        serviceCharge: billData.serviceCharge,
+        customerName: snapshotCustomerName,
+        tableNumber: snapshotTableNumber,
+        createdAt: billData.createdAt,
+      };
+
       set((s) => ({
         activeBillId: billId,
         activeBillNumber: billNumber,
-        dismissedHeldOrderIds: s.dismissedHeldOrderIds.includes(billId)
-          ? s.dismissedHeldOrderIds
-          : [...s.dismissedHeldOrderIds, billId],
+        heldOrders: s.heldOrders.some((o) => o.id === billId)
+          ? s.heldOrders
+          : [...s.heldOrders, heldOrder],
       }));
     } catch {
       set({ customerName: snapshotCustomerName, tableNumber: snapshotTableNumber });
@@ -420,16 +443,12 @@ export const usePOSStore = create<POSState>((set, get) => ({
 
     const isTemp = heldOrder.id.startsWith('hold-');
 
-    set((s) => ({
-      heldOrders: s.heldOrders.filter((o) => o.id !== heldOrder.id),
+    set({
       customerName: heldOrder.customerName || '',
       tableNumber: heldOrder.tableNumber || '',
       activeBillId: isTemp ? null : heldOrder.id,
       activeBillNumber: isTemp ? null : heldOrder.orderNumber,
-      dismissedHeldOrderIds: isTemp || s.dismissedHeldOrderIds.includes(heldOrder.id)
-        ? s.dismissedHeldOrderIds
-        : [...s.dismissedHeldOrderIds, heldOrder.id],
-    }));
+    });
   },
 
   cancelActiveBill: () => {
