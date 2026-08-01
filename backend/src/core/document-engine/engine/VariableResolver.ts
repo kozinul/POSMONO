@@ -1,4 +1,4 @@
-import { DocumentSection, DocumentNode, FieldNode, TextNode, RepeaterNode, TableNode } from '../types/template';
+import { DocumentSection, DocumentNode, FieldNode, TextNode, RepeaterNode, TableNode, ImageNode } from '../types/template';
 import { DocumentData } from '../types/document-data';
 import { ConditionEvaluator } from './ConditionEvaluator';
 import { ExpressionEvaluator } from './ExpressionEvaluator';
@@ -65,6 +65,8 @@ export class VariableResolver {
         return this.resolveFieldNode(node, data, unresolvedFields);
       case 'text':
         return this.resolveTextNode(node, data, unresolvedFields);
+      case 'image':
+        return this.resolveImageNode(node, data, unresolvedFields);
       case 'container':
       case 'row':
       case 'column':
@@ -146,6 +148,18 @@ export class VariableResolver {
       return String(value);
     });
     return { node, content, isVisible: true };
+  }
+
+  private resolveImageNode(node: ImageNode, data: DocumentData, unresolvedFields: string[]): ResolvedNode {
+    const source = node.field ? this.resolveField(node.field, data) : undefined;
+    if (source === undefined) {
+      unresolvedFields.push(node.field ?? 'image.source');
+    }
+    return {
+      node,
+      content: source !== undefined ? String(source) : '',
+      isVisible: true,
+    };
   }
 
   private resolveContainerNode(

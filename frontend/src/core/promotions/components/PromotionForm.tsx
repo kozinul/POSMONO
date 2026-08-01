@@ -41,6 +41,7 @@ function promoToFormState(promo: Promotion): { rules: RuleInput[]; effects: Effe
       value: e.value,
       target: e.target,
       ...(e.targetProductId ? { targetProductId: e.targetProductId } : {}),
+      ...(e.targetProductName ? { targetProductName: e.targetProductName } : {}),
       ...(e.maxDiscount ? { maxDiscount: e.maxDiscount } : {}),
     },
     position: i,
@@ -70,6 +71,7 @@ function formStateToPayload(state: FormState) {
         value: (p.value as number) ?? 0,
         target: (p.target as string) ?? 'order',
         ...(p.targetProductId ? { targetProductId: p.targetProductId as string } : {}),
+        ...(p.targetProductName ? { targetProductName: p.targetProductName as string } : {}),
         ...(p.maxDiscount ? { maxDiscount: p.maxDiscount as number } : {}),
       };
     });

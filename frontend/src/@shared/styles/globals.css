@@ -52,3 +52,23 @@
   background: #d4d4d8;
   border-radius: 10px;
 }
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .receipt-print,
+  .receipt-print * {
+    visibility: visible;
+  }
+  .receipt-print {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    box-shadow: none !important;
+  }
+  .receipt-print .receipt-actions {
+    display: none !important;
+  }
+}

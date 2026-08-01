@@ -36,6 +36,30 @@ Copy this block for each new day:
 
 ## Entries
 
+### DATE: 2026-08-01 — Receipt vs Cart Discount Double-Counting Fix
+
+**Today I worked on:**
+
+- **Bug: receipt total ≠ cart total** — promo/auto-apply discount applied twice during `POST /payments/pay-cash`, so the printed/thermal receipt showed a lower total than what the cashier quoted in the cart
+  - Example (ORD-20260801-9469): 1x Jus Jeruk Rp 18.000, rule diskon 30% → cart Rp 12.600; cashier pays Rp 12.600; receipt printed `Total Diskon -Rp 10.800`, `TOTAL Rp 7.200`, `Kembalian Rp 5.400`
+  - Root cause: `PaymentModal.handleSubmit` sent `discount = pricing.promotionDiscount + manualDiscount`; `PaymentService.payCash` re-applied the same rules via `discountService.apply()` and added them on top → double discount (60% instead of 30%)
+  - Fix: `PaymentModal` now sends only the manual discount (`discount: manualDiscount, discountType: manualDiscountType`); backend remains the single authority for promo/auto-apply discounts
+
+**Files changed:**
+
+- `frontend/src/core/pos/components/PaymentModal.tsx` — send only manual discount + correct discountType to pay-cash
+- `docs/BUG_TRACKER.md` — BUG-005 (CRITICAL)
+- `docs/API_REFERENCE.md` — documented pay-cash `discount` contract (manual-only, no double counting)
+
+**What I learned:**
+
+- The frontend pricing result (`promotionDiscount`) is for display only — never echo it back to the backend as an input, or the discount engine will apply it a second time
+- Keep discount ownership on one side: the backend recomputes promo/auto discounts, the client only passes manual discounts
+
+**Productivity score:** 8
+
+---
+
 ### DATE: 2026-07-28
 
 **Today I worked on:**

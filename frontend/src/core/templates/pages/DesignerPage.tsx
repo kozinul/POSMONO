@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../../../@shared/services/api';
 import { useQueryClient } from '@tanstack/react-query';
+import { renderLayoutToHtml } from '../utils/renderLayoutToHtml';
 import { DesignerProvider, useDesigner, DesignerTemplate } from '../../../modules/designer/context/DesignerContext';
 import ToolboxPanel from '../../../modules/designer/components/ToolboxPanel';
 import CanvasPanel from '../../../modules/designer/components/CanvasPanel';
@@ -181,8 +182,9 @@ function DesignerContent() {
             tenantId: 'preview-tenant'
           },
           data: {
-            store: { name: 'Demo Store', address: 'Jl. Demo No. 1' },
-            order: { invoiceNumber: 'INV-001', orderNumber: 'ORD-001', type: 'dine_in', cashier: 'Demo', date: '2026-07-30', time: '14:30' },
+            store: { name: 'Demo Store', address: 'Jl. Merdeka No. 1, Jakarta', phone: '021-555-1234', email: 'halo@demostore.id', taxNumber: '123.456.789-0-001', logo: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNjAiIGhlaWdodD0iNDgiPjxyZWN0IHdpZHRoPSIxNjAiIGhlaWdodD0iNDgiIHJ4PSI4IiBmaWxsPSIjMjE3NkQyIi8+PHRleHQgeD0iODAiIHk9IjMxIiBmb250LWZhbWlseT0iQXJpYWwsc2Fucy1zZXJpZiIgZm9udC1zaXplPSIyMCIgZm9udC13ZWlnaHQ9ImJvbGQiIGZpbGw9IiNmZmZmZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkxPR088L3RleHQ+PC9zdmc+' },
+            order: { documentNumber: 'INV-001', referenceNumber: 'KOT-001', type: 'dine_in', table: 'Meja 4', cashier: 'Budi', date: '2026-07-30', time: '14:30' },
+            customer: { name: 'Andi Wijaya', phone: '0812-3456-7890' },
             items: [
               { name: 'Kopi Susu', qty: 2, unitPrice: 18000, totalPrice: 36000 },
               { name: 'Roti Bakar', qty: 1, unitPrice: 20000, totalPrice: 20000 },
@@ -202,21 +204,6 @@ function DesignerContent() {
 
   const handlePreview = async () => {
     setPreviewOpen(true);
-  };
-
-  const renderLayoutToHtml = (layout: any): string => {
-    if (!layout?.pages?.[0]) return '<p>No preview layout</p>';
-    const page = layout.pages[0];
-    const sections = page.sections ?? [];
-    return sections.map((sec: any) => `
-      <div style="margin-bottom:12px;">
-        ${sec.components?.map((c: any) => `
-          <div style="text-align:${c.style?.font?.align ?? 'left'};font-size:${c.style?.font?.size ?? 12}px;font-weight:${c.style?.font?.weight ?? 'normal'};">
-            ${c.content ?? ''}
-          </div>
-        `).join('')}
-      </div>
-    `).join('');
   };
 
   const handleExport = () => {
@@ -371,7 +358,7 @@ function DesignerContent() {
           <button onClick={async () => {
             try {
               const res = await api.post('/templates', state.template);
-              navigate(`/templates/${res.data.data.id}/edit`);
+              navigate(`/templates/${res.data.data.id}/designer`);
             } catch {
               alert('Gagal membuat template.');
             }

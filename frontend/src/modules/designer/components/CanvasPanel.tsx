@@ -58,6 +58,54 @@ export default function CanvasPanel() {
     }
   };
 
+  const handleCanvasDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const raw = e.dataTransfer.getData('application/designer');
+    if (!raw) return;
+    let data: any;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      return;
+    }
+
+    if (data.type === 'section') {
+      dispatch({
+        type: 'ADD_SECTION',
+        section: {
+          id: `sec-${Date.now()}`,
+          type: data.sectionType,
+          enabled: true,
+          order: state.template.sections.length + 1,
+          nodes: [],
+        },
+      });
+      return;
+    }
+
+    if (data.type === 'field' || data.type === 'component') {
+      let targetSectionId = state.template.sections[0]?.id;
+      if (!targetSectionId) {
+        const newSecId = `sec-${Date.now()}`;
+        dispatch({
+          type: 'ADD_SECTION',
+          section: { id: newSecId, type: 'header', enabled: true, order: 1, nodes: [] },
+        });
+        targetSectionId = newSecId;
+      }
+      const isImage = data.type === 'component' && data.componentType === 'image';
+      const newNode = {
+        id: `node-${Date.now()}`,
+        type: data.field ? 'field' : (data.componentType ?? 'text'),
+        field: isImage ? 'store.logo' : data.field,
+        label: isImage ? 'Logo' : data.label,
+        style: { font: { size: 10, align: isImage ? 'center' : 'left' } },
+        visibility: [],
+      };
+      dispatch({ type: 'ADD_NODE', sectionId: targetSectionId, node: newNode });
+    }
+  };
+
   const paperWidth = PAPER_PRESETS[state.template.paper.type]?.width ?? 80;
   const pxWidth = typeof paperWidth === 'number' ? (paperWidth * zoom) / 100 * 3.78 : 450;
 
@@ -108,6 +156,8 @@ export default function CanvasPanel() {
             padding: '24px 16px',
           }}
           onClick={(e) => e.stopPropagation()}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={handleCanvasDrop}
         >
           {state.template.sections.length === 0 && (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 p-8 text-center">
@@ -137,6 +187,7 @@ export default function CanvasPanel() {
 
 function SortableSection({ section, sIndex }: { section: any; sIndex: number }) {
   const { state, dispatch } = useDesigner();
+  const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: section.id });
 
   const style = {
@@ -149,24 +200,94 @@ function SortableSection({ section, sIndex }: { section: any; sIndex: number }) 
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    e.stopPropagation();
+    const raw = e.dataTransfer.getData('application/designer');
+    if (!raw) return;
+    let data: any;
     try {
-      const raw = e.dataTransfer.getData('application/designer');
-      if (!raw) return;
-      const data = JSON.parse(raw);
-      if (data.type === 'field' || data.type === 'component') {
-        const newNode = {
-          id: `node-${Date.now()}`,
-          type: data.field ? 'field' : (data.componentType ?? 'text'),
-          field: data.field,
-          label: data.label,
-          style: { font: { size: 10, align: 'left' } },
-          visibility: [],
-        };
-        dispatch({ type: 'ADD_NODE', sectionId: section.id, node: newNode });
-      }
+      data = JSON.parse(raw);
     } catch {
-      // ignore
+      return;
+    }
+    if (data.type === 'field' || data.type === 'component') {
+      e.stopPropagation();
+      const isImage = data.type === 'component' && data.componentType === 'image';
+      const newNode = {
+        id: `node-${Date.now()}`,
+        type: data.field ? 'field' : (data.componentType ?? 'text'),
+        field: isImage ? 'store.logo' : data.field,
+        label: isImage ? 'Logo' : data.label,
+        style: { font: { size: 10, align: isImage ? 'center' : 'left' } },
+        visibility: [],
+      };
+      dispatch({ type: 'ADD_NODE', sectionId: section.id, node: newNode });
+    }
+  };
+
+  const handleNodeDragStart = (e: React.DragEvent, node: any) => {
+    e.stopPropagation();
+    e.dataTransfer.setData('application/designer-node', JSON.stringify({ sectionId: section.id, nodeId: node.id }));
+    e.dataTransfer.effectAllowed = 'move';
+    setDraggedNodeId(node.id);
+  };
+
+  const handleNodeDragEnd = () => {
+    setDraggedNodeId(null);
+  };
+
+  const handleNodeDrop = (e: React.DragEvent, targetNode: any) => {
+    e.preventDefault();
+    const raw = e.dataTransfer.getData('application/designer-node');
+    if (!raw) return;
+    e.stopPropagation();
+    setDraggedNodeId(null);
+    let data: any;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      return;
+    }
+    if (data.nodeId === targetNode.id) return;
+    if (data.sectionId === section.id) {
+      const nodes = [...section.nodes];
+      const fromIdx = nodes.findIndex((n) => n.id === data.nodeId);
+      if (fromIdx === -1) return;
+      const [moved] = nodes.splice(fromIdx, 1);
+      let toIdx = nodes.findIndex((n) => n.id === targetNode.id);
+      if (toIdx === -1) toIdx = nodes.length;
+      nodes.splice(toIdx, 0, moved);
+      dispatch({ type: 'REORDER_NODES', sectionId: section.id, nodes });
+    } else {
+      dispatch({
+        type: 'MOVE_NODE_BETWEEN_SECTIONS',
+        sourceSectionId: data.sectionId,
+        targetSectionId: section.id,
+        nodeId: data.nodeId,
+      });
+    }
+  };
+
+  const handleContainerNodeDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const raw = e.dataTransfer.getData('application/designer-node');
+    if (!raw) return;
+    e.stopPropagation();
+    setDraggedNodeId(null);
+    let data: any;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      return;
+    }
+    if (data.nodeId && data.sectionId === section.id) {
+      const nodes = section.nodes.filter((n: any) => n.id !== data.nodeId);
+      dispatch({ type: 'REORDER_NODES', sectionId: section.id, nodes });
+    } else if (data.nodeId) {
+      dispatch({
+        type: 'MOVE_NODE_BETWEEN_SECTIONS',
+        sourceSectionId: data.sectionId,
+        targetSectionId: section.id,
+        nodeId: data.nodeId,
+      });
     }
   };
 
@@ -245,7 +366,11 @@ function SortableSection({ section, sIndex }: { section: any; sIndex: number }) 
       {/* Section Nodes */}
       <div className="p-3 min-h-[48px] space-y-1.5">
         {section.nodes.length === 0 ? (
-          <div className="py-4 px-2 border border-dashed border-gray-200 rounded-lg flex flex-col items-center justify-center text-gray-400 gap-1.5">
+          <div
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={handleContainerNodeDrop}
+            className="py-4 px-2 border border-dashed border-gray-200 rounded-lg flex flex-col items-center justify-center text-gray-400 gap-1.5"
+          >
             <p className="text-xs font-medium">Drop komponen di sini atau klik tambah</p>
             <button
               onClick={(e) => {
@@ -271,9 +396,15 @@ function SortableSection({ section, sIndex }: { section: any; sIndex: number }) 
           <>
             {section.nodes.map((node: any) => {
               const isNodeSelected = state.selectedIds.includes(node.id);
+              const isNodeDragging = draggedNodeId === node.id;
               return (
                 <div
                   key={node.id}
+                  draggable
+                  onDragStart={(e) => handleNodeDragStart(e, node)}
+                  onDragEnd={handleNodeDragEnd}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => handleNodeDrop(e, node)}
                   onClick={(e) => {
                     e.stopPropagation();
                     dispatch({ type: 'SET_SELECTION', ids: [node.id] });
@@ -282,15 +413,17 @@ function SortableSection({ section, sIndex }: { section: any; sIndex: number }) 
                     isNodeSelected
                       ? 'border-blue-500 bg-blue-50/70 ring-2 ring-blue-500/20 shadow-xs'
                       : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50/50'
-                  }`}
+                  } ${isNodeDragging ? 'opacity-40' : ''}`}
                 >
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-gray-300 cursor-grab">
+                    <span className="text-gray-300 cursor-grab" title="Seret untuk mengubah posisi">
                       <GripVertical className="w-3.5 h-3.5" />
                     </span>
                     <span className="font-mono font-medium text-gray-800 truncate">
                       {node.type === 'field'
                         ? `📄 ${node.field}${node.label ? ` (${node.label})` : ''}`
+                        : node.type === 'image'
+                        ? `🖼 ${node.label || node.field || 'Image'}`
                         : node.type === 'text'
                         ? `📝 "${node.text ?? ''}"`
                         : node.type === 'divider'
@@ -350,6 +483,11 @@ function SortableSection({ section, sIndex }: { section: any; sIndex: number }) 
               );
             })}
             <div className="pt-1 flex justify-end">
+              <div
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={handleContainerNodeDrop}
+                className="w-full"
+              >
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -369,6 +507,7 @@ function SortableSection({ section, sIndex }: { section: any; sIndex: number }) 
               >
                 <Plus className="w-3 h-3" /> Tambah Komponen
               </button>
+              </div>
             </div>
           </>
         )}

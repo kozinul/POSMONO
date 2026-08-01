@@ -200,3 +200,40 @@ FIXED
 
 **Reported:** 2026-07-26
 **Fixed:** 2026-07-26
+
+---
+
+### BUG-005
+
+**Problem:**
+Receipt total does not match the cart total — promo/auto-apply discount is applied **twice** during payment, so the order total is lower than what the cashier quoted. Business loses the double-discounted amount.
+
+**Severity:**
+🔴 CRITICAL
+
+**Environment:**
+Local
+
+**Steps to Reproduce:**
+1. Create an auto-apply (or promo code) discount rule, e.g. 30% off all items
+2. Add 1x item @ Rp 18.000 to the POS cart → cart shows total Rp 12.600
+3. Cashier pays Rp 12.600
+4. Receipt prints total Rp 7.200 with `Total Diskon -Rp 10.800` and `Kembalian Rp 5.400`
+
+**Expected Behavior:**
+Receipt total should equal the cart total (Rp 12.600, discount Rp 5.400).
+
+**Actual Behavior:**
+Receipt total is Rp 7.200 (discount Rp 10.800 = 60%), because the 30% discount was applied twice. The cashier quoted Rp 12.600 but the system recorded Rp 7.200.
+
+**Root Cause:**
+`PaymentModal.handleSubmit` sent `discount = pricing.promotionDiscount + manualDiscount` to `POST /payments/pay-cash`. The frontend `pricing.promotionDiscount` already contains the promo/auto-apply discount, and `PaymentService.payCash` re-applies the same rules via `discountService.apply()` and adds it on top (`totalDiscountValue = manualDiscountValue + promoDiscount`) → double discount.
+
+**Fix:**
+`PaymentModal` now sends only the manual discount (`discount: manualDiscount, discountType: manualDiscountType`). The backend is the single authority for promo/auto-apply discounts via `discountService.apply()`, so the discount is applied exactly once.
+
+**Status:**
+FIXED
+
+**Reported:** 2026-08-01
+**Fixed:** 2026-08-01

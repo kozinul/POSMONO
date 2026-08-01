@@ -13,6 +13,7 @@ export interface ITemplate {
   sections: DocumentSection[];
   metadata: TemplateMetadata;
   isActive: boolean;
+  isDefault: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -27,6 +28,7 @@ export class Template {
     documentType: DocumentType;
     paper: PaperPreset;
     sections?: DocumentSection[];
+    isDefault?: boolean;
   }): Template {
     const now = new Date();
     return new Template({
@@ -45,6 +47,7 @@ export class Template {
         createdBy: 'system',
       },
       isActive: true,
+      isDefault: input.isDefault ?? false,
       createdAt: now,
       updatedAt: now,
     });
@@ -54,13 +57,14 @@ export class Template {
     return new Template(props);
   }
 
-  update(input: Partial<Pick<ITemplate, 'name' | 'description' | 'documentType' | 'paper' | 'sections' | 'isActive'>>): void {
+  update(input: Partial<Pick<ITemplate, 'name' | 'description' | 'documentType' | 'paper' | 'sections' | 'isActive' | 'isDefault'>>): void {
     if (input.name !== undefined) this.props.name = input.name;
     if (input.description !== undefined) this.props.description = input.description;
     if (input.documentType !== undefined) this.props.documentType = input.documentType;
     if (input.paper !== undefined) this.props.paper = input.paper;
     if (input.sections !== undefined) this.props.sections = input.sections;
     if (input.isActive !== undefined) this.props.isActive = input.isActive;
+    if (input.isDefault !== undefined) this.props.isDefault = input.isDefault;
     this.props.updatedAt = new Date();
     this.props.metadata.updatedAt = new Date().toISOString();
     this.props.metadata.version++;
@@ -80,6 +84,7 @@ export class Template {
   get name(): string { return this.props.name; }
   get documentType(): DocumentType { return this.props.documentType; }
   get isActive(): boolean { return this.props.isActive; }
+  get isDefault(): boolean { return this.props.isDefault; }
   get sections(): DocumentSection[] { return this.props.sections; }
   get paper(): PaperPreset { return this.props.paper; }
   get metadata(): TemplateMetadata { return this.props.metadata; }

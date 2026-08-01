@@ -40,7 +40,14 @@ export default function FreeItemEditor({ params, onChange }: EffectEditorProps) 
           <label className="block text-xs text-gray-500 mb-1">Pilih Produk</label>
           <select
             value={targetProductId}
-            onChange={(e) => onChange({ ...params, targetProductId: e.target.value })}
+            onChange={(e) => {
+              const selected = products?.find((p) => p.id === e.target.value);
+              onChange({
+                ...params,
+                targetProductId: e.target.value,
+                targetProductName: selected?.name ?? '',
+              });
+            }}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
           >
             <option value="">-- Pilih Produk --</option>

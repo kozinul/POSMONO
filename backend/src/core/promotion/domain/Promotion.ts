@@ -15,7 +15,9 @@ export type PromotionRuleType =
   | 'day_of_week'
   | 'date_range'
   | 'time_range'
-  | 'customer_tag';
+  | 'customer_tag'
+  | 'buy_x_get_y'
+  | 'buy_x_pay_y';
 
 export type PromotionLogic = 'AND' | 'OR';
 
@@ -31,6 +33,7 @@ export interface IPromotionEffect {
   value: number;
   target: 'order' | 'item' | 'cheapest_item' | 'specific_product';
   targetProductId?: string;
+  targetProductName?: string;
   maxDiscount?: number;
   params?: Record<string, unknown>;
 }
@@ -182,6 +185,10 @@ export class Promotion extends AggregateRoot<PromotionId> {
       }
       case 'customer_tag':
         return context.customerTags.some((tag) => (rule.params.tags as string[]).includes(tag));
+      case 'buy_x_get_y':
+        return context.itemCount >= (rule.params.buyQuantity as number);
+      case 'buy_x_pay_y':
+        return context.itemCount >= (rule.params.buyQuantity as number ?? rule.params.minQty as number);
       case 'percentage_off':
       case 'nominal_off':
       case 'fixed_price':
@@ -237,6 +244,26 @@ export class Promotion extends AggregateRoot<PromotionId> {
             : context.items;
           const bundleTotal = bundleItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
           discount = Math.max(0, bundleTotal - effect.value);
+          break;
+        }
+        case 'buy_x_get_y': {
+          const buyQty = (effect.params?.buyQuantity as number) ?? 2;
+          const getQty = (effect.params?.getQuantity as number) ?? 1;
+          const totalQty = context.items.reduce((s, i) => s + i.quantity, 0);
+          if (totalQty < buyQty) break;
+          const sets = Math.floor(totalQty / buyQty);
+          const cheapest = [...context.items].sort((a, b) => a.unitPrice - b.unitPrice)[0];
+          if (cheapest) discount = sets * getQty * cheapest.unitPrice;
+          break;
+        }
+        case 'buy_x_pay_y': {
+          const minQty = (effect.params?.minQty as number) ?? 1;
+          const payQty = (effect.params?.payQty as number) ?? 0;
+          const totalQty = context.items.reduce((s, i) => s + i.quantity, 0);
+          if (minQty <= payQty || totalQty < minQty) break;
+          const sets = Math.floor(totalQty / minQty);
+          const cheapest = [...context.items].sort((a, b) => a.unitPrice - b.unitPrice)[0];
+          if (cheapest) discount = sets * (minQty - payQty) * cheapest.unitPrice;
           break;
         }
       }

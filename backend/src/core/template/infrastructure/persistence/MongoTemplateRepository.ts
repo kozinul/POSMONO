@@ -12,6 +12,7 @@ interface TemplateDoc {
   sections: any[];
   metadata: any;
   isActive: boolean;
+  isDefault: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -34,6 +35,7 @@ export class MongoTemplateRepository {
       sections: doc.sections,
       metadata: doc.metadata,
       isActive: doc.isActive,
+      isDefault: doc.isDefault,
       createdAt: doc.createdAt,
       updatedAt: doc.updatedAt,
     });
@@ -52,6 +54,7 @@ export class MongoTemplateRepository {
       sections: data.sections,
       metadata: data.metadata,
       isActive: data.isActive,
+      isDefault: data.isDefault,
     };
   }
 
@@ -91,6 +94,19 @@ export class MongoTemplateRepository {
 
   async delete(id: string): Promise<void> {
     await this.model.deleteOne({ _id: id });
+  }
+
+  async findDefault(tenantId: string, documentType: string): Promise<Template | null> {
+    const doc = await this.model.findOne({ tenantId, documentType, isDefault: true }).sort({ updatedAt: -1 }).lean();
+    if (!doc) return null;
+    return this.toDomain(doc as unknown as TemplateDoc);
+  }
+
+  async clearDefault(tenantId: string, documentType: string): Promise<void> {
+    await this.model.updateMany(
+      { tenantId, documentType, isDefault: true },
+      { $set: { isDefault: false } },
+    );
   }
 
   async saveVersion(template: Template, changeDescription?: string): Promise<void> {

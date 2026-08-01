@@ -5,7 +5,7 @@ const PromotionRuleSchema = new Schema(
     type: {
       type: String,
       enum: [
-        'min_purchase', 'min_items', 'buy_x_get_y', 'percentage_off', 'nominal_off',
+        'min_purchase', 'min_items', 'buy_x_get_y', 'buy_x_pay_y', 'percentage_off', 'nominal_off',
         'fixed_price', 'free_item', 'bundle_price', 'product_match', 'category_match',
         'day_of_week', 'date_range', 'time_range', 'customer_tag',
       ],
@@ -30,6 +30,7 @@ const PromotionEffectSchema = new Schema(
       default: 'order',
     },
     targetProductId: { type: String },
+    targetProductName: { type: String },
     maxDiscount: { type: Number },
   },
   { _id: false },

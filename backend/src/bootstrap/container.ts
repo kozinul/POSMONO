@@ -111,6 +111,7 @@ import { TemplateVersionSchema } from '../core/template/infrastructure/persisten
 import { MongoTemplateRepository } from '../core/template/infrastructure/persistence/MongoTemplateRepository';
 import { TemplateService } from '../core/template/application/services/TemplateService';
 import { RenderService } from '../core/template/application/services/RenderService';
+import { ReceiptRenderService } from '../core/template/application/services/ReceiptRenderService';
 import { TemplateController } from '../core/template/interfaces/http/controllers/TemplateController';
 
 export type DIContainer = ReturnType<typeof buildContainer>;
@@ -574,6 +575,7 @@ export function buildContainer() {
         taxService: container.resolve('taxService'),
         discountService: container.resolve('discountService'),
         eventBus: container.resolve('eventBus'),
+        receiptRenderService: container.resolve('receiptRenderService'),
       }),
     }),
     paymentController: asClass(PaymentController, {
@@ -765,6 +767,12 @@ export function buildContainer() {
       }),
     }),
     renderService: asClass(RenderService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        templateService: container.resolve('templateService'),
+      }),
+    }),
+    receiptRenderService: asClass(ReceiptRenderService, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
         templateService: container.resolve('templateService'),

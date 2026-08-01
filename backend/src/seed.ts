@@ -257,6 +257,42 @@ async function seed() {
   await Stock.create(stockEntries);
 
   console.log('Seeding templates...');
+  const receiptSections = [
+    { id: 'sec-header', type: 'header', enabled: true, order: 1, nodes: [
+      { id: 'r1', type: 'image', field: 'store.logo', maxHeight: 12, style: { font: { align: 'center' } }, visibility: { operator: 'AND', rules: [{ field: 'store.logo', operator: 'exists' }] } },
+      { id: 'r2', type: 'field', field: 'store.name', style: { font: { size: 14, weight: 'bold', align: 'center' } } },
+      { id: 'r3', type: 'text', text: 'Pesanan {{ order.documentNumber }}', style: { font: { align: 'center' } } },
+      { id: 'r4', type: 'text', text: '{{ order.date }} {{ order.time }}', style: { font: { align: 'center' } } },
+      { id: 'r5', type: 'divider', style: {} },
+    ]},
+    { id: 'sec-items', type: 'items', enabled: true, order: 2, nodes: [
+      { id: 'r6', type: 'repeater', dataSource: 'items', template: [
+        { id: 'r7', type: 'text', text: '{{ item.qty }}x {{ item.name }} ... Rp {{ item.totalPrice | number(0) }}', style: { font: { size: 10 } } },
+      ]},
+    ]},
+    { id: 'sec-promo', type: 'summary', enabled: true, order: 3, nodes: [
+      { id: 'r8', type: 'repeater', dataSource: 'promotions', template: [
+        { id: 'r9', type: 'text', text: '{{ item.name }} ({{ item.code }})', style: { font: { size: 10 } } },
+      ], visibility: { operator: 'AND', rules: [{ field: 'summary.orderDiscount', operator: 'greater_than', value: 0 }] } },
+      { id: 'r10', type: 'text', text: 'Total Diskon  -Rp {{ summary.orderDiscount | number(0) }}', style: { font: { size: 10 } }, visibility: { operator: 'AND', rules: [{ field: 'summary.orderDiscount', operator: 'greater_than', value: 0 }] } },
+    ]},
+    { id: 'sec-summary', type: 'summary', enabled: true, order: 4, nodes: [
+      { id: 'r11', type: 'divider', style: {} },
+      { id: 'r12', type: 'text', text: 'Subtotal  Rp {{ summary.subtotal | number(0) }}', style: {} },
+      { id: 'r13', type: 'text', text: 'Service Charge  Rp {{ summary.serviceCharge | number(0) }}', style: {}, visibility: { operator: 'AND', rules: [{ field: 'summary.serviceCharge', operator: 'greater_than', value: 0 }] } },
+      { id: 'r14', type: 'text', text: 'Tax  Rp {{ summary.tax | number(0) }}', style: {}, visibility: { operator: 'AND', rules: [{ field: 'summary.tax', operator: 'greater_than', value: 0 }] } },
+      { id: 'r15', type: 'text', text: 'Pembulatan  Rp {{ summary.rounding | number(0) }}', style: {}, visibility: { operator: 'AND', rules: [{ field: 'summary.rounding', operator: 'not_equals', value: 0 }] } },
+      { id: 'r16', type: 'divider', style: {} },
+      { id: 'r17', type: 'text', text: 'TOTAL  Rp {{ summary.grandTotal | number(0) }}', style: { font: { size: 12, weight: 'bold' } } },
+      { id: 'r18', type: 'text', text: 'Tunai  Rp {{ payments.0.paidAmount | number(0) }}', style: {} },
+      { id: 'r19', type: 'text', text: 'Kembalian  Rp {{ payments.0.change | number(0) }}', style: {} },
+    ]},
+    { id: 'sec-footer', type: 'footer', enabled: true, order: 5, nodes: [
+      { id: 'r20', type: 'divider', style: {} },
+      { id: 'r21', type: 'text', text: 'Terima kasih telah berbelanja', style: { font: { align: 'center' } } },
+    ]},
+  ];
+
   const kotSections = [
     { id: 'sec-header', type: 'header', enabled: true, order: 1, nodes: [
       { id: 'n1', type: 'field', field: 'store.name', style: { font: { size: 14, weight: 'bold', align: 'center' } } },
@@ -313,6 +349,19 @@ async function seed() {
     {
       _id: id('tpl'),
       tenantId,
+      name: 'Struk Kasir Default',
+      description: 'Struk kasir default (mirror tampilan print receipt POS)',
+      schemaVersion: 1,
+      documentType: 'receipt',
+      paper: { type: 'thermal80', width: 80, height: 'auto', margin: { top: 2, right: 3, bottom: 2, left: 3 } },
+      sections: receiptSections,
+      metadata: { createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), version: 1, createdBy: 'system' },
+      isActive: true,
+      isDefault: true,
+    },
+    {
+      _id: id('tpl'),
+      tenantId,
       name: 'Standard Receipt 58mm',
       description: 'Standard thermal receipt for 58mm paper (2-inch)',
       schemaVersion: 1,
@@ -321,6 +370,7 @@ async function seed() {
       sections: [],
       metadata: { createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), version: 1, createdBy: 'system' },
       isActive: true,
+      isDefault: false,
     },
     {
       _id: id('tpl'),
@@ -333,6 +383,7 @@ async function seed() {
       sections: [],
       metadata: { createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), version: 1, createdBy: 'system' },
       isActive: true,
+      isDefault: false,
     },
     {
       _id: id('tpl'),
@@ -367,7 +418,7 @@ async function seed() {
   console.log(`   Categories: ${categories.length}`);
   console.log(`   Products: ${products.length}`);
   console.log(`   Payment Methods: 6`);
-  console.log(`   Templates: 4`);
+  console.log(`   Templates: 5`);
   console.log(`   Stock items: ${stockEntries.length}`);
   console.log(`   Stock items: ${stockEntries.length}`);
 

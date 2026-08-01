@@ -15,6 +15,7 @@ export interface TenantConfig {
   discountMaxPercent: number;
   discountMaxNominal: number;
   receiptFooter: string;
+  receiptLogo: string;
 }
 
 export interface Tenant {

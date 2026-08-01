@@ -43,6 +43,7 @@ type Action =
   | { type: 'REMOVE_NODE'; sectionId: string; nodeId: string }
   | { type: 'UPDATE_NODE'; sectionId: string; nodeId: string; updates: Partial<DesignerNode> }
   | { type: 'MOVE_NODE'; sectionId: string; nodeId: string; targetIndex: number }
+  | { type: 'REORDER_NODES'; sectionId: string; nodes: DesignerNode[] }
   | { type: 'MOVE_NODE_BETWEEN_SECTIONS'; sourceSectionId: string; targetSectionId: string; nodeId: string }
   | { type: 'LOAD_TEMPLATE'; template: DesignerTemplate }
   | { type: 'SET_SELECTION'; ids: string[]; append?: boolean }
@@ -188,6 +189,12 @@ function designerReducer(state: DesignerState, action: Action): DesignerState {
       });
       return { ...state, ...recordHistory({ ...state.template, sections }) };
     }
+    case 'REORDER_NODES': {
+      const sections = state.template.sections.map((s) =>
+        s.id === action.sectionId ? { ...s, nodes: action.nodes } : s
+      );
+      return { ...state, ...recordHistory({ ...state.template, sections }) };
+    }
     case 'MOVE_NODE_BETWEEN_SECTIONS': {
       let nodeToMove: DesignerNode | undefined;
       const sectionsWithoutNode = state.template.sections.map((s) => {
@@ -225,7 +232,12 @@ function designerReducer(state: DesignerState, action: Action): DesignerState {
       return { ...state, copiedNode: action.node };
     case 'PASTE_NODE': {
       if (!state.copiedNode) return state;
-      const targetSecId = action.sectionId ?? state.selectedIds[0] ?? state.template.sections[0]?.id;
+      let targetSecId: string | undefined = action.sectionId ?? state.selectedIds[0];
+      if (targetSecId && !state.template.sections.some((s) => s.id === targetSecId)) {
+        const parentSec = state.template.sections.find((s) => s.nodes.some((n) => n.id === targetSecId));
+        targetSecId = parentSec?.id;
+      }
+      if (!targetSecId) targetSecId = state.template.sections[0]?.id;
       if (!targetSecId) return state;
       const newNode = { ...state.copiedNode, id: `node-${Date.now()}` };
       const sections = state.template.sections.map((s) =>

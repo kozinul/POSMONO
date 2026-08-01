@@ -12,6 +12,7 @@ export const TemplateSchema = new Schema(
     sections: { type: [Schema.Types.Mixed], default: [] },
     metadata: { type: Schema.Types.Mixed, default: {} },
     isActive: { type: Boolean, default: true },
+    isDefault: { type: Boolean, default: false },
   },
   {
     timestamps: true,

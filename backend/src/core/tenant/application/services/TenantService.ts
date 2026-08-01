@@ -35,6 +35,7 @@ export class TenantService {
         serviceChargeEnabled: false, serviceChargeRate: 0, serviceChargeName: 'Service Charge',
         discountMaxPercent: 100, discountMaxNominal: 1_000_000,
         receiptFooter: 'Terima kasih telah berbelanja',
+        receiptLogo: '',
       },
       billingEmail: input.billingEmail,
     });

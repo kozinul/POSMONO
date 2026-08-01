@@ -32,6 +32,11 @@ interface HeldOrder {
   createdAt: string;
 }
 
+export interface ReceiptLayout {
+  paper: Record<string, unknown>;
+  pages: { width: number; height: number; nodes: Array<Record<string, unknown>> }[];
+}
+
 interface Receipt {
   orderNumber: string;
   displayOrderNumber: string;
@@ -41,6 +46,10 @@ interface Receipt {
   paidItems: CartItem[];
   hasRemaining: boolean;
   createdAt: string;
+  layout?: ReceiptLayout | null;
+  thermal?: string | null;
+  pdf?: string | null;
+  templateName?: string | null;
 }
 
 interface POSState {
@@ -202,7 +211,7 @@ export const usePOSStore = create<POSState>((set, get) => ({
     const state = get();
     const paidItems = state.items.filter((i) => !i.isFreeItem);
     if (paidItems.length === 0) {
-      set({ pricing: null, pricingLoading: false });
+      set({ pricing: null, pricingLoading: false, items: state.items.filter((i) => !i.isFreeItem) });
       return;
     }
 
@@ -240,10 +249,11 @@ export const usePOSStore = create<POSState>((set, get) => ({
               isFreeItem: true,
               freeByRuleId: freeLi.freeByRuleId,
             });
-            return { ...item, quantity: item.quantity - freeLi.quantity };
-          }
-          return item;
-        });
+          return { ...item, quantity: item.quantity - freeLi.quantity };
+        }
+        return item;
+      })
+      .filter((i) => i.quantity > 0);
 
       for (const li of data.lineItems ?? []) {
         if (

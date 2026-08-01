@@ -585,7 +585,7 @@ Process a cash payment with optional promo code and manual discount.
 |-------|------|----------|-------------|
 | items | array | yes | Cart items with productId, quantity, unitPrice |
 | amountPaid | number | yes | Amount tendered by customer |
-| discount | number | no | Manual discount value (default 0) |
+| discount | number | no | **Manual** discount only — NOT the promo discount (default 0) |
 | discountType | string | no | `"percentage"` or `"nominal"` (default nominal) |
 | promoCode | string | no | Promo code to apply (validated against discount engine) |
 
@@ -601,10 +601,13 @@ Process a cash payment with optional promo code and manual discount.
 ```
 
 **Discount flow:**
-1. If `promoCode` provided → `DiscountServiceAdapter.apply()` evaluates rules against cart
-2. Promo discount + manual discount combined (capped to subtotal)
-3. Combined discount passed to `TaxService.calculate()` (discount before tax)
-4. Order stores `promotions[]` and `discountBreakdown[]` for receipt/reporting
+1. `discount` is the cashier's **manual** discount only. Do **not** send `promotionDiscount` from `/pricing/calculate` in this field — the backend recomputes it.
+2. Backend calls `DiscountServiceAdapter.apply()` which evaluates all active auto-apply rules + `promoCode` exactly once → `promoDiscount`
+3. Promo discount + manual discount combined (capped to subtotal)
+4. Combined discount passed to `TaxService.calculate()` (discount before tax)
+5. Order stores `promotions[]` and `discountBreakdown[]` for receipt/reporting
+
+> ⚠️ **Contract:** sending the pre-computed `promotionDiscount` here AND a `promoCode` (or having auto-apply rules) causes the discount to be applied **twice**, producing a receipt total that is lower than the cart total. Only the manual discount belongs in `discount`.
 
 ---
 

@@ -25,6 +25,7 @@ export const updateTenantConfigSchema = z.object({
   discountMaxPercent: z.number().min(0).max(100).optional(),
   discountMaxNominal: z.number().min(0).optional(),
   receiptFooter: z.string().optional(),
+  receiptLogo: z.string().optional(),
 });
 
 export type CreateTenantInput = z.infer<typeof createTenantSchema>;

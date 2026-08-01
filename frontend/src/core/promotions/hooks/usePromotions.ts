@@ -11,6 +11,7 @@ export interface PromotionEffect {
   value: number;
   target: string;
   targetProductId?: string;
+  targetProductName?: string;
   maxDiscount?: number;
 }
 

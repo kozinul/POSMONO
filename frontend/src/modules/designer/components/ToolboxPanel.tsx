@@ -67,6 +67,7 @@ const components: ComponentItem[] = [
   { id: 'c-text', type: 'text', label: 'Static Text', hasField: false, hasChildren: false },
   { id: 'c-divider', type: 'divider', label: 'Divider', hasField: false, hasChildren: false },
   { id: 'c-spacer', type: 'spacer', label: 'Blank Space', hasField: false, hasChildren: false },
+  { id: 'c-image', type: 'image', label: 'Image / Logo', hasField: true, hasChildren: false },
   { id: 'c-qrcode', type: 'qrcode', label: 'QR Code', hasField: true, hasChildren: false },
   { id: 'c-barcode', type: 'barcode', label: 'Barcode', hasField: true, hasChildren: false },
   { id: 'c-container', type: 'container', label: 'Container', hasField: false, hasChildren: true },
@@ -96,7 +97,11 @@ export default function ToolboxPanel() {
   };
 
   const handleAddFieldOrComponent = (payload: { field?: string; label?: string; componentType?: string }) => {
-    let targetSectionId = state.selectedIds[0];
+    let targetSectionId: string | undefined = state.selectedIds[0];
+    if (targetSectionId && !state.template.sections.some((s) => s.id === targetSectionId)) {
+      const parentSec = state.template.sections.find((s) => s.nodes.some((n) => n.id === targetSectionId));
+      targetSectionId = parentSec?.id;
+    }
     if (!targetSectionId && state.template.sections.length > 0) {
       targetSectionId = state.template.sections[0].id;
     }
@@ -122,6 +127,10 @@ export default function ToolboxPanel() {
       newNode.text = 'Static text';
     } else if (payload.componentType === 'spacer') {
       newNode.height = 4;
+    } else if (payload.componentType === 'image') {
+      newNode.field = 'store.logo';
+      newNode.label = 'Logo';
+      newNode.style = { font: { align: 'center' } };
     }
 
     dispatch({ type: 'ADD_NODE', sectionId: targetSectionId, node: newNode });

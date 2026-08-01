@@ -1,8 +1,21 @@
 import { Request, Response } from 'express';
 import { BaseController } from '../../../../../@shared/interfaces/BaseController';
 import { PaymentService } from '../../../application/services/PaymentService';
+import { ReceiptRenderResult } from '../../../../../core/template/application/services/ReceiptRenderService';
 import { z } from 'zod';
 import { ValidationError } from '../../../../../@shared/infrastructure/error/AppError';
+
+function serializeReceipt(receipt: ReceiptRenderResult | null | undefined): Record<string, unknown> | null {
+  if (!receipt) return null;
+  return {
+    layout: receipt.layout,
+    thermal: receipt.thermal.toString('base64'),
+    pdf: receipt.pdf.toString('base64'),
+    templateId: receipt.templateId,
+    templateName: receipt.templateName,
+    paper: receipt.paper,
+  };
+}
 
 const payCashSchema = z.object({
   items: z.array(z.object({
@@ -83,6 +96,7 @@ export class PaymentController extends BaseController {
           : 0,
       },
       order: orderData,
+      receipt: serializeReceipt(result.receipt),
     });
   }
 
@@ -106,6 +120,7 @@ export class PaymentController extends BaseController {
     this.ok(res, {
       payment: result.payment.serialize(),
       order: result.order.serialize(),
+      receipt: serializeReceipt(result.receipt),
     });
   }
 

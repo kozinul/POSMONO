@@ -8,7 +8,7 @@ const ruleSchema = z.object({
   type: z.enum([
     'min_purchase', 'min_items', 'percentage_off', 'nominal_off',
     'fixed_price', 'free_item', 'bundle_price', 'product_match', 'category_match',
-    'day_of_week', 'date_range', 'time_range', 'customer_tag',
+    'day_of_week', 'date_range', 'time_range', 'customer_tag', 'buy_x_get_y', 'buy_x_pay_y',
   ]),
   params: z.record(z.unknown()),
 });
@@ -18,6 +18,7 @@ const effectSchema = z.object({
   value: z.number(),
   target: z.enum(['order', 'item', 'cheapest_item', 'specific_product']).default('order'),
   targetProductId: z.string().optional(),
+  targetProductName: z.string().optional(),
   maxDiscount: z.number().optional(),
   params: z.record(z.unknown()).optional(),
 });

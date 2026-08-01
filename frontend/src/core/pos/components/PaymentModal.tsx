@@ -72,13 +72,14 @@ export function PaymentModal() {
         })),
         amountPaid: isCash ? paid : grandTotal,
         method: selectedMethod.code,
-        discount: (pricing?.promotionDiscount ?? 0) + manualDiscount,
-        discountType: 'nominal',
+        discount: manualDiscount,
+        discountType: manualDiscountType,
         promoCode: promoCode || undefined,
         referenceNumber: referenceNumber || undefined,
       });
 
       const orderData = res.data.data.order;
+      const receiptData = res.data.data.receipt;
 
       setReceipt({
         orderNumber: orderData.orderNumber,
@@ -89,6 +90,10 @@ export function PaymentModal() {
         paidItems: items,
         hasRemaining: false,
         createdAt: orderData.createdAt,
+        layout: receiptData?.layout ?? null,
+        thermal: receiptData?.thermal ?? null,
+        pdf: receiptData?.pdf ?? null,
+        templateName: receiptData?.templateName ?? null,
       });
 
       removeItems(items.map((i) => i.productId));

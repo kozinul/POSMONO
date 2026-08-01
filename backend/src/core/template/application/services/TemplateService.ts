@@ -12,7 +12,11 @@ export class TemplateService {
     documentType: DocumentType;
     paper: PaperPreset;
     sections?: DocumentSection[];
+    isDefault?: boolean;
   }): Promise<Template> {
+    if (input.isDefault) {
+      await this.templateRepository.clearDefault(input.tenantId, input.documentType);
+    }
     const template = Template.create(input);
     await this.templateRepository.save(template);
     await this.templateRepository.saveVersion(template, 'Initial version');
@@ -28,10 +32,15 @@ export class TemplateService {
     paper?: PaperPreset;
     sections?: DocumentSection[];
     isActive?: boolean;
+    isDefault?: boolean;
   }): Promise<Template> {
     const template = await this.templateRepository.findById(input.id);
     if (!template) throw new Error('Template not found');
     if (template.tenantId !== input.tenantId) throw new Error('Template not found');
+
+    if (input.isDefault && input.documentType && input.documentType !== template.documentType) {
+      await this.templateRepository.clearDefault(input.tenantId, input.documentType);
+    }
 
     template.update({
       name: input.name,
@@ -40,10 +49,33 @@ export class TemplateService {
       paper: input.paper,
       sections: input.sections,
       isActive: input.isActive,
+      isDefault: input.isDefault,
     });
+    if (input.isDefault) {
+      await this.templateRepository.clearDefault(input.tenantId, template.documentType);
+    }
     await this.templateRepository.save(template);
     await this.templateRepository.saveVersion(template);
     return template;
+  }
+
+  async setDefault(input: { id: string; tenantId: string }): Promise<Template> {
+    const template = await this.templateRepository.findById(input.id);
+    if (!template) throw new Error('Template not found');
+    if (template.tenantId !== input.tenantId) throw new Error('Template not found');
+
+    await this.templateRepository.clearDefault(input.tenantId, template.documentType);
+    template.update({ isDefault: true });
+    await this.templateRepository.save(template);
+    await this.templateRepository.saveVersion(template, 'Set as default');
+    return template;
+  }
+
+  async getDefault(tenantId: string, documentType: DocumentType): Promise<Template | null> {
+    const defaultTemplate = await this.templateRepository.findDefault(tenantId, documentType);
+    if (defaultTemplate) return defaultTemplate;
+    const { templates } = await this.templateRepository.findByTenant(tenantId, { documentType, limit: 1 });
+    return templates[0] ?? null;
   }
 
   async publish(input: { id: string; tenantId: string }): Promise<Template> {

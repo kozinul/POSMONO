@@ -39,6 +39,7 @@ export interface TenantConfig {
   discountMaxPercent: number;
   discountMaxNominal: number;
   receiptFooter: string;
+  receiptLogo: string;
 }
 
 export class Tenant extends AggregateRoot<TenantId> {

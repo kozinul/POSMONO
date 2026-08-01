@@ -37,6 +37,7 @@ export const TenantSchema = new Schema(
       discountMaxPercent: { type: Number, default: 100 },
       discountMaxNominal: { type: Number, default: 1_000_000 },
       receiptFooter: { type: String, default: 'Terima kasih telah berbelanja' },
+      receiptLogo: { type: String, default: '' },
     },
     billingEmail: { type: String, required: true },
   },

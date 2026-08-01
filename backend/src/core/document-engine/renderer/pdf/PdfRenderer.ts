@@ -69,6 +69,18 @@ export class PdfRenderer {
       }
       case 'spacer':
         break;
+      case 'image': {
+        if (node.content) {
+          try {
+            const imgWidth = Math.min(node.width ?? 120, 120);
+            const imgHeight = node.height ?? 12;
+            pdf.image(node.content, x, y, { width: imgWidth, height: imgHeight, fit: [imgWidth, imgHeight] });
+          } catch {
+            // ignore invalid/unloadable image sources
+          }
+        }
+        break;
+      }
       case 'barcode':
         pdf.fontSize(8).text(node.content || ' ', x, y);
         break;

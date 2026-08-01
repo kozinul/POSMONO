@@ -8,9 +8,11 @@ export function createTemplateRoutes(templateController: TemplateController): Ro
 
   router.get('/', authenticate, asyncHandler(templateController.list.bind(templateController)));
   router.get('/:id', authenticate, asyncHandler(templateController.getById.bind(templateController)));
+  router.get('/default/:documentType', authenticate, asyncHandler(templateController.getDefault.bind(templateController)));
   router.post('/', authenticate, asyncHandler(templateController.create.bind(templateController)));
   router.put('/:id', authenticate, asyncHandler(templateController.update.bind(templateController)));
   router.post('/:id/publish', authenticate, asyncHandler(templateController.publish.bind(templateController)));
+  router.post('/:id/set-default', authenticate, asyncHandler(templateController.setDefault.bind(templateController)));
   router.post('/:id/duplicate', authenticate, asyncHandler(templateController.duplicate.bind(templateController)));
   router.delete('/:id', authenticate, asyncHandler(templateController.delete.bind(templateController)));
   router.post('/:id/export', authenticate, asyncHandler(templateController.exportTemplate.bind(templateController)));

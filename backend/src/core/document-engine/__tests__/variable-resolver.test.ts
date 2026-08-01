@@ -159,6 +159,39 @@ describe('VariableResolver', () => {
     expect(result.resolvedSections[0].nodes[0].children![0].content).toBe('Kopi Susu — Warung Kopi');
   });
 
+  it('resolves image nodes from their field', () => {
+    const data: DocumentData = {
+      ...sampleData,
+      store: { ...sampleData.store, logo: 'data:image/svg+xml;base64,PHN2Zy8+' },
+    };
+    const sections: DocumentSection[] = [
+      {
+        id: 'sec-1', type: 'header', enabled: true, order: 1,
+        nodes: [
+          { id: 'img1', type: 'image', field: 'store.logo', maxHeight: 12, style: { font: { align: 'center' } } },
+        ],
+      },
+    ];
+    const result = resolver.resolve(sections, data);
+    expect(result.resolvedSections[0].nodes[0].node.type).toBe('image');
+    expect(result.resolvedSections[0].nodes[0].content).toBe('data:image/svg+xml;base64,PHN2Zy8+');
+    expect(result.unresolvedFields).toHaveLength(0);
+  });
+
+  it('flags image node with missing field as unresolved', () => {
+    const sections: DocumentSection[] = [
+      {
+        id: 'sec-1', type: 'header', enabled: true, order: 1,
+        nodes: [
+          { id: 'img1', type: 'image', field: 'store.logo', style: {} },
+        ],
+      },
+    ];
+    const result = resolver.resolve(sections, sampleData);
+    expect(result.resolvedSections[0].nodes[0].content).toBe('');
+    expect(result.unresolvedFields).toEqual(['store.logo']);
+  });
+
   it('returns empty for invalid dataSource', () => {
     const sections: DocumentSection[] = [
       {

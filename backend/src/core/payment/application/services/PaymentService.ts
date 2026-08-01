@@ -3,6 +3,7 @@ import { NotFoundError, ValidationError } from '../../../../@shared/infrastructu
 import { Payment, PaymentMethod, ISplitBill } from '../../domain/Payment';
 import { Refund } from '../../domain/Refund';
 import { Order, IOrderItem, IPromotionBreakdown, IDiscountBreakdown } from '../../../ordering/domain/Order';
+import { ReceiptRenderResult } from '../../../template/application/services/ReceiptRenderService';
 
 export class PaymentService {
   constructor(
@@ -13,6 +14,7 @@ export class PaymentService {
     private readonly taxService: any,
     private readonly discountService: any,
     private readonly eventBus: any,
+    private readonly receiptRenderService?: any,
   ) {}
 
   async payCash(input: {
@@ -26,7 +28,7 @@ export class PaymentService {
     promoCode?: string;
     referenceNumber?: string;
     cardLastFour?: string;
-  }): Promise<{ payment: Payment; order: any }> {
+  }): Promise<{ payment: Payment; order: any; receipt: ReceiptRenderResult | null }> {
     const roundMoney = (value: number) => Math.round(value);
     const rawSubtotal = input.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
     const manualDiscountInput = input.discount ?? 0;
@@ -205,7 +207,25 @@ export class PaymentService {
       this.eventBus.publish(event);
     }
 
-    return { payment, order };
+    const receipt = await this.renderReceipt(order, payment);
+
+    return { payment, order, receipt };
+  }
+
+  private async renderReceipt(order: Order, payment: Payment): Promise<ReceiptRenderResult | null> {
+    if (!this.receiptRenderService) return null;
+    try {
+      const tenant = await this.tenantRepository.findById(order.serialize().tenantId);
+      if (!tenant) return null;
+      return await this.receiptRenderService.render({
+        tenantId: order.serialize().tenantId,
+        order: order.serialize(),
+        payment: payment.serialize(),
+        tenant: tenant.serialize(),
+      });
+    } catch {
+      return null;
+    }
   }
 
   async processByOrderId(input: {
@@ -219,7 +239,7 @@ export class PaymentService {
     provider?: string;
     qrCodeUrl?: string;
     paymentTransactionId?: string;
-  }): Promise<{ payment: Payment; order: Order }> {
+  }): Promise<{ payment: Payment; order: Order; receipt: ReceiptRenderResult | null }> {
     const order = await this.orderRepository.findById(input.orderId);
     if (!order) throw new NotFoundError('Order not found');
 
@@ -271,7 +291,9 @@ export class PaymentService {
       this.eventBus.publish(event);
     }
 
-    return { payment, order };
+    const receipt = await this.renderReceipt(order, payment);
+
+    return { payment, order, receipt };
   }
 
   async refund(input: {

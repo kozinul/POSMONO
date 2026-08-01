@@ -19,6 +19,7 @@ const createSchema = z.object({
   documentType: z.enum(['receipt', 'invoice', 'kot', 'label', 'report', 'slip']),
   paper: paperSchema,
   sections: z.array(z.record(z.unknown())).optional().default([]),
+  isDefault: z.boolean().optional().default(false),
 });
 
 const updateSchema = z.object({
@@ -28,6 +29,7 @@ const updateSchema = z.object({
   paper: paperSchema.optional(),
   sections: z.array(z.record(z.unknown())).optional(),
   isActive: z.boolean().optional(),
+  isDefault: z.boolean().optional(),
 }).refine((data) => Object.keys(data).length > 0, { message: 'At least one field required' });
 
 const renderSchema = z.object({
@@ -61,6 +63,7 @@ export class TemplateController extends BaseController {
       documentType: data.documentType as DocumentType,
       paper: data.paper as PaperPreset,
       sections: data.sections as unknown as DocumentSection[],
+      isDefault: data.isDefault,
     });
     this.created(res, template.serialize());
   }
@@ -78,7 +81,23 @@ export class TemplateController extends BaseController {
       paper: data.paper as PaperPreset | undefined,
       sections: data.sections as unknown as DocumentSection[] | undefined,
       isActive: data.isActive,
+      isDefault: data.isDefault,
     });
+    this.ok(res, template.serialize());
+  }
+
+  async setDefault(req: Request, res: Response): Promise<void> {
+    const template = await this.templateService.setDefault({ id: req.params.id, tenantId: req.tenantId });
+    this.ok(res, template.serialize());
+  }
+
+  async getDefault(req: Request, res: Response): Promise<void> {
+    const documentType = (req.params.documentType ?? 'receipt') as DocumentType;
+    const template = await this.templateService.getDefault(req.tenantId, documentType);
+    if (!template) {
+      res.status(404).json({ success: false, message: 'No default template found' });
+      return;
+    }
     this.ok(res, template.serialize());
   }
 

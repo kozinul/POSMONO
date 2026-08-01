@@ -58,6 +58,8 @@ function mapEffects(promoEffects: IPromotionEffect[]): IDiscountEffect[] {
         amount: e.type === 'nominal' ? e.value : undefined,
         target: e.target,
         productId: e.targetProductId,
+        productName: e.targetProductName,
+        quantity: e.params?.quantity ?? (e.type === 'free_item' ? 1 : undefined),
         maxCap: e.maxDiscount,
       },
     };

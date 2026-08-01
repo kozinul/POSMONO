@@ -206,6 +206,31 @@ function NodeProperties({ node, dispatch, sectionId }: { node: any; dispatch: an
         </div>
       )}
 
+      {node.type === 'image' && (
+        <>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">Variabel Gambar / Logo</label>
+            <input
+              type="text"
+              value={node.field ?? 'store.logo'}
+              onChange={(e) => update({ field: e.target.value })}
+              placeholder="store.logo"
+              className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-mono focus:ring-2 focus:ring-blue-500 outline-none"
+            />
+            <p className="text-[10px] text-gray-400 mt-1">Path variabel berisi URL gambar. Di preview menggunakan data contoh.</p>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">Tinggi Maks. Logo (mm)</label>
+            <input
+              type="number"
+              value={node.maxHeight ?? 12}
+              onChange={(e) => update({ maxHeight: Number(e.target.value) })}
+              className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs"
+            />
+          </div>
+        </>
+      )}
+
       <hr className="border-gray-200" />
 
       <div>

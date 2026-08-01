@@ -72,6 +72,20 @@ export class ThermalLayoutCalculator {
       return;
     }
 
+    if (resolved.node.type === 'image') {
+      const imgHeight = (resolved.node as any).maxHeight ?? 12;
+      nodes.push({
+        type: resolved.node.type,
+        content,
+        style: (resolved.node.style || {}) as Record<string, unknown>,
+        x: paper.margin.left,
+        y,
+        width: printableWidth,
+        height: imgHeight,
+      });
+      return;
+    }
+
     const charWidth = this.getCharWidth(paper);
     const lineHeight = this.getLineHeight(resolved.node);
     const maxChars = Math.floor(printableWidth / charWidth);
@@ -99,6 +113,8 @@ export class ThermalLayoutCalculator {
       case 'field':
         return resolved.content;
       case 'text':
+        return resolved.content;
+      case 'image':
         return resolved.content;
       case 'table':
         return resolved.content;
