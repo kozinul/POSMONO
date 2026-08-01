@@ -102,10 +102,22 @@ export class ProductService {
       }
     }
 
+    const before = product.serialize();
     product.update(input);
     await this.productRepository.save(product);
     const data = product.serialize();
     this.publish(DOMAIN_EVENTS.PRODUCT_UPDATED, data.id, data.tenantId, { productId: data.id, name: data.name });
+    const priceChanged =
+      (input.basePrice !== undefined && input.basePrice !== before.basePrice) ||
+      (input.pricingProfileId !== undefined && input.pricingProfileId !== before.pricingProfileId);
+    if (priceChanged) {
+      this.publish(DOMAIN_EVENTS.PRODUCT_PRICE_CHANGED, data.id, data.tenantId, {
+        productId: data.id,
+        name: data.name,
+        basePrice: data.basePrice,
+        pricingProfileId: data.pricingProfileId,
+      });
+    }
     return product;
   }
 
