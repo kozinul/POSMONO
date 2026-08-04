@@ -3,6 +3,7 @@ import type { IDiscountRule } from '../../../@shared/hooks/useDiscountConfigurat
 import type { PricingResult, PricingLineItem } from '../../../@shared/hooks/usePricing';
 import { api } from '../../../@shared/services/api';
 import { useAuthStore } from '../../../@shared/hooks/useAuth';
+import { toast } from '../../../@shared/hooks/useToast';
 
 export interface CartItem {
   productId: string;
@@ -422,8 +423,35 @@ export const usePOSStore = create<POSState>((set, get) => ({
         tableNumber: state.tableNumber || null,
         customerName: state.customerName || null,
       });
+
+      set((s) => ({
+        heldOrders: s.heldOrders.map((o) =>
+          o.id === billId
+            ? {
+                ...o,
+                items: state.items.map((i) => ({
+                  productId: i.productId,
+                  name: i.name,
+                  price: i.price,
+                  quantity: i.quantity,
+                  categoryId: i.categoryId,
+                  pricingMode: i.pricingMode,
+                  imageUrl: i.imageUrl,
+                  stock: i.stock,
+                  isFreeItem: i.isFreeItem,
+                  freeByRuleId: i.freeByRuleId,
+                })),
+                customerName: state.customerName || o.customerName,
+                tableNumber: state.tableNumber || o.tableNumber,
+              }
+            : o,
+        ),
+      }));
+
+      toast({ title: 'Bill berhasil disimpan', icon: 'success' });
       return true;
     } catch {
+      toast({ title: 'Gagal menyimpan bill', icon: 'error' });
       return false;
     }
   },
@@ -500,9 +528,9 @@ export const usePOSStore = create<POSState>((set, get) => ({
       const remote = orders.filter((o) => !s.dismissedHeldOrderIds.includes(o.id));
       const local = s.heldOrders.filter((o) => o.id.startsWith('hold-'));
       const merged = [...remote, ...local];
-      const current = s.heldOrders.map((o) => o.id).join('|');
-      const next = merged.map((o) => o.id).join('|');
-      if (current === next) return {};
+      const currentKey = s.heldOrders.map((o) => `${o.id}:${o.total}`).join('|');
+      const nextKey = merged.map((o) => `${o.id}:${o.total}`).join('|');
+      if (currentKey === nextKey) return {};
       return { heldOrders: merged };
     });
   },

@@ -1,5 +1,6 @@
 import { Model, Document } from 'mongoose';
 import { StockMovement, IStockMovement, StockMovementType } from '../../domain/StockMovement';
+import { StockMovementRepository } from '../../domain/StockMovementRepository';
 
 interface StockMovementDoc extends Document<string> {
   _id: string;
@@ -18,7 +19,7 @@ interface StockMovementDoc extends Document<string> {
   createdAt: Date;
 }
 
-export class MongoStockMovementRepository {
+export class MongoStockMovementRepository implements StockMovementRepository {
   constructor(private readonly model: Model<any>) {}
 
   toDomain(doc: StockMovementDoc): StockMovement {

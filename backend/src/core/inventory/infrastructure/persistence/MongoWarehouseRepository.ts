@@ -1,5 +1,6 @@
 import { Model, Document } from 'mongoose';
 import { Warehouse, IWarehouse } from '../../domain/Warehouse';
+import { WarehouseRepository } from '../../domain/WarehouseRepository';
 
 interface WarehouseDoc extends Document<string> {
   _id: string;
@@ -11,7 +12,7 @@ interface WarehouseDoc extends Document<string> {
   updatedAt: Date;
 }
 
-export class MongoWarehouseRepository {
+export class MongoWarehouseRepository implements WarehouseRepository {
   constructor(private readonly model: Model<any>) {}
 
   toDomain(doc: WarehouseDoc): Warehouse {
@@ -54,6 +55,11 @@ export class MongoWarehouseRepository {
 
   async findByTenant(tenantId: string): Promise<Warehouse[]> {
     const docs = await this.model.find({ tenantId }).sort({ name: 1 }).exec();
+    return docs.map((d: WarehouseDoc) => this.toDomain(d));
+  }
+
+  async findActiveByTenant(tenantId: string): Promise<Warehouse[]> {
+    const docs = await this.model.find({ tenantId, isActive: true }).sort({ name: 1 }).exec();
     return docs.map((d: WarehouseDoc) => this.toDomain(d));
   }
 

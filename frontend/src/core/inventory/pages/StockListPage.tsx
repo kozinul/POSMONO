@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { useStockList, useStockMovements, useStockIn, useStockOut, useAdjustStock, Stock } from '../hooks/useInventory';
+import { useMemo, useState, useRef } from 'react';
+import { useStockList, useStockMovements, useStockIn, useStockOut, useAdjustStock, useExportStock, useImportStock, Stock } from '../hooks/useInventory';
 import { useProductList, Product } from '../../products/hooks/useProducts';
 
 type ModalMode = 'in' | 'out' | 'adjust';
@@ -14,11 +14,16 @@ const STATUS_LABEL: Record<string, string> = {
   in: 'Masuk',
   out: 'Keluar',
   adjustment: 'Penyesuaian',
+  reserve: 'Reservasi',
+  release: 'Rilis',
 };
+
+const PAGE_SIZE = 20;
 
 export default function StockListPage() {
   const [search, setSearch] = useState('');
   const [lowStockOnly, setLowStockOnly] = useState(false);
+  const [page, setPage] = useState(1);
   const [modal, setModal] = useState<ModalState | null>(null);
   const [qtyInput, setQtyInput] = useState('');
   const [adjustSign, setAdjustSign] = useState<'plus' | 'minus'>('plus');
@@ -33,6 +38,9 @@ export default function StockListPage() {
   const stockInMutation = useStockIn();
   const stockOutMutation = useStockOut();
   const adjustMutation = useAdjustStock();
+  const exportMutation = useExportStock();
+  const importMutation = useImportStock();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const stockMap = useMemo(() => {
     const m: Record<string, Stock> = {};
@@ -60,6 +68,9 @@ export default function StockListPage() {
       return true;
     });
   }, [products, stockMap, search, lowStockOnly]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
+  const paginatedProducts = filteredProducts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const lowStockCount = useMemo(
     () => stocks.filter((s) => s.quantity > 0 && s.quantity <= s.minLevel).length,
@@ -112,15 +123,119 @@ export default function StockListPage() {
   const isPending =
     stockInMutation.isPending || stockOutMutation.isPending || adjustMutation.isPending;
 
+  const handleExport = async () => {
+    try {
+      const data = await exportMutation.mutateAsync();
+      const productData = products;
+      const productMapExport: Record<string, Product> = {};
+      for (const p of productData) productMapExport[p.id] = p;
+
+      const headers = ['productId', 'productName', 'sku', 'quantity', 'reservedQuantity', 'minLevel', 'maxLevel', 'warehouseId'];
+      const rows = data.map((row) => ({
+        ...row,
+        productName: productMapExport[row.productId]?.name || '',
+        sku: productMapExport[row.productId]?.sku || '',
+      }));
+
+      const csv = [
+        headers.join(','),
+        ...rows.map((r) => headers.map((h) => `"${(r as any)[h] ?? ''}"`).join(',')),
+      ].join('\n');
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `inventory-export-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert('Gagal export data');
+    }
+  };
+
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const text = event.target?.result as string;
+      const lines = text.split('\n').filter((l) => l.trim());
+      if (lines.length < 2) {
+        alert('File CSV kosong atau tidak valid');
+        return;
+      }
+
+      const headers = lines[0].split(',').map((h) => h.trim().replace(/"/g, ''));
+      const productIdIdx = headers.indexOf('productId');
+      const quantityIdx = headers.indexOf('quantity');
+      const minLevelIdx = headers.indexOf('minLevel');
+      const maxLevelIdx = headers.indexOf('maxLevel');
+
+      if (productIdIdx === -1 || quantityIdx === -1) {
+        alert('CSV harus memiliki kolom "productId" dan "quantity"');
+        return;
+      }
+
+      const items = lines.slice(1).map((line) => {
+        const cols = line.split(',').map((c) => c.trim().replace(/"/g, ''));
+        return {
+          productId: cols[productIdIdx],
+          quantity: parseInt(cols[quantityIdx], 10) || 0,
+          minLevel: minLevelIdx !== -1 ? parseInt(cols[minLevelIdx], 10) || undefined : undefined,
+          maxLevel: maxLevelIdx !== -1 ? parseInt(cols[maxLevelIdx], 10) || undefined : undefined,
+        };
+      }).filter((item) => item.productId && item.quantity > 0);
+
+      if (items.length === 0) {
+        alert('Tidak ada data valid untuk diimport');
+        return;
+      }
+
+      try {
+        const result = await importMutation.mutateAsync({ items });
+        alert(`Import selesai: ${result.data.data.imported} berhasil${result.data.data.errors.length > 0 ? `, ${result.data.data.errors.length} gagal` : ''}`);
+      } catch {
+        alert('Gagal import data');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Inventory</h1>
-        {lowStockCount > 0 && (
-          <span className="px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-sm font-medium">
-            {lowStockCount} produk stok rendah
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {lowStockCount > 0 && (
+            <span className="px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-sm font-medium">
+              {lowStockCount} produk stok rendah
+            </span>
+          )}
+          <button
+            onClick={handleExport}
+            disabled={exportMutation.isPending}
+            className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-medium disabled:opacity-50"
+          >
+            {exportMutation.isPending ? 'Exporting...' : 'Export CSV'}
+          </button>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importMutation.isPending}
+            className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-medium disabled:opacity-50"
+          >
+            {importMutation.isPending ? 'Importing...' : 'Import CSV'}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv"
+            onChange={handleImport}
+            className="hidden"
+          />
+        </div>
       </div>
 
       <div className="bg-white rounded-lg shadow p-4 mb-6 flex flex-wrap items-center gap-3">
@@ -133,7 +248,7 @@ export default function StockListPage() {
           <input
             type="text"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
             placeholder="Cari nama atau SKU..."
           />
@@ -142,11 +257,12 @@ export default function StockListPage() {
           <input
             type="checkbox"
             checked={lowStockOnly}
-            onChange={(e) => setLowStockOnly(e.target.checked)}
+            onChange={(e) => { setLowStockOnly(e.target.checked); setPage(1); }}
             className="h-4 w-4 text-amber-600 focus:ring-amber-500 border-gray-300 rounded"
           />
           Hanya stok rendah
         </label>
+        <span className="text-sm text-gray-400">{filteredProducts.length} produk</span>
       </div>
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -164,14 +280,14 @@ export default function StockListPage() {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {filteredProducts.length === 0 ? (
+            {paginatedProducts.length === 0 ? (
               <tr>
                 <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
                   Tidak ada produk ditemukan
                 </td>
               </tr>
             ) : (
-              filteredProducts.map((product) => {
+              paginatedProducts.map((product) => {
                 const stock = stockMap[product.id];
                 const tracked = stock && stock.quantity > 0;
                 const isLow = tracked && stock.quantity <= stock.minLevel;
@@ -253,6 +369,30 @@ export default function StockListPage() {
             )}
           </tbody>
         </table>
+
+        {totalPages > 1 && (
+          <div className="px-6 py-3 border-t border-gray-200 flex items-center justify-between">
+            <span className="text-sm text-gray-500">
+              Halaman {page} dari {totalPages}
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="px-3 py-1 text-sm border border-gray-300 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+              >
+                Prev
+              </button>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="px-3 py-1 text-sm border border-gray-300 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Movements */}
@@ -283,6 +423,8 @@ export default function StockListPage() {
               movements.map((m) => {
                 const product = productMap[m.productId];
                 const isIn = m.type === 'in';
+                const isReserve = m.type === 'reserve';
+                const isRelease = m.type === 'release';
                 return (
                   <tr key={m.id} className="hover:bg-gray-50">
                     <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-500">
@@ -293,13 +435,18 @@ export default function StockListPage() {
                     </td>
                     <td className="px-6 py-3 whitespace-nowrap">
                       <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
-                        isIn ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
+                        isIn ? 'bg-green-100 text-green-800'
+                          : isReserve ? 'bg-purple-100 text-purple-800'
+                          : isRelease ? 'bg-indigo-100 text-indigo-800'
+                          : 'bg-orange-100 text-orange-800'
                       }`}>
                         {STATUS_LABEL[m.type] || m.type}
                       </span>
                     </td>
-                    <td className={`px-6 py-3 whitespace-nowrap text-sm font-semibold ${isIn ? 'text-green-600' : 'text-orange-600'}`}>
-                      {isIn ? '+' : '-'}{m.quantity}
+                    <td className={`px-6 py-3 whitespace-nowrap text-sm font-semibold ${
+                      isIn ? 'text-green-600' : isReserve || isRelease ? 'text-purple-600' : 'text-orange-600'
+                    }`}>
+                      {isIn ? '+' : isRelease ? '+' : '-'}{m.quantity}
                     </td>
                     <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-500">
                       {m.beforeQuantity} → {m.afterQuantity}

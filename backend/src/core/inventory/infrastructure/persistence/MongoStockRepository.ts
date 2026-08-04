@@ -1,5 +1,6 @@
 import { Model, Document } from 'mongoose';
 import { Stock, IStock } from '../../domain/Stock';
+import { StockRepository } from '../../domain/StockRepository';
 
 interface StockDoc extends Document<string> {
   _id: string;
@@ -15,7 +16,7 @@ interface StockDoc extends Document<string> {
   updatedAt: Date;
 }
 
-export class MongoStockRepository {
+export class MongoStockRepository implements StockRepository {
   constructor(private readonly model: Model<any>) {}
 
   toDomain(doc: StockDoc): Stock {
@@ -73,5 +74,14 @@ export class MongoStockRepository {
       .find({ tenantId, $expr: { $lte: ['$quantity', '$minLevel'] } })
       .exec();
     return docs.map((d: StockDoc) => this.toDomain(d));
+  }
+
+  async findByWarehouse(tenantId: string, warehouseId: string): Promise<Stock[]> {
+    const docs = await this.model.find({ tenantId, warehouseId }).exec();
+    return docs.map((d: StockDoc) => this.toDomain(d));
+  }
+
+  async deleteByProduct(tenantId: string, productId: string): Promise<void> {
+    await this.model.deleteOne({ tenantId, productId }).exec();
   }
 }

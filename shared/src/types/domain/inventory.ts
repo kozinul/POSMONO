@@ -6,6 +6,7 @@ export interface Stock {
   warehouseId: string;
   quantity: number;
   reservedQuantity: number;
+  availableQuantity: number;
   minLevel: number;
   maxLevel: number;
   updatedAt: Date;
@@ -18,6 +19,7 @@ export interface Warehouse {
   address: string;
   isActive: boolean;
   createdAt: Date;
+  updatedAt: Date;
 }
 
 export type StockMovementType = 'in' | 'out' | 'adjustment' | 'reserve' | 'release';
@@ -30,6 +32,8 @@ export interface StockMovement {
   warehouseId: string;
   type: StockMovementType;
   quantity: number;
+  beforeQuantity: number;
+  afterQuantity: number;
   referenceType: string;
   referenceId: string;
   notes: string;

@@ -265,6 +265,7 @@ export class VoidOrderService implements UseCase<VoidOrderInput, Order> {
   constructor(
     private readonly orderRepository: any,
     private readonly eventBus: any,
+    private readonly inventoryService?: any,
   ) {}
 
   async execute(input: VoidOrderInput): Promise<Order> {
@@ -274,6 +275,23 @@ export class VoidOrderService implements UseCase<VoidOrderInput, Order> {
     order.voidOrder(input.voidedBy, input.voidedByName, input.reason);
 
     await this.orderRepository.save(order);
+
+    if (this.inventoryService) {
+      const data = order.serialize();
+      for (const item of data.items) {
+        if (item.isFreeItem) continue;
+        try {
+          await this.inventoryService.releaseStock({
+            tenantId: data.tenantId,
+            productId: item.productId,
+            quantity: item.quantity,
+            referenceId: data.id,
+          });
+        } catch {
+          // Best-effort release
+        }
+      }
+    }
 
     for (const event of order.domainEvents) {
       this.eventBus.publish(event);
@@ -595,6 +613,7 @@ export class HoldOrderService implements UseCase<HoldOrderInput, Order> {
   constructor(
     private readonly orderRepository: any,
     private readonly eventBus: any,
+    private readonly inventoryService?: any,
   ) {}
 
   async execute(input: HoldOrderInput): Promise<Order> {
@@ -604,6 +623,23 @@ export class HoldOrderService implements UseCase<HoldOrderInput, Order> {
     order.hold();
 
     await this.orderRepository.save(order);
+
+    if (this.inventoryService) {
+      const data = order.serialize();
+      for (const item of data.items) {
+        if (item.isFreeItem) continue;
+        try {
+          await this.inventoryService.reserveStock({
+            tenantId: data.tenantId,
+            productId: item.productId,
+            quantity: item.quantity,
+            referenceId: data.id,
+          });
+        } catch {
+          // Stock reservation is best-effort; don't block hold
+        }
+      }
+    }
 
     for (const event of order.domainEvents) {
       this.eventBus.publish(event);
@@ -617,6 +653,7 @@ export class RecallOrderService implements UseCase<RecallOrderInput, Order> {
   constructor(
     private readonly orderRepository: any,
     private readonly eventBus: any,
+    private readonly inventoryService?: any,
   ) {}
 
   async execute(input: RecallOrderInput): Promise<Order> {
@@ -626,6 +663,23 @@ export class RecallOrderService implements UseCase<RecallOrderInput, Order> {
     order.recall();
 
     await this.orderRepository.save(order);
+
+    if (this.inventoryService) {
+      const data = order.serialize();
+      for (const item of data.items) {
+        if (item.isFreeItem) continue;
+        try {
+          await this.inventoryService.releaseStock({
+            tenantId: data.tenantId,
+            productId: item.productId,
+            quantity: item.quantity,
+            referenceId: data.id,
+          });
+        } catch {
+          // Stock release is best-effort; don't block recall
+        }
+      }
+    }
 
     for (const event of order.domainEvents) {
       this.eventBus.publish(event);

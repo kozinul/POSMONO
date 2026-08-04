@@ -36,6 +36,65 @@ Copy this block for each new day:
 
 ## Entries
 
+### DATE: 2026-08-04 — Inventory reserve/release, warehouse integration, receipt free items, held bill fix, toast notifications
+
+**Today I worked on:**
+
+- **Inventory: reserve/release stock** — `Stock.reserve()` and `Stock.release()` methods, wired into HoldOrderService (reserve), RecallOrderService (release), VoidOrderService (release) so held/cancelled orders properly lock and release stock
+- **Inventory: warehouse integration** — `InventoryService` now auto-resolves warehouse via `resolveWarehouseId(tenantId)`, new endpoints: `POST /inventory/reserve`, `POST /inventory/release`, `POST /inventory/import`, `POST /inventory/export`
+- **Inventory: repository interfaces** — created `StockRepository.ts`, `StockMovementRepository.ts`, `WarehouseRepository.ts` domain interfaces; Mongo implementations updated to implement them
+- **Inventory: typed repos** — `InventoryService` and `WarehouseService` rewritten with typed repositories, injected `warehouseRepository` into container
+- **Frontend: WarehouseListPage** — CRUD page for warehouse management with toggle active
+- **Frontend: StockListPage enhanced** — pagination (20/page), CSV export/import, reserve/release in movement history
+- **Frontend: new hooks** — `useReserveStock`, `useReleaseStock`, `useExportStock`, `useImportStock`, `useWarehouseList`, `useCreateWarehouse`, `useUpdateWarehouse`, `useDeleteWarehouse`
+- **Receipt: free items display** — fixed entire pipeline to show free items (from promotions) on receipts: added `isFreeItem` to `IOrderItem` and `LineItem` types, `PaymentModal` now sends all items (not filtering free ones), `PaymentService` preserves `isFreeItem` in order items (skips stock deduction for free items), `ReceiptRenderService` passes `isFreeItem` through to DocumentData, added `gratisLabel`/`priceLabel`/`idr` formatters, registered `items.*` fields in template engine defaults
+- **Bug fix: held bill items lost** — `saveBill()` now updates `heldOrders` Zustand state after successful backend save; `mergeHeldOrders()` now compares by `id:total` (not just IDs) so polling refreshes stale item content
+- **Toast notifications** — created `useToast.ts` utility using SweetAlert2 with `position: 'top-start'`, auto-dismiss, hover-to-pause; wired into `saveBill()` success/error and bill close feedback (replaced `window.confirm`)
+
+**Files changed:**
+
+- `shared/src/types/domain/inventory.ts` — added `availableQuantity`, `beforeQuantity`, `afterQuantity`, `updatedAt`
+- `backend/src/core/inventory/domain/Stock.ts` — `reserve()`, `release()` methods
+- `backend/src/core/inventory/domain/StockRepository.ts` (NEW)
+- `backend/src/core/inventory/domain/StockMovementRepository.ts` (NEW)
+- `backend/src/core/inventory/domain/WarehouseRepository.ts` (NEW)
+- `backend/src/core/inventory/application/services/InventoryService.ts` — rewritten with typed repos, warehouse integration, reserve/release
+- `backend/src/core/inventory/application/services/WarehouseService.ts` — typed repo, `listActive()`
+- `backend/src/core/inventory/infrastructure/persistence/MongoStockRepository.ts`
+- `backend/src/core/inventory/infrastructure/persistence/MongoStockMovementRepository.ts`
+- `backend/src/core/inventory/infrastructure/persistence/MongoWarehouseRepository.ts`
+- `backend/src/core/inventory/interfaces/http/controllers/InventoryController.ts`
+- `backend/src/core/inventory/interfaces/http/routes/inventory.routes.ts`
+- `backend/src/core/ordering/application/services/OrderService.ts` — HoldOrder/RecallOrder/VoidOrder wired with inventoryService
+- `backend/src/core/ordering/domain/Order.ts` — `isFreeItem` on IOrderItem
+- `backend/src/core/payment/application/services/PaymentService.ts` — preserves `isFreeItem`, skips stock deduction for free items
+- `backend/src/core/document-engine/types/document-data.ts` — `isFreeItem` on LineItem
+- `backend/src/core/document-engine/engine/formatters.ts` — `gratisLabel`, `priceLabel`, `idr` formatters
+- `backend/src/core/document-engine/defaults.ts` — `items.*` field registrations
+- `backend/src/core/template/application/services/ReceiptRenderService.ts` — passes `isFreeItem` through
+- `backend/src/bootstrap/container.ts` — warehouseRepository injection
+- `backend/tests/services/InventoryService.test.ts` — 34 tests
+- `backend/tests/services/WarehouseService.test.ts` (NEW) — 11 tests
+- `frontend/src/@shared/hooks/useToast.ts` (NEW)
+- `frontend/src/app/router.tsx` — `/inventory/warehouses` route
+- `frontend/src/layouts/DashboardLayout.tsx` — nav "Gudang"
+- `frontend/src/core/inventory/hooks/useInventory.ts` — new hooks
+- `frontend/src/core/inventory/pages/StockListPage.tsx` — pagination, CSV export/import
+- `frontend/src/core/inventory/pages/WarehouseListPage.tsx` (NEW)
+- `frontend/src/core/pos/components/PaymentModal.tsx` — sends free items to backend
+- `frontend/src/core/pos/pages/PosPage.tsx` — toast on bill close
+- `frontend/src/core/pos/store/posStore.ts` — `saveBill()` updates heldOrders, `mergeHeldOrders()` content comparison, toast feedback
+
+**What I learned:**
+
+- Free items from promotions need to flow through the entire pipeline (frontend → backend order → receipt renderer → template engine) — filtering them out at any point breaks the receipt display
+- Held bill state management requires keeping the in-memory cache in sync with backend saves; comparing only order IDs in `mergeHeldOrders` caused stale data to persist through 15s polling
+- SweetAlert2 toast mode (`toast: true, position: 'top-start'`) is a clean replacement for `window.confirm` — less disruptive UX
+
+**Productivity score:** 9
+
+---
+
 ### DATE: 2026-08-01 — Inventory (stok) dual-scheme + auto-decrement on payment
 
 **Today I worked on:**

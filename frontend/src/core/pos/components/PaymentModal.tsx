@@ -62,15 +62,15 @@ export function PaymentModal() {
     setPaymentState('processing');
     setPaymentMessage('');
     try {
-      const paidItems = items.filter((i) => !i.isFreeItem);
       const res = await api.post('/payments/pay-cash', {
-        items: paidItems.map((i) => ({
+        items: items.map((i) => ({
           productId: i.productId,
           productName: i.name,
           categoryId: i.categoryId,
           quantity: i.quantity,
           unitPrice: i.price,
           pricingMode: i.pricingMode || undefined,
+          isFreeItem: i.isFreeItem || undefined,
         })),
         amountPaid: isCash ? paid : grandTotal,
         method: selectedMethod.code,

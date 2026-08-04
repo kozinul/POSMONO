@@ -18,6 +18,7 @@ export interface IOrderItem {
   tax: { rate: number; amount: number };
   serviceCharge?: number;
   dpp?: number;
+  isFreeItem?: boolean;
 }
 
 export interface IVoidedItem {

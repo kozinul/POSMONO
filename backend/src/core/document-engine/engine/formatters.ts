@@ -65,6 +65,23 @@ export const defaultFormatters: Record<string, FormatterFn> = {
     const s = String(value ?? '');
     return s.replace(/\b\w/g, (c) => c.toUpperCase());
   },
+
+  gratisLabel: (value) => {
+    const truthy = value === 'true' || value === '1' || value === true || value === 1;
+    return truthy ? '(GRATIS)' : '';
+  },
+
+  priceLabel: (value) => {
+    const truthy = value === 'true' || value === '1' || value === true || value === 1;
+    if (truthy) return 'GRATIS';
+    return '';
+  },
+
+  idr: (value) => {
+    const n = Number(value);
+    if (isNaN(n)) return String(value ?? '');
+    return `Rp ${new Intl.NumberFormat('id-ID').format(n)}`;
+  },
 };
 
 export function parsePipeFormat(format: string): { name: string; args: string[] }[] {

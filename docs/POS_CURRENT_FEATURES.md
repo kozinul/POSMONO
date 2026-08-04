@@ -1109,7 +1109,7 @@ Untuk rewrite ke Modular Monolith + DDD, berikut rekomendasi domain boundaries:
 | **Identity** | User | User | Email, Password, UserId | UserCreated, UserUpdated |
 | **Access Control** | Role | Role | Permission | RoleCreated, RoleUpdated |
 | **Catalog** | Product | Product, Category, Family, Modifier | Barcode, Price, TaxEntry, ModifierOption | ProductCreated, ProductUpdated |
-| **Inventory** | Stock | StockMovement | StockLevel | StockAdjusted, StockDepleted |
+| **Inventory** | Stock | StockMovement, Warehouse | StockLevel, AvailableQuantity | StockAdjusted, StockDepleted, StockReserved, StockReleased |
 | **Pricing** | PricingService | PricingLineItem, AppliedRule | PricingResult, Adjustment | PricingCalculated |
 | **Sales** | Order | Order, OrderItem, VoidedItem | OrderNumber, OrderStatus, TaxDetail, PromotionBreakdown | OrderCreated, OrderPaid, OrderVoided |
 | **Pricing** | Promotion | Promotion, Discount, TaxRule, Charge | Rule, RoundingPolicy, DppFormula, Adjustment | PromotionApplied, TaxCalculated, AdjustmentProcessed |

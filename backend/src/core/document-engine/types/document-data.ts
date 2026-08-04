@@ -8,6 +8,7 @@ export interface LineItem {
   note?: string;
   modifiers?: ItemModifier[];
   adjustments?: LineAdjustment[];
+  isFreeItem?: boolean;
 }
 
 export interface ItemModifier {

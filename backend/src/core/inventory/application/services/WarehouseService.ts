@@ -1,9 +1,10 @@
 import { NotFoundError, ConflictError } from '../../../../@shared/infrastructure/error/AppError';
 import { Warehouse } from '../../domain/Warehouse';
+import { WarehouseRepository } from '../../domain/WarehouseRepository';
 
 export class WarehouseService {
   constructor(
-    private readonly warehouseRepository: any,
+    private readonly warehouseRepository: WarehouseRepository,
   ) {}
 
   async create(input: { tenantId: string; name: string; address?: string }): Promise<Warehouse> {
@@ -28,6 +29,10 @@ export class WarehouseService {
 
   async list(tenantId: string): Promise<Warehouse[]> {
     return this.warehouseRepository.findByTenant(tenantId);
+  }
+
+  async listActive(tenantId: string): Promise<Warehouse[]> {
+    return this.warehouseRepository.findActiveByTenant(tenantId);
   }
 
   async update(tenantId: string, id: string, data: { name?: string; address?: string; isActive?: boolean }): Promise<Warehouse> {

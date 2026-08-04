@@ -34,6 +34,12 @@ export function createDefaultEngine(): TemplateEngine {
   engine.fields.register({ path: 'summary.rounding', type: 'number', label: 'Rounding', category: 'summary', documentTypes: ['receipt'], sampleValue: 0 });
   engine.fields.register({ path: 'summary.grandTotal', type: 'number', label: 'Grand Total', category: 'summary', documentTypes: ['receipt', 'invoice', 'report'], sampleValue: 60500 });
 
+  engine.fields.register({ path: 'items.name', type: 'string', label: 'Item Name', category: 'item', documentTypes: ['receipt', 'invoice', 'kot'], sampleValue: 'Kopi Susu' });
+  engine.fields.register({ path: 'items.qty', type: 'number', label: 'Item Quantity', category: 'item', documentTypes: ['receipt', 'invoice', 'kot'], sampleValue: 2 });
+  engine.fields.register({ path: 'items.unitPrice', type: 'number', label: 'Item Unit Price', category: 'item', documentTypes: ['receipt', 'invoice'], sampleValue: 25000 });
+  engine.fields.register({ path: 'items.totalPrice', type: 'number', label: 'Item Total Price', category: 'item', documentTypes: ['receipt', 'invoice'], sampleValue: 50000 });
+  engine.fields.register({ path: 'items.isFreeItem', type: 'boolean', label: 'Is Free Item', category: 'item', documentTypes: ['receipt', 'invoice'], sampleValue: false });
+
   engine.fields.register({ path: 'payment.method', type: 'string', label: 'Payment Method', category: 'payment', documentTypes: ['receipt', 'invoice'], sampleValue: 'QRIS' });
   engine.fields.register({ path: 'payment.paidAmount', type: 'number', label: 'Paid Amount', category: 'payment', documentTypes: ['receipt', 'invoice'], sampleValue: 60500 });
   engine.fields.register({ path: 'payment.change', type: 'number', label: 'Change', category: 'payment', documentTypes: ['receipt'], sampleValue: 0 });

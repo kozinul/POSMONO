@@ -1,12 +1,16 @@
 import { NotFoundError, ValidationError } from '../../../../@shared/infrastructure/error/AppError';
 import { Stock } from '../../domain/Stock';
 import { StockMovement } from '../../domain/StockMovement';
+import { StockRepository } from '../../domain/StockRepository';
+import { StockMovementRepository } from '../../domain/StockMovementRepository';
+import { WarehouseRepository } from '../../domain/WarehouseRepository';
 
 export class InventoryService {
   constructor(
-    private readonly stockRepository: any,
-    private readonly stockMovementRepository: any,
-    private readonly eventBus?: any,
+    private readonly stockRepository: StockRepository,
+    private readonly stockMovementRepository: StockMovementRepository,
+    private readonly warehouseRepository: WarehouseRepository,
+    private readonly eventBus?: { publish: (event: any) => void },
   ) {}
 
   private publishEvents(stock: Stock): void {
@@ -14,6 +18,13 @@ export class InventoryService {
     for (const event of stock.domainEvents) {
       this.eventBus.publish(event);
     }
+  }
+
+  private async resolveWarehouseId(tenantId: string, warehouseId?: string): Promise<string> {
+    if (warehouseId) return warehouseId;
+    const warehouses = await this.warehouseRepository.findActiveByTenant(tenantId);
+    if (warehouses.length > 0) return warehouses[0].id.toValue();
+    return 'utama';
   }
 
   async getStock(tenantId: string, productId: string): Promise<Stock> {
@@ -47,6 +58,7 @@ export class InventoryService {
       throw new ValidationError('Quantity must be positive');
     }
 
+    const resolvedWarehouseId = await this.resolveWarehouseId(input.tenantId, input.warehouseId);
     let stock = await this.stockRepository.findByProduct(input.tenantId, input.productId);
     const beforeQty = stock ? stock.serialize().quantity : 0;
 
@@ -55,7 +67,7 @@ export class InventoryService {
         tenantId: input.tenantId,
         productId: input.productId,
         variantId: input.variantId || null,
-        warehouseId: input.warehouseId || 'utama',
+        warehouseId: resolvedWarehouseId,
         quantity: 0,
         reservedQuantity: 0,
         minLevel: 5,
@@ -70,7 +82,7 @@ export class InventoryService {
       tenantId: input.tenantId,
       productId: input.productId,
       variantId: input.variantId || null,
-      warehouseId: input.warehouseId || 'utama',
+      warehouseId: resolvedWarehouseId,
       type: 'in',
       quantity: input.quantity,
       beforeQuantity: beforeQty,
@@ -112,6 +124,8 @@ export class InventoryService {
       throw new ValidationError('Insufficient stock');
     }
 
+    const resolvedWarehouseId = input.warehouseId || stock.serialize().warehouseId;
+
     stock.adjust(-input.quantity, input.reason || 'stock_out');
     await this.stockRepository.save(stock);
 
@@ -119,7 +133,7 @@ export class InventoryService {
       tenantId: input.tenantId,
       productId: input.productId,
       variantId: input.variantId || null,
-      warehouseId: input.warehouseId || 'utama',
+      warehouseId: resolvedWarehouseId,
       type: 'out',
       quantity: input.quantity,
       beforeQuantity: beforeQty,
@@ -194,6 +208,7 @@ export class InventoryService {
     warehouseId?: string;
     userId?: string;
   }): Promise<Stock> {
+    const resolvedWarehouseId = await this.resolveWarehouseId(input.tenantId, input.warehouseId);
     let stock = await this.stockRepository.findByProduct(input.tenantId, input.productId);
     const beforeQty = stock ? stock.serialize().quantity : 0;
 
@@ -202,7 +217,7 @@ export class InventoryService {
         tenantId: input.tenantId,
         productId: input.productId,
         variantId: input.variantId || null,
-        warehouseId: input.warehouseId || 'utama',
+        warehouseId: resolvedWarehouseId,
         quantity: 0,
         reservedQuantity: 0,
         minLevel: 5,
@@ -217,7 +232,7 @@ export class InventoryService {
       tenantId: input.tenantId,
       productId: input.productId,
       variantId: input.variantId || null,
-      warehouseId: input.warehouseId || 'utama',
+      warehouseId: resolvedWarehouseId,
       type: 'adjustment',
       quantity: Math.abs(input.delta),
       beforeQuantity: beforeQty,
@@ -233,16 +248,141 @@ export class InventoryService {
     return stock;
   }
 
+  async reserveStock(input: {
+    tenantId: string;
+    productId: string;
+    quantity: number;
+    referenceId?: string;
+    userId?: string;
+  }): Promise<void> {
+    if (input.quantity <= 0) return;
+
+    const stock = await this.stockRepository.findByProduct(input.tenantId, input.productId);
+    if (!stock) return;
+
+    if (stock.availableQuantity < input.quantity) {
+      throw new ValidationError('Insufficient available stock');
+    }
+
+    const beforeQty = stock.serialize().quantity;
+    stock.reserve(input.quantity);
+    await this.stockRepository.save(stock);
+
+    const movement = StockMovement.create({
+      tenantId: input.tenantId,
+      productId: input.productId,
+      variantId: stock.serialize().variantId,
+      warehouseId: stock.serialize().warehouseId,
+      type: 'reserve',
+      quantity: input.quantity,
+      beforeQuantity: beforeQty,
+      afterQuantity: stock.serialize().quantity,
+      referenceType: 'reservation',
+      referenceId: input.referenceId || '',
+      notes: `Reserved ${input.quantity} units`,
+      userId: input.userId || '',
+    });
+
+    await this.stockMovementRepository.save(movement);
+    this.publishEvents(stock);
+  }
+
+  async releaseStock(input: {
+    tenantId: string;
+    productId: string;
+    quantity: number;
+    referenceId?: string;
+    userId?: string;
+  }): Promise<void> {
+    if (input.quantity <= 0) return;
+
+    const stock = await this.stockRepository.findByProduct(input.tenantId, input.productId);
+    if (!stock) return;
+
+    const beforeQty = stock.serialize().quantity;
+    stock.release(input.quantity);
+    await this.stockRepository.save(stock);
+
+    const movement = StockMovement.create({
+      tenantId: input.tenantId,
+      productId: input.productId,
+      variantId: stock.serialize().variantId,
+      warehouseId: stock.serialize().warehouseId,
+      type: 'release',
+      quantity: input.quantity,
+      beforeQuantity: beforeQty,
+      afterQuantity: stock.serialize().quantity,
+      referenceType: 'release',
+      referenceId: input.referenceId || '',
+      notes: `Released ${input.quantity} units`,
+      userId: input.userId || '',
+    });
+
+    await this.stockMovementRepository.save(movement);
+    this.publishEvents(stock);
+  }
+
   async getMovements(
     tenantId: string,
     filter?: { productId?: string; type?: string },
     page = 1,
     limit = 50,
-  ): Promise<{ movements: any[]; total: number }> {
-    const result = await this.stockMovementRepository.findByTenant(tenantId, filter, page, limit);
-    return {
-      movements: result.movements.map((m: StockMovement) => m.serialize()),
-      total: result.total,
-    };
+  ): Promise<{ movements: StockMovement[]; total: number }> {
+    return this.stockMovementRepository.findByTenant(tenantId, filter, page, limit);
+  }
+
+  async exportStock(tenantId: string): Promise<Array<{
+    productId: string;
+    productName: string;
+    sku: string;
+    quantity: number;
+    reservedQuantity: number;
+    minLevel: number;
+    maxLevel: number;
+    warehouseId: string;
+  }>> {
+    const stocks = await this.stockRepository.findByTenant(tenantId);
+    return stocks.map((s) => {
+      const data = s.serialize();
+      return {
+        productId: data.productId,
+        productName: '',
+        sku: '',
+        quantity: data.quantity,
+        reservedQuantity: data.reservedQuantity,
+        minLevel: data.minLevel,
+        maxLevel: data.maxLevel,
+        warehouseId: data.warehouseId,
+      };
+    });
+  }
+
+  async importStock(tenantId: string, items: Array<{
+    productId: string;
+    quantity: number;
+    minLevel?: number;
+    maxLevel?: number;
+    warehouseId?: string;
+  }>, userId?: string): Promise<{ imported: number; errors: string[] }> {
+    const errors: string[] = [];
+    let imported = 0;
+
+    for (const item of items) {
+      try {
+        await this.adjust({
+          tenantId,
+          productId: item.productId,
+          delta: item.quantity,
+          reason: 'csv_import',
+          warehouseId: item.warehouseId,
+          userId,
+        });
+        imported++;
+      } catch (err: any) {
+        errors.push(`${item.productId}: ${err.message}`);
+      }
+    }
+
+    return { imported, errors };
   }
 }

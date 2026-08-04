@@ -374,6 +374,36 @@ Arbitrary stock adjustment (positive or negative delta).
 
 **Response 200:** Updated stock record.
 
+### `POST /api/inventory/reserve`
+
+Reserve stock for an order (increments `reservedQuantity`).
+
+**Body:** `{ "productId": "uuid", "quantity": 5, "referenceId": "order-id" }`
+
+**Response 200:** Updated stock record.
+
+### `POST /api/inventory/release`
+
+Release previously reserved stock (decrements `reservedQuantity`).
+
+**Body:** `{ "productId": "uuid", "quantity": 5, "referenceId": "order-id" }`
+
+**Response 200:** Updated stock record.
+
+### `POST /api/inventory/import`
+
+Bulk import stock levels from CSV data.
+
+**Body:** `{ "data": [{ "productId": "uuid", "quantity": 100 }] }`
+
+**Response 200:** `{ "success": true, "imported": 5 }`
+
+### `POST /api/inventory/export`
+
+Export current stock levels as CSV.
+
+**Response 200:** CSV file download.
+
 ---
 
 ## Warehouses (`/api/warehouses`)
@@ -768,36 +798,40 @@ id, tenantId, email, displayName, roleId, isActive, lastLoginAt, createdAt, upda
 | 24 | POST | `/api/inventory/stock-in` | ✓ |
 | 25 | POST | `/api/inventory/stock-out` | ✓ |
 | 26 | POST | `/api/inventory/adjust` | ✓ |
-| 27 | GET | `/api/warehouses` | ✓ |
-| 28 | GET | `/api/warehouses/:id` | ✓ |
-| 29 | POST | `/api/warehouses` | ✓ |
-| 30 | PUT | `/api/warehouses/:id` | ✓ |
-| 31 | DELETE | `/api/warehouses/:id` | ✓ |
-| 32 | GET | `/api/roles` | ✓ |
-| 33 | GET | `/api/roles/:id` | ✓ |
-| 34 | POST | `/api/roles` | ✓ |
-| 35 | PUT | `/api/roles/:id` | ✓ |
-| 36 | DELETE | `/api/roles/:id` | ✓ |
-| 37 | GET | `/api/users` | ✓ |
-| 38 | GET | `/api/users/:id` | ✓ |
-| 39 | PUT | `/api/users/:id` | ✓ |
-| 40 | POST | `/api/users/:id/deactivate` | ✓ |
-| 41 | POST | `/api/users/:id/activate` | ✓ |
-| 42 | GET | `/api/permissions` | ✓ |
-| 43 | GET | `/api/orders` | ✓ |
-| 44 | GET | `/api/orders/:id` | ✓ |
-| 45 | POST | `/api/orders` | ✓ |
-| 46 | GET | `/api/shifts` | ✓ |
-| 47 | GET | `/api/shifts/current` | ✓ |
-| 48 | POST | `/api/shifts/open` | ✓ |
-| 49 | POST | `/api/shifts/:id/close` | ✓ |
-| 50 | GET | `/api/payments` | ✓ |
-| 51 | GET | `/api/payments/:orderId` | ✓ |
-| 52 | POST | `/api/payments/pay-cash` | ✓ |
-| 53 | GET | `/api/tax/config` | ✓ |
-| 54 | PUT | `/api/tax/config` | ✓ |
-| 55 | POST | `/api/tax/calculate` | ✓ |
-| 56 | GET | `/api/tax/rules` | ✓ |
+| 27 | POST | `/api/inventory/reserve` | ✓ |
+| 28 | POST | `/api/inventory/release` | ✓ |
+| 29 | POST | `/api/inventory/import` | ✓ |
+| 30 | POST | `/api/inventory/export` | ✓ |
+| 31 | GET | `/api/warehouses` | ✓ |
+| 32 | GET | `/api/warehouses/:id` | ✓ |
+| 33 | POST | `/api/warehouses` | ✓ |
+| 34 | PUT | `/api/warehouses/:id` | ✓ |
+| 35 | DELETE | `/api/warehouses/:id` | ✓ |
+| 36 | GET | `/api/roles` | ✓ |
+| 37 | GET | `/api/roles/:id` | ✓ |
+| 38 | POST | `/api/roles` | ✓ |
+| 39 | PUT | `/api/roles/:id` | ✓ |
+| 40 | DELETE | `/api/roles/:id` | ✓ |
+| 41 | GET | `/api/users` | ✓ |
+| 42 | GET | `/api/users/:id` | ✓ |
+| 43 | PUT | `/api/users/:id` | ✓ |
+| 44 | POST | `/api/users/:id/deactivate` | ✓ |
+| 45 | POST | `/api/users/:id/activate` | ✓ |
+| 46 | GET | `/api/permissions` | ✓ |
+| 47 | GET | `/api/orders` | ✓ |
+| 48 | GET | `/api/orders/:id` | ✓ |
+| 49 | POST | `/api/orders` | ✓ |
+| 50 | GET | `/api/shifts` | ✓ |
+| 51 | GET | `/api/shifts/current` | ✓ |
+| 52 | POST | `/api/shifts/open` | ✓ |
+| 53 | POST | `/api/shifts/:id/close` | ✓ |
+| 54 | GET | `/api/payments` | ✓ |
+| 55 | GET | `/api/payments/:orderId` | ✓ |
+| 56 | POST | `/api/payments/pay-cash` | ✓ |
+| 57 | GET | `/api/tax/config` | ✓ |
+| 58 | PUT | `/api/tax/config` | ✓ |
+| 59 | POST | `/api/tax/calculate` | ✓ |
+| 60 | GET | `/api/tax/rules` | ✓ |
 | 57 | POST | `/api/tax/rules` | ✓ |
 | 58 | PUT | `/api/tax/rules/:id` | ✓ |
 | 59 | DELETE | `/api/tax/rules/:id` | ✓ |

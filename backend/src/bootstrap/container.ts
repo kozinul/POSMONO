@@ -366,6 +366,7 @@ export function buildContainer() {
       injector: () => ({
         stockRepository: container.resolve('stockRepository'),
         stockMovementRepository: container.resolve('stockMovementRepository'),
+        warehouseRepository: container.resolve('warehouseRepository'),
         eventBus: container.resolve('eventBus'),
       }),
     }),
@@ -412,6 +413,7 @@ export function buildContainer() {
       injector: () => ({
         orderRepository: container.resolve('orderRepository'),
         eventBus: container.resolve('eventBus'),
+        inventoryService: container.resolve('inventoryService'),
       }),
     }),
     voidItemService: asClass(VoidItemService, {
@@ -504,6 +506,7 @@ export function buildContainer() {
       injector: () => ({
         orderRepository: container.resolve('orderRepository'),
         eventBus: container.resolve('eventBus'),
+        inventoryService: container.resolve('inventoryService'),
       }),
     }),
     recallOrderService: asClass(RecallOrderService, {
@@ -511,6 +514,7 @@ export function buildContainer() {
       injector: () => ({
         orderRepository: container.resolve('orderRepository'),
         eventBus: container.resolve('eventBus'),
+        inventoryService: container.resolve('inventoryService'),
       }),
     }),
     replaceOrderItemsService: asClass(ReplaceOrderItemsService, {

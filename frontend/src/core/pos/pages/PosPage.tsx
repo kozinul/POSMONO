@@ -8,6 +8,7 @@ import { ProductCard } from '../components/ProductCard';
 import { CartItemRow } from '../components/CartItemRow';
 import { PaymentModal } from '../components/PaymentModal';
 import { ReceiptDisplay } from '../components/ReceiptDisplay';
+import { toast } from '../../../@shared/hooks/useToast';
 import { HeldOrdersPanel } from '../components/HeldOrdersPanel';
 import { formatIDR } from '../utils/money';
 import { useHeldOrders } from '../hooks/useHeldOrders';
@@ -295,7 +296,9 @@ export default function PosPage() {
               </div>
               <button
                 onClick={() => {
-                  if (items.length > 0 && !window.confirm('Tutup bill ini? Item di keranjang yang belum disimpan akan hilang.')) return;
+                  if (items.length > 0) {
+                    toast({ title: 'Bill ditutup, item yang belum disimpan dihapus', icon: 'info' });
+                  }
                   clearCart();
                   cancelActiveBill();
                   setHoldError('');

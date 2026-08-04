@@ -66,6 +66,7 @@ export class ReceiptRenderService {
         qty: item.quantity,
         unitPrice: item.unitPrice,
         totalPrice: item.totalPrice,
+        isFreeItem: item.isFreeItem || false,
       })),
       summary: {
         subtotal: order.subtotal - order.discount,

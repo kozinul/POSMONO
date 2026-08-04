@@ -22,6 +22,7 @@ export class PaymentService {
     if (!this.inventoryService) return;
     const orderData = order.serialize();
     for (const item of orderData.items) {
+      if (item.isFreeItem) continue;
       await this.inventoryService.decrementForSale({
         tenantId,
         productId: item.productId,
@@ -36,6 +37,7 @@ export class PaymentService {
     if (!this.inventoryService) return;
     const orderData = order.serialize();
     for (const item of orderData.items) {
+      if (item.isFreeItem) continue;
       await this.inventoryService.incrementForReturn({
         tenantId,
         productId: item.productId,
@@ -49,7 +51,7 @@ export class PaymentService {
   async payCash(input: {
     tenantId: string;
     cashierId: string;
-    items: Array<{ productId: string; productName?: string; categoryId?: string; quantity: number; unitPrice: number; pricingMode?: 'inclusive' | 'exclusive' }>;
+    items: Array<{ productId: string; productName?: string; categoryId?: string; quantity: number; unitPrice: number; pricingMode?: 'inclusive' | 'exclusive'; isFreeItem?: boolean }>;
     amountPaid: number;
     method?: PaymentMethod;
     discount?: number;
@@ -146,6 +148,7 @@ export class PaymentService {
         },
         serviceCharge: Math.round(itemSC),
         dpp: Math.round(itemDpp),
+        isFreeItem: item.isFreeItem || false,
       };
     });
 

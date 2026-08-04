@@ -237,3 +237,46 @@ FIXED
 
 **Reported:** 2026-08-01
 **Fixed:** 2026-08-01
+
+---
+
+### BUG-006
+
+**Problem:**
+Held bill items lost after save — when opening a held bill, adding items, clicking "Simpan Bill", then closing and reopening the same bill, the newly added items are missing from the cart.
+
+**Severity:**
+🟡 HIGH
+
+**Environment:**
+Local
+
+**Steps to Reproduce:**
+1. Hold a bill with items [A, B] → bill appears in sidebar
+2. Open the held bill → cart = [A, B]
+3. Add item C to cart → cart = [A, B, C]
+4. Click "Simpan Bill" → backend order updated to [A, B, C]
+5. Close the bill (click "Tutup")
+6. Reopen the same bill from sidebar → cart = [A, B] (item C is missing)
+
+**Expected Behavior:**
+Reopening the bill should show all saved items [A, B, C].
+
+**Actual Behavior:**
+Item C is lost because the in-memory `heldOrders` cache was never updated after save.
+
+**Root Cause:**
+Three interconnected bugs:
+1. `saveBill()` called `PUT /orders/:id/items` but never updated the `heldOrders` Zustand state
+2. `mergeHeldOrders()` compared only order IDs (`o.id.join('|')`), so 15-second polling never refreshed stale item content
+3. `tapBill()` read from the stale in-memory `HeldOrder` instead of fetching fresh from backend
+
+**Fix:**
+1. `saveBill()` now updates the corresponding `heldOrders` entry with current cart items after successful backend save
+2. `mergeHeldOrders()` now compares by `id:total` key so content changes trigger a state update
+
+**Status:**
+FIXED
+
+**Reported:** 2026-08-04
+**Fixed:** 2026-08-04

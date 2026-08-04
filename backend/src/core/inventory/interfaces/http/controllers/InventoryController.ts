@@ -30,6 +30,22 @@ const adjustSchema = z.object({
   warehouseId: z.string().optional(),
 });
 
+const reserveSchema = z.object({
+  productId: z.string().min(1),
+  quantity: z.number().positive(),
+  referenceId: z.string().optional(),
+});
+
+const importSchema = z.object({
+  items: z.array(z.object({
+    productId: z.string().min(1),
+    quantity: z.number(),
+    minLevel: z.number().optional(),
+    maxLevel: z.number().optional(),
+    warehouseId: z.string().optional(),
+  })).min(1),
+});
+
 export class InventoryController extends BaseController {
   constructor(private readonly inventoryService: InventoryService) {
     super();
@@ -98,6 +114,32 @@ export class InventoryController extends BaseController {
     this.ok(res, stock.serialize());
   }
 
+  async reserve(req: Request, res: Response): Promise<void> {
+    const parsed = reserveSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError('Invalid input');
+
+    await this.inventoryService.reserveStock({
+      tenantId: req.tenantId,
+      userId: req.userId,
+      ...parsed.data,
+    });
+
+    this.ok(res, { success: true });
+  }
+
+  async release(req: Request, res: Response): Promise<void> {
+    const parsed = reserveSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError('Invalid input');
+
+    await this.inventoryService.releaseStock({
+      tenantId: req.tenantId,
+      userId: req.userId,
+      ...parsed.data,
+    });
+
+    this.ok(res, { success: true });
+  }
+
   async movements(req: Request, res: Response): Promise<void> {
     const { productId, type, page, limit } = req.query;
     const filter: { productId?: string; type?: string } = {};
@@ -111,10 +153,28 @@ export class InventoryController extends BaseController {
       limit ? parseInt(limit as string) : undefined,
     );
 
-    this.ok(res, result.movements, {
+    this.ok(res, result.movements.map((m) => m.serialize()), {
       total: result.total,
       page: parseInt(page as string) || 1,
       limit: parseInt(limit as string) || 50,
     });
+  }
+
+  async exportStock(req: Request, res: Response): Promise<void> {
+    const data = await this.inventoryService.exportStock(req.tenantId);
+    this.ok(res, data);
+  }
+
+  async importStock(req: Request, res: Response): Promise<void> {
+    const parsed = importSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError('Invalid input');
+
+    const result = await this.inventoryService.importStock(
+      req.tenantId,
+      parsed.data.items,
+      req.userId,
+    );
+
+    this.ok(res, result);
   }
 }
