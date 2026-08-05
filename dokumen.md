@@ -86,6 +86,8 @@ PricingService.calculate()
   │                 ├── free_item       → gratis item (qty)
   │                 ├── fixed_price     → (originalPrice - fixedPrice) × qty
   │                 └── bundle_price    → originalTotal - bundlePrice
+  │                 └── buy_x_pay_y     → unit gratis → freeItems[] (line item 0)
+  │                 └── buy_x_get_y     → freeItems[] / generatedLineItems[]
   │
   └── Distribusi diskon ke line items
         └── Setiap paid item dapat discount = (lineTotal/paidSubtotal) × totalDiscount
@@ -541,6 +543,8 @@ Sequence  │ Type     │ Keterangan
 | 6 | `CartItemRow` selalu tampilkan harga asli | `CartItemRow.tsx:42-43` | Tampilkan `lineTotal` + coret harga asli + badge DISKON |
 | 7 | `DiscountScope` tidak punya `getType()`/`getEntityId()` | `DiscountScope.ts` | Tambah method |
 | 8 | `EffectContext` tidak punya `matchingSubtotal`/`matchingItems` | `EffectStrategy.ts` | Tambah field |
+| 9 | `buy_x_pay_y` (beli 3 bayar 2) menghitung diskon tunai proporsional & mengabaikan free unit terpilih | `BuyXPayYEffect.ts` | Sekarang mengembalikan `freeItems[]` (line item harga 0) + `discountAmount: 0`; `PricingService` mengurangi `totalFreeItemValue` dari subtotal; `DiscountEngine` menambahkan `freeItemValue` |
+| 10 | Cart POS tidak bisa melewati 1 set gratis pada promo beli-3-bayar-2 — qty macet, item gratis kedua tidak muncul | `posStore.ts` | `recalculate` mengirim total qty (paid + free) ke backend; `addItem`/`updateQuantity` hanya menaikkan baris paid (bukan baris free); guard `recalcToken` mencegah response basi menimpa input terbaru |
 
 ---
 

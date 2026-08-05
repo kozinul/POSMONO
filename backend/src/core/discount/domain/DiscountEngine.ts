@@ -20,6 +20,7 @@ export interface DiscountResult {
   appliedRules: DiscountRuleResult[];
   freeItems: Array<{ productId: string; quantity: number }>;
   generatedLineItems: Array<{ productId: string; productName: string; categoryId: string; quantity: number; unitPrice: number }>;
+  freeItemValue: number;
   finalSubtotal: number;
   breakdown: Array<{ ruleId: string; ruleName: string; discountAmount: number; description: string }>;
   itemDiscounts: Array<{ productId: string; discountAmount: number }>;
@@ -162,6 +163,18 @@ export class DiscountEngine {
       if (!rule.isStackable()) break;
     }
 
+    // Value of free items (price × quantity). Uses the unit price of the
+    // matching cart line for that product. Free *gifts* (generatedLineItems)
+    // have unitPrice 0 and contribute nothing here.
+    const unitPriceByProduct = new Map<string, number>();
+    for (const i of items) {
+      if (!unitPriceByProduct.has(i.productId)) unitPriceByProduct.set(i.productId, i.unitPrice);
+    }
+    let freeItemValue = 0;
+    for (const fi of freeItems) {
+      freeItemValue += (unitPriceByProduct.get(fi.productId) ?? 0) * fi.quantity;
+    }
+
     totalDiscount = Math.min(totalDiscount, subtotal);
     totalDiscount = this.roundingEngine.round(totalDiscount, 'round', 2);
 
@@ -170,6 +183,7 @@ export class DiscountEngine {
       appliedRules,
       freeItems,
       generatedLineItems,
+      freeItemValue,
       finalSubtotal: subtotal - totalDiscount,
       breakdown: appliedRules,
       itemDiscounts: Array.from(itemDiscounts.entries()).map(([productId, discountAmount]) => ({

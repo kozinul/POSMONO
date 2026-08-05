@@ -72,6 +72,37 @@ Copy this block for each new day:
 
 ---
 
+### DATE: 2026-08-05 — Buy X Pay Y as real free items, POS cart free-item scaling
+
+**Today I worked on:**
+
+- **Bug fix: `buy_x_pay_y` (beli 3 bayar 2)** — `BuyXPayYEffect` previously computed a proportional cash discount but never returned the selected free units, so the promo behaved as a proportional discount instead of freeing units. It now returns `discountAmount: 0` + `freeItems[]` (the cheapest/most-expensive/proportional selected units) so the free item actually appears as a "gratis" line and scales across qualifying sets (qty 6 → 2 free).
+- **Bug fix: POS cart stuck at one free set** — the cart could not grow past a single qualifying set because `recalculate` sent only the paid quantity to the backend; each add beyond the threshold was re-consumed as the free item. `recalculate` now folds same-product free lines into the total quantity sent, then re-derives paid/free from the response. Also fixed `addItem`/`updateQuantity` incrementing free lines (they now only touch paid lines) and added a `recalcToken` staleness guard so stale pricing responses can't clobber the user's latest adds.
+- **PricingService free-item value** — `totalFreeItemValue` (price × qty of free line items) is now subtracted from the order subtotal/total discount so "beli 3 bayar 2" no longer overcharges.
+- **DiscountEngine `freeItemValue`** — added to `DiscountResult`, computed from the matching cart line unit price; disabled fallback returns `freeItemValue: 0`.
+- **Tests** — rewrote `frontend/tests/unit/posStore.test.ts` (was stale vs new store API) covering the free-item cart flow: 3 adds → 2 paid + 1 free, 6 adds → 4 paid + 2 free. All frontend (47) and backend discount/pricing (88) unit tests pass.
+
+**Problems encountered:**
+
+- `vi.mock('@shared/services/api')` alias points at the workspace `shared/src`, but `posStore` imports the frontend-local `src/@shared/services/api` — the mock silently didn't intercept. Fixed by mocking the relative path.
+- Fake-timer microtask flushing needed repeated `await Promise.resolve()`; a naive 2-flush loop hid a real bug where `addItem` incremented both the paid AND the free line (same productId), inflating totals (qty 5/7/9 sent). Fixed by excluding free lines in `addItem`/`updateQuantity`.
+
+**What I completed:**
+
+- `backend/.../BuyXPayYEffect.ts`, `DiscountEngine.ts` (`freeItemValue`), `DiscountServiceAdapter.ts` (fallback `freeItemValue: 0`), `PricingService.ts` (`totalFreeItemValue`)
+- `frontend/src/core/pos/store/posStore.ts` (recalc folds free qty into total, paid-only increments, `recalcToken`)
+- `frontend/tests/unit/posStore.test.ts` (rewritten)
+- `docs/pricing/04-discount-engine.md`, `dokumen.md`, `docs/DAILY_LOG.md`
+
+**What I learned:**
+
+- For a free-item promo, the backend must emit the freed units as free line items (price 0) and the pricing layer must subtract their value — otherwise totals drift from the line items.
+- A cart store must treat free lines as derived state owned by `recalculate`, never mutated by add/update — otherwise double-counting feedback loops explode quantities.
+
+**Productivity score:** 9
+
+---
+
 ### DATE: 2026-08-04 — Inventory reserve/release, warehouse integration, receipt free items, held bill fix, toast notifications
 
 **Today I worked on:**

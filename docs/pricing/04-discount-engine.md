@@ -60,7 +60,7 @@ Semua kondisi menggunakan **AND logic**. Jika ruleLogic=OR (dari Promotion), mak
 | `free_item` | `{ productId, quantity }` | Menghasilkan `freeItems[]` atau `generatedLineItems[]`. Jumlah item gratis dilipatgandakan sesuai *qualifying sets* (`floor(matchCount / minItems)`) |
 | `fixed_price` | `{ productId?, fixedPrice }` | `(unitPrice - fixedPrice) × qty`. Jika `productId` kosong, menggunakan item yang cocok dari `conditions` (`getQualifyingItems`) |
 | `bundle_price` | `{ productIds[]?, bundlePrice }` | `originalTotal - bundlePrice`. Jika `productIds` kosong, menggunakan item yang cocok dari `conditions` (`getQualifyingItems`) |
-| `buy_x_pay_y` | `{ buyQuantity, payQuantity, allocationStrategy }` | Memilih item termurah/termahal/proporsional via `AllocationStrategy`. Diskon = `unitPrice × (buyQuantity - payQuantity) × qualifyingSets` |
+| `buy_x_pay_y` | `{ buyQuantity, payQuantity, allocationStrategy }` | Memilih item termurah/termahal/proporsional via `AllocationStrategy`. Unit yang di-*free* menjadi `freeItems[]` (line item harga 0), bukan diskon tunai. `discountAmount` selalu 0 — nilainya direpresentasikan lewat free line items. Bebas diskalakan lintas set (qty 6 → 2 gratis pada beli-3-bayar-2) |
 | `buy_x_get_y` | `{ buyQuantity, getQuantity, target }` | Tidak menghasilkan diskon tunai. `target.type` menentukan sumber item gratis: `cart_item` / `product` / `category` / `same_product`. Untuk `product` → `generatedLineItems[]`, sisanya → `freeItems[]`. `AllocationStrategy` digunakan untuk memilih item gratis (cheapest/most_expensive/proportional) |
 
 ### 4.4.1 AllocationStrategy

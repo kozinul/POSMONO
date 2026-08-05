@@ -27,6 +27,7 @@ export class DiscountServiceAdapter {
         appliedRules: [],
         freeItems: [],
         generatedLineItems: [],
+        freeItemValue: 0,
         finalSubtotal: subtotal,
         breakdown: [],
         itemDiscounts: [],

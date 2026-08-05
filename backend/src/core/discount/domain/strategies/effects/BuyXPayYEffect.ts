@@ -20,22 +20,40 @@ export class BuyXPayYEffect implements EffectStrategy {
     const qualifiedQty = qualifyingSets * minQty;
     const pickCount = qualifyingSets * freeCount;
 
+    if (pickCount <= 0) {
+      return { discountAmount: 0, description: describeAllocation(strategy, minQty, payQty, freeCount, qualifyingSets) };
+    }
+
     const allocationItems = matchItems.map((i) => ({
       productId: i.productId,
       unitPrice: i.unitPrice,
       quantity: i.quantity,
     }));
 
-    const result = allocateDiscount(strategy, allocationItems, {
+    // The free'd units become explicit free-item lines (price 0). The freed value is
+    // captured through the free line items (discount = unitPrice * qty), NOT through a
+    // proportional cash discount — so the cheapest/most-expensive selection is honored
+    // and the cart shows a real "gratis" line that can grow across qualifying sets.
+    const alloc = allocateDiscount(strategy, allocationItems, {
       pickCount,
       qualifiedQty,
       minQty,
       freeCount,
     });
 
+    const freeMap = new Map<string, number>();
+    for (const s of alloc.selectedItems) {
+      freeMap.set(s.productId, (freeMap.get(s.productId) ?? 0) + 1);
+    }
+    const freeItems = Array.from(freeMap.entries()).map(([productId, quantity]) => ({
+      productId,
+      quantity,
+    }));
+
     return {
-      discountAmount: result.discountAmount,
+      discountAmount: 0,
       description: describeAllocation(strategy, minQty, payQty, freeCount, qualifyingSets),
+      freeItems: freeItems.length > 0 ? freeItems : undefined,
     };
   }
 }

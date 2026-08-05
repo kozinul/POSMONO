@@ -168,6 +168,11 @@ export class PricingService {
       });
     }
 
+    // Value taken off by free-item effects (price × quantity). This must be
+    // subtracted from the order subtotal so totals match the line items —
+    // otherwise "beli 3 bayar 2" would charge for the free unit(s).
+    const totalFreeItemValue = lineItems.filter((li) => li.isFreeItem).reduce((s, li) => s + li.discount, 0);
+
     let manualDiscountAmount = 0;
     if (input.manualDiscount && input.manualDiscount > 0) {
       if (input.manualDiscountType === 'percentage') {
@@ -177,7 +182,7 @@ export class PricingService {
       }
     }
 
-    const totalDiscount = discountResult.totalDiscount + manualDiscountAmount;
+    const totalDiscount = discountResult.totalDiscount + totalFreeItemValue + manualDiscountAmount;
     const netSubtotal = originalSubtotal - totalDiscount;
 
     const itemDiscountMap = new Map(discountResult.itemDiscounts.map((d) => [d.productId, d.discountAmount]));
