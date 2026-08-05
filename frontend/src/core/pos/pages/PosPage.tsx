@@ -13,6 +13,7 @@ import { HeldOrdersPanel } from '../components/HeldOrdersPanel';
 import { formatIDR } from '../utils/money';
 import { useHeldOrders } from '../hooks/useHeldOrders';
 import { useStockList } from '../../inventory/hooks/useInventory';
+import { useOpenShift } from '../../shifts/hooks/useShift';
 
 export default function PosPage() {
   const {
@@ -44,9 +45,15 @@ export default function PosPage() {
     mergeHeldOrders,
     refreshItemPrices,
     clearCart,
+    seedOpenShift,
   } = usePOSStore();
 
   const { data: discountConfig } = useDiscountConfiguration();
+  const { data: openShift } = useOpenShift();
+
+  useEffect(() => {
+    seedOpenShift(openShift ?? null);
+  }, [openShift, seedOpenShift]);
 
   useEffect(() => {
     if (discountConfig?.rules) {

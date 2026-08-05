@@ -44,6 +44,31 @@ describe('Shift', () => {
       expect(data.closedAt).toBeInstanceOf(Date);
     });
 
+    it('exposes reconciliation difference = physicalCash - expectedCash', () => {
+      const shift = Shift.open(validShiftOpenInput);
+      shift.updateSales({
+        totalSales: 1200000,
+        cashSales: 800000,
+        nonCashSales: 400000,
+        totalTransactions: 3,
+        paymentBreakdown: [
+          { method: 'cash', code: 'cash', amount: 800000 },
+          { method: 'qris', code: 'qris', amount: 400000 },
+        ],
+      });
+      shift.addCashPickup(200000, 'Bank deposit', 'cashier-1');
+      shift.close(980000);
+
+      const data = shift.serialize();
+      expect(data.expectedCash).toBe(500000 + 800000 - 200000);
+      expect(data.difference).toBe(980000 - 1100000);
+    });
+
+    it('has null difference while shift is open', () => {
+      const shift = Shift.open(validShiftOpenInput);
+      expect(shift.serialize().difference).toBeNull();
+    });
+
     it('emits pos.shift.closed event with totals', () => {
       const shift = Shift.open(validShiftOpenInput);
       shift.clearEvents();

@@ -56,6 +56,37 @@ interface Receipt {
   pricing?: PricingResult | null;
 }
 
+export interface ShiftPaymentBreakdownEntry {
+  method: string;
+  code: string;
+  amount: number;
+}
+
+export interface ShiftTotals {
+  totalSales: number;
+  cashSales: number;
+  nonCashSales: number;
+  totalTransactions: number;
+  paymentBreakdown: ShiftPaymentBreakdownEntry[];
+}
+
+export interface OpenShiftSnapshot {
+  id: string;
+  totalSales: number;
+  cashSales: number;
+  nonCashSales: number;
+  totalTransactions: number;
+  paymentBreakdown?: ShiftPaymentBreakdownEntry[];
+}
+
+export const EMPTY_SHIFT_TOTALS: ShiftTotals = {
+  totalSales: 0,
+  cashSales: 0,
+  nonCashSales: 0,
+  totalTransactions: 0,
+  paymentBreakdown: [],
+};
+
 interface POSState {
   items: CartItem[];
   pricing: PricingResult | null;
@@ -65,6 +96,9 @@ interface POSState {
   manualDiscountType: 'percentage' | 'nominal';
   discountRules: IDiscountRule[];
   productPrices: Record<string, number>;
+
+  openShiftId: string | null;
+  shiftTotals: ShiftTotals;
 
   paymentModalOpen: boolean;
   paymentState: PaymentState;
@@ -97,6 +131,9 @@ interface POSState {
   setCustomerName: (name: string) => void;
   setTableNumber: (table: string) => void;
 
+  seedOpenShift: (shift: OpenShiftSnapshot | null) => void;
+  registerShiftPayment: (input: { total: number; method: string; isCash: boolean }) => void;
+
   openPaymentModal: () => void;
   closePaymentModal: () => void;
   setPaymentState: (state: PaymentState) => void;
@@ -115,7 +152,7 @@ interface POSState {
 
   removeItems: (productIds: string[]) => void;
   resetSplit: () => void;
-  registerSplitPayment: () => void;
+  registerSplitPayment: (baseOrderNumber?: string) => void;
 }
 
 let recalcTimer: ReturnType<typeof setTimeout> | null = null;
@@ -126,6 +163,21 @@ function scheduleRecalculation(get: () => POSState, set: (fn: (s: POSState) => P
   recalcTimer = setTimeout(() => {
     get().recalculate();
   }, 50);
+}
+
+function mergePaymentBreakdown(
+  current: ShiftPaymentBreakdownEntry[],
+  method: string,
+  amount: number,
+): ShiftPaymentBreakdownEntry[] {
+  const roundMoney = (value: number) => Math.round(value * 100) / 100;
+  const existing = current.find((e) => e.method === method);
+  if (existing) {
+    return current.map((e) =>
+      e.method === method ? { ...e, amount: roundMoney(e.amount + amount) } : e,
+    );
+  }
+  return [...current, { method, code: method, amount: roundMoney(amount) }];
 }
 
 export const usePOSStore = create<POSState>((set, get) => ({
@@ -154,6 +206,9 @@ export const usePOSStore = create<POSState>((set, get) => ({
 
   splitNumber: 0,
   splitBaseOrderNumber: null,
+
+  openShiftId: null,
+  shiftTotals: { ...EMPTY_SHIFT_TOTALS },
 
   addItem: (item) => {
     set((state) => {
@@ -394,6 +449,43 @@ export const usePOSStore = create<POSState>((set, get) => ({
   setCustomerName: (name) => set({ customerName: name }),
   setTableNumber: (table) => set({ tableNumber: table }),
 
+  seedOpenShift: (shift) => {
+    const state = get();
+    const id = shift?.id ?? null;
+    if (id === state.openShiftId) return;
+    set({
+      openShiftId: id,
+      shiftTotals: shift
+        ? {
+            totalSales: shift.totalSales,
+            cashSales: shift.cashSales,
+            nonCashSales: shift.nonCashSales,
+            totalTransactions: shift.totalTransactions,
+            paymentBreakdown: [...(shift.paymentBreakdown ?? [])],
+          }
+        : { ...EMPTY_SHIFT_TOTALS },
+    });
+  },
+
+  registerShiftPayment: ({ total, method, isCash }) => {
+    const state = get();
+    if (!state.openShiftId) return;
+
+    const roundMoney = (value: number) => Math.round(value * 100) / 100;
+    const next: ShiftTotals = {
+      totalSales: roundMoney(state.shiftTotals.totalSales + total),
+      cashSales: roundMoney(state.shiftTotals.cashSales + (isCash ? total : 0)),
+      nonCashSales: roundMoney(state.shiftTotals.nonCashSales + (isCash ? 0 : total)),
+      totalTransactions: state.shiftTotals.totalTransactions + 1,
+      paymentBreakdown: mergePaymentBreakdown(state.shiftTotals.paymentBreakdown, method, total),
+    };
+
+    set({ shiftTotals: next });
+    api
+      .put(`/shifts/${state.openShiftId}/sales`, next)
+      .catch(() => {});
+  },
+
   openPaymentModal: () => set({ paymentModalOpen: true }),
   closePaymentModal: () => set({ paymentModalOpen: false, paymentState: 'idle' }),
 
@@ -569,7 +661,11 @@ export const usePOSStore = create<POSState>((set, get) => ({
   closeBillAfterPayment: async () => {
     const state = usePOSStore.getState();
     const billId = state.activeBillId;
-    if (!billId) return;
+
+    if (!billId) {
+      set({ splitNumber: 0, splitBaseOrderNumber: null });
+      return;
+    }
 
     set((s) => ({
       heldOrders: s.heldOrders.filter((o) => o.id !== billId),
@@ -625,9 +721,9 @@ export const usePOSStore = create<POSState>((set, get) => ({
 
   resetSplit: () => set({ splitNumber: 0, splitBaseOrderNumber: null }),
 
-  registerSplitPayment: () =>
+  registerSplitPayment: (baseOrderNumber?: string) =>
     set((s) => ({
       splitNumber: s.splitNumber + 1,
-      splitBaseOrderNumber: s.splitBaseOrderNumber ?? s.activeBillNumber,
+      splitBaseOrderNumber: s.splitBaseOrderNumber ?? s.activeBillNumber ?? baseOrderNumber ?? null,
     })),
 }));

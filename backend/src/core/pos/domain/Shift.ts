@@ -36,6 +36,7 @@ export interface IShift {
   cashPickups: ICashPickup[];
   expectedTotal: number | null;
   actualTotal: number | null;
+  difference: number | null;
   openedAt: Date;
   closedAt: Date | null;
   createdAt: Date;
@@ -65,6 +66,11 @@ export class Shift extends AggregateRoot<ShiftId> {
   private createdAt: Date;
   private updatedAt: Date;
 
+  get difference(): number | null {
+    if (this.physicalCash === null || this.expectedCash === null) return null;
+    return Math.round((this.physicalCash - this.expectedCash) * 100) / 100;
+  }
+
   private constructor(props: IShift) {
     super(new ShiftId(props.id));
     this.tenantId = props.tenantId;
@@ -90,7 +96,7 @@ export class Shift extends AggregateRoot<ShiftId> {
     this.updatedAt = props.updatedAt;
   }
 
-  static open(props: Omit<IShift, 'id' | 'status' | 'closingBalance' | 'physicalCash' | 'expectedCash' | 'totalCashPickups' | 'totalSales' | 'cashSales' | 'nonCashSales' | 'totalTransactions' | 'paymentBreakdown' | 'cashPickups' | 'expectedTotal' | 'actualTotal' | 'closedAt' | 'openedAt' | 'createdAt' | 'updatedAt'>): Shift {
+  static open(props: Omit<IShift, 'id' | 'status' | 'closingBalance' | 'physicalCash' | 'expectedCash' | 'totalCashPickups' | 'totalSales' | 'cashSales' | 'nonCashSales' | 'totalTransactions' | 'paymentBreakdown' | 'cashPickups' | 'expectedTotal' | 'actualTotal' | 'difference' | 'closedAt' | 'openedAt' | 'createdAt' | 'updatedAt'>): Shift {
     const shift = new Shift({
       ...props,
       id: new ShiftId().toValue(),
@@ -107,6 +113,7 @@ export class Shift extends AggregateRoot<ShiftId> {
       cashPickups: [],
       expectedTotal: null,
       actualTotal: null,
+      difference: null,
       openedAt: new Date(),
       closedAt: null,
       createdAt: new Date(),
@@ -231,6 +238,7 @@ export class Shift extends AggregateRoot<ShiftId> {
       cashPickups: [...this.cashPickups],
       expectedTotal: this.expectedTotal,
       actualTotal: this.actualTotal,
+      difference: this.difference,
       openedAt: this.openedAt,
       closedAt: this.closedAt,
       createdAt: this.createdAt,

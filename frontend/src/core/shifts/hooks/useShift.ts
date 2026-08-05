@@ -8,11 +8,23 @@ interface Shift {
   status: 'open' | 'closed';
   openingBalance: number;
   closingBalance: number | null;
+  physicalCash: number | null;
+  expectedCash: number | null;
+  difference: number | null;
+  totalCashPickups: number;
+  totalSales: number;
+  cashSales: number;
+  nonCashSales: number;
+  totalTransactions: number;
+  paymentBreakdown: Array<{ method: string; code: string; amount: number }>;
+  cashPickups: Array<{ amount: number; reason: string; pickedAt: string; pickedBy: string }>;
   expectedTotal: number | null;
   actualTotal: number | null;
   openedAt: string;
   closedAt: string | null;
 }
+
+export type { Shift };
 
 interface ShiftsResponse {
   success: boolean;

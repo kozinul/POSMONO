@@ -147,50 +147,48 @@ export function PaymentModal() {
     setPaymentMessage('');
 
     try {
-      if (splitMode && activeBillId) {
-        const portionIndex = splitNumber + 1;
-        const baseOrderNumber = splitBaseOrderNumber ?? activeBillNumber;
+      const portionIndex = splitNumber + 1;
+      const isSplitPortion = splitMode || !!splitBaseOrderNumber;
+      const splitBase = splitBaseOrderNumber ?? (splitMode && activeBillId ? activeBillNumber : undefined);
 
-        const res = await api.post('/payments/pay-cash', {
-          items: selectedItems.map((i) => ({
-            productId: i.productId,
-            productName: i.name,
-            categoryId: i.categoryId || '',
-            quantity: i.isFreeItem ? i.quantity : payQty(i.productId),
-            unitPrice: i.price,
-            pricingMode: i.pricingMode || undefined,
-            isFreeItem: i.isFreeItem || undefined,
-          })),
-          amountPaid: isCash ? paid : (portionPricing.data?.grandTotal ?? selectedTotal),
-          method: selectedMethod.code,
-          referenceNumber: referenceNumber || undefined,
-          splitIndex: portionIndex,
-          splitBaseOrderNumber: baseOrderNumber || undefined,
-        });
+      const payload: Record<string, unknown> = {
+        items: (splitMode ? selectedItems : items).map((i) => ({
+          productId: i.productId,
+          productName: i.name,
+          categoryId: i.categoryId || '',
+          quantity: splitMode
+            ? (i.isFreeItem ? i.quantity : payQty(i.productId))
+            : i.quantity,
+          unitPrice: i.price,
+          pricingMode: i.pricingMode || undefined,
+          isFreeItem: i.isFreeItem || undefined,
+        })),
+        amountPaid: isCash ? paid : grandTotal,
+        method: selectedMethod.code,
+        referenceNumber: referenceNumber || undefined,
+        ...(isSplitPortion ? { splitIndex: portionIndex } : {}),
+        ...(splitBase ? { splitBaseOrderNumber: splitBase } : {}),
+      };
+      if (!splitMode) {
+        payload.discount = manualDiscount;
+        payload.discountType = manualDiscountType;
+        payload.promoCode = promoCode || undefined;
+      }
 
-        const orderData = res.data.data.order;
-        const receiptData = res.data.data.receipt;
+      const res = await api.post('/payments/pay-cash', payload);
 
-        registerSplitPayment();
+      const orderData = res.data.data.order;
+      const receiptData = res.data.data.receipt;
 
-        const hasRemaining = items.some((i) => !i.isFreeItem && payQty(i.productId) < i.quantity);
+      const hasRemaining = splitMode
+        ? items.some((i) => !i.isFreeItem && payQty(i.productId) < i.quantity)
+        : false;
 
-        setReceipt({
-          orderNumber: baseOrderNumber || orderData.orderNumber,
-          displayOrderNumber: `${baseOrderNumber}/${portionIndex}`,
-          paid: isCash ? paid : grandTotal,
-          change: isCash ? change : 0,
-          grandTotal,
-          paidItems: selectedItems,
-          hasRemaining,
-          createdAt: orderData.createdAt,
-          layout: receiptData?.layout ?? null,
-          thermal: receiptData?.thermal ?? null,
-          pdf: receiptData?.pdf ?? null,
-          templateName: receiptData?.templateName ?? null,
-          pricing: portionPricing.data ?? null,
-        });
+      if (isSplitPortion) {
+        registerSplitPayment(splitBase ?? orderData.orderNumber);
+      }
 
+      if (splitMode) {
         for (const item of items) {
           const qty = item.isFreeItem ? item.quantity : payQty(item.productId);
           if (qty <= 0) continue;
@@ -200,67 +198,37 @@ export function PaymentModal() {
             updateQuantity(item.productId, -qty);
           }
         }
-        queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      } else {
+        removeItems(items.map((i) => i.productId));
+      }
+      queryClient.invalidateQueries({ queryKey: ['inventory'] });
 
-        if (hasRemaining) {
+      const displayOrderNumber = isSplitPortion
+        ? `${splitBase ?? orderData.orderNumber}/${portionIndex}`
+        : orderData.orderNumber;
+
+      setReceipt({
+        orderNumber: isSplitPortion ? (splitBase ?? orderData.orderNumber) : orderData.orderNumber,
+        displayOrderNumber,
+        paid: isCash ? paid : grandTotal,
+        change: isCash ? change : 0,
+        grandTotal,
+        paidItems: splitMode ? selectedItems : items,
+        hasRemaining,
+        createdAt: orderData.createdAt,
+        layout: receiptData?.layout ?? null,
+        thermal: receiptData?.thermal ?? null,
+        pdf: receiptData?.pdf ?? null,
+        templateName: receiptData?.templateName ?? null,
+        pricing: splitMode ? (portionPricing.data ?? null) : (pricing ?? null),
+      });
+      usePOSStore.getState().registerShiftPayment({ total: grandTotal, method: selectedMethod.code, isCash });
+
+      if (hasRemaining) {
+        if (activeBillId) {
           await saveBill();
-        } else {
-          closeBillAfterPayment();
         }
       } else {
-        const continuation = splitBaseOrderNumber ? {
-          splitIndex: splitNumber + 1,
-          splitBaseOrderNumber,
-        } : {};
-
-        const res = await api.post('/payments/pay-cash', {
-          items: items.map((i) => ({
-            productId: i.productId,
-            productName: i.name,
-            categoryId: i.categoryId,
-            quantity: i.quantity,
-            unitPrice: i.price,
-            pricingMode: i.pricingMode || undefined,
-            isFreeItem: i.isFreeItem || undefined,
-          })),
-          amountPaid: isCash ? paid : grandTotal,
-          method: selectedMethod.code,
-          discount: manualDiscount,
-          discountType: manualDiscountType,
-          promoCode: promoCode || undefined,
-          referenceNumber: referenceNumber || undefined,
-          ...continuation,
-        });
-
-        const orderData = res.data.data.order;
-        const receiptData = res.data.data.receipt;
-
-        const displayOrderNumber = continuation.splitBaseOrderNumber
-          ? `${continuation.splitBaseOrderNumber}/${continuation.splitIndex}`
-          : orderData.orderNumber;
-
-        if (continuation.splitBaseOrderNumber) {
-          registerSplitPayment();
-        }
-
-        setReceipt({
-          orderNumber: orderData.orderNumber,
-          displayOrderNumber,
-          paid: isCash ? paid : grandTotal,
-          change: isCash ? change : 0,
-          grandTotal,
-          paidItems: items,
-          hasRemaining: false,
-          createdAt: orderData.createdAt,
-          layout: receiptData?.layout ?? null,
-          thermal: receiptData?.thermal ?? null,
-          pdf: receiptData?.pdf ?? null,
-          templateName: receiptData?.templateName ?? null,
-          pricing: pricing ?? null,
-        });
-
-        removeItems(items.map((i) => i.productId));
-        queryClient.invalidateQueries({ queryKey: ['inventory'] });
         closeBillAfterPayment();
       }
     } catch (err: any) {
@@ -297,7 +265,7 @@ export function PaymentModal() {
           {/* Left: Items + Promo */}
           <div className="flex-1 flex flex-col bg-white border-r border-gray-200 p-5">
             {/* Split Bill Toggle */}
-            {activeBillId && totalUnits > 1 && (
+            {totalUnits > 1 && (
               <div className="flex items-center justify-between mb-4 p-3 bg-amber-50 rounded-lg border border-amber-200">
                 <div>
                   <p className="text-sm font-bold text-amber-800">Split Bill</p>

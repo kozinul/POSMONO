@@ -1,18 +1,21 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { usePOSStore } from '../../src/core/pos/store/posStore';
+import { usePOSStore, EMPTY_SHIFT_TOTALS } from '../../src/core/pos/store/posStore';
 
 // Mock the backend pricing API. Simulates "beli 3 dapat 1 gratis"
 // (same_product) so the free-item reconciliation can be exercised in the store.
 const mockPricing = vi.fn();
+const mockShiftSales = vi.fn();
 vi.mock('../../src/@shared/services/api', () => ({
   api: {
     post: (...args: unknown[]) => mockPricing(...args),
     get: () => Promise.resolve({ data: { data: [] } }),
-    put: () => Promise.resolve({ data: { data: {} } }),
+    put: (...args: unknown[]) => mockShiftSales(...args),
     interceptors: { request: { use: () => {} }, response: { use: () => {} } },
     defaults: {},
   },
 }));
+
+mockShiftSales.mockResolvedValue({ data: { data: {} } });
 
 function freeLineItem(productId: string, productName: string, categoryId: string, quantity: number) {
   return {
@@ -65,8 +68,10 @@ describe('POS Store (free-item cart flow)', () => {
       discountRules: [], productPrices: {}, paymentModalOpen: false, paymentState: 'idle',
       receipt: null, customerName: '', tableNumber: '', heldOrders: [], heldOrdersPanelOpen: false,
       dismissedHeldOrderIds: [], activeBillId: null, activeBillNumber: null, splitNumber: 0, splitBaseOrderNumber: null,
+      openShiftId: null, shiftTotals: { ...EMPTY_SHIFT_TOTALS },
     } as any);
     mockPricing.mockReset();
+    mockShiftSales.mockClear();
   });
 
   afterEach(() => {
@@ -130,5 +135,114 @@ describe('POS Store (free-item cart flow)', () => {
     const free = items.filter((i) => i.isFreeItem);
     expect(paid[0].quantity).toBe(4);
     expect(free[0].quantity).toBe(2);
+  });
+
+  it('seedOpenShift loads baseline totals for the open shift', () => {
+    usePOSStore.getState().seedOpenShift({
+      id: 'shift-1',
+      totalSales: 10000,
+      cashSales: 10000,
+      nonCashSales: 0,
+      totalTransactions: 1,
+      paymentBreakdown: [{ method: 'cash', code: 'cash', amount: 10000 }],
+    });
+
+    const state = usePOSStore.getState();
+    expect(state.openShiftId).toBe('shift-1');
+    expect(state.shiftTotals.totalSales).toBe(10000);
+    expect(state.shiftTotals.totalTransactions).toBe(1);
+  });
+
+  it('seedOpenShift keeps local accumulator for the same shift (refetch does not reset)', () => {
+    usePOSStore.getState().seedOpenShift({
+      id: 'shift-1', totalSales: 0, cashSales: 0, nonCashSales: 0, totalTransactions: 0, paymentBreakdown: [],
+    });
+    usePOSStore.getState().registerShiftPayment({ total: 10000, method: 'cash', isCash: true });
+
+    usePOSStore.getState().seedOpenShift({
+      id: 'shift-1', totalSales: 0, cashSales: 0, nonCashSales: 0, totalTransactions: 0, paymentBreakdown: [],
+    });
+
+    expect(usePOSStore.getState().shiftTotals.totalSales).toBe(10000);
+  });
+
+  it('registerShiftPayment accumulates totals and PUTs to /shifts/:id/sales', () => {
+    usePOSStore.getState().seedOpenShift({
+      id: 'shift-1',
+      totalSales: 10000,
+      cashSales: 10000,
+      nonCashSales: 0,
+      totalTransactions: 1,
+      paymentBreakdown: [{ method: 'cash', code: 'cash', amount: 10000 }],
+    });
+
+    const store = usePOSStore.getState();
+    store.registerShiftPayment({ total: 20000, method: 'cash', isCash: true });
+    store.registerShiftPayment({ total: 15000, method: 'qris', isCash: false });
+
+    const totals = usePOSStore.getState().shiftTotals;
+    expect(totals.totalSales).toBe(45000);
+    expect(totals.cashSales).toBe(30000);
+    expect(totals.nonCashSales).toBe(15000);
+    expect(totals.totalTransactions).toBe(3);
+    expect(totals.paymentBreakdown).toEqual([
+      { method: 'cash', code: 'cash', amount: 30000 },
+      { method: 'qris', code: 'qris', amount: 15000 },
+    ]);
+
+    expect(mockShiftSales).toHaveBeenLastCalledWith('/shifts/shift-1/sales', {
+      totalSales: 45000,
+      cashSales: 30000,
+      nonCashSales: 15000,
+      totalTransactions: 3,
+      paymentBreakdown: [
+        { method: 'cash', code: 'cash', amount: 30000 },
+        { method: 'qris', code: 'qris', amount: 15000 },
+      ],
+    });
+  });
+
+  it('registerShiftPayment is a no-op without an open shift', () => {
+    usePOSStore.getState().registerShiftPayment({ total: 20000, method: 'cash', isCash: true });
+
+    const totals = usePOSStore.getState().shiftTotals;
+    expect(totals.totalSales).toBe(0);
+    expect(totals.totalTransactions).toBe(0);
+    expect(mockShiftSales).not.toHaveBeenCalled();
+  });
+
+  it('registerSplitPayment falls back to the given base order number (no active bill)', () => {
+    usePOSStore.getState().registerSplitPayment('ORD-100');
+
+    const state = usePOSStore.getState();
+    expect(state.splitNumber).toBe(1);
+    expect(state.splitBaseOrderNumber).toBe('ORD-100');
+  });
+
+  it('registerSplitPayment prefers activeBillNumber over the given base', () => {
+    usePOSStore.setState({ activeBillNumber: 'ORD-BILL' } as any);
+    usePOSStore.getState().registerSplitPayment('ORD-100');
+
+    const state = usePOSStore.getState();
+    expect(state.splitNumber).toBe(1);
+    expect(state.splitBaseOrderNumber).toBe('ORD-BILL');
+  });
+
+  it('registerSplitPayment keeps the existing split base for continuation portions', () => {
+    usePOSStore.setState({ splitNumber: 1, splitBaseOrderNumber: 'ORD-100' } as any);
+    usePOSStore.getState().registerSplitPayment('ORD-200');
+
+    const state = usePOSStore.getState();
+    expect(state.splitNumber).toBe(2);
+    expect(state.splitBaseOrderNumber).toBe('ORD-100');
+  });
+
+  it('closeBillAfterPayment resets split state even without an active bill', async () => {
+    usePOSStore.setState({ splitNumber: 1, splitBaseOrderNumber: 'ORD-100' } as any);
+    await usePOSStore.getState().closeBillAfterPayment();
+
+    const state = usePOSStore.getState();
+    expect(state.splitNumber).toBe(0);
+    expect(state.splitBaseOrderNumber).toBeNull();
   });
 });

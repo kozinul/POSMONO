@@ -643,7 +643,7 @@ families.view, families.edit
 - **Inclusive/exclusive pricing**: SC & PPN extracted from price (inclusive) or added on top (exclusive)
 - **Promotion application**: terapkan promo rules ke cart
 - **Split payment**: bayar dengan beberapa metode sekaligus
-- **Split bill (pay one at a time)**: pilih item yang mau dibayar → bayar → sisa item tetap di cart → ulangi
+- **Split bill (pay one at a time)**: berlaku untuk SEMUA transaksi (tidak hanya open bill) sejak 2026-08-05 — pilih item yang mau dibayar → bayar → sisa item tetap di cart → ulangi hingga lunas; bila sisa item ada di tengah split tanpa bill, sisa tetap di cart (tidak di-persist), lalu split state di-reset saat transaksi selesai
 - **Split order numbering**: receipt menampilkan `ORD-xxx/N` untuk split portions
 - **Hold/Recall order**: tahan pesanan (instant, backend sync in background), panggil kapan saja
 - **Void order**: batalkan seluruh transaksi (butuh supervisor auth)
@@ -656,6 +656,8 @@ families.view, families.edit
 ---
 
 ## 15. Domain: Closing (Shift Management)
+
+> Implementasi aktual berada di modul `/shifts` (`backend/src/core/pos`). Rekonsiliasi kas & laporan penutupan shift sudah aktif (2026-08-05): `Shift.serialize()` mengekspos `expectedCash` dan `difference`; POS menyinkronkan penjualan ke shift open via `PUT /shifts/:id/sales` setelah setiap pembayaran; `ShiftPage` menampilkan selisih live saat close dan laporan penutupan (penjualan, rekonsiliasi, cash pickups, breakdown pembayaran) dengan print.
 
 ### Models
 - **Closing** (`Closing.ts`)

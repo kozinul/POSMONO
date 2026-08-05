@@ -36,6 +36,60 @@ Copy this block for each new day:
 
 ## Entries
 
+### DATE: 2026-08-05 — Split bill untuk semua transaksi
+
+**Today I worked on:**
+
+- **Split bill berlaku untuk semua transaksi** — toggle Split Bill di `PaymentModal` tidak lagi dibatasi open bill (`activeBillId`); kini muncul kapan saja cart berisi >1 unit (`totalUnits > 1`).
+- **Alur pembayaran split terpadu** — `PaymentModal.handleSubmit` disatukan: payload dibangun dari `selectedItems` (split) atau `items` (non-split); `splitIndex`/`splitBaseOrderNumber` dikirim hanya saat split portion; discount/promo hanya untuk transaksi non-split; qty item berkurang sesuai portion yang dibayar; receipt menampilkan `base/portion`; `registerSplitPayment(splitBase ?? orderNumber)`.
+- **Split state tidak bocor** — `closeBillAfterPayment` kini mereset `splitNumber`/`splitBaseOrderNumber` juga saat tidak ada active bill (sebelumnya early-return). Untuk transaksi tanpa bill, sisa item split tetap di cart (tidak di-persist) sampai portion terakhir.
+
+**Files changed:**
+
+- `frontend/src/core/pos/components/PaymentModal.tsx`
+- `frontend/src/core/pos/store/posStore.ts` — `registerSplitPayment(baseOrderNumber?)`, fallback bill → base → null; `closeBillAfterPayment` reset split tanpa bill
+- `frontend/tests/unit/posStore.test.ts` — +4 (fallback base, prefer bill, lanjutkan base yang sama, reset split tanpa bill)
+- `docs/POS_CURRENT_FEATURES.md`
+
+**What I learned:**
+
+- Tanpa bill, `closeBillAfterPayment` early-return adalah jebakan: split state yang tidak di-reset akan tersangkut dan membuat transaksi berikutnya terkirim sebagai split portion.
+
+**Productivity score:** 8
+
+---
+
+### DATE: 2026-08-05 — Shift closeout report (reconciliation kasir)
+
+**Today I worked on:**
+
+- **Shift closeout report (report requirement #1)** — shift-closeout summary untuk kasir: rekonsiliasi kas `expected vs physical` + selisih, penjualan (tunai/non-tunai/total), jumlah transaksi, cash pickups, dan breakdown pembayaran per metode. Menyelesaikan kebutuhan C1–C3 di `docs/REPORT_REQUIREMENTS.md`.
+- **Backend: `Shift` expose `difference`** — domain `Shift` sekarang menghitung `difference = physicalCash - expectedCash` (derived, null saat masih open) dan menyertakannya di `serialize()`.
+- **Frontend POS → shift sales sync** — `posStore` menambahkan `seedOpenShift` (memuat baseline dari shift open, tidak reset pada refetch polling 10s) dan `registerShiftPayment` (akumulasi total/cash/non-cash/transaksi/breakdown lalu `PUT /shifts/:id/sales`). `PosPage` memanggil `useOpenShift` untuk seed; `PaymentModal` memanggil `registerShiftPayment` setelah pembayaran sukses (cash & non-cash, split & non-split).
+- **Frontend: ShiftPage closeout UI** — `CloseShiftModal` kini menampilkan live reconciliation (expected cash + selisih berwarna saat kasir mengetik fisik kas); setelah close muncul **Laporan Penutupan Shift** (sales, rekonsiliasi, pickups, breakdown) dengan tombol **Print** (window print); tabel shift menambah kolom Expected / Actual / Difference.
+- **Tests** — `Shift.test.ts` (+3: difference setelah close, null saat open, reconciliation dengan pickup); `posStore.test.ts` (+4: seed baseline, refetch tidak reset, akumulasi + payload PUT, no-op tanpa shift). Frontend 51 tests, backend discount/pricing/pos 97 tests pass.
+
+**Files changed:**
+
+- `backend/src/core/pos/domain/Shift.ts` — getter `difference` + serialize
+- `backend/src/core/pos/domain/__tests__/Shift.test.ts`
+- `frontend/src/core/pos/store/posStore.ts` — `seedOpenShift`, `registerShiftPayment`, `mergePaymentBreakdown`
+- `frontend/src/core/pos/pages/PosPage.tsx` — seed open shift
+- `frontend/src/core/pos/components/PaymentModal.tsx` — shift sales sync setelah bayar
+- `frontend/src/core/shifts/hooks/useShift.ts` — interface `Shift` lengkap (report fields), export type
+- `frontend/src/core/shifts/pages/ShiftPage.tsx` — closeout summary modal + live reconciliation + kolom Expected/Actual/Difference + print
+- `frontend/tests/unit/posStore.test.ts`
+- `docs/REPORT_REQUIREMENTS.md`, `docs/POS_CURRENT_FEATURES.md`
+
+**What I learned:**
+
+- POS harus meng-feeding shift secara inkremental (baseline dari server + akumulasi lokal) — accumulator jangan di-reset oleh polling refetch dengan shift id yang sama.
+- `difference` murni derived (physicalCash − expectedCash) — cukup dihitung di `serialize()`, tidak perlu dipersist.
+
+**Productivity score:** 9
+
+---
+
 ### DATE: 2026-08-05 — Free item scaling by qualifying sets, split payment receipts, promotion schema index fix
 
 **Today I worked on:**
