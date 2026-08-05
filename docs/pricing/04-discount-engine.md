@@ -57,9 +57,9 @@ Semua kondisi menggunakan **AND logic**. Jika ruleLogic=OR (dari Promotion), mak
 |--------|--------|-----------|
 | `percentage_off` | `{ rate, maxCap?, target? }` | `matchingSubtotal × rate/100` (cap di maxCap). Jika target=remaining, base = subtotal - appliedDiscounts |
 | `nominal_off` | `{ amount }` | `min(amount, max(0, subtotal - appliedDiscounts))` |
-| `free_item` | `{ productId, quantity }` | Tidak menghasilkan diskon tunai, menghasilkan `freeItems[]` |
-| `fixed_price` | `{ productId, fixedPrice }` | `(unitPrice - fixedPrice) × qty` |
-| `bundle_price` | `{ productIds[], bundlePrice }` | `originalTotal - bundlePrice` |
+| `free_item` | `{ productId, quantity }` | Menghasilkan `freeItems[]` atau `generatedLineItems[]`. Jumlah item gratis dilipatgandakan sesuai *qualifying sets* (`floor(matchCount / minItems)`) |
+| `fixed_price` | `{ productId?, fixedPrice }` | `(unitPrice - fixedPrice) × qty`. Jika `productId` kosong, menggunakan item yang cocok dari `conditions` (`getQualifyingItems`) |
+| `bundle_price` | `{ productIds[]?, bundlePrice }` | `originalTotal - bundlePrice`. Jika `productIds` kosong, menggunakan item yang cocok dari `conditions` (`getQualifyingItems`) |
 | `buy_x_pay_y` | `{ buyQuantity, payQuantity, allocationStrategy }` | Memilih item termurah/termahal/proporsional via `AllocationStrategy`. Diskon = `unitPrice × (buyQuantity - payQuantity) × qualifyingSets` |
 | `buy_x_get_y` | `{ buyQuantity, getQuantity, target }` | Tidak menghasilkan diskon tunai. `target.type` menentukan sumber item gratis: `cart_item` / `product` / `category` / `same_product`. Untuk `product` → `generatedLineItems[]`, sisanya → `freeItems[]`. `AllocationStrategy` digunakan untuk memilih item gratis (cheapest/most_expensive/proportional) |
 

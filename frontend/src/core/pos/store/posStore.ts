@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { IDiscountRule } from '../../../@shared/hooks/useDiscountConfiguration';
-import type { PricingResult, PricingLineItem } from '../../../@shared/hooks/usePricing';
+import type { PricingResult } from '../../../@shared/hooks/usePricing';
 import { api } from '../../../@shared/services/api';
 import { useAuthStore } from '../../../@shared/hooks/useAuth';
 import { toast } from '../../../@shared/hooks/useToast';
@@ -53,6 +53,7 @@ interface Receipt {
   thermal?: string | null;
   pdf?: string | null;
   templateName?: string | null;
+  pricing?: PricingResult | null;
 }
 
 interface POSState {
@@ -114,6 +115,7 @@ interface POSState {
 
   removeItems: (productIds: string[]) => void;
   resetSplit: () => void;
+  registerSplitPayment: () => void;
 }
 
 let recalcTimer: ReturnType<typeof setTimeout> | null = null;
@@ -276,46 +278,61 @@ export const usePOSStore = create<POSState>((set, get) => ({
         manualDiscountType: state.manualDiscount > 0 ? state.manualDiscountType : undefined,
       });
 
+      const freeLineMap = new Map<string, { quantity: number; productName: string; categoryId: string; freeByRuleId?: string }>();
+      for (const li of data.lineItems ?? []) {
+        if (!li.isFreeItem) continue;
+        const existing = freeLineMap.get(li.productId);
+        if (existing) {
+          existing.quantity += li.quantity;
+        } else {
+          freeLineMap.set(li.productId, {
+            quantity: li.quantity,
+            productName: li.productName,
+            categoryId: li.categoryId,
+            freeByRuleId: li.freeByRuleId,
+          });
+        }
+      }
+
       const freeItems: CartItem[] = [];
       const updatedItems = state.items
         .filter((i) => !i.isFreeItem)
         .map((item) => {
-          const freeLi = data.lineItems?.find(
-            (li: PricingLineItem) => li.productId === item.productId && li.isFreeItem
-          );
-          if (freeLi) {
+          const info = freeLineMap.get(item.productId);
+          const freeQty = info ? Math.min(info.quantity, item.quantity) : 0;
+          if (info && freeQty > 0) {
             freeItems.push({
               productId: item.productId,
               name: item.name,
               price: 0,
-              quantity: freeLi.quantity,
+              quantity: freeQty,
               categoryId: item.categoryId,
               pricingMode: item.pricingMode,
               isFreeItem: true,
-              freeByRuleId: freeLi.freeByRuleId,
+              freeByRuleId: info.freeByRuleId,
             });
-          return { ...item, quantity: item.quantity - freeLi.quantity };
-        }
-        return item;
-      })
-      .filter((i) => i.quantity > 0);
+            info.quantity -= freeQty;
+          }
+          return { ...item, quantity: item.quantity - freeQty };
+        })
+        .filter((i) => i.quantity > 0);
 
-      for (const li of data.lineItems ?? []) {
-        if (
-          li.isFreeItem &&
-          !updatedItems.some((i) => i.productId === li.productId) &&
-          !freeItems.some((i) => i.productId === li.productId)
-        ) {
-          freeItems.push({
-            productId: li.productId,
-            name: li.productName,
-            price: 0,
-            quantity: li.quantity,
-            categoryId: li.categoryId,
-            isFreeItem: true,
-            freeByRuleId: li.freeByRuleId,
-          });
+      for (const [productId, info] of freeLineMap) {
+        if (info.quantity <= 0) continue;
+        const existing = freeItems.find((i) => i.productId === productId);
+        if (existing) {
+          existing.quantity += info.quantity;
+          continue;
         }
+        freeItems.push({
+          productId,
+          name: info.productName,
+          price: 0,
+          quantity: info.quantity,
+          categoryId: info.categoryId,
+          isFreeItem: true,
+          freeByRuleId: info.freeByRuleId,
+        });
       }
 
       set({ pricing: data, items: [...updatedItems, ...freeItems], pricingLoading: false });
@@ -484,7 +501,12 @@ export const usePOSStore = create<POSState>((set, get) => ({
     const billId = state.activeBillId;
     if (!billId) return;
 
-    set({ activeBillId: null, activeBillNumber: null });
+    set({
+      activeBillId: null,
+      activeBillNumber: null,
+      splitNumber: 0,
+      splitBaseOrderNumber: null,
+    });
 
     if (!billId.startsWith('hold-')) {
       const userName = useAuthStore.getState().user?.displayName || 'Kasir';
@@ -506,6 +528,8 @@ export const usePOSStore = create<POSState>((set, get) => ({
         : [...s.dismissedHeldOrderIds, billId],
       activeBillId: null,
       activeBillNumber: null,
+      splitNumber: 0,
+      splitBaseOrderNumber: null,
     }));
 
     if (!billId.startsWith('hold-')) {
@@ -537,12 +561,23 @@ export const usePOSStore = create<POSState>((set, get) => ({
 
   toggleHeldOrdersPanel: () => set((s) => ({ heldOrdersPanelOpen: !s.heldOrdersPanelOpen })),
 
-  removeItems: (productIds) =>
-    set((state) => ({
-      items: state.items.filter((i) => !productIds.includes(i.productId)),
-      splitNumber: state.items.filter((i) => !productIds.includes(i.productId)).length === 0 ? 0 : state.splitNumber,
-      splitBaseOrderNumber: state.items.filter((i) => !productIds.includes(i.productId)).length === 0 ? null : state.splitBaseOrderNumber,
-    })),
+  removeItems: (productIds) => {
+    set((state) => {
+      const remaining = state.items.filter((i) => !productIds.includes(i.productId));
+      return {
+        items: remaining,
+        splitNumber: remaining.length === 0 ? 0 : state.splitNumber,
+        splitBaseOrderNumber: remaining.length === 0 ? null : state.splitBaseOrderNumber,
+      };
+    });
+    scheduleRecalculation(get, set);
+  },
 
   resetSplit: () => set({ splitNumber: 0, splitBaseOrderNumber: null }),
+
+  registerSplitPayment: () =>
+    set((s) => ({
+      splitNumber: s.splitNumber + 1,
+      splitBaseOrderNumber: s.splitBaseOrderNumber ?? s.activeBillNumber,
+    })),
 }));

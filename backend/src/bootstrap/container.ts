@@ -144,6 +144,7 @@ export function buildContainer() {
   const CustomerModel = systemConnection.model('Customer', CustomerSchema);
   const SettingModel = systemConnection.model('Setting', SettingSchema);
   const PromotionModel = systemConnection.model('Promotion', PromotionSchema);
+  PromotionModel.syncIndexes().catch(() => {});
   const PaymentMethodModel = systemConnection.model('PaymentMethod', PaymentMethodSchema);
   const MenuTypeModel = systemConnection.model('MenuType', MenuTypeSchema);
   const TemplateModel = systemConnection.model('Template', TemplateSchema);

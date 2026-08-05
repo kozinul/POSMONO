@@ -151,6 +151,23 @@ export class PricingService {
       }
     }
 
+    for (const [productId, info] of freeItemMap) {
+      if (info.quantity <= 0) continue;
+      const source = input.items.find((i) => i.productId === productId);
+      lineItems.push({
+        productId,
+        productName: source?.productName ?? '',
+        categoryId: source?.categoryId ?? '',
+        quantity: info.quantity,
+        unitPrice: 0,
+        originalUnitPrice: source?.unitPrice ?? 0,
+        discount: (source?.unitPrice ?? 0) * info.quantity,
+        lineTotal: 0,
+        isFreeItem: true,
+        freeByRuleId: info.ruleId,
+      });
+    }
+
     let manualDiscountAmount = 0;
     if (input.manualDiscount && input.manualDiscount > 0) {
       if (input.manualDiscountType === 'percentage') {

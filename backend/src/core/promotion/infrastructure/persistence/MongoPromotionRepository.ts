@@ -32,7 +32,7 @@ export class MongoPromotionRepository {
       id: doc._id,
       tenantId: doc.tenantId,
       name: doc.name,
-      code: doc.code,
+      code: doc.code ?? '',
       description: doc.description,
       priority: doc.priority,
       exclusive: doc.exclusive,
@@ -58,7 +58,7 @@ export class MongoPromotionRepository {
       _id: data.id,
       tenantId: data.tenantId,
       name: data.name,
-      code: data.code || null,
+      code: data.code || undefined,
       description: data.description,
       priority: data.priority,
       exclusive: data.exclusive,
@@ -78,7 +78,12 @@ export class MongoPromotionRepository {
 
   async save(promotion: Promotion): Promise<void> {
     const data = this.toPersistence(promotion);
-    await this.model.findOneAndUpdate({ _id: promotion.id.toValue() }, data, {
+    const update: Record<string, unknown> = { ...data };
+    if (!update.code) {
+      delete update.code;
+      update.$unset = { code: '' };
+    }
+    await this.model.findOneAndUpdate({ _id: promotion.id.toValue() }, update, {
       upsert: true,
       new: true,
     });

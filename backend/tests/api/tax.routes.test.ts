@@ -180,7 +180,7 @@ describe('Tax Routes', () => {
       expect(res.body.taxBase).toBe(135000);
       const expectedTax = Math.round(135000 * 11 / 12 * 12 / 100 * 100) / 100;
       expect(res.body.taxAmount).toBe(expectedTax);
-      expect(res.body.grandTotal).toBe(150000 + expectedTax);
+      expect(res.body.grandTotal).toBe(150000 - 15000 + expectedTax);
     });
   });
 

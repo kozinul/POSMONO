@@ -33,13 +33,19 @@ export class ReceiptRenderService {
     order: IOrder;
     payment: IPayment;
     tenant: ITenant;
+    splitIndex?: number;
+    totalSplits?: number;
+    splitBaseOrderNumber?: string;
   }): DocumentData {
-    const { order, payment, tenant } = input;
+    const { order, payment, tenant, splitIndex, splitBaseOrderNumber } = input;
     const createdAt = order.createdAt ? new Date(order.createdAt) : new Date();
     const { date, time } = formatDateTime(createdAt);
     const change = payment.method === 'cash'
       ? Math.max(0, payment.amount - order.total)
       : 0;
+
+    const orderNumber = splitBaseOrderNumber || order.orderNumber;
+    const splitSuffix = splitIndex != null && splitIndex > 0 ? `/${splitIndex}` : '';
 
     return {
       schemaVersion: 1,
@@ -52,7 +58,7 @@ export class ReceiptRenderService {
         logo: tenant.config?.receiptLogo ?? '',
       },
       order: {
-        documentNumber: order.orderNumber,
+        documentNumber: `${orderNumber}${splitSuffix}`,
         referenceNumber: payment.referenceNumber,
         type: (order.transactionType ?? 'dine_in') as DocumentData['order']['type'],
         table: order.tableNumber ?? undefined,
@@ -99,6 +105,9 @@ export class ReceiptRenderService {
     order: IOrder;
     payment: IPayment;
     tenant: ITenant;
+    splitIndex?: number;
+    totalSplits?: number;
+    splitBaseOrderNumber?: string;
   }): Promise<ReceiptRenderResult> {
     const template = await this.templateService.getDefault(input.tenantId, 'receipt');
     if (!template) throw new Error('No receipt template found');

@@ -1,19 +1,29 @@
 import { EffectStrategy, IDiscountEffect, EffectContext, EffectResult } from './EffectStrategy';
+import { getQualifyingItems } from './qualifyingSets';
 
 export class FixedPriceEffect implements EffectStrategy {
   readonly type = 'fixed_price' as const;
 
   apply(effect: IDiscountEffect, context: EffectContext): EffectResult {
-    const productId = effect.config.productId as string;
-    const fixedPrice = effect.config.fixedPrice as number;
-    const item = context.items.find((i) => i.productId === productId);
+    const fixedPrice = (effect.config.fixedPrice as number) ?? (effect.config.amount as number) ?? 0;
+    const productId = effect.config.productId as string | undefined;
 
-    if (!item) return { discountAmount: 0, description: 'Fixed price (not in cart)' };
+    const targetItems = productId
+      ? context.items.filter((i) => i.productId === productId)
+      : getQualifyingItems(context.conditions, context.items);
 
-    const saving = (item.unitPrice - fixedPrice) * item.quantity;
+    if (targetItems.length === 0) {
+      return { discountAmount: 0, description: 'Fixed price (tidak ada item yang cocok)' };
+    }
+
+    const saving = targetItems.reduce(
+      (s, i) => s + Math.max(0, i.unitPrice - fixedPrice) * i.quantity,
+      0,
+    );
+
     return {
-      discountAmount: Math.max(0, Math.round(saving * 100) / 100),
-      description: `Harga spesial Rp${fixedPrice.toLocaleString()}/${item.productId}`,
+      discountAmount: Math.round(saving * 100) / 100,
+      description: `Harga spesial Rp${new Intl.NumberFormat('id-ID').format(fixedPrice)}`,
     };
   }
 }

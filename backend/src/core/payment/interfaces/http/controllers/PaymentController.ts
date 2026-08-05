@@ -25,6 +25,7 @@ const payCashSchema = z.object({
     quantity: z.number().int().positive(),
     unitPrice: z.number().nonnegative(),
     pricingMode: z.enum(['inclusive', 'exclusive']).optional().nullable(),
+    isFreeItem: z.boolean().optional(),
   })).min(1),
   amountPaid: z.number().positive(),
   method: z.enum(['cash', 'qris', 'transfer', 'card', 'debit', 'credit', 'ewallet']).default('cash'),
@@ -33,6 +34,8 @@ const payCashSchema = z.object({
   promoCode: z.string().optional(),
   referenceNumber: z.string().optional(),
   cardLastFour: z.string().optional(),
+  splitIndex: z.number().int().positive().optional(),
+  splitBaseOrderNumber: z.string().optional(),
 });
 
 const processPaymentSchema = z.object({
@@ -84,6 +87,8 @@ export class PaymentController extends BaseController {
       promoCode: parsed.data.promoCode,
       referenceNumber: parsed.data.referenceNumber,
       cardLastFour: parsed.data.cardLastFour,
+      splitIndex: parsed.data.splitIndex,
+      splitBaseOrderNumber: parsed.data.splitBaseOrderNumber,
     });
 
     const paymentData = result.payment.serialize();
@@ -154,7 +159,10 @@ export class PaymentController extends BaseController {
     });
 
     this.ok(res, {
-      payments: result.payments.map((p) => p.serialize()),
+      payments: result.payments.map((p, i) => ({
+        ...p.serialize(),
+        receipt: serializeReceipt(result.receipts[i]),
+      })),
       order: result.order.serialize(),
     });
   }

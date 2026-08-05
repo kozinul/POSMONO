@@ -36,6 +36,42 @@ Copy this block for each new day:
 
 ## Entries
 
+### DATE: 2026-08-05 — Free item scaling by qualifying sets, split payment receipts, promotion schema index fix
+
+**Today I worked on:**
+
+- **Discount Engine: free item scaling** — `FreeItemEffect` now scales quantity by qualifying sets (`floor(matchCount / minItems)`). Added `qualifyingSets.ts` helper to determine qualifying items and sets based on `product_match`, `category_match`, and `min_items` conditions.
+- **Discount Engine: fixed price & bundle price** — `FixedPriceEffect` and `BundlePriceEffect` now use qualifying items from conditions when specific target product/productIds are not explicitly provided.
+- **Pricing Service: line items free items** — `PricingService` now adds free items directly into `lineItems[]` with `isFreeItem: true`, `unitPrice: 0`, and `discount = originalUnitPrice * qty`.
+- **Payment & Split Bill receipts** — `PaymentService` and `PaymentController` now handle `splitIndex` and `splitBaseOrderNumber` on `payCash` and `processSplitBill`, generating individual receipts for each split payment portion.
+- **Frontend: PaymentModal refactoring** — Updated `PaymentModal` and `ReceiptDisplay` to handle individual split bill receipts and display split order numbering (`ORD-xxx/1`, `ORD-xxx/2`).
+- **Promotion Schema & Indexing** — Updated `PromotionSchema` sparse index using `partialFilterExpression: { code: { $type: 'string' } }` so empty code fields do not cause duplicate key errors. `MongoPromotionRepository` now unsets empty code fields upon save.
+
+**Files changed:**
+
+- `backend/src/core/discount/domain/strategies/effects/qualifyingSets.ts` (NEW)
+- `backend/src/core/discount/domain/strategies/effects/FreeItemEffect.ts`, `FixedPriceEffect.ts`, `BundlePriceEffect.ts`, `EffectStrategy.ts`
+- `backend/src/core/discount/domain/DiscountEngine.ts`
+- `backend/src/core/pricing/application/services/PricingService.ts`
+- `backend/src/core/payment/application/services/PaymentService.ts`
+- `backend/src/core/payment/interfaces/http/controllers/PaymentController.ts`
+- `backend/src/core/promotion/infrastructure/persistence/schemas/PromotionSchema.ts`
+- `backend/src/core/promotion/infrastructure/persistence/MongoPromotionRepository.ts`
+- `backend/src/core/promotion/infrastructure/sync/PromotionToDiscountMapper.ts`
+- `frontend/src/core/pos/components/PaymentModal.tsx`
+- `frontend/src/core/pos/store/posStore.ts`
+- `docs/pricing/04-discount-engine.md`
+- `docs/API_REFERENCE.md`
+
+**What I learned:**
+
+- Promo effects like `free_item` must scale proportionally when customers purchase multiple qualifying sets (e.g., buy 2 get 1 → buy 4 gets 2).
+- Split payment receipts require carrying `splitIndex` and `splitBaseOrderNumber` through payment execution so printed receipts clearly identify split bill portions.
+
+**Productivity score:** 9
+
+---
+
 ### DATE: 2026-08-04 — Inventory reserve/release, warehouse integration, receipt free items, held bill fix, toast notifications
 
 **Today I worked on:**

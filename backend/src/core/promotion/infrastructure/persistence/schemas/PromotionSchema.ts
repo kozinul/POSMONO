@@ -41,7 +41,7 @@ export const PromotionSchema = new Schema(
     _id: { type: String },
     tenantId: { type: String, required: true, index: true },
     name: { type: String, required: true },
-    code: { type: String, default: null },
+    code: { type: String },
     description: { type: String, default: '' },
     priority: { type: Number, default: 0 },
     exclusive: { type: Boolean, default: false },
@@ -64,6 +64,9 @@ export const PromotionSchema = new Schema(
   },
 );
 
-PromotionSchema.index({ tenantId: 1, code: 1 }, { unique: true, sparse: true });
+PromotionSchema.index(
+  { tenantId: 1, code: 1 },
+  { unique: true, partialFilterExpression: { code: { $type: 'string' } } },
+);
 PromotionSchema.index({ tenantId: 1, isActive: 1, priority: -1 });
 PromotionSchema.index({ tenantId: 1, validFrom: 1, validUntil: 1 });

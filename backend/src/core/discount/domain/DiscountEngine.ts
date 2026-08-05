@@ -126,6 +126,7 @@ export class DiscountEngine {
         appliedDiscounts: totalDiscount,
         matchingSubtotal,
         matchingItems,
+        conditions: rule.getConditions(),
       };
 
       const effectResult = this.effectApplier.apply(rule.getEffects(), effectContext);

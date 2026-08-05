@@ -411,6 +411,9 @@ async function main() {
     console.log('[DEV] Cleared all collections for re-seed.');
   }
 
+  const { ensurePromotionIndexes } = await import('./core/promotion/infrastructure/persistence/ensurePromotionIndexes');
+  await ensurePromotionIndexes();
+
   await seedData();
 
   process.env.MONGO_URI = uri;

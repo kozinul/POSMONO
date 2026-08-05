@@ -615,11 +615,13 @@ Process a cash payment with optional promo code and manual discount.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| items | array | yes | Cart items with productId, quantity, unitPrice |
+| items | array | yes | Cart items with productId, quantity, unitPrice, and optional `isFreeItem` |
 | amountPaid | number | yes | Amount tendered by customer |
 | discount | number | no | **Manual** discount only — NOT the promo discount (default 0) |
 | discountType | string | no | `"percentage"` or `"nominal"` (default nominal) |
 | promoCode | string | no | Promo code to apply (validated against discount engine) |
+| splitIndex | number | no | Portiion index when performing split payment (e.g. 1, 2) |
+| splitBaseOrderNumber | string | no | Base order number for split payment receipts |
 
 **Response 200:**
 ```json

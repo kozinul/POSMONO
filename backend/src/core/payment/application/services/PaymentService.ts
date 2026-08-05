@@ -59,6 +59,8 @@ export class PaymentService {
     promoCode?: string;
     referenceNumber?: string;
     cardLastFour?: string;
+    splitIndex?: number;
+    splitBaseOrderNumber?: string;
   }): Promise<{ payment: Payment; order: any; receipt: ReceiptRenderResult | null }> {
     const roundMoney = (value: number) => Math.round(value);
     const rawSubtotal = input.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
@@ -222,6 +224,8 @@ export class PaymentService {
         promoCode: input.promoCode ?? null,
         promoDiscount,
         manualDiscount: manualDiscountValue,
+        splitIndex: input.splitIndex ?? null,
+        splitBaseOrderNumber: input.splitBaseOrderNumber ?? null,
       },
       paidAt: null,
     });
@@ -241,12 +245,12 @@ export class PaymentService {
       this.eventBus.publish(event);
     }
 
-    const receipt = await this.renderReceipt(order, payment);
+    const receipt = await this.renderReceipt(order, payment, input.splitIndex, undefined, input.splitBaseOrderNumber);
 
     return { payment, order, receipt };
   }
 
-  private async renderReceipt(order: Order, payment: Payment): Promise<ReceiptRenderResult | null> {
+  private async renderReceipt(order: Order, payment: Payment, splitIndex?: number, totalSplits?: number, splitBaseOrderNumber?: string): Promise<ReceiptRenderResult | null> {
     if (!this.receiptRenderService) return null;
     try {
       const tenant = await this.tenantRepository.findById(order.serialize().tenantId);
@@ -256,6 +260,9 @@ export class PaymentService {
         order: order.serialize(),
         payment: payment.serialize(),
         tenant: tenant.serialize(),
+        splitIndex,
+        totalSplits,
+        splitBaseOrderNumber,
       });
     } catch {
       return null;
@@ -415,7 +422,7 @@ export class PaymentService {
     orderId: string;
     splitBills: ISplitBill[];
     cashierId: string;
-  }): Promise<{ payments: Payment[]; order: Order }> {
+  }): Promise<{ payments: Payment[]; order: Order; receipts: (ReceiptRenderResult | null)[] }> {
     const order = await this.orderRepository.findById(input.orderId);
     if (!order) throw new NotFoundError('Order not found');
 
@@ -430,9 +437,13 @@ export class PaymentService {
     }
 
     const payments: Payment[] = [];
+    const receipts: (ReceiptRenderResult | null)[] = [];
     const breakdown: Array<{ method: string; code: string; amount: number; change: number; cardLastFour?: string }> = [];
 
-    for (const bill of input.splitBills) {
+    const totalSplits = input.splitBills.length;
+
+    for (let i = 0; i < input.splitBills.length; i++) {
+      const bill = input.splitBills[i];
       const payment = Payment.create({
         tenantId: input.tenantId,
         orderId: input.orderId,
@@ -463,6 +474,9 @@ export class PaymentService {
         amount: bill.amount,
         change: 0,
       });
+
+      const receipt = await this.renderReceipt(order, payment, i + 1, totalSplits);
+      receipts.push(receipt);
     }
 
     order.pay(breakdown, input.cashierId, '');
@@ -476,7 +490,7 @@ export class PaymentService {
       this.eventBus.publish(event);
     }
 
-    return { payments, order };
+    return { payments, order, receipts };
   }
 
   async getByOrder(tenantId: string, orderId: string): Promise<Payment | null> {

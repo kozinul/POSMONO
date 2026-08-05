@@ -56,6 +56,8 @@ function mapEffects(promoEffects: IPromotionEffect[]): IDiscountEffect[] {
       config: {
         rate: e.type === 'percentage' ? e.value : undefined,
         amount: e.type === 'nominal' ? e.value : undefined,
+        fixedPrice: e.type === 'fixed_price' ? e.value : undefined,
+        bundlePrice: e.type === 'bundle_price' ? e.value : undefined,
         target: e.target,
         productId: e.targetProductId,
         productName: e.targetProductName,
@@ -192,7 +194,7 @@ export function promotionToDiscountRule(promo: IPromotion): IDiscountRule {
   const mainEffect = promo.effects[0];
   const discountType = mainEffect?.type === 'nominal' ? 'nominal' : 'percentage';
   const discountValue = mainEffect?.value ?? 0;
-  const promoCode = promo.code.trim().toUpperCase();
+  const promoCode = (promo.code ?? '').trim().toUpperCase();
 
   const finalEffects = mapEffects(promo.effects);
 

@@ -1,3 +1,5 @@
+import { IDiscountCondition } from '../conditions/ConditionStrategy';
+
 export type EffectType =
   | 'percentage_off'
   | 'nominal_off'
@@ -18,6 +20,7 @@ export interface EffectContext {
   appliedDiscounts: number;
   matchingSubtotal?: number;
   matchingItems?: Array<{ productId: string; categoryId: string; quantity: number; unitPrice: number; lineTotal: number }>;
+  conditions?: IDiscountCondition[];
 }
 
 export interface GeneratedLineItem {

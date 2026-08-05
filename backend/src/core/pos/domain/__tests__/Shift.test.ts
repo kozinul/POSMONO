@@ -34,11 +34,11 @@ describe('Shift', () => {
   describe('close', () => {
     it('transitions from open to closed', () => {
       const shift = Shift.open(validShiftOpenInput);
-      shift.close(1500000, 1480000);
+      shift.close(1480000);
 
       const data = shift.serialize();
       expect(data.status).toBe('closed');
-      expect(data.expectedTotal).toBe(1500000);
+      expect(data.expectedTotal).toBe(500000);
       expect(data.actualTotal).toBe(1480000);
       expect(data.closingBalance).toBe(1480000);
       expect(data.closedAt).toBeInstanceOf(Date);
@@ -47,13 +47,14 @@ describe('Shift', () => {
     it('emits pos.shift.closed event with totals', () => {
       const shift = Shift.open(validShiftOpenInput);
       shift.clearEvents();
-      shift.close(1500000, 1480000);
+      shift.close(1480000);
 
       const events = shift.domainEvents;
       expect(events).toHaveLength(1);
       expect(events[0].eventName).toBe('pos.shift.closed');
-      expect(events[0].payload.expectedTotal).toBe(1500000);
-      expect(events[0].payload.actualTotal).toBe(1480000);
+      expect(events[0].payload.physicalCash).toBe(1480000);
+      expect(events[0].payload.expectedCash).toBe(500000);
+      expect(events[0].payload.difference).toBe(980000);
     });
 
     it('throws if shift is already closed', () => {

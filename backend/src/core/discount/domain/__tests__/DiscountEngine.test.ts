@@ -177,4 +177,26 @@ describe('DiscountEngine', () => {
     expect(withoutPromo.appliedRules).toHaveLength(1);
     expect(withoutPromo.totalDiscount).toBe(5000);
   });
+
+  it('scales free_item by qualifying matching items', () => {
+    const engine = new DiscountEngine();
+    const items = [
+      makeItem('kopi', 'minuman', 2, 15000),
+      makeItem('roti', 'makanan', 1, 5000),
+    ];
+    const subtotal = 35000;
+    const rules: IDiscountRule[] = [{
+      id: 'r1', name: 'Beli Kopi Gratis Roti', priority: 10, stackable: true, active: true,
+      scope: { type: 'product', entityId: 'kopi', entityName: 'Kopi' },
+      policy: { type: 'percentage', value: 0, application: 'per_order', roundingMode: 'round', precision: 2 },
+      conditions: [{ type: 'product_match', config: { productIds: ['kopi'] } }],
+      effects: [{ type: 'free_item', config: { productId: 'roti', productName: 'Roti', quantity: 1 } }],
+      currentUsageCount: 0,
+    }];
+
+    const result = engine.applyDiscounts(items, subtotal, rules);
+    expect(result.freeItems).toHaveLength(1);
+    expect(result.freeItems![0].productId).toBe('roti');
+    expect(result.freeItems![0].quantity).toBe(2);
+  });
 });

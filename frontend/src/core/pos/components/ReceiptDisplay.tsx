@@ -31,7 +31,7 @@ export function ReceiptDisplay() {
 
   if (!receipt) return null;
 
-  const p = pricing;
+  const p = receipt.pricing ?? pricing;
   const isInclusive = receipt.paidItems.some((i) => i.pricingMode === 'inclusive');
 
   const scRate = p ? getChargeRate(p.adjustments) : 0;

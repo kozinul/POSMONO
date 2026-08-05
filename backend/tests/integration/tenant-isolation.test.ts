@@ -80,9 +80,10 @@ describe('Integration: Tenant Isolation', () => {
         const pajak = Math.round(base * 12 / 100);
         return {
           subtotal, discount, discountType: input.discountType ?? 'nominal', discountAmount,
-          taxableAmount,
+          taxableAmount, adjustments: [], charges: [],
+          taxBase: base, modifier: { type: 'tax', before: taxableAmount, after: base },
           taxes: [{ name: 'Pajak 12%', type: 'vat', rate: 12, baseAmount: taxableAmount, amount: pajak, compoundOrder: 0 }],
-          totalTax: pajak, serviceCharge: 0, grandTotal: taxableAmount + pajak, pricingMode: 'exclusive',
+          taxAmount: pajak, serviceCharge: 0, grandTotal: taxableAmount + pajak, pricingMode: 'exclusive',
         };
       },
     };

@@ -26,12 +26,13 @@ function createMockTaxService() {
       const pajak = Math.round(base * 12 / 100);
       return {
         subtotal,
+        adjustments: [],
         discount: discountValue,
-        discountType: input.discountType ?? 'nominal',
-        discountAmount,
-        taxableAmount,
+        charges: [],
+        taxBase: base,
+        modifier: { type: 'tax', before: taxableAmount, after: base },
         taxes: [{ name: 'Pajak 12%', type: 'vat', rate: 12, baseAmount: taxableAmount, amount: pajak, compoundOrder: 0 }],
-        totalTax: pajak,
+        taxAmount: pajak,
         serviceCharge: 0,
         grandTotal: taxableAmount + pajak,
         pricingMode: 'exclusive',

@@ -65,13 +65,12 @@ describe('ShiftService', () => {
       repo.findById.mockResolvedValue(shift);
 
       const closed = await service.close(TENANT_ID, shift.id.toValue(), {
-        expectedTotal: 750000,
-        actualTotal: 745000,
+        physicalCash: 745000,
       });
 
       const data = closed.serialize();
       expect(data.status).toBe('closed');
-      expect(data.expectedTotal).toBe(750000);
+      expect(data.expectedTotal).toBe(500000);
       expect(data.actualTotal).toBe(745000);
       expect(data.closedAt).toBeInstanceOf(Date);
       expect(repo.save).toHaveBeenCalledTimes(1);
@@ -81,7 +80,7 @@ describe('ShiftService', () => {
       repo.findById.mockResolvedValue(null);
 
       await expect(
-        service.close(TENANT_ID, 'nonexistent', { expectedTotal: 0, actualTotal: 0 }),
+        service.close(TENANT_ID, 'nonexistent', { physicalCash: 0 }),
       ).rejects.toThrow(NotFoundError);
     });
 
@@ -90,17 +89,17 @@ describe('ShiftService', () => {
       repo.findById.mockResolvedValue(shift);
 
       await expect(
-        service.close('other-tenant', shift.id.toValue(), { expectedTotal: 0, actualTotal: 0 }),
+        service.close('other-tenant', shift.id.toValue(), { physicalCash: 0 }),
       ).rejects.toThrow(NotFoundError);
     });
 
     it('throws ValidationError if shift is already closed', async () => {
       const shift = Shift.open({ tenantId: TENANT_ID, registerId: 'register-1', cashierId: 'cashier-1', openingBalance: 500000 });
-      shift.close(750000, 745000);
+      shift.close(750000);
       repo.findById.mockResolvedValue(shift);
 
       await expect(
-        service.close(TENANT_ID, shift.id.toValue(), { expectedTotal: 750000, actualTotal: 745000 }),
+        service.close(TENANT_ID, shift.id.toValue(), { physicalCash: 745000 }),
       ).rejects.toThrow(ValidationError);
     });
   });
