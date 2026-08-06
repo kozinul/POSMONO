@@ -33,6 +33,17 @@ export interface IVoidedItem {
   voidedAt: Date;
 }
 
+export type VoidApprovalType = 'order' | 'item' | 'payment';
+
+export interface IVoidApproval {
+  voidType: VoidApprovalType;
+  requestedBy: string;
+  reason: string;
+  approverId: string;
+  approverName: string;
+  approvedAt: Date;
+}
+
 export interface IPaymentBreakdownEntry {
   method: string;
   code: string;
@@ -97,6 +108,7 @@ export interface IOrder {
   notes: string;
   source: OrderSource;
   voidedItems: IVoidedItem[];
+  voidApprovals: IVoidApproval[];
   voidedAt: Date | null;
   voidedBy: string | null;
   voidedByName: string | null;
@@ -137,6 +149,7 @@ export class Order extends AggregateRoot<OrderId> {
   private notes: string;
   private source: OrderSource;
   private voidedItems: IVoidedItem[];
+  private voidApprovals: IVoidApproval[];
   private voidedAt: Date | null;
   private voidedBy: string | null;
   private voidedByName: string | null;
@@ -177,6 +190,7 @@ export class Order extends AggregateRoot<OrderId> {
     this.notes = props.notes;
     this.source = props.source;
     this.voidedItems = [...props.voidedItems];
+    this.voidApprovals = [...(props.voidApprovals ?? [])];
     this.voidedAt = props.voidedAt;
     this.voidedBy = props.voidedBy;
     this.voidedByName = props.voidedByName;
@@ -204,6 +218,7 @@ export class Order extends AggregateRoot<OrderId> {
       promotions: props.promotions ?? [],
       discountBreakdown: props.discountBreakdown ?? [],
       voidedItems: [],
+      voidApprovals: [],
       voidedAt: null,
       voidedBy: null,
       voidedByName: null,
@@ -282,6 +297,28 @@ export class Order extends AggregateRoot<OrderId> {
         aggregateType: 'Order',
         tenantId: this.tenantId,
         payload: { orderId: this.id.toValue(), reason },
+      }),
+    );
+  }
+
+  addVoidApproval(approval: IVoidApproval): void {
+    this.voidApprovals.push({ ...approval });
+    this.updatedAt = new Date();
+    this.addDomainEvent(
+      new DomainEvent({
+        eventName: 'ordering.order.void-approved',
+        aggregateId: this.id.toValue(),
+        aggregateType: 'Order',
+        tenantId: this.tenantId,
+        payload: {
+          orderId: this.id.toValue(),
+          orderNumber: this.orderNumber,
+          voidType: approval.voidType,
+          requestedBy: approval.requestedBy,
+          approverId: approval.approverId,
+          approverName: approval.approverName,
+          approvedAt: approval.approvedAt,
+        },
       }),
     );
   }
@@ -824,6 +861,7 @@ export class Order extends AggregateRoot<OrderId> {
       notes: this.notes,
       source: this.source,
       voidedItems: [...this.voidedItems],
+      voidApprovals: [...this.voidApprovals],
       voidedAt: this.voidedAt,
       voidedBy: this.voidedBy,
       voidedByName: this.voidedByName,

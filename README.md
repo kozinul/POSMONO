@@ -116,6 +116,9 @@ Lihat [docs/API_REFERENCE.md](docs/API_REFERENCE.md) untuk dokumentasi lengkap.
 | `POST /api/tax/calculate` | Calculate tax |
 | `POST /api/discount/:tenantId/validate-promo` | Validate promo code |
 | `POST /api/promotions` | Create promotion |
+| `GET /api/reports/{daily|sales|finance|sales-per-product}/export?format=pdf\|xlsx&...` | Export report |
+| `POST /api/orders/:id/void` | Void entire order (manager PIN when role lacks `order:void`) |
+| `POST /api/orders/:id/void-item` | Void individual line item |
 
 ## Tax Engine & Adjustment Pipeline
 
@@ -215,7 +218,25 @@ cd backend && pnpm start
 cd frontend && pnpm preview
 ```
 
-## Dokumentasi
+## Catatan Rilis Terbaru
+
+### POS — Panel Aksi Kasir (v0.3.x)
+- **Panel aksi mengambang**: tombol aksi kasir kini berupa tombol mengapung (ikon tiga garis / hamburger) yang dipasang **di sebelah kiri search bar** pada halaman POS (`PosActionPanel`, `fixed left-6 top-[88px]`), tidak lagi di kanan-bawah dan tidak lagi menempati ruang katalog/cart.
+- **Grub aksi**:
+  - *Order / Bill*: Buat Bill, Simpan & Tutup, Batal Bill, **Void Transaksi** (pilih order paid → konfirmasi PIN manajer bila tidak punya permission sendiri).
+  - *Laporan Kasir*: ringkasan harian (orders, revenue, item) + tombol ekspor **PDF** dan **Excel**.
+  - *Shift*: Buka / Tutup Shift.
+- **Void item draft pada cart dihapus**: tombol *void per-item* pada baris keranjang baru (draft) sudah tidak ditampilkan lagi; hanya *Void Transaksi* purna (paid) yang tersedia via panel.
+- Ikon tombol panel diganti dari petir (⚡) ke tiga garis horizontal.
+- Z-index dinaikkan agar tombol tetap dapat diklik saat drawer terbuka (backdrop `z-[49]`, drawer & tombol `z-[51]`).
+
+### Reporting — Export PDF/Excel
+- Endpoint export ditambahkan (lihat API Reference): `GET /reports/{daily|sales|finance|sales-per-product}/export?format=pdf|xlsx&...`.
+- `ReportExportService` (pdfkit + exceljs) terdaftar di DI container.
+
+### Backend — Void permission
+- Permission `order:void` / `payment:void` dapat diberikan ke role; cashier tanpa permission wajib memasukkan PIN manajer pada void (verifikasi supervisor).
+
 
 - [Arsitektur](docs/ARCHITECTURE.md)
 - [API Reference](docs/API_REFERENCE.md)

@@ -6,6 +6,7 @@ export interface TokenPayload {
   sub: string;
   tenant: string;
   role: string;
+  roleName?: string;
   jti?: string;
   type?: 'access' | 'refresh';
 }

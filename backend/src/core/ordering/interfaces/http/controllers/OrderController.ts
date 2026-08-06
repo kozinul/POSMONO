@@ -84,12 +84,14 @@ const replaceOrderItemsSchema = z.object({
 const voidOrderSchema = z.object({
   reason: z.string().min(1, 'Reason is required'),
   voidedByName: z.string().min(1, 'Voided by name is required'),
+  managerPin: z.string().regex(/^\d{4,6}$/, 'PIN must be 4-6 digits').optional(),
 });
 
 const voidItemSchema = z.object({
   itemIndex: z.number().int().nonnegative(),
   reason: z.string().min(1, 'Reason is required'),
   voidedByName: z.string().min(1, 'Voided by name is required'),
+  managerPin: z.string().regex(/^\d{4,6}$/, 'PIN must be 4-6 digits').optional(),
 });
 
 const payOrderSchema = z.object({
@@ -112,6 +114,7 @@ const voidPaymentSchema = z.object({
   paymentIndex: z.number().int().nonnegative(),
   reason: z.string().min(1, 'Reason is required'),
   voidedByName: z.string().min(1, 'Voided by name is required'),
+  managerPin: z.string().regex(/^\d{4,6}$/, 'PIN must be 4-6 digits').optional(),
 });
 
 const removeItemSchema = z.object({
@@ -126,6 +129,7 @@ const updateItemQuantitySchema = z.object({
 const voidAndRollbackSchema = z.object({
   reason: z.string().min(1, 'Reason is required'),
   voidedByName: z.string().min(1, 'Voided by name is required'),
+  managerPin: z.string().regex(/^\d{4,6}$/, 'PIN must be 4-6 digits').optional(),
 });
 
 const topaySchema = z.object({
@@ -267,9 +271,11 @@ export class OrderController extends BaseController {
 
     const order = await this.voidOrderService.execute({
       id: req.params.id,
+      tenantId: req.tenantId,
       voidedBy: req.userId,
       voidedByName: parsed.data.voidedByName,
       reason: parsed.data.reason,
+      managerPin: parsed.data.managerPin,
     });
 
     this.ok(res, order.serialize());
@@ -281,10 +287,12 @@ export class OrderController extends BaseController {
 
     const order = await this.voidItemService.execute({
       id: req.params.id,
+      tenantId: req.tenantId,
       itemIndex: parsed.data.itemIndex,
       reason: parsed.data.reason,
       voidedBy: req.userId,
       voidedByName: parsed.data.voidedByName,
+      managerPin: parsed.data.managerPin,
     });
 
     this.ok(res, order.serialize());
@@ -323,10 +331,12 @@ export class OrderController extends BaseController {
 
     const order = await this.voidPaymentService.execute({
       id: req.params.id,
+      tenantId: req.tenantId,
       paymentIndex: parsed.data.paymentIndex,
       reason: parsed.data.reason,
       voidedBy: req.userId,
       voidedByName: parsed.data.voidedByName,
+      managerPin: parsed.data.managerPin,
     });
 
     this.ok(res, order.serialize());
@@ -372,9 +382,11 @@ export class OrderController extends BaseController {
 
     const order = await this.voidAndRollbackService.execute({
       id: req.params.id,
+      tenantId: req.tenantId,
       reason: parsed.data.reason,
       voidedBy: req.userId,
       voidedByName: parsed.data.voidedByName,
+      managerPin: parsed.data.managerPin,
     });
 
     this.ok(res, order.serialize());

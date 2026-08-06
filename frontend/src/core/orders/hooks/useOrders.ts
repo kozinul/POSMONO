@@ -94,6 +94,28 @@ interface SalesReport {
   orders: Order[];
 }
 
+interface FinanceCategory {
+  categoryId: string | null;
+  totalOrders: number;
+  totalItems: number;
+  revenue: number;
+  dpp: number;
+  tax: number;
+  serviceCharge: number;
+}
+
+interface FinanceReport {
+  dateFrom: string;
+  dateTo: string;
+  totalOrders: number;
+  totalRevenue: number;
+  netRevenue: number;
+  totalTax: number;
+  totalServiceCharge: number;
+  totalDiscount: number;
+  categories: FinanceCategory[];
+}
+
 export function useOrders(params?: { status?: string; dateFrom?: string; dateTo?: string; page?: number; limit?: number }) {
   return useQuery({
     queryKey: ['orders', params],
@@ -154,11 +176,36 @@ export function useSalesReport(dateFrom: string, dateTo: string) {
   });
 }
 
+export function useFinanceReport(dateFrom: string, dateTo: string) {
+  return useQuery({
+    queryKey: ['finance-report', dateFrom, dateTo],
+    queryFn: async () => {
+      const res = await api.get<{ success: boolean; data: FinanceReport }>(`/reports/finance?dateFrom=${dateFrom}&dateTo=${dateTo}`);
+      return res.data.data;
+    },
+    enabled: !!dateFrom && !!dateTo,
+  });
+}
+
 export function useVoidOrder() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ orderId, reason, voidedByName }: { orderId: string; reason: string; voidedByName: string }) => {
-      const res = await api.post<{ success: boolean; data: Order }>(`/orders/${orderId}/void`, { reason, voidedByName });
+    mutationFn: async ({
+      orderId,
+      reason,
+      voidedByName,
+      managerPin,
+    }: {
+      orderId: string;
+      reason: string;
+      voidedByName: string;
+      managerPin?: string;
+    }) => {
+      const res = await api.post<{ success: boolean; data: Order }>(`/orders/${orderId}/void`, {
+        reason,
+        voidedByName,
+        managerPin: managerPin ?? undefined,
+      });
       return res.data.data;
     },
     onSuccess: () => {

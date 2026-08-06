@@ -12,7 +12,13 @@ export function createReportRoutes(reportController: ReportController): Router {
   router.get('/cashier', authenticate, asyncHandler(reportController.cashier.bind(reportController)));
   router.get('/daily-metrics', authenticate, asyncHandler(reportController.dailyMetrics.bind(reportController)));
   router.get('/sales-per-product', authenticate, asyncHandler(reportController.salesPerProduct.bind(reportController)));
+  router.get('/finance', authenticate, asyncHandler(reportController.finance.bind(reportController)));
   router.post('/daily-metrics/generate', authenticate, asyncHandler(reportController.generateDailyMetric.bind(reportController)));
+
+  router.get('/daily/export', authenticate, asyncHandler(reportController.exportDaily.bind(reportController)));
+  router.get('/sales/export', authenticate, asyncHandler(reportController.exportSales.bind(reportController)));
+  router.get('/finance/export', authenticate, asyncHandler(reportController.exportFinance.bind(reportController)));
+  router.get('/sales-per-product/export', authenticate, asyncHandler(reportController.exportSalesPerProduct.bind(reportController)));
 
   return router;
 }

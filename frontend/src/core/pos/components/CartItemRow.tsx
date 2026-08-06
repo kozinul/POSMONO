@@ -83,6 +83,7 @@ export function CartItemRow({ item, lineItem }: CartItemRowProps) {
           <button
             onClick={() => removeItem(item.productId)}
             className="text-gray-300 hover:text-red-500 transition-colors"
+            title="Hapus dari keranjang"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M6 18L18 6M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />

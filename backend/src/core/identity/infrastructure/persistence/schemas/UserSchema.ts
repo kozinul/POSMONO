@@ -10,6 +10,7 @@ export const UserSchema = new Schema(
     roleId: { type: String, required: true },
     isActive: { type: Boolean, default: true },
     lastLoginAt: { type: Date, default: null },
+    pin: { type: String, default: null },
     preferences: { type: Schema.Types.Mixed, default: {} },
   },
   {

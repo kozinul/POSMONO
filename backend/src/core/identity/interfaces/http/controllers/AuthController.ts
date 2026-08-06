@@ -39,6 +39,8 @@ export class AuthController extends BaseController {
         email: result.user.emailValue,
         displayName: result.user.displayNameValue,
         role: result.user.roleIdValue,
+        roleName: result.roleName,
+        permissions: result.permissions,
       },
     });
   }
@@ -83,16 +85,20 @@ export class AuthController extends BaseController {
   }
 
   async me(req: Request, res: Response): Promise<void> {
-    const user = await this.authService.getCurrentUser(req.userId, req.tenantId);
-    if (!user) {
+    const result = await this.authService.getCurrentUser(req.userId, req.tenantId);
+    if (!result) {
       throw new ValidationError('User not found');
     }
+
+    const { user, roleName, permissions } = result;
 
     this.ok(res, {
       id: user.id.toValue(),
       email: user.emailValue,
       displayName: user.displayNameValue,
       role: user.roleIdValue,
+      roleName,
+      permissions,
       isActive: user.isActiveUser(),
       lastLoginAt: user.serialize().lastLoginAt,
     });

@@ -17,11 +17,11 @@ const StockListPage = lazy(() => import('../core/inventory/pages/StockListPage')
 const WarehouseListPage = lazy(() => import('../core/inventory/pages/WarehouseListPage'));
 const SettingsPage = lazy(() => import('../core/settings/pages/GeneralSettingsPage'));
 const ReportPage = lazy(() => import('../core/reports/pages/ReportPage'));
-const SalesPerProductPage = lazy(() => import('../core/reports/pages/SalesPerProductPage'));
 const ShiftPage = lazy(() => import('../core/shifts/pages/ShiftPage'));
 const MemberListPage = lazy(() => import('../core/members/pages/MemberListPage'));
 const PromotionListPage = lazy(() => import('../core/promotions/pages/PromotionListPage'));
 const PaymentMethodListPage = lazy(() => import('../core/payment-methods/pages/PaymentMethodListPage'));
+const UserListPage = lazy(() => import('../core/users/pages/UserListPage'));
 const TemplateListPage = lazy(() => import('../core/templates/pages/TemplateListPage'));
 const DesignerPage = lazy(() => import('../core/templates/pages/DesignerPage'));
 
@@ -51,12 +51,13 @@ export function AppRouter() {
               <Route path="/inventory" element={<StockListPage />} />
               <Route path="/inventory/warehouses" element={<WarehouseListPage />} />
               <Route path="/reports" element={<ReportPage />} />
-              <Route path="/reports/sales-per-product" element={<SalesPerProductPage />} />
+              <Route path="/reports/sales-per-product" element={<Navigate to="/reports" replace />} />
               <Route path="/shifts" element={<ShiftPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/members" element={<MemberListPage />} />
               <Route path="/promotions" element={<PromotionListPage />} />
               <Route path="/payment-methods" element={<PaymentMethodListPage />} />
+              <Route path="/users" element={<UserListPage />} />
               <Route path="/templates" element={<TemplateListPage />} />
               <Route path="/templates/:id/designer" element={<DesignerPage />} />
             </Route>

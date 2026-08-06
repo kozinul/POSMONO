@@ -6,6 +6,7 @@ declare global {
       tenantId: string;
       userId: string;
       userRole: string;
+      userRoleName: string;
       userPermissions: string[];
       user?: { tenantId: string };
     }

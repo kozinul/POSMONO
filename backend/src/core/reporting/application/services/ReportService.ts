@@ -123,4 +123,20 @@ export class ReportService {
   async getSalesPerProduct(tenantId: string, dateFrom: string, dateTo: string) {
     return this.reportAggregation.getSalesPerProductAggregation(tenantId, dateFrom, dateTo);
   }
+
+  async getFinanceReport(tenantId: string, dateFrom: string, dateTo: string) {
+    const finance = await this.reportAggregation.getFinanceAggregation(tenantId, dateFrom, dateTo);
+
+    return {
+      dateFrom,
+      dateTo,
+      totalOrders: finance.totalOrders,
+      totalRevenue: finance.totalRevenue,
+      netRevenue: finance.netRevenue,
+      totalTax: finance.totalTax,
+      totalServiceCharge: finance.totalServiceCharge,
+      totalDiscount: finance.totalDiscount,
+      categories: finance.categories,
+    };
+  }
 }

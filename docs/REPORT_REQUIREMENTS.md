@@ -2,7 +2,7 @@
 
 > Analisis kebutuhan report POS, dipisahkan antara kebutuhan **kasir** (operasional, shift-based, rekonsiliasi kas) dan kebutuhan **manajemen/lainnya** (analitik, akuntansi, tren). Dokumen ini adalah bahan diskusi & tasking — sebagian kebutuhan kasir sudah diimplementasikan (lihat §7).
 >
-> Last updated: 2026-08-05
+> Last updated: 2026-08-06
 
 ---
 
@@ -26,7 +26,7 @@ Endpoint yang tersedia di `report.routes.ts`:
 | `GET /reports/cashier?date=` | ✅ (admin) |
 | `GET /reports/daily-metrics?dateFrom=&dateTo=` | ✅ |
 | `GET /reports/sales-per-product?dateFrom=&dateTo=` | ✅ |
-| `GET /reports/finance` | ❌ **tercantum di docs tapi tidak ada di router** |
+| `GET /reports/finance?dateFrom=&dateTo=` | ✅ (2026-08-06) |
 | `POST /reports/daily-metrics/generate?date=` | ✅ |
 
 ### Frontend — `frontend/src/core/reports/`
@@ -35,8 +35,8 @@ Endpoint yang tersedia di `report.routes.ts`:
 - `pages/SalesPerProductPage.tsx` — tabel penjualan per produk + transaksi
 - `hooks/useSalesPerProductReport.ts`, `useOrders.ts` (`useDashboardSummary`, `useDailyReport`, `useSalesReport`)
 - Router: `/reports`, `/reports/sales-per-product` (di `src/app/router.tsx`)
-- **Belum ada** UI cashier-report maupun shift-close report.
-- Role user: `admin` | `cashier`; permission `reports.read`, `reports.export`, `reports.dashboard.customize` (+ `platform.reports.read`).
+- **Belum ada** UI cashier-performance (`/reports/cashier`). UI shift-close report sudah ada di halaman Shift (`ShiftPage`).
+- Role user: `admin` | `cashier`. Satu-satunya permission yang terdaftar di seed/dev adalah `reports:read` — **belum ada** `reports.export`/`reports.dashboard.customize`/`platform.reports.read`, dan semua route report hanya pakai middleware `authenticate` (belum ada enforcement `authorize`/permission).
 
 ### Data pendukung
 
@@ -104,11 +104,18 @@ Fokus: **analitik**, **akuntansi**, **tren**, **evaluasi performa**.
 
 ## 6. Open Questions (perlu keputusan)
 
+Status jawaban berdasarkan kondisi kode (2026-08-06):
+
 1. Apakah Order memiliki `shiftId`? Jika tidak, bagaimana memetakan transaksi ke shift milik kasir?
+   → **Tidak.** Order hanya punya `cashierId`/`cashierName` + `paidAt`; pemetaan order→shift hanya via `date + cashierId` (tidak 1:1). Perlu keputusan desain.
 2. Apakah Order sudah menyimpan `serviceCharge` per order, atau cukup hitung dari field `serviceCharge` di items?
+   → **Sudah di level order** (`serviceCharge`, `serviceChargeRate`) **dan** di item (`dpp`, `serviceCharge`, `tax`). Data finance report tersedia.
 3. Apakah sistem multi-outlet? Jika ya, filter `outletId` wajib ditambahkan ke semua aggregation.
+   → **Belum ada entitas outlet**; `outlet` hanya muncul sebagai enum scope di tax config (`TaxScope`).
 4. Apakah kasir boleh export? (hanya shift report, atau semuanya?)
+   → Belum ada mekanisme export sama sekali (print shift sudah ada via `window.print`).
 5. UI approach: cashier report sebagai **tab di halaman Shift (`/shifts`)** atau **sub-halaman Reports (`/reports/cashier`)**?
+   → Shift-close report **sudah** di `ShiftPage`. Keputusan tinggal untuk cashier-performance (`/reports/cashier`).
 
 ---
 
@@ -122,6 +129,13 @@ Fokus: **analitik**, **akuntansi**, **tren**, **evaluasi performa**.
 | C4 Voided items di daily/sales | ⏳ — belum |
 | C5 Print/export shift report | ⏳ — print via window.print sudah ada; export CSV/PDF belum |
 | C6 Ringan & spesifik | ✅ — laporan berbasis shift single-date |
-| M1–M8 (manajemen) | ⏳ — belum (prioritas berikutnya) |
+| M1 Sales report (rentang) | ✅ |
+| M2 Finance report (nett, pajak, SC, diskon) | ✅ **Terimplementasi (2026-08-06)** — `GET /reports/finance` (backend) + kartu Finance Report di `ReportPage`; data `serviceCharge`/`dpp`/`tax` per order & per kategori |
+| M3 Cashier performance UI | ⏳ — API ada, UI belum |
+| M4 Sales per product | ✅ |
+| M5 Dashboard summary | ✅ |
+| M6 Daily metrics otomatis | ⏳ — generate masih manual (POST `/reports/daily-metrics/generate`); belum ada cron |
+| M7 Export data mentah | ⏳ — belum ada endpoint export |
+| M8 Multi-outlet | ⏳ — belum ada entitas outlet |
 
 *Dokumen ini belum diimplementasikan — untuk dipakai saat tasking fitur report.*

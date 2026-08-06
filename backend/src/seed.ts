@@ -67,6 +67,7 @@ async function seed() {
         'roles:read', 'roles:write',
         'products:read', 'products:write', 'products:delete',
         'orders:read', 'orders:write', 'orders:cancel',
+        'order:void', 'payment:void',
         'payments:read', 'payments:write',
         'inventory:read', 'inventory:write', 'inventory:adjust',
         'reports:read',
@@ -84,6 +85,7 @@ async function seed() {
       permissions: [
         'products:read', 'products:write',
         'orders:read', 'orders:write', 'orders:cancel',
+        'order:void', 'payment:void',
         'payments:read', 'payments:write',
         'inventory:read', 'inventory:write',
         'reports:read',

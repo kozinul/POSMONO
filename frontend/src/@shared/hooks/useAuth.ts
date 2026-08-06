@@ -1,7 +1,16 @@
 import { create } from 'zustand';
 
+export interface AuthUser {
+  id: string;
+  email: string;
+  displayName: string;
+  role: string;
+  roleName?: string | null;
+  permissions?: string[];
+}
+
 interface AuthState {
-  user: { id: string; email: string; displayName: string; role: string } | null;
+  user: AuthUser | null;
   isAuthenticated: boolean;
   setUser: (user: AuthState['user']) => void;
   logout: () => void;
@@ -19,3 +28,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     window.location.href = '/login';
   },
 }));
+
+export function hasPermission(user: AuthUser | null, permission: string): boolean {
+  return !!user?.permissions?.includes(permission);
+}

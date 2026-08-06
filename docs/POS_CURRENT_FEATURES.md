@@ -646,9 +646,9 @@ families.view, families.edit
 - **Split bill (pay one at a time)**: berlaku untuk SEMUA transaksi (tidak hanya open bill) sejak 2026-08-05 — pilih item yang mau dibayar → bayar → sisa item tetap di cart → ulangi hingga lunas; bila sisa item ada di tengah split tanpa bill, sisa tetap di cart (tidak di-persist), lalu split state di-reset saat transaksi selesai
 - **Split order numbering**: receipt menampilkan `ORD-xxx/N` untuk split portions
 - **Hold/Recall order**: tahan pesanan (instant, backend sync in background), panggil kapan saja
-- **Void order**: batalkan seluruh transaksi (butuh supervisor auth)
-- **Void item**: batalkan item tertentu dalam transaksi
-- **Void payment**: batalkan pembayaran, kembali ke cart
+- **Void order**: batalkan seluruh transaksi (permission `order:void` → bypass; cashier wajib PIN manajer, sejak 2026-08-06)
+- **Void item**: batalkan item tertentu dalam transaksi (approval policy sama seperti void order)
+- **Void payment**: batalkan pembayaran, kembali ke cart (permission `payment:void` → bypass; cashier wajib PIN manajer)
 - **Open bill**: transaksi belum dibayar, bisa dilanjutkan nanti
 - **Customer name & table number**: field di atas cart, selalu terlihat
 - **Transaction types**: dine_in, takeaway, delivery, online
@@ -852,7 +852,7 @@ families.view, families.edit
 - Select modifier (popup)
 - Update quantity (+ / -)
 - Remove item
-- Item-level void (dengan supervisor auth)
+- Item-level void (permission `order:void` → bypass; cashier wajib PIN manajer via modal 2-step, sejak 2026-08-06)
 - Subtotal per item & total
 
 #### C. Member Selection
@@ -892,7 +892,7 @@ families.view, families.edit
 
 #### G. Transaction History
 - List recent transactions
-- Void full order (supervisor auth)
+- Void full order (permission `order:void` → bypass; cashier wajib PIN manajer)
 - Void individual item
 - Void payment (return to cart)
 

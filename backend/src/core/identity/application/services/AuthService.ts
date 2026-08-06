@@ -13,6 +13,8 @@ interface LoginInput {
 
 interface LoginOutput {
   user: User;
+  roleName: string | null;
+  permissions: string[];
   accessToken: string;
   refreshToken: string;
 }
@@ -23,6 +25,7 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
     private readonly tokenService: any,
     private readonly passwordService: PasswordService,
     private readonly sessionService: any,
+    private readonly roleRepository?: any,
   ) {}
 
   async execute(input: LoginInput): Promise<LoginOutput> {
@@ -43,10 +46,15 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
     user.recordLogin();
     await this.userRepository.save(user);
 
+    const role = await this.resolveRole(user.roleIdValue);
+    const roleName = role?.serialize().name ?? null;
+    const permissions = role?.serialize().permissions ?? [];
+
     const refreshToken = this.tokenService.generateRefreshToken({
       sub: user.id.toValue(),
       tenant: input.tenantId,
       role: user.roleIdValue,
+      roleName: roleName ?? undefined,
     });
 
     await this.sessionService.create({
@@ -61,9 +69,15 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
       sub: user.id.toValue(),
       tenant: input.tenantId,
       role: user.roleIdValue,
+      roleName: roleName ?? undefined,
     });
 
-    return { user, accessToken, refreshToken };
+    return { user, roleName, permissions, accessToken, refreshToken };
+  }
+
+  private async resolveRole(roleId: string) {
+    if (!this.roleRepository) return null;
+    return this.roleRepository.findById(roleId);
   }
 
   async refresh(token: string): Promise<{ accessToken: string; refreshToken: string }> {
@@ -89,6 +103,7 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
       sub: payload.sub,
       tenant: payload.tenant,
       role: payload.role,
+      roleName: payload.roleName,
     });
 
     await this.sessionService.create({
@@ -101,6 +116,7 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
       sub: payload.sub,
       tenant: payload.tenant,
       role: payload.role,
+      roleName: payload.roleName,
     });
 
     return { accessToken, refreshToken: newRefreshToken };
@@ -131,6 +147,7 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
       roleId: input.roleId,
       isActive: true,
       lastLoginAt: null,
+      pin: null,
       preferences: {},
     });
 
@@ -138,8 +155,17 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
     return user;
   }
 
-  async getCurrentUser(userId: string, tenantId: string): Promise<User | null> {
+  async getCurrentUser(
+    userId: string,
+    tenantId: string,
+  ): Promise<{ user: User; roleName: string | null; permissions: string[] } | null> {
     const user = await this.userRepository.findByIdAndTenant(userId, tenantId);
-    return user;
+    if (!user) return null;
+
+    const role = await this.resolveRole(user.roleIdValue);
+    const roleName = role?.serialize().name ?? null;
+    const permissions = role?.serialize().permissions ?? [];
+
+    return { user, roleName, permissions };
   }
 }

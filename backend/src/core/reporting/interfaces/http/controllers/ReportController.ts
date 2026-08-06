@@ -1,10 +1,24 @@
 import { Request, Response } from 'express';
 import { ReportService } from '../../../application/services/ReportService';
+import { ReportExportService, ReportExportFormat, ReportFile } from '../../../application/services/ReportExportService';
 import { BaseController } from '../../../../../@shared/interfaces/BaseController';
 
 export class ReportController extends BaseController {
-  constructor(private readonly reportService: ReportService) {
+  constructor(
+    private readonly reportService: ReportService,
+    private readonly reportExportService: ReportExportService,
+  ) {
     super();
+  }
+
+  private resolveFormat(format: unknown): ReportExportFormat | null {
+    return format === 'pdf' || format === 'xlsx' ? format : null;
+  }
+
+  private sendFile(res: Response, file: ReportFile): void {
+    res.setHeader('Content-Type', file.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${file.filename}"`);
+    res.send(file.buffer);
   }
 
   async dashboard(req: Request, res: Response): Promise<void> {
@@ -82,5 +96,94 @@ export class ReportController extends BaseController {
       dateTo as string,
     );
     this.ok(res, result);
+  }
+
+  async finance(req: Request, res: Response): Promise<void> {
+    const { dateFrom, dateTo } = req.query;
+    if (!dateFrom || !dateTo) {
+      res.status(400).json({ success: false, message: 'dateFrom and dateTo query parameters are required' });
+      return;
+    }
+    const result = await this.reportService.getFinanceReport(
+      req.tenantId,
+      dateFrom as string,
+      dateTo as string,
+    );
+    this.ok(res, result);
+  }
+
+  async exportDaily(req: Request, res: Response): Promise<void> {
+    const { date, format } = req.query;
+    if (!date) {
+      res.status(400).json({ success: false, message: 'date query parameter is required' });
+      return;
+    }
+    const f = this.resolveFormat(format);
+    if (!f) {
+      res.status(400).json({ success: false, message: 'format must be pdf or xlsx' });
+      return;
+    }
+    const file = await this.reportExportService.exportDaily(req.tenantId, date as string, f);
+    this.sendFile(res, file);
+  }
+
+  async exportSales(req: Request, res: Response): Promise<void> {
+    const { dateFrom, dateTo, format } = req.query;
+    if (!dateFrom || !dateTo) {
+      res.status(400).json({ success: false, message: 'dateFrom and dateTo query parameters are required' });
+      return;
+    }
+    const f = this.resolveFormat(format);
+    if (!f) {
+      res.status(400).json({ success: false, message: 'format must be pdf or xlsx' });
+      return;
+    }
+    const file = await this.reportExportService.exportSales(
+      req.tenantId,
+      dateFrom as string,
+      dateTo as string,
+      f,
+    );
+    this.sendFile(res, file);
+  }
+
+  async exportFinance(req: Request, res: Response): Promise<void> {
+    const { dateFrom, dateTo, format } = req.query;
+    if (!dateFrom || !dateTo) {
+      res.status(400).json({ success: false, message: 'dateFrom and dateTo query parameters are required' });
+      return;
+    }
+    const f = this.resolveFormat(format);
+    if (!f) {
+      res.status(400).json({ success: false, message: 'format must be pdf or xlsx' });
+      return;
+    }
+    const file = await this.reportExportService.exportFinance(
+      req.tenantId,
+      dateFrom as string,
+      dateTo as string,
+      f,
+    );
+    this.sendFile(res, file);
+  }
+
+  async exportSalesPerProduct(req: Request, res: Response): Promise<void> {
+    const { dateFrom, dateTo, format } = req.query;
+    if (!dateFrom || !dateTo) {
+      res.status(400).json({ success: false, message: 'dateFrom and dateTo query parameters are required' });
+      return;
+    }
+    const f = this.resolveFormat(format);
+    if (!f) {
+      res.status(400).json({ success: false, message: 'format must be pdf or xlsx' });
+      return;
+    }
+    const file = await this.reportExportService.exportSalesPerProduct(
+      req.tenantId,
+      dateFrom as string,
+      dateTo as string,
+      f,
+    );
+    this.sendFile(res, file);
   }
 }

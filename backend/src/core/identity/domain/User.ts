@@ -12,6 +12,7 @@ export interface IUser {
   roleId: string;
   isActive: boolean;
   lastLoginAt: Date | null;
+  pin: string | null;
   preferences: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
@@ -25,6 +26,7 @@ export class User extends AggregateRoot<UserId> {
   private roleId: string;
   private isActive: boolean;
   private lastLoginAt: Date | null;
+  private pin: string | null;
   private preferences: Record<string, unknown>;
   private createdAt: Date;
   private updatedAt: Date;
@@ -38,6 +40,7 @@ export class User extends AggregateRoot<UserId> {
     this.roleId = props.roleId;
     this.isActive = props.isActive;
     this.lastLoginAt = props.lastLoginAt;
+    this.pin = props.pin ?? null;
     this.preferences = props.preferences;
     this.createdAt = props.createdAt;
     this.updatedAt = props.updatedAt;
@@ -86,6 +89,7 @@ export class User extends AggregateRoot<UserId> {
       roleId: this.roleId,
       isActive: this.isActive,
       lastLoginAt: this.lastLoginAt,
+      pin: this.pin,
       preferences: this.preferences,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
@@ -106,6 +110,10 @@ export class User extends AggregateRoot<UserId> {
 
   get roleIdValue(): string {
     return this.roleId;
+  }
+
+  get pinValue(): string | null {
+    return this.pin;
   }
 
   recordLogin(): void {

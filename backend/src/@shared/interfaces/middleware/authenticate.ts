@@ -7,6 +7,7 @@ interface JwtPayload {
   sub: string;
   tenant: string;
   role: string;
+  roleName?: string;
 }
 
 export function authenticate(req: Request, _res: Response, next: NextFunction): void {
@@ -23,6 +24,7 @@ export function authenticate(req: Request, _res: Response, next: NextFunction): 
     req.userId = decoded.sub;
     req.tenantId = decoded.tenant;
     req.userRole = decoded.role;
+    req.userRoleName = decoded.roleName ?? '';
     req.userPermissions = [];
     next();
   } catch {

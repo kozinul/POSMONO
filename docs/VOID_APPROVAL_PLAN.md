@@ -2,8 +2,8 @@
 
 > Rencana implementasi fitur void untuk kasir dengan persetujuan manager. Cashier (role `Cashier`) wajib memasukkan alasan void + PIN manager untuk melakukan void order/item/payment/rollback. Manager/Owner bypass kode.
 >
-> Status: **RENCANA — belum diimplementasikan**.
-> Last updated: 2026-08-05
+> Status: **Langkah 1 (same-terminal + PIN) SELESAI diimplementasikan** (2026-08-06), termasuk UI User management (`/users`) untuk set/hapus PIN Manager. Alur 2b (two-device `void_requests`) belum.
+> Last updated: 2026-08-06
 
 ---
 
@@ -16,12 +16,12 @@
 
 ## 2. Keputusan (Hasil Diskusi 2026-08-05)
 
-1. **Per-manager PIN** — tiap user manajer punya PIN pribadi (bukan kode satu-tenant). Hanya role `Manager`/`Owner` yang bisa punya PIN.
+1. **Per-manager PIN** — tiap user manajer punya PIN pribadi (bukan kode satu-tenant). Hanya user dengan permission `order:void`/`payment:void` (default: role `owner`, `manager`, `supervisor`) yang bisa punya PIN.
 2. **Dua alur didukung** (backend dirancang agnostik metode):
    - **(a) Same-terminal**: manager yang hadir memasukkan PIN-nya di terminal yang sama saat approval.
    - **(b) Two-device**: kasir kirim request → manager setujui dari device manager (endpoint approve + event realtime).
 3. **Buat UI void baru di terminal kasir (`PosPage`)** — dibangun dari nol.
-4. **Manager/Owner bypass kode**; cashier wajib persetujuan.
+4. **User dengan `order:void`/`payment:void` bypass kode**; cashier (tanpa permission tsb) wajib persetujuan.
 5. **Perbaiki `authorize()` + role-name di JWT sebagai improvement terpisah** (prasyarat untuk gating role yang aman; didokumentasikan di sini, bukan bagian implementasi void inti).
 
 ## 3. Perubahan Data
@@ -29,7 +29,7 @@
 ### Backend — User
 - `User` domain & `MongoUserSchema` (`backend/src/core/identity/infrastructure/persistence/schemas/UserSchema.ts`):
   - Tambah field opsional `pin?: string` (hash).
-  - Hanya user ber-role `Manager`/`Owner` yang boleh mengatur PIN (lewat User management UI/service).
+  - Hanya user yang punya permission `order:void`/`payment:void` (default: `owner`/`manager`/`supervisor`) yang boleh mengatur PIN (lewat User management UI/service).
   - Cashier tidak punya PIN.
 
 ### Backend — Order
@@ -53,10 +53,10 @@ interface VoidApproval {
 
 ### `VoidApprovalService` (baru, `backend/src/core/ordering/...`)
 - `verifyApprover(userId, managerPin?)`:
-  - Resolve role `userId` → `roleName`.
-  - Role `Manager`/`Owner` → bypass (`requireManager = false`).
-  - Role `Cashier` → wajib `managerPin`; cari user dengan hash PIN cocok **dan** role `Manager`/`Owner`; gagal → `ForbiddenError`.
-  - Return `{ approverId, approverName, requireManager }`.
+  - Load user + role → `userPermissions`.
+  - Caller punya `order:void`/`payment:void` → bypass (`requireApproval = false`).
+  - Caller tanpa permission tsb (cashier) → wajib `managerPin`; cari user dengan hash PIN cocok **dan** punya `order:void`/`payment:void`; gagal → `ForbiddenError`.
+  - Return `{ approverId, approverName, requireApproval }`.
 - `approvePendingVoid(tenantId, voidRequestId, managerPin)` (untuk alur 2b): validasi PIN manager, ubah status request `pending` → `approved`, trigger void + event.
 
 ### Endpoint void (perubahan payload)
@@ -84,11 +84,11 @@ Kasir submit tanpa PIN → backend buat `void_requests` (collection baru: `{ id,
   - Tombol Void per item di cart (hanya untuk kasir; muncul tombol approval).
   - Store methods: `voidItemOnBill(itemIndex, reason, managerPin?)`, `voidBill(reason, managerPin?)`, `voidPayment(idx, reason, managerPin?)`.
   - Handle 403 → modal tampilkan "Kode manager salah".
-- Modal baru `VoidItemModal` khusus POS, 2 step: (1) item + reason, (2) approval manager (field PIN). Untuk Manager/Owner, field PIN tidak ditampilkan (auto approve).
+- Modal baru `VoidItemModal` khusus POS, 2 step: (1) item + reason, (2) approval manager (field PIN). Untuk user dengan `order:void`/`payment:void`, field PIN tidak ditampilkan (auto approve).
 
 ## 6. Pengelolaan PIN
 
-- UI User/Edit User: field "PIN Manager" (masked, 4–6 digit + confirm) tampil **hanya** untuk role `Manager`/`Owner`.
+- UI User/Edit User (`frontend/src/core/users/pages/UserListPage.tsx`, route `/users`): field "PIN Manager" (masked, 4–6 digit + confirm) tampil **hanya** untuk role yang punya permission `order:void`/`payment:void`. Ada opsi "Hapus PIN" (kirim `pin: null`). **SELESAI diimplementasikan** (2026-08-06). Halaman kini full CRUD: Tambah (POST `/users`, backend `UserService.create` + `UserController.create`), Edit, Hapus (DELETE `/users/:id`), Aktif/Nonaktif.
 - Simpan hash ke `User.pin`.
 - Cashier tidak melihat PIN; PIN hanya dimasukkan saat approval.
 
@@ -123,5 +123,5 @@ Kasir submit tanpa PIN → backend buat `void_requests` (collection baru: `{ id,
 
 - PIN 4–6 digit, di-hash (bcrypt).
 - Role-name via lookup di login/me (1 DB hit/login — acceptable). JWT membawa `roleName`, bukan permissions.
-- Manager bypass berdasarkan `roleName`, bukan permission (`authorize()` masih belum diaktifkan).
+- Manager bypass berdasarkan permission `order:void`/`payment:void` (bukan hardcode `roleName`; `authorize()` masih belum diaktifkan — resolver permission dibuat di service ini).
 - Fokus void item/order/payment/rollback; void payment *refund* tidak termasuk.

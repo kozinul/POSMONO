@@ -43,30 +43,37 @@ async function seedData() {
   const cashierRoleId = id('rol');
   const managerRoleId = id('rol');
 
-  await Tenant.create({
-    _id: 'dev-tenant',
-    name: 'Toko ABC Retail',
-    slug: 'toko-abc',
-    domain: null,
-    ownerId: adminUserId,
-    plan: 'pro',
-    status: 'active',
-    businessType: 'retail',
-    modules: ['core', 'retail'],
-    databaseName: `posmono_${tenantId}`,
-    config: { timezone: 'Asia/Jakarta', currency: 'IDR', locale: 'id' },
-    billingEmail: 'admin@tokoabc.com',
-  });
-
-  await Role.create([
+  await Tenant.updateOne(
+    { _id: 'dev-tenant' },
     {
-      _id: adminRoleId, tenantId, name: 'Owner',
+      $setOnInsert: {
+        _id: 'dev-tenant',
+        name: 'Toko ABC Retail',
+        slug: 'toko-abc',
+        domain: null,
+        ownerId: adminUserId,
+        plan: 'pro',
+        status: 'active',
+        businessType: 'retail',
+        modules: ['core', 'retail'],
+        databaseName: `posmono_${tenantId}`,
+        config: { timezone: 'Asia/Jakarta', currency: 'IDR', locale: 'id' },
+        billingEmail: 'admin@tokoabc.com',
+      },
+    },
+    { upsert: true },
+  );
+
+  const roleDocs = [
+    {
+      _id: adminRoleId, name: 'Owner',
       description: 'Full access to all features',
       permissions: [
         'users:read', 'users:write', 'users:delete',
         'roles:read', 'roles:write',
         'products:read', 'products:write', 'products:delete',
         'orders:read', 'orders:write', 'orders:cancel',
+        'order:void', 'payment:void',
         'payments:read', 'payments:write',
         'inventory:read', 'inventory:write', 'inventory:adjust',
         'reports:read',
@@ -77,11 +84,12 @@ async function seedData() {
       isSystem: true,
     },
     {
-      _id: managerRoleId, tenantId, name: 'Manager',
+      _id: managerRoleId, name: 'Manager',
       description: 'Daily operations management',
       permissions: [
         'products:read', 'products:write',
         'orders:read', 'orders:write', 'orders:cancel',
+        'order:void', 'payment:void',
         'payments:read', 'payments:write',
         'inventory:read', 'inventory:write',
         'reports:read',
@@ -92,7 +100,7 @@ async function seedData() {
       isSystem: true,
     },
     {
-      _id: cashierRoleId, tenantId, name: 'Cashier',
+      _id: cashierRoleId, name: 'Cashier',
       description: 'Can process POS transactions',
       permissions: [
         'products:read',
@@ -103,22 +111,34 @@ async function seedData() {
       ],
       isSystem: true,
     },
-  ]);
+  ];
+
+  await Role.bulkWrite(
+    roleDocs.map((r) => ({
+      updateOne: {
+        filter: { tenantId, name: r.name },
+        update: { $setOnInsert: { _id: r._id, tenantId, description: r.description, permissions: r.permissions, isSystem: r.isSystem } },
+        upsert: true,
+      },
+    })),
+  );
 
   const passwordHash = await bcrypt.hash('admin123', 12);
 
-  await User.create([
+  await User.bulkWrite([
     {
-      _id: adminUserId, tenantId,
-      email: 'admin@demo.com', passwordHash,
-      displayName: 'Admin Toko', roleId: adminRoleId,
-      isActive: true, lastLoginAt: null, preferences: {},
+      updateOne: {
+        filter: { tenantId, email: 'admin@demo.com' },
+        update: { $setOnInsert: { _id: adminUserId, tenantId, email: 'admin@demo.com', passwordHash, displayName: 'Admin Toko', roleId: adminRoleId, isActive: true, lastLoginAt: null, preferences: {} } },
+        upsert: true,
+      },
     },
     {
-      _id: cashierUserId, tenantId,
-      email: 'cashier@demo.com', passwordHash,
-      displayName: 'Cashier Demo', roleId: cashierRoleId,
-      isActive: true, lastLoginAt: null, preferences: {},
+      updateOne: {
+        filter: { tenantId, email: 'cashier@demo.com' },
+        update: { $setOnInsert: { _id: cashierUserId, tenantId, email: 'cashier@demo.com', passwordHash, displayName: 'Cashier Demo', roleId: cashierRoleId, isActive: true, lastLoginAt: null, preferences: {} } },
+        upsert: true,
+      },
     },
   ]);
 

@@ -8,7 +8,9 @@ export function createUserRoutes(userController: UserController): Router {
 
   router.get('/', authenticate, asyncHandler(userController.list.bind(userController)));
   router.get('/:id', authenticate, asyncHandler(userController.getById.bind(userController)));
+  router.post('/', authenticate, asyncHandler(userController.create.bind(userController)));
   router.put('/:id', authenticate, asyncHandler(userController.update.bind(userController)));
+  router.delete('/:id', authenticate, asyncHandler(userController.delete.bind(userController)));
   router.post('/:id/deactivate', authenticate, asyncHandler(userController.deactivate.bind(userController)));
   router.post('/:id/activate', authenticate, asyncHandler(userController.activate.bind(userController)));
 

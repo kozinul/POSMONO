@@ -56,6 +56,7 @@ import { PermissionController } from '../core/identity/interfaces/http/controlle
 import { OrderSchema } from '../core/ordering/infrastructure/persistence/schemas/OrderSchema';
 import { MongoOrderRepository } from '../core/ordering/infrastructure/persistence/MongoOrderRepository';
 import { CreateOrderService, UpdateOrderService, ReplaceOrderItemsService, VoidOrderService, VoidItemService, PayOrderService, VoidPaymentService, ReopenOrderService, SplitItemService, RemoveItemService, UpdateItemQuantityService, VoidAndRollbackService, TopayService, RefundService, ApplyDiscountService, SetServiceChargeService, HoldOrderService, RecallOrderService } from '../core/ordering/application/services/OrderService';
+import { VoidApprovalService } from '../core/ordering/application/services/VoidApprovalService';
 import { OrderController } from '../core/ordering/interfaces/http/controllers/OrderController';
 import { ShiftSchema } from '../core/pos/infrastructure/persistence/schemas/ShiftSchema';
 import { MongoShiftRepository } from '../core/pos/infrastructure/persistence/MongoShiftRepository';
@@ -68,6 +69,7 @@ import { MongoRefundRepository } from '../core/payment/infrastructure/persistenc
 import { PaymentService } from '../core/payment/application/services/PaymentService';
 import { PaymentController } from '../core/payment/interfaces/http/controllers/PaymentController';
 import { ReportService } from '../core/reporting/application/services/ReportService';
+import { ReportExportService } from '../core/reporting/application/services/ReportExportService';
 import { ReportController } from '../core/reporting/interfaces/http/controllers/ReportController';
 import { DailyMetricSchema } from '../core/reporting/infrastructure/persistence/schemas/DailyMetricSchema';
 import { MongoDailyMetricRepository } from '../core/reporting/infrastructure/persistence/MongoDailyMetricRepository';
@@ -240,6 +242,7 @@ export function buildContainer() {
     container.resolve('tokenService'),
     container.resolve('passwordService'),
     container.resolve('sessionService'),
+    container.resolve('roleRepository'),
   );
 
   container.register({
@@ -409,11 +412,20 @@ export function buildContainer() {
         eventBus: container.resolve('eventBus'),
       }),
     }),
+    voidApprovalService: asClass(VoidApprovalService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        userRepository: container.resolve('userRepository'),
+        roleRepository: container.resolve('roleRepository'),
+        passwordService: container.resolve('passwordService'),
+      }),
+    }),
     voidOrderService: asClass(VoidOrderService, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
         orderRepository: container.resolve('orderRepository'),
         eventBus: container.resolve('eventBus'),
+        voidApprovalService: container.resolve('voidApprovalService'),
         inventoryService: container.resolve('inventoryService'),
       }),
     }),
@@ -422,6 +434,7 @@ export function buildContainer() {
       injector: () => ({
         orderRepository: container.resolve('orderRepository'),
         eventBus: container.resolve('eventBus'),
+        voidApprovalService: container.resolve('voidApprovalService'),
       }),
     }),
     payOrderService: asClass(PayOrderService, {
@@ -436,6 +449,7 @@ export function buildContainer() {
       injector: () => ({
         orderRepository: container.resolve('orderRepository'),
         eventBus: container.resolve('eventBus'),
+        voidApprovalService: container.resolve('voidApprovalService'),
       }),
     }),
     reopenOrderService: asClass(ReopenOrderService, {
@@ -472,6 +486,7 @@ export function buildContainer() {
       injector: () => ({
         orderRepository: container.resolve('orderRepository'),
         eventBus: container.resolve('eventBus'),
+        voidApprovalService: container.resolve('voidApprovalService'),
       }),
     }),
     topayService: asClass(TopayService, {
@@ -697,10 +712,18 @@ export function buildContainer() {
         reportAggregation: container.resolve('reportAggregation'),
       }),
     }),
+    reportExportService: asClass(ReportExportService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        reportService: container.resolve('reportService'),
+        categoryRepository: container.resolve('categoryRepository'),
+      }),
+    }),
     reportController: asClass(ReportController, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
         reportService: container.resolve('reportService'),
+        reportExportService: container.resolve('reportExportService'),
       }),
     }),
     customerRepository: asClass(MongoCustomerRepository, {

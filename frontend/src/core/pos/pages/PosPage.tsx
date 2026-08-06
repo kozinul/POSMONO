@@ -14,6 +14,12 @@ import { formatIDR } from '../utils/money';
 import { useHeldOrders } from '../hooks/useHeldOrders';
 import { useStockList } from '../../inventory/hooks/useInventory';
 import { useOpenShift } from '../../shifts/hooks/useShift';
+import { PosVoidModal } from '../components/PosVoidModal';
+import { PosActionPanel } from '../components/PosActionPanel';
+import { useAuthStore, hasPermission } from '../../../@shared/hooks/useAuth';
+import { VOID_ORDER_PERMISSION } from '../../../@shared/utils/permissions';
+import { useOrders, useVoidOrder } from '../../orders/hooks/useOrders';
+import type { CartItem } from '../store/posStore';
 
 export default function PosPage() {
   const {
@@ -38,15 +44,19 @@ export default function PosPage() {
     recalculate,
     openBill,
     saveBill,
-    cancelActiveBill,
     activeBillId,
     activeBillNumber,
     toggleHeldOrdersPanel,
     mergeHeldOrders,
     refreshItemPrices,
-    clearCart,
     seedOpenShift,
-  } = usePOSStore();
+     voidItemOnBill,
+     voidActiveBill,
+     cancelActiveBill,
+   } = usePOSStore();
+
+  const currentUser = useAuthStore((s) => s.user);
+  const canVoidSelf = hasPermission(currentUser, VOID_ORDER_PERMISSION);
 
   const { data: discountConfig } = useDiscountConfiguration();
   const { data: openShift } = useOpenShift();
@@ -65,6 +75,13 @@ export default function PosPage() {
   const [search, setSearch] = useState('');
   const [selectedFamily, setSelectedFamily] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [voidTarget, setVoidTarget] = useState<{ item: CartItem; itemIndex: number } | null>(null);
+  const [voidBillOpen, setVoidBillOpen] = useState(false);
+  const [voidError, setVoidError] = useState<string | null>(null);
+  const [voidPending, setVoidPending] = useState(false);
+  const [paidOrderSelectOpen, setPaidOrderSelectOpen] = useState(false);
+  const [paidSearch, setPaidSearch] = useState('');
+  const [voidOrderTarget, setVoidOrderTarget] = useState<{ id: string; orderNumber: string } | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const barcodeBuffer = useRef('');
   const barcodeTimer = useRef<ReturnType<typeof setTimeout>>();
@@ -72,6 +89,9 @@ export default function PosPage() {
   const { lookupBarcode } = useBarcodeLookup();
   const { data: stocks = [] } = useStockList();
   const { data: heldOrdersQuery } = useHeldOrders();
+  const { data: paidOrdersRes } = useOrders({ status: 'paid', limit: 100 });
+  const paidOrders = paidOrdersRes?.data ?? [];
+  const voidOrderMutate = useVoidOrder();
 
   useEffect(() => {
     if (heldOrdersQuery) {
@@ -171,6 +191,73 @@ export default function PosPage() {
 
   const p = pricing;
   const itemCount = items.reduce((s, i) => s + i.quantity, 0);
+
+  const paidItemIndex = useMemo(() => {
+    const m: Record<string, number> = {};
+    let i = 0;
+    for (const item of items) {
+      if (item.isFreeItem) continue;
+      m[item.productId] = i++;
+    }
+    return m;
+  }, [items]);
+
+  const handleVoidItem = (item: CartItem) => {
+    const index = paidItemIndex[item.productId];
+    if (index === undefined) return;
+    setVoidError(null);
+    setVoidTarget({ item, itemIndex: index });
+  };
+
+  const submitVoidItem = async (reason: string, managerPin?: string) => {
+    if (!voidTarget) return;
+    setVoidPending(true);
+    setVoidError(null);
+    const res = await voidItemOnBill({
+      productId: voidTarget.item.productId,
+      itemIndex: voidTarget.itemIndex,
+      reason,
+      managerPin,
+    });
+    setVoidPending(false);
+    if (res.ok) {
+      setVoidTarget(null);
+    } else {
+      setVoidError(res.error ?? 'Gagal memvoid item');
+    }
+  };
+
+  const submitVoidBill = async (reason: string, managerPin?: string) => {
+    setVoidPending(true);
+    setVoidError(null);
+    const res = await voidActiveBill({ reason, managerPin });
+    setVoidPending(false);
+    if (res.ok) {
+      setVoidBillOpen(false);
+    } else {
+      setVoidError(res.error ?? 'Gagal memvoid bill');
+    }
+  };
+
+  const submitVoidOrder = async (reason: string, managerPin?: string) => {
+    if (!voidOrderTarget) return;
+    setVoidPending(true);
+    setVoidError(null);
+    const userName = currentUser?.displayName || 'Kasir';
+    try {
+      await voidOrderMutate.mutateAsync({
+        orderId: voidOrderTarget.id,
+        reason,
+        voidedByName: userName,
+        managerPin,
+      });
+      setVoidOrderTarget(null);
+    } catch (err: any) {
+      setVoidError(err?.response?.data?.error?.message || 'Gagal memvoid order');
+    } finally {
+      setVoidPending(false);
+    }
+  };
 
   return (
     <div className="flex-1 min-h-0 w-full flex overflow-hidden">
@@ -303,12 +390,8 @@ export default function PosPage() {
               </div>
               <button
                 onClick={() => {
-                  if (items.length > 0) {
-                    toast({ title: 'Bill ditutup, item yang belum disimpan dihapus', icon: 'info' });
-                  }
-                  clearCart();
-                  cancelActiveBill();
-                  setHoldError('');
+                  setVoidError(null);
+                  setVoidBillOpen(true);
                 }}
                 className="shrink-0 text-xs font-semibold text-amber-700 hover:text-amber-900 underline"
               >
@@ -441,9 +524,106 @@ export default function PosPage() {
         </div>
       </aside>
 
+      <PosActionPanel
+        openBill={openBill}
+        saveBill={saveBill}
+        closeActiveBill={cancelActiveBill}
+        hasItems={items.length === 0 ? false : true}
+        activeBillNumber={activeBillNumber}
+      />
+
       {paymentModalOpen && <PaymentModal />}
       {receipt && <ReceiptDisplay />}
       <HeldOrdersPanel />
+
+      {voidTarget && (
+        <PosVoidModal
+          title="Void Item"
+          description={`Void "${voidTarget.item.name}" (Qty ${voidTarget.item.quantity}) dari bill ${activeBillNumber ?? ''}?`}
+          requiresPin={!canVoidSelf}
+          isPending={voidPending}
+          error={voidError}
+          onSubmit={submitVoidItem}
+          onClose={() => setVoidTarget(null)}
+        />
+      )}
+
+      {voidBillOpen && (
+        <PosVoidModal
+          title="Void Bill"
+          description={`Batalkan bill ${activeBillNumber ?? ''}? Seluruh item pada bill akan divoid.`}
+          requiresPin={!canVoidSelf}
+          isPending={voidPending}
+          error={voidError}
+          onSubmit={submitVoidBill}
+          onClose={() => setVoidBillOpen(false)}
+        />
+      )}
+
+      {paidOrderSelectOpen && (
+        <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-lg w-full max-w-lg">
+            <div className="p-4 border-b border-gray-200">
+              <h3 className="text-lg font-bold text-gray-800">Pilih Transaksi untuk Void</h3>
+              <p className="text-sm text-gray-400 mt-0.5">Cari order yang sudah selesai (paid).</p>
+            </div>
+            <div className="p-4">
+              <input
+                value={paidSearch}
+                onChange={(e) => setPaidSearch(e.target.value)}
+                className="block w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Cari nomor order..."
+              />
+              <div className="mt-3 max-h-56 overflow-y-auto divide-y divide-gray-100">
+                {(paidOrders || [])
+                  .filter(
+                    (o: any) =>
+                      !paidSearch.trim() ||
+                      (o.orderNumber ?? '').toLowerCase().includes(paidSearch.toLowerCase()),
+                  )
+                  .slice(0, 50)
+                  .map((o: any) => (
+                    <button
+                      key={o.id}
+                      onClick={() => {
+                        setVoidOrderTarget({ id: o.id, orderNumber: o.orderNumber });
+                        setPaidOrderSelectOpen(false);
+                        setPaidSearch('');
+                      }}
+                      className="w-full flex items-center justify-between text-left px-3 py-2 text-sm hover:bg-gray-50 rounded-lg"
+                    >
+                      <span className="text-gray-700 font-medium">{o.orderNumber}</span>
+                      <span className="text-gray-900">Rp {formatIDR(o.total ?? 0)}</span>
+                    </button>
+                  ))}
+              </div>
+            </div>
+            <div className="p-4 border-t border-gray-200 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setPaidOrderSelectOpen(false);
+                  setPaidSearch('');
+                }}
+                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-700"
+              >
+                Batal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {voidOrderTarget && (
+        <PosVoidModal
+          title="Void Transaksi"
+          description={`Void order ${voidOrderTarget.orderNumber}? Transaksi ini akan dibatalkan.`}
+          requiresPin={!canVoidSelf}
+          isPending={voidPending}
+          error={voidError}
+          onSubmit={submitVoidOrder}
+          onClose={() => setVoidOrderTarget(null)}
+        />
+      )}
     </div>
   );
 }

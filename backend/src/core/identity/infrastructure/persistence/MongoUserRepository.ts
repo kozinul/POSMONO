@@ -12,6 +12,7 @@ interface UserDoc extends Document<string> {
   roleId: string;
   isActive: boolean;
   lastLoginAt: Date | null;
+  pin: string | null;
   preferences: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
@@ -35,6 +36,7 @@ export class MongoUserRepository extends MongoRepository<User, UserId, UserDoc> 
       roleId: doc.roleId,
       isActive: doc.isActive,
       lastLoginAt: doc.lastLoginAt,
+      pin: doc.pin ?? null,
       preferences: doc.preferences || {},
       createdAt: doc.createdAt,
       updatedAt: doc.updatedAt,
@@ -52,6 +54,7 @@ export class MongoUserRepository extends MongoRepository<User, UserId, UserDoc> 
       roleId: data.roleId,
       isActive: data.isActive,
       lastLoginAt: data.lastLoginAt,
+      pin: data.pin ?? null,
       preferences: data.preferences,
     } as unknown as Partial<UserDoc>;
   }

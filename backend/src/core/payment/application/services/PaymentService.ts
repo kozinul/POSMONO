@@ -186,6 +186,7 @@ export class PaymentService {
       notes: '',
       source: 'pos',
       voidedItems: [],
+      voidApprovals: [],
       metadata: {
         discountType: input.promoCode ? 'promo' : (input.discountType ?? 'nominal'),
         discountValue: totalDiscountValue,

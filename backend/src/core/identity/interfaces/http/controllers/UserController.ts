@@ -4,10 +4,20 @@ import { UserService } from '../../../application/services/UserService';
 import { z } from 'zod';
 import { ValidationError } from '../../../../../@shared/infrastructure/error/AppError';
 
+const createSchema = z.object({
+  email: z.string().email(),
+  displayName: z.string().min(1),
+  roleId: z.string().min(1),
+  password: z.string().min(6),
+  pin: z.string().regex(/^\d{4,6}$/, 'PIN must be 4-6 digits').nullable().optional(),
+  isActive: z.boolean().optional(),
+});
+
 const updateSchema = z.object({
   displayName: z.string().min(1).optional(),
   roleId: z.string().optional(),
   password: z.string().min(6).optional(),
+  pin: z.string().regex(/^\d{4,6}$/, 'PIN must be 4-6 digits').nullable().optional(),
   isActive: z.boolean().optional(),
 });
 
@@ -44,6 +54,26 @@ export class UserController extends BaseController {
       lastLoginAt: s.lastLoginAt,
       createdAt: s.createdAt,
     });
+  }
+
+  async create(req: Request, res: Response): Promise<void> {
+    const parsed = createSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError('Invalid input');
+
+    const user = await this.userService.create(req.tenantId, parsed.data);
+    const s = user.serialize();
+    this.created(res, {
+      id: s.id,
+      email: s.email,
+      displayName: s.displayName,
+      roleId: s.roleId,
+      isActive: s.isActive,
+    });
+  }
+
+  async delete(req: Request, res: Response): Promise<void> {
+    await this.userService.delete(req.tenantId, req.params.id);
+    this.noContent(res);
   }
 
   async update(req: Request, res: Response): Promise<void> {

@@ -1,4 +1,5 @@
 import { NotFoundError, ValidationError } from '../../../../@shared/infrastructure/error/AppError';
+import { UserId } from '../../../../@shared/domain/Identifier';
 import { User } from '../../domain/User';
 import { PasswordService } from '../../domain/services/PasswordService';
 
@@ -20,7 +21,40 @@ export class UserService {
     return user;
   }
 
-  async update(tenantId: string, id: string, data: { displayName?: string; roleId?: string; password?: string; isActive?: boolean }): Promise<User> {
+  async create(
+    tenantId: string,
+    data: { email: string; displayName: string; roleId: string; password: string; pin?: string | null; isActive?: boolean },
+  ): Promise<User> {
+    if (!data.password || data.password.length < 6) {
+      throw new ValidationError('Password must be at least 6 characters');
+    }
+    const existing = await this.userRepository.findByEmail(data.email, tenantId);
+    if (existing) {
+      throw new ValidationError('User with this email already exists');
+    }
+
+    const user = User.create({
+      tenantId,
+      email: data.email,
+      passwordHash: await this.passwordService.hash(data.password),
+      displayName: data.displayName,
+      roleId: data.roleId,
+      isActive: data.isActive ?? true,
+      lastLoginAt: null,
+      pin: data.pin ? await this.passwordService.hash(data.pin) : null,
+      preferences: {},
+    });
+
+    await this.userRepository.save(user);
+    return user;
+  }
+
+  async delete(tenantId: string, id: string): Promise<void> {
+    await this.getById(tenantId, id);
+    await this.userRepository.delete(new UserId(id));
+  }
+
+  async update(tenantId: string, id: string, data: { displayName?: string; roleId?: string; password?: string; pin?: string | null; isActive?: boolean }): Promise<User> {
     const user = await this.getById(tenantId, id);
 
     const serialized = user.serialize();
@@ -32,6 +66,11 @@ export class UserService {
       passwordHash: data.password
         ? await this.passwordService.hash(data.password)
         : serialized.passwordHash,
+      pin: data.pin === undefined
+        ? serialized.pin
+        : data.pin === null
+          ? null
+          : await this.passwordService.hash(data.pin),
     });
 
     await this.userRepository.save(updated);

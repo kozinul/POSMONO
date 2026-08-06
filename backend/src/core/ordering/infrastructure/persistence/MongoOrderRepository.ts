@@ -32,6 +32,7 @@ interface OrderDoc extends Document<string> {
   notes: string;
   source: string;
   voidedItems: any[];
+  voidApprovals: any[];
   voidedAt: Date | null;
   voidedBy: string | null;
   voidedByName: string | null;
@@ -76,6 +77,7 @@ export class MongoOrderRepository {
       notes: doc.notes,
       source: doc.source as IOrder['source'],
       voidedItems: doc.voidedItems ?? [],
+      voidApprovals: doc.voidApprovals ?? [],
       voidedAt: doc.voidedAt ?? null,
       voidedBy: doc.voidedBy ?? null,
       voidedByName: doc.voidedByName ?? null,
@@ -119,6 +121,7 @@ export class MongoOrderRepository {
       notes: data.notes,
       source: data.source,
       voidedItems: data.voidedItems,
+      voidApprovals: data.voidApprovals,
       voidedAt: data.voidedAt,
       voidedBy: data.voidedBy,
       voidedByName: data.voidedByName,

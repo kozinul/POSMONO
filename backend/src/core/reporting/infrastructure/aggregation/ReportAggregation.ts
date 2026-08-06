@@ -176,6 +176,85 @@ export class ReportAggregation {
     }));
   }
 
+  async getFinanceAggregation(tenantId: string, dateFrom: string, dateTo: string) {
+    const startOfDay = new Date(dateFrom);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(dateTo);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const match = {
+      tenantId,
+      createdAt: { $gte: startOfDay, $lte: endOfDay },
+      status: { $in: ['paid', 'completed'] },
+    };
+
+    const [totals] = await this.orderModel.aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: null,
+          totalOrders: { $sum: 1 },
+          totalRevenue: { $sum: '$total' },
+          netRevenue: {
+            $sum: { $subtract: [{ $subtract: ['$total', '$tax'] }, { $ifNull: ['$serviceCharge', 0] }] },
+          },
+          totalTax: { $sum: { $ifNull: ['$tax', 0] } },
+          totalServiceCharge: { $sum: { $ifNull: ['$serviceCharge', 0] } },
+          totalDiscount: {
+            $sum: { $add: [{ $ifNull: ['$discount', 0] }, { $ifNull: ['$discountTotal', 0] }] },
+          },
+        },
+      },
+    ]);
+
+    const categories = await this.orderModel.aggregate([
+      { $match: match },
+      { $unwind: '$items' },
+      {
+        $lookup: {
+          from: 'products',
+          localField: 'items.productId',
+          foreignField: '_id',
+          as: 'product',
+        },
+      },
+      { $unwind: { path: '$product', preserveNullAndEmptyArrays: true } },
+      {
+        $group: {
+          _id: '$product.categoryId',
+          totalOrders: { $sum: 1 },
+          totalItems: { $sum: '$items.quantity' },
+          revenue: { $sum: { $multiply: ['$items.unitPrice', '$items.quantity'] } },
+          dpp: { $sum: { $ifNull: ['$items.dpp', 0] } },
+          tax: { $sum: { $ifNull: ['$items.tax.amount', 0] } },
+          serviceCharge: { $sum: { $ifNull: ['$items.serviceCharge', 0] } },
+        },
+      },
+      { $sort: { revenue: -1 } },
+    ]);
+
+    return {
+      totalOrders: totals?.totalOrders ?? 0,
+      totalRevenue: totals?.totalRevenue ?? 0,
+      netRevenue: totals?.netRevenue ?? 0,
+      totalTax: totals?.totalTax ?? 0,
+      totalServiceCharge: totals?.totalServiceCharge ?? 0,
+      totalDiscount: totals?.totalDiscount ?? 0,
+      categories: categories.map((item: any) => ({
+        categoryId: item._id,
+        totalOrders: item.totalOrders,
+        totalItems: item.totalItems,
+        revenue: item.revenue,
+        dpp:
+          item.dpp > 0
+            ? Math.round(item.dpp)
+            : Math.round(item.revenue - item.tax - item.serviceCharge),
+        tax: Math.round(item.tax),
+        serviceCharge: Math.round(item.serviceCharge),
+      })),
+    };
+  }
+
   async getSalesPerProductAggregation(tenantId: string, dateFrom: string, dateTo: string) {
     const startOfDay = new Date(dateFrom);
     startOfDay.setHours(0, 0, 0, 0);

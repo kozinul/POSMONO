@@ -6,7 +6,13 @@ import {
   ITaxDetail,
   TransactionType,
   IDiscountBreakdown,
+  IVoidApproval,
 } from '../../domain/Order';
+import {
+  VoidApprovalService,
+  VOID_ORDER_PERMISSION,
+  VOID_PAYMENT_PERMISSION,
+} from './VoidApprovalService';
 
 interface CreateOrderInput {
   tenantId: string;
@@ -38,17 +44,21 @@ interface UpdateOrderInput {
 
 interface VoidOrderInput {
   id: string;
+  tenantId: string;
   voidedBy: string;
   voidedByName: string;
   reason: string;
+  managerPin?: string;
 }
 
 interface VoidItemInput {
   id: string;
+  tenantId: string;
   itemIndex: number;
   reason: string;
   voidedBy: string;
   voidedByName: string;
+  managerPin?: string;
 }
 
 interface PayOrderInput {
@@ -60,10 +70,12 @@ interface PayOrderInput {
 
 interface VoidPaymentInput {
   id: string;
+  tenantId: string;
   paymentIndex: number;
   reason: string;
   voidedBy: string;
   voidedByName: string;
+  managerPin?: string;
 }
 
 interface ReopenOrderInput {
@@ -90,9 +102,11 @@ interface UpdateItemQuantityInput {
 
 interface VoidAndRollbackInput {
   id: string;
+  tenantId: string;
   reason: string;
   voidedBy: string;
   voidedByName: string;
+  managerPin?: string;
 }
 
 interface TopayInput {
@@ -133,6 +147,46 @@ interface ReplaceOrderItemsInput {
   tableNumber?: string | null;
   customerName?: string | null;
   notes?: string;
+}
+
+interface VoidContext {
+  tenantId: string;
+  voidedBy: string;
+  voidedByName: string;
+  reason: string;
+  managerPin?: string;
+}
+
+async function resolveVoidApproval(
+  voidApprovalService: VoidApprovalService | undefined,
+  context: VoidContext,
+  requiredPermission: string,
+): Promise<{ approverId: string; approverName: string }> {
+  if (!voidApprovalService) {
+    return { approverId: context.voidedBy, approverName: context.voidedByName };
+  }
+  return voidApprovalService.verifyApprover({
+    tenantId: context.tenantId,
+    userId: context.voidedBy,
+    managerPin: context.managerPin,
+    requiredPermission,
+  });
+}
+
+function appendVoidApproval(
+  order: Order,
+  approval: { approverId: string; approverName: string },
+  voidType: IVoidApproval['voidType'],
+  context: VoidContext,
+): void {
+  order.addVoidApproval({
+    voidType,
+    requestedBy: context.voidedBy,
+    reason: context.reason,
+    approverId: approval.approverId,
+    approverName: approval.approverName,
+    approvedAt: new Date(),
+  });
 }
 
 export class CreateOrderService implements UseCase<CreateOrderInput, Order> {
@@ -186,6 +240,7 @@ export class CreateOrderService implements UseCase<CreateOrderInput, Order> {
       source: input.source,
       metadata: input.metadata || {},
       voidedItems: [],
+      voidApprovals: [],
     });
 
     await this.orderRepository.save(order);
@@ -265,6 +320,7 @@ export class VoidOrderService implements UseCase<VoidOrderInput, Order> {
   constructor(
     private readonly orderRepository: any,
     private readonly eventBus: any,
+    private readonly voidApprovalService?: VoidApprovalService,
     private readonly inventoryService?: any,
   ) {}
 
@@ -272,7 +328,9 @@ export class VoidOrderService implements UseCase<VoidOrderInput, Order> {
     const order = await this.orderRepository.findById(input.id);
     if (!order) throw new Error('Order not found');
 
+    const approval = await resolveVoidApproval(this.voidApprovalService, input, VOID_ORDER_PERMISSION);
     order.voidOrder(input.voidedBy, input.voidedByName, input.reason);
+    appendVoidApproval(order, approval, 'order', input);
 
     await this.orderRepository.save(order);
 
@@ -305,13 +363,16 @@ export class VoidItemService implements UseCase<VoidItemInput, Order> {
   constructor(
     private readonly orderRepository: any,
     private readonly eventBus: any,
+    private readonly voidApprovalService?: VoidApprovalService,
   ) {}
 
   async execute(input: VoidItemInput): Promise<Order> {
     const order = await this.orderRepository.findById(input.id);
     if (!order) throw new Error('Order not found');
 
+    const approval = await resolveVoidApproval(this.voidApprovalService, input, VOID_ORDER_PERMISSION);
     order.voidItem(input.itemIndex, input.reason, input.voidedBy, input.voidedByName);
+    appendVoidApproval(order, approval, 'item', input);
 
     await this.orderRepository.save(order);
 
@@ -349,13 +410,16 @@ export class VoidPaymentService implements UseCase<VoidPaymentInput, Order> {
   constructor(
     private readonly orderRepository: any,
     private readonly eventBus: any,
+    private readonly voidApprovalService?: VoidApprovalService,
   ) {}
 
   async execute(input: VoidPaymentInput): Promise<Order> {
     const order = await this.orderRepository.findById(input.id);
     if (!order) throw new Error('Order not found');
 
+    const approval = await resolveVoidApproval(this.voidApprovalService, input, VOID_PAYMENT_PERMISSION);
     order.voidPayment(input.paymentIndex, input.reason, input.voidedBy, input.voidedByName);
+    appendVoidApproval(order, approval, 'payment', input);
 
     await this.orderRepository.save(order);
 
@@ -445,6 +509,7 @@ export class SplitItemService implements UseCase<SplitItemInput, Order> {
         source: order.serialize().source,
         metadata: {},
         voidedItems: [],
+        voidApprovals: [],
       });
       await this.orderRepository.save(newOrder);
       for (const event of newOrder.domainEvents) {
@@ -503,13 +568,16 @@ export class VoidAndRollbackService implements UseCase<VoidAndRollbackInput, Ord
   constructor(
     private readonly orderRepository: any,
     private readonly eventBus: any,
+    private readonly voidApprovalService?: VoidApprovalService,
   ) {}
 
   async execute(input: VoidAndRollbackInput): Promise<Order> {
     const order = await this.orderRepository.findById(input.id);
     if (!order) throw new Error('Order not found');
 
+    const approval = await resolveVoidApproval(this.voidApprovalService, input, VOID_ORDER_PERMISSION);
     order.voidAndRollback(input.reason, input.voidedBy, input.voidedByName);
+    appendVoidApproval(order, approval, 'order', input);
 
     await this.orderRepository.save(order);
 

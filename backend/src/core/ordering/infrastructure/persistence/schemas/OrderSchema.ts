@@ -39,6 +39,18 @@ const VoidedItemSchema = new Schema(
   { _id: false },
 );
 
+const VoidApprovalSchema = new Schema(
+  {
+    voidType: { type: String, enum: ['order', 'item', 'payment'], required: true },
+    requestedBy: { type: String, required: true },
+    reason: { type: String, required: true },
+    approverId: { type: String, required: true },
+    approverName: { type: String, required: true },
+    approvedAt: { type: Date, required: true },
+  },
+  { _id: false },
+);
+
 const PaymentBreakdownEntrySchema = new Schema(
   {
     method: { type: String, required: true },
@@ -132,6 +144,7 @@ export const OrderSchema = new Schema(
       default: 'pos',
     },
     voidedItems: { type: [VoidedItemSchema], default: [] },
+    voidApprovals: { type: [VoidApprovalSchema], default: [] },
     voidedAt: { type: Date, default: null },
     voidedBy: { type: String, default: null },
     voidedByName: { type: String, default: null },

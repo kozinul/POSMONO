@@ -14,6 +14,9 @@ vi.mock('../../src/@shared/services/api', () => ({
     defaults: {},
   },
 }));
+vi.mock('../../src/@shared/hooks/useToast', () => ({
+  toast: () => {},
+}));
 
 mockShiftSales.mockResolvedValue({ data: { data: {} } });
 
@@ -244,5 +247,123 @@ describe('POS Store (free-item cart flow)', () => {
     const state = usePOSStore.getState();
     expect(state.splitNumber).toBe(0);
     expect(state.splitBaseOrderNumber).toBeNull();
+  });
+
+  it('voidItemOnBill POSTs void-item with managerPin and removes the item', async () => {
+    usePOSStore.setState({ activeBillId: 'bill-1', activeBillNumber: 'ORD-1', items: [coffee] } as any);
+    mockPricing.mockResolvedValue({ data: { success: true, data: {} } });
+
+    const res = await usePOSStore.getState().voidItemOnBill({
+      productId: 'coffee',
+      itemIndex: 0,
+      reason: 'salah input',
+      managerPin: '1234',
+    });
+
+    expect(res.ok).toBe(true);
+    expect(mockPricing).toHaveBeenCalledWith('/orders/bill-1/void-item', {
+      itemIndex: 0,
+      reason: 'salah input',
+      voidedByName: 'Kasir',
+      managerPin: '1234',
+    });
+    expect(usePOSStore.getState().items).toEqual([]);
+  });
+
+  it('voidItemOnBill omits managerPin when not provided', async () => {
+    usePOSStore.setState({ activeBillId: 'bill-1', activeBillNumber: 'ORD-1', items: [coffee] } as any);
+    mockPricing.mockResolvedValue({ data: { success: true, data: {} } });
+
+    const res = await usePOSStore.getState().voidItemOnBill({
+      productId: 'coffee',
+      itemIndex: 0,
+      reason: 'salah input',
+    });
+
+    expect(res.ok).toBe(true);
+    expect(mockPricing).toHaveBeenCalledWith('/orders/bill-1/void-item', {
+      itemIndex: 0,
+      reason: 'salah input',
+      voidedByName: 'Kasir',
+      managerPin: undefined,
+    });
+  });
+
+  it('voidItemOnBill returns the backend error message on failure', async () => {
+    usePOSStore.setState({ activeBillId: 'bill-1', activeBillNumber: 'ORD-1', items: [coffee] } as any);
+    mockPricing.mockRejectedValue({ response: { data: { error: { message: 'PIN manajer salah' } } } });
+
+    const res = await usePOSStore.getState().voidItemOnBill({
+      productId: 'coffee',
+      itemIndex: 0,
+      reason: 'salah input',
+      managerPin: '0000',
+    });
+
+    expect(res.ok).toBe(false);
+    expect(res.error).toBe('PIN manajer salah');
+  });
+
+  it('voidItemOnBill is a no-op without an active bill', async () => {
+    usePOSStore.setState({ activeBillId: null, activeBillNumber: null, items: [coffee] } as any);
+
+    const res = await usePOSStore.getState().voidItemOnBill({
+      productId: 'coffee',
+      itemIndex: 0,
+      reason: 'salah input',
+    });
+
+    expect(res.ok).toBe(false);
+    expect(mockPricing).not.toHaveBeenCalled();
+  });
+
+  it('voidActiveBill POSTs void with managerPin and clears bill + cart', async () => {
+    const held = {
+      id: 'bill-1',
+      orderNumber: 'ORD-1',
+      items: [coffee],
+      total: 10000,
+      subtotal: 10000,
+      tax: 0,
+      serviceCharge: 0,
+      customerName: '',
+      tableNumber: '',
+      createdAt: new Date().toISOString(),
+    };
+    usePOSStore.setState({
+      activeBillId: 'bill-1',
+      activeBillNumber: 'ORD-1',
+      items: [coffee],
+      heldOrders: [held],
+      customerName: 'Budi',
+      tableNumber: '5',
+    } as any);
+    mockPricing.mockResolvedValue({ data: { success: true, data: {} } });
+
+    const res = await usePOSStore.getState().voidActiveBill({ reason: 'batal', managerPin: '1234' });
+
+    expect(res.ok).toBe(true);
+    expect(mockPricing).toHaveBeenCalledWith('/orders/bill-1/void', {
+      reason: 'batal',
+      voidedByName: 'Kasir',
+      managerPin: '1234',
+    });
+    const state = usePOSStore.getState();
+    expect(state.activeBillId).toBeNull();
+    expect(state.activeBillNumber).toBeNull();
+    expect(state.items).toEqual([]);
+    expect(state.heldOrders).toEqual([]);
+    expect(state.customerName).toBe('');
+  });
+
+  it('voidActiveBill surfaces the backend error on failure', async () => {
+    usePOSStore.setState({ activeBillId: 'bill-1', activeBillNumber: 'ORD-1', items: [coffee] } as any);
+    mockPricing.mockRejectedValue({ response: { data: { error: { message: 'PIN manajer salah' } } } });
+
+    const res = await usePOSStore.getState().voidActiveBill({ reason: 'batal', managerPin: '0000' });
+
+    expect(res.ok).toBe(false);
+    expect(res.error).toBe('PIN manajer salah');
+    expect(usePOSStore.getState().activeBillId).toBe('bill-1');
   });
 });

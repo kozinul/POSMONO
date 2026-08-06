@@ -233,12 +233,15 @@ describe('AuthService', () => {
   });
 
   describe('getCurrentUser', () => {
-    it('returns user by ID and tenant', async () => {
+    it('returns user by ID and tenant with role info', async () => {
       const user = createUser();
       userRepo.findByIdAndTenant.mockResolvedValue(user);
 
       const result = await service.getCurrentUser('user-1', TENANT_ID);
-      expect(result).toBe(user);
+      expect(result).not.toBeNull();
+      expect(result!.user).toBe(user);
+      expect(result!.roleName).toBeNull();
+      expect(result!.permissions).toEqual([]);
       expect(userRepo.findByIdAndTenant).toHaveBeenCalledWith('user-1', TENANT_ID);
     });
   });
