@@ -1,15 +1,18 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { usePOSStore } from '../store/posStore';
 import { useProducts, useCategories, useBarcodeLookup } from '../hooks/useProducts';
 import { useFamilies } from '../hooks/useFamilies';
 import { useDiscountConfiguration } from '../../../@shared/hooks/useDiscountConfiguration';
-import { getActiveProductDiscounts, getProductDiscount } from '../../../@shared/utils/discountCalculator';
+import {
+  getActiveProductDiscounts,
+  getProductDiscount,
+} from '../../../@shared/utils/discountCalculator';
 import { ProductCard } from '../components/ProductCard';
 import { CartItemRow } from '../components/CartItemRow';
 import { PaymentModal } from '../components/PaymentModal';
 import { ReceiptDisplay } from '../components/ReceiptDisplay';
 import { toast } from '../../../@shared/hooks/useToast';
-import { HeldOrdersPanel } from '../components/HeldOrdersPanel';
 import { formatIDR } from '../utils/money';
 import { useHeldOrders } from '../hooks/useHeldOrders';
 import { useStockList } from '../../inventory/hooks/useInventory';
@@ -18,7 +21,7 @@ import { PosVoidModal } from '../components/PosVoidModal';
 import { PosActionPanel } from '../components/PosActionPanel';
 import { useAuthStore, hasPermission } from '../../../@shared/hooks/useAuth';
 import { VOID_ORDER_PERMISSION } from '../../../@shared/utils/permissions';
-import { useOrders, useVoidOrder } from '../../orders/hooks/useOrders';
+import { useVoidOrder, useVoidItem } from '../../orders/hooks/useOrders';
 import type { CartItem } from '../store/posStore';
 
 export default function PosPage() {
@@ -44,19 +47,19 @@ export default function PosPage() {
     recalculate,
     openBill,
     saveBill,
+    discardBill,
     activeBillId,
     activeBillNumber,
-    toggleHeldOrdersPanel,
+    heldOrders,
     mergeHeldOrders,
     refreshItemPrices,
     seedOpenShift,
-     voidItemOnBill,
-     voidActiveBill,
-     cancelActiveBill,
-   } = usePOSStore();
+    voidItemOnBill,
+  } = usePOSStore();
 
   const currentUser = useAuthStore((s) => s.user);
   const canVoidSelf = hasPermission(currentUser, VOID_ORDER_PERMISSION);
+  const [actionDrawerOpen, setActionDrawerOpen] = useState(false);
 
   const { data: discountConfig } = useDiscountConfiguration();
   const { data: openShift } = useOpenShift();
@@ -76,12 +79,14 @@ export default function PosPage() {
   const [selectedFamily, setSelectedFamily] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [voidTarget, setVoidTarget] = useState<{ item: CartItem; itemIndex: number } | null>(null);
-  const [voidBillOpen, setVoidBillOpen] = useState(false);
   const [voidError, setVoidError] = useState<string | null>(null);
   const [voidPending, setVoidPending] = useState(false);
-  const [paidOrderSelectOpen, setPaidOrderSelectOpen] = useState(false);
-  const [paidSearch, setPaidSearch] = useState('');
-  const [voidOrderTarget, setVoidOrderTarget] = useState<{ id: string; orderNumber: string } | null>(null);
+  const [viewTransaction, setViewTransaction] = useState<any>(null);
+  const [voidOrderTarget, setVoidOrderTarget] = useState<{
+    id: string;
+    orderNumber: string;
+    itemIndex?: number;
+  } | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const barcodeBuffer = useRef('');
   const barcodeTimer = useRef<ReturnType<typeof setTimeout>>();
@@ -89,9 +94,6 @@ export default function PosPage() {
   const { lookupBarcode } = useBarcodeLookup();
   const { data: stocks = [] } = useStockList();
   const { data: heldOrdersQuery } = useHeldOrders();
-  const { data: paidOrdersRes } = useOrders({ status: 'paid', limit: 100 });
-  const paidOrders = paidOrdersRes?.data ?? [];
-  const voidOrderMutate = useVoidOrder();
 
   useEffect(() => {
     if (heldOrdersQuery) {
@@ -156,10 +158,11 @@ export default function PosPage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleBarcodeInput]);
 
-  const { data: products = [], isLoading, isError } = useProducts(
-    search || undefined,
-    selectedCategory ?? undefined,
-  );
+  const {
+    data: products = [],
+    isLoading,
+    isError,
+  } = useProducts(search || undefined, selectedCategory ?? undefined);
   const { data: categories = [], isError: categoriesError } = useCategories();
   const { data: families = [] } = useFamilies();
 
@@ -227,17 +230,8 @@ export default function PosPage() {
     }
   };
 
-  const submitVoidBill = async (reason: string, managerPin?: string) => {
-    setVoidPending(true);
-    setVoidError(null);
-    const res = await voidActiveBill({ reason, managerPin });
-    setVoidPending(false);
-    if (res.ok) {
-      setVoidBillOpen(false);
-    } else {
-      setVoidError(res.error ?? 'Gagal memvoid bill');
-    }
-  };
+  const voidOrderMutate = useVoidOrder();
+  const voidItemMutate = useVoidItem();
 
   const submitVoidOrder = async (reason: string, managerPin?: string) => {
     if (!voidOrderTarget) return;
@@ -245,13 +239,29 @@ export default function PosPage() {
     setVoidError(null);
     const userName = currentUser?.displayName || 'Kasir';
     try {
-      await voidOrderMutate.mutateAsync({
-        orderId: voidOrderTarget.id,
-        reason,
-        voidedByName: userName,
-        managerPin,
-      });
-      setVoidOrderTarget(null);
+      if (voidOrderTarget.itemIndex !== undefined) {
+        await voidItemMutate.mutateAsync({
+          orderId: voidOrderTarget.id,
+          itemIndex: voidOrderTarget.itemIndex,
+          reason,
+          voidedByName: userName,
+        });
+        setVoidOrderTarget(null);
+        setViewTransaction(null);
+        queryClient.invalidateQueries({ queryKey: ['orders'] });
+        toast({ title: 'Item berhasil divoid', icon: 'success' });
+      } else {
+        await voidOrderMutate.mutateAsync({
+          orderId: voidOrderTarget.id,
+          reason,
+          voidedByName: userName,
+          managerPin,
+        });
+        setVoidOrderTarget(null);
+        setViewTransaction(null);
+        queryClient.invalidateQueries({ queryKey: ['orders'] });
+        toast({ title: 'Order berhasil divoid', icon: 'success' });
+      }
     } catch (err: any) {
       setVoidError(err?.response?.data?.error?.message || 'Gagal memvoid order');
     } finally {
@@ -259,16 +269,44 @@ export default function PosPage() {
     }
   };
 
+  const queryClient = useQueryClient();
+
   return (
     <div className="flex-1 min-h-0 w-full flex overflow-hidden">
       {/* Left: Product Catalog */}
       <section className="flex-1 flex flex-col p-6 overflow-y-auto">
-        <div className="space-y-6 mb-6">
-          {/* Search */}
-          <div className="relative max-w-2xl">
+        <div className="flex items-center gap-3 mb-6">
+          {/* Menu button — toggles action drawer */}
+          <button
+            onClick={() => setActionDrawerOpen(!actionDrawerOpen)}
+            className="flex-shrink-0 w-10 h-10 rounded-lg blue-primary text-white flex items-center justify-center shadow hover:opacity-90 transition"
+            title="Aksi kasir"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                d="M4 6h16M4 12h16M4 18h16"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+              />
+            </svg>
+          </button>
+
+          {/* Search bar */}
+          <div className="relative flex-1 max-w-2xl">
             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+              <svg
+                className="h-5 w-5 text-gray-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                />
               </svg>
             </div>
             <input
@@ -280,60 +318,84 @@ export default function PosPage() {
               type="text"
             />
             <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
-              <svg className="h-6 w-6 text-[#2176D2]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2" strokeLinecap="round" strokeLinejoin="round" />
+              <svg
+                className="h-6 w-6 text-[#2176D2]"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
                 <path d="M7 8h10M7 12h10M7 16h10" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
           </div>
+        </div>
 
-          {/* Family Filter */}
-          {families.length > 0 && (
-            <div className="flex gap-3 flex-wrap">
-              <button
-                onClick={() => { setSelectedFamily(null); setSelectedCategory(null); }}
-                className={`px-6 py-2 rounded-full font-medium text-sm transition-colors ${
-                  !selectedFamily ? 'blue-primary text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                }`}
-              >
-                Semua
-              </button>
-              {families.map((fam) => (
-                <button
-                  key={fam.id}
-                  onClick={() => { setSelectedFamily(fam.id); setSelectedCategory(null); }}
-                  className={`px-6 py-2 rounded-full font-medium text-sm transition-colors ${
-                    selectedFamily === fam.id ? 'blue-primary text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  }`}
-                >
-                  {fam.name}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Category Filter */}
-          <div className="flex gap-3 flex-wrap">
+        {/* Family Filter */}
+        {families.length > 0 && (
+          <div className="flex gap-3 flex-wrap mb-4">
             <button
-              onClick={() => setSelectedCategory(null)}
-              className={`px-8 py-2 rounded-full font-medium transition-colors ${
-                !selectedCategory ? 'blue-primary text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              onClick={() => {
+                setSelectedFamily(null);
+                setSelectedCategory(null);
+              }}
+              className={`px-6 py-2 rounded-full font-medium text-sm transition-colors ${
+                !selectedFamily
+                  ? 'blue-primary text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
               }`}
             >
               Semua
             </button>
-            {filteredCategories.map((cat) => (
+            {families.map((fam) => (
               <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
-                className={`px-8 py-2 rounded-full font-medium transition-colors ${
-                  selectedCategory === cat.id ? 'blue-primary text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                key={fam.id}
+                onClick={() => {
+                  setSelectedFamily(fam.id);
+                  setSelectedCategory(null);
+                }}
+                className={`px-6 py-2 rounded-full font-medium text-sm transition-colors ${
+                  selectedFamily === fam.id
+                    ? 'blue-primary text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                 }`}
               >
-                {cat.name}
+                {fam.name}
               </button>
             ))}
           </div>
+        )}
+
+        {/* Category Filter */}
+        <div className="flex gap-3 flex-wrap mb-6">
+          <button
+            onClick={() => setSelectedCategory(null)}
+            className={`px-8 py-2 rounded-full font-medium transition-colors ${
+              !selectedCategory
+                ? 'blue-primary text-white'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            Semua
+          </button>
+          {filteredCategories.map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => setSelectedCategory(cat.id)}
+              className={`px-8 py-2 rounded-full font-medium transition-colors ${
+                selectedCategory === cat.id
+                  ? 'blue-primary text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              {cat.name}
+            </button>
+          ))}
         </div>
 
         {/* Product Grid */}
@@ -348,11 +410,16 @@ export default function PosPage() {
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {products.map((product) => {
-              const discount = getProductDiscount(activeProductDiscounts, product.id, product.categoryId);
+              const discount = getProductDiscount(
+                activeProductDiscounts,
+                product.id,
+                product.categoryId,
+              );
               const stock = getAvailableStock(product.id);
-              const remaining = stock !== undefined
-                ? Math.max(0, stock - (cartQtyByProduct[product.id] ?? 0))
-                : undefined;
+              const remaining =
+                stock !== undefined
+                  ? Math.max(0, stock - (cartQtyByProduct[product.id] ?? 0))
+                  : undefined;
               return (
                 <ProductCard
                   key={product.id}
@@ -376,57 +443,118 @@ export default function PosPage() {
       {/* Right: Cart Sidebar */}
       <aside className="w-[400px] min-h-0 bg-white border-l border-gray-200 flex flex-col shadow-xl z-20">
         <div className="p-4 border-b border-gray-100 shrink-0 space-y-3">
-          <div className="flex justify-between items-center">
-            <h2 className="text-lg font-bold text-gray-800">Pesanan Baru</h2>
-            <span className="text-gray-400 font-medium text-sm">{itemCount} item</span>
-          </div>
-          {activeBillNumber && (
-            <div className="flex items-center justify-between gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <svg className="w-4 h-4 shrink-0 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
-                </svg>
-                <span className="text-sm font-bold text-amber-800 truncate">Bill {activeBillNumber} terbuka</span>
+          {viewTransaction ? (
+            <div className="flex items-center justify-between">
+              <div className="min-w-0">
+                <h2 className="text-lg font-bold text-gray-800">Transaksi</h2>
+                <p className="text-sm text-gray-500">{viewTransaction.orderNumber}</p>
               </div>
               <button
-                onClick={() => {
-                  setVoidError(null);
-                  setVoidBillOpen(true);
-                }}
-                className="shrink-0 text-xs font-semibold text-amber-700 hover:text-amber-900 underline"
+                onClick={() => setViewTransaction(null)}
+                className="shrink-0 text-gray-400 hover:text-gray-600 text-lg leading-none"
               >
-                Tutup
+                ✕
               </button>
             </div>
+          ) : (
+            <>
+              <div className="flex justify-between items-center">
+                <h2 className="text-lg font-bold text-gray-800">Pesanan Baru</h2>
+                <span className="text-gray-400 font-medium text-sm">{itemCount} item</span>
+              </div>
+              {activeBillNumber && (
+                <div className="flex items-center justify-between gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <svg
+                      className="w-4 h-4 shrink-0 text-amber-600"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                      />
+                    </svg>
+                    <span className="text-sm font-bold text-amber-800 truncate">
+                      Bill {activeBillNumber} terbuka
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => discardBill()}
+                    className="shrink-0 text-xs font-semibold text-amber-700 hover:text-amber-900 underline"
+                  >
+                    Tutup
+                  </button>
+                </div>
+              )}
+            </>
           )}
           <div className="flex gap-2">
             <input
               value={customerName}
-              onChange={(e) => { setCustomerName(e.target.value); setHoldError(''); }}
+              onChange={(e) => {
+                setCustomerName(e.target.value);
+                setHoldError('');
+              }}
               className={`flex-1 px-3 py-2 bg-gray-50 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none ${holdError ? 'border-red-400' : 'border-gray-200'}`}
               placeholder="Nama Customer"
               type="text"
             />
             <input
               value={tableNumber}
-              onChange={(e) => { setTableNumber(e.target.value); setHoldError(''); }}
+              onChange={(e) => {
+                setTableNumber(e.target.value);
+                setHoldError('');
+              }}
               className={`w-24 px-3 py-2 bg-gray-50 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-center ${holdError ? 'border-red-400' : 'border-gray-200'}`}
               placeholder="No Meja"
               type="text"
             />
           </div>
-          {holdError && (
-            <p className="text-xs text-red-500 font-medium">{holdError}</p>
-          )}
+          {holdError && <p className="text-xs text-red-500 font-medium">{holdError}</p>}
         </div>
 
         <div className="flex-1 overflow-y-auto order-list-container p-6 space-y-6">
-          {items.length === 0 ? (
+          {viewTransaction ? (
+            <>
+              {viewTransaction.items.map((item: any, idx: number) => (
+                <div key={idx}>
+                  <div className="flex items-start justify-between py-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-700 truncate">{item.productName}</p>
+                      <p className="text-xs text-gray-400">
+                        Qty {item.quantity} × Rp {formatIDR(item.unitPrice ?? 0)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 ml-2">
+                      <span className="text-sm font-medium text-gray-800">
+                        Rp {formatIDR(item.totalPrice ?? item.unitPrice * item.quantity)}
+                      </span>
+                      <button
+                        onClick={() => {
+                          if (viewTransaction) {
+                            setVoidOrderTarget({ id: viewTransaction.id, orderNumber: viewTransaction.orderNumber, itemIndex: idx });
+                          }
+                        }}
+                        className="text-xs text-red-600 hover:bg-red-50 px-2 py-1 rounded font-medium"
+                      >
+                        Void
+                      </button>
+                    </div>
+                  </div>
+                  <div className="border-t border-gray-100 mt-4" />
+                </div>
+              ))}
+            </>
+          ) : items.length === 0 ? (
             <p className="text-gray-400 text-center mt-8">Belum ada item</p>
           ) : (
             items.map((item) => {
               const lineItem = pricing?.lineItems?.find(
-                (li) => li.productId === item.productId && li.isFreeItem === !!item.isFreeItem
+                (li) => li.productId === item.productId && li.isFreeItem === !!item.isFreeItem,
               );
               return (
                 <div key={`${item.productId}_${item.isFreeItem ? 'free' : 'paid'}`}>
@@ -460,14 +588,18 @@ export default function PosPage() {
                 )}
                 {p.tax > 0 && (
                   <div className="flex justify-between text-gray-700 text-sm">
-                    <span>{p.taxName} ({p.taxRate}%):</span>
+                    <span>
+                      {p.taxName} ({p.taxRate}%):
+                    </span>
                     <span>Rp {formatIDR(p.tax)}</span>
                   </div>
                 )}
                 {p.rounding !== 0 && (
                   <div className="flex justify-between text-gray-500 text-sm">
                     <span>Pembulatan</span>
-                    <span>{p.rounding > 0 ? '+' : ''}Rp {formatIDR(p.rounding)}</span>
+                    <span>
+                      {p.rounding > 0 ? '+' : ''}Rp {formatIDR(p.rounding)}
+                    </span>
                   </div>
                 )}
               </>
@@ -484,59 +616,119 @@ export default function PosPage() {
               Rp {formatIDR(p?.grandTotal ?? 0)}
             </span>
           </div>
-          <div className="flex gap-4 pt-4">
-            {activeBillId ? (
-              <button
-                onClick={async () => {
-                  const ok = await saveBill();
-                  setHoldError(ok ? '' : 'Gagal menyimpan bill. Coba lagi.');
-                }}
-                disabled={items.length === 0}
-                className="flex-1 bg-[#9E9E9E] text-white py-4 rounded-xl font-bold hover:bg-gray-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Simpan Bill
-              </button>
-            ) : (
-              <button
-                onClick={() => {
-                  if (items.length === 0) return;
-                  if (!customerName.trim() && !tableNumber.trim()) {
-                    setHoldError('Isi nama customer atau nomor meja');
-                    return;
-                  }
-                  setHoldError('');
-                  openBill();
-                }}
-                disabled={items.length === 0}
-                className="flex-1 bg-[#9E9E9E] text-white py-4 rounded-xl font-bold hover:bg-gray-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Buka Bill
-              </button>
-            )}
-            <button
-              onClick={openPaymentModal}
-              disabled={items.length === 0}
-              className="flex-[2] blue-primary text-white py-4 rounded-xl font-bold hover:opacity-90 transition-opacity uppercase tracking-wide disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Proses Pembayaran
-            </button>
-          </div>
+           <div className="flex gap-4 pt-4">
+             {viewTransaction ? (
+               <>
+                 <button
+                   onClick={() => {
+                     if (!viewTransaction) return;
+                     setVoidOrderTarget({
+                       id: viewTransaction.id,
+                       orderNumber: viewTransaction.orderNumber,
+                     });
+                   }}
+                   disabled={!viewTransaction}
+                   className="flex-1 bg-red-600 text-white py-4 rounded-xl font-bold hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                 >
+                   Void
+                 </button>
+                 <button
+                   onClick={() => {
+                     if (!viewTransaction) return;
+                     const paid = viewTransaction.paymentBreakdown?.reduce(
+                       (s: number, p: any) => s + (p.amount ?? 0),
+                       0,
+                     ) ?? 0;
+                     const change = viewTransaction.paymentBreakdown?.reduce(
+                       (s: number, p: any) => s + (p.change ?? 0),
+                       0,
+                     ) ?? 0;
+                     usePOSStore.getState().setReceipt({
+                       orderNumber: viewTransaction.orderNumber,
+                       displayOrderNumber: viewTransaction.orderNumber,
+                       paid,
+                       change,
+                       grandTotal: viewTransaction.total,
+                       paidItems: (viewTransaction.items ?? []).map((i: any) => ({
+                         productId: i.productId,
+                         name: i.productName,
+                         price: i.unitPrice,
+                         quantity: i.quantity,
+                         isFreeItem: false,
+                       })),
+                       hasRemaining: false,
+                       createdAt: viewTransaction.createdAt,
+                       layout: null,
+                       thermal: null,
+                       pdf: null,
+                       templateName: null,
+                       pricing: null,
+                     });
+                   }}
+                   className="flex-1 bg-primary-600 text-white py-4 rounded-xl font-bold hover:opacity-90 transition-opacity"
+                 >
+                   Print Ulang
+                 </button>
+               </>
+             ) : (
+               <>
+                 {activeBillId ? (
+                   <button
+                     onClick={async () => {
+                       const ok = await saveBill();
+                       setHoldError(ok ? '' : 'Gagal menyimpan bill. Coba lagi.');
+                     }}
+                     disabled={items.length === 0}
+                     className="flex-1 bg-[#9E9E9E] text-white py-4 rounded-xl font-bold hover:bg-gray-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                   >
+                     Simpan Bill
+                   </button>
+                 ) : (
+                   <button
+                     onClick={() => {
+                       if (items.length === 0) return;
+                       if (!customerName.trim() && !tableNumber.trim()) {
+                         setHoldError('Isi nama customer atau nomor meja');
+                         return;
+                       }
+                       setHoldError('');
+                       openBill();
+                     }}
+                     disabled={items.length === 0}
+                     className="flex-1 bg-[#9E9E9E] text-white py-4 rounded-xl font-bold hover:bg-gray-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                   >
+                     Buka Bill
+                   </button>
+                 )}
+                 <button
+                   onClick={openPaymentModal}
+                   disabled={items.length === 0}
+                   className="flex-[2] blue-primary text-white py-4 rounded-xl font-bold hover:opacity-90 transition-opacity uppercase tracking-wide disabled:opacity-50 disabled:cursor-not-allowed"
+                 >
+                   Proses Pembayaran
+                 </button>
+               </>
+             )}
+           </div>
         </div>
       </aside>
 
       <PosActionPanel
-        openBill={openBill}
-        saveBill={saveBill}
-        closeActiveBill={cancelActiveBill}
-        hasItems={items.length === 0 ? false : true}
-        activeBillNumber={activeBillNumber}
+        open={actionDrawerOpen}
+        onOpenChange={setActionDrawerOpen}
+        onViewTransaction={(order: any) => {
+          if (items.length > 0 || activeBillNumber) {
+            const ok = window.confirm('Pesanan saat ini akan digantikan. Lanjutkan?');
+            if (!ok) return;
+          }
+          setViewTransaction(order);
+        }}
       />
 
       {paymentModalOpen && <PaymentModal />}
       {receipt && <ReceiptDisplay />}
-      <HeldOrdersPanel />
 
-      {voidTarget && (
+{voidTarget && (
         <PosVoidModal
           title="Void Item"
           description={`Void "${voidTarget.item.name}" (Qty ${voidTarget.item.quantity}) dari bill ${activeBillNumber ?? ''}?`}
@@ -548,75 +740,14 @@ export default function PosPage() {
         />
       )}
 
-      {voidBillOpen && (
-        <PosVoidModal
-          title="Void Bill"
-          description={`Batalkan bill ${activeBillNumber ?? ''}? Seluruh item pada bill akan divoid.`}
-          requiresPin={!canVoidSelf}
-          isPending={voidPending}
-          error={voidError}
-          onSubmit={submitVoidBill}
-          onClose={() => setVoidBillOpen(false)}
-        />
-      )}
-
-      {paidOrderSelectOpen && (
-        <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-lg">
-            <div className="p-4 border-b border-gray-200">
-              <h3 className="text-lg font-bold text-gray-800">Pilih Transaksi untuk Void</h3>
-              <p className="text-sm text-gray-400 mt-0.5">Cari order yang sudah selesai (paid).</p>
-            </div>
-            <div className="p-4">
-              <input
-                value={paidSearch}
-                onChange={(e) => setPaidSearch(e.target.value)}
-                className="block w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Cari nomor order..."
-              />
-              <div className="mt-3 max-h-56 overflow-y-auto divide-y divide-gray-100">
-                {(paidOrders || [])
-                  .filter(
-                    (o: any) =>
-                      !paidSearch.trim() ||
-                      (o.orderNumber ?? '').toLowerCase().includes(paidSearch.toLowerCase()),
-                  )
-                  .slice(0, 50)
-                  .map((o: any) => (
-                    <button
-                      key={o.id}
-                      onClick={() => {
-                        setVoidOrderTarget({ id: o.id, orderNumber: o.orderNumber });
-                        setPaidOrderSelectOpen(false);
-                        setPaidSearch('');
-                      }}
-                      className="w-full flex items-center justify-between text-left px-3 py-2 text-sm hover:bg-gray-50 rounded-lg"
-                    >
-                      <span className="text-gray-700 font-medium">{o.orderNumber}</span>
-                      <span className="text-gray-900">Rp {formatIDR(o.total ?? 0)}</span>
-                    </button>
-                  ))}
-              </div>
-            </div>
-            <div className="p-4 border-t border-gray-200 flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  setPaidOrderSelectOpen(false);
-                  setPaidSearch('');
-                }}
-                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-700"
-              >
-                Batal
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {voidOrderTarget && (
         <PosVoidModal
-          title="Void Transaksi"
-          description={`Void order ${voidOrderTarget.orderNumber}? Transaksi ini akan dibatalkan.`}
+          title={voidOrderTarget.itemIndex !== undefined ? 'Void Item' : 'Void Transaksi'}
+          description={
+            voidOrderTarget.itemIndex !== undefined
+              ? `Void item dari order ${voidOrderTarget.orderNumber}?`
+              : `Void order ${voidOrderTarget.orderNumber}? Transaksi ini akan dibatalkan.`
+          }
           requiresPin={!canVoidSelf}
           isPending={voidPending}
           error={voidError}

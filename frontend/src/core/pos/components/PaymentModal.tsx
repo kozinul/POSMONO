@@ -202,6 +202,11 @@ export function PaymentModal() {
         removeItems(items.map((i) => i.productId));
       }
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
+      queryClient.invalidateQueries({ queryKey: ['daily-report'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['shifts'] });
+      queryClient.invalidateQueries({ queryKey: ['open-shift'] });
 
       const displayOrderNumber = isSplitPortion
         ? `${splitBase ?? orderData.orderNumber}/${portionIndex}`

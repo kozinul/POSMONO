@@ -148,6 +148,7 @@ interface POSState {
   saveBill: () => Promise<boolean>;
   tapBill: (heldOrder: HeldOrder) => void;
   cancelActiveBill: () => void;
+  discardBill: () => void;
   closeBillAfterPayment: () => Promise<void>;
 
   removeItems: (productIds: string[]) => void;
@@ -659,6 +660,24 @@ export const usePOSStore = create<POSState>((set, get) => ({
         .post(`/orders/${billId}/void`, { reason: 'Bill ditutup tanpa pembayaran', voidedByName: userName })
         .catch(() => {});
     }
+  },
+
+  discardBill: () => {
+    set({
+      items: [],
+      pricing: null,
+      promoCode: '',
+      manualDiscount: 0,
+      manualDiscountType: 'nominal',
+      receipt: null,
+      paymentState: 'idle',
+      customerName: '',
+      tableNumber: '',
+      activeBillId: null,
+      activeBillNumber: null,
+      splitNumber: 0,
+      splitBaseOrderNumber: null,
+    });
   },
 
   closeBillAfterPayment: async () => {

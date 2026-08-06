@@ -151,8 +151,16 @@ export class MongoOrderRepository {
     if (filter?.status) query.status = filter.status;
     if (filter?.dateFrom || filter?.dateTo) {
       query.createdAt = {};
-      if (filter?.dateFrom) query.createdAt.$gte = new Date(filter.dateFrom);
-      if (filter?.dateTo) query.createdAt.$lte = new Date(filter.dateTo);
+      if (filter?.dateFrom) {
+        const from = new Date(filter.dateFrom);
+        from.setHours(0, 0, 0, 0);
+        query.createdAt.$gte = from;
+      }
+      if (filter?.dateTo) {
+        const to = new Date(filter.dateTo);
+        to.setHours(23, 59, 59, 999);
+        query.createdAt.$lte = to;
+      }
     }
 
     const page = filter?.page || 1;
