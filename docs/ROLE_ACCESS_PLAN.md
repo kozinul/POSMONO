@@ -252,6 +252,8 @@ Rincian (hanya permission; aturan approval mengikuti policy terpisah):
 - [ ] POS: gating tombol aksi per permission; layar KDS/drink-queue terpisah untuk kitchen/barista.
 - [ ] Laporan per outlet + konsolidasi owner.
 
+> **Fokus awal**: redirect kasir langsung ke POS + filter sidebar role-aware — lihat `docs/POS_REDIRECT_PLAN.md` (2026-08-07).
+
 ### Fase 4 — Uji & dokumentasi
 - [ ] Unit test (guard/scope/outlet), integrasi (login→route per role).
 - [ ] **Test permission matrix** — pastikan daftar permission eksplisit per role tidak drift (regresi saat permission baru ditambahkan).
