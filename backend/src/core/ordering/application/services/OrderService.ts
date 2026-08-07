@@ -55,6 +55,7 @@ interface VoidItemInput {
   id: string;
   tenantId: string;
   itemIndex: number;
+  quantity?: number;
   reason: string;
   voidedBy: string;
   voidedByName: string;
@@ -371,7 +372,7 @@ export class VoidItemService implements UseCase<VoidItemInput, Order> {
     if (!order) throw new Error('Order not found');
 
     const approval = await resolveVoidApproval(this.voidApprovalService, input, VOID_ORDER_PERMISSION);
-    order.voidItem(input.itemIndex, input.reason, input.voidedBy, input.voidedByName);
+    order.voidItem(input.itemIndex, input.reason, input.voidedBy, input.voidedByName, input.quantity);
     appendVoidApproval(order, approval, 'item', input);
 
     await this.orderRepository.save(order);

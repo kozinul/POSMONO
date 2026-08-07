@@ -212,19 +212,21 @@ export default function PosPage() {
     setVoidTarget({ item, itemIndex: index });
   };
 
-  const submitVoidItem = async (reason: string, managerPin?: string) => {
+  const submitVoidItem = async (reason: string, managerPin?: string, quantity?: number) => {
     if (!voidTarget) return;
     setVoidPending(true);
     setVoidError(null);
     const res = await voidItemOnBill({
       productId: voidTarget.item.productId,
       itemIndex: voidTarget.itemIndex,
+      quantity,
       reason,
       managerPin,
     });
     setVoidPending(false);
     if (res.ok) {
       setVoidTarget(null);
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
     } else {
       setVoidError(res.error ?? 'Gagal memvoid item');
     }
@@ -233,7 +235,7 @@ export default function PosPage() {
   const voidOrderMutate = useVoidOrder();
   const voidItemMutate = useVoidItem();
 
-  const submitVoidOrder = async (reason: string, managerPin?: string) => {
+  const submitVoidOrder = async (reason: string, managerPin?: string, quantity?: number) => {
     if (!voidOrderTarget) return;
     setVoidPending(true);
     setVoidError(null);
@@ -243,8 +245,10 @@ export default function PosPage() {
         await voidItemMutate.mutateAsync({
           orderId: voidOrderTarget.id,
           itemIndex: voidOrderTarget.itemIndex,
+          quantity,
           reason,
           voidedByName: userName,
+          managerPin,
         });
         setVoidOrderTarget(null);
         setViewTransaction(null);
@@ -735,6 +739,7 @@ export default function PosPage() {
           requiresPin={!canVoidSelf}
           isPending={voidPending}
           error={voidError}
+          availableQuantity={voidTarget.item.quantity}
           onSubmit={submitVoidItem}
           onClose={() => setVoidTarget(null)}
         />
@@ -751,6 +756,11 @@ export default function PosPage() {
           requiresPin={!canVoidSelf}
           isPending={voidPending}
           error={voidError}
+          availableQuantity={
+            voidOrderTarget.itemIndex !== undefined
+              ? viewTransaction?.items?.[voidOrderTarget.itemIndex]?.quantity
+              : undefined
+          }
           onSubmit={submitVoidOrder}
           onClose={() => setVoidOrderTarget(null)}
         />

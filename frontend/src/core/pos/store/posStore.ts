@@ -155,7 +155,7 @@ interface POSState {
   resetSplit: () => void;
   registerSplitPayment: (baseOrderNumber?: string) => void;
 
-  voidItemOnBill: (input: { productId: string; itemIndex: number; reason: string; managerPin?: string }) => Promise<{ ok: boolean; error?: string }>;
+  voidItemOnBill: (input: { productId: string; itemIndex: number; quantity?: number; reason: string; managerPin?: string }) => Promise<{ ok: boolean; error?: string }>;
   voidActiveBill: (input: { reason: string; managerPin?: string }) => Promise<{ ok: boolean; error?: string }>;
 }
 
@@ -749,7 +749,7 @@ export const usePOSStore = create<POSState>((set, get) => ({
       splitBaseOrderNumber: s.splitBaseOrderNumber ?? s.activeBillNumber ?? baseOrderNumber ?? null,
     })),
 
-  voidItemOnBill: async ({ productId, itemIndex, reason, managerPin }) => {
+  voidItemOnBill: async ({ productId, itemIndex, quantity, reason, managerPin }) => {
     const state = usePOSStore.getState();
     const billId = state.activeBillId;
     if (!billId) return { ok: false, error: 'Tidak ada bill aktif' };
@@ -758,11 +758,26 @@ export const usePOSStore = create<POSState>((set, get) => ({
     try {
       await api.post(`/orders/${billId}/void-item`, {
         itemIndex,
+        quantity: quantity ?? undefined,
         reason,
         voidedByName: userName,
         managerPin: managerPin ?? undefined,
       });
-      state.removeItems([productId]);
+      const paidItem = state.items.find((i) => i.productId === productId && !i.isFreeItem);
+      if (quantity && paidItem && quantity < paidItem.quantity) {
+        set((s) => ({
+          items: s.items
+            .map((i) =>
+              i.productId === productId && !i.isFreeItem
+                ? { ...i, quantity: i.quantity - quantity }
+                : i,
+            )
+            .filter((i) => i.quantity > 0),
+        }));
+        scheduleRecalculation(get, set);
+      } else {
+        state.removeItems([productId]);
+      }
       toast({ title: 'Item berhasil divoid', icon: 'success' });
       return { ok: true };
     } catch (err: any) {

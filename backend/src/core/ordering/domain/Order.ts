@@ -323,7 +323,7 @@ export class Order extends AggregateRoot<OrderId> {
     );
   }
 
-  voidItem(itemIndex: number, reason: string, voidedBy: string, voidedByName: string): void {
+  voidItem(itemIndex: number, reason: string, voidedBy: string, voidedByName: string, quantity?: number): void {
     if (itemIndex < 0 || itemIndex >= this.items.length) {
       throw new Error('Invalid item index');
     }
@@ -336,12 +336,14 @@ export class Order extends AggregateRoot<OrderId> {
       throw new Error('Item not found');
     }
 
+    const voidQty = quantity && quantity < item.quantity ? quantity : item.quantity;
+
     const voidedItem: IVoidedItem = {
       productId: item.productId,
       productName: item.productName,
-      quantity: item.quantity,
+      quantity: voidQty,
       unitPrice: item.unitPrice,
-      totalPrice: item.totalPrice,
+      totalPrice: Math.round(item.unitPrice * voidQty * 100) / 100,
       reason,
       voidedBy,
       voidedByName,
@@ -349,7 +351,17 @@ export class Order extends AggregateRoot<OrderId> {
     };
 
     this.voidedItems.push(voidedItem);
-    this.items.splice(itemIndex, 1);
+
+    if (voidQty < item.quantity) {
+      item.quantity -= voidQty;
+      item.totalPrice = Math.round(item.unitPrice * item.quantity * 100) / 100;
+      if (item.tax && item.tax.rate > 0) {
+        item.tax.amount = Math.round(item.unitPrice * item.quantity * item.tax.rate * 100) / 100;
+      }
+    } else {
+      this.items.splice(itemIndex, 1);
+    }
+
     this.updatedAt = new Date();
 
     this.recalculateTotals();

@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
@@ -124,12 +125,21 @@ async function seedData() {
   );
 
   const passwordHash = await bcrypt.hash('admin123', 12);
+  const managerPinHash = await bcrypt.hash('1234', 12);
+  const managerUserId = id('usr');
 
   await User.bulkWrite([
     {
       updateOne: {
         filter: { tenantId, email: 'admin@demo.com' },
         update: { $setOnInsert: { _id: adminUserId, tenantId, email: 'admin@demo.com', passwordHash, displayName: 'Admin Toko', roleId: adminRoleId, isActive: true, lastLoginAt: null, preferences: {} } },
+        upsert: true,
+      },
+    },
+    {
+      updateOne: {
+        filter: { tenantId, email: 'manager@demo.com' },
+        update: { $setOnInsert: { _id: managerUserId, tenantId, email: 'manager@demo.com', passwordHash, pin: managerPinHash, displayName: 'Manager Demo', roleId: managerRoleId, isActive: true, lastLoginAt: null, preferences: {} } },
         upsert: true,
       },
     },

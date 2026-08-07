@@ -317,6 +317,32 @@ describe('POS Store (free-item cart flow)', () => {
     expect(mockPricing).not.toHaveBeenCalled();
   });
 
+  it('voidItemOnBill with partial quantity sends quantity and decrements the item', async () => {
+    usePOSStore.setState({
+      activeBillId: 'bill-1',
+      activeBillNumber: 'ORD-1',
+      items: [{ ...coffee, quantity: 3 }],
+    } as any);
+    mockPricing.mockResolvedValue({ data: { success: true, data: {} } });
+
+    const res = await usePOSStore.getState().voidItemOnBill({
+      productId: 'coffee',
+      itemIndex: 0,
+      quantity: 1,
+      reason: 'salah input',
+    });
+
+    expect(res.ok).toBe(true);
+    expect(mockPricing).toHaveBeenCalledWith('/orders/bill-1/void-item', {
+      itemIndex: 0,
+      quantity: 1,
+      reason: 'salah input',
+      voidedByName: 'Kasir',
+      managerPin: undefined,
+    });
+    expect(usePOSStore.getState().items[0].quantity).toBe(2);
+  });
+
   it('voidActiveBill POSTs void with managerPin and clears bill + cart', async () => {
     const held = {
       id: 'bill-1',

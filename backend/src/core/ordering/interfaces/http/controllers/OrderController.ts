@@ -89,6 +89,7 @@ const voidOrderSchema = z.object({
 
 const voidItemSchema = z.object({
   itemIndex: z.number().int().nonnegative(),
+  quantity: z.number().int().positive().optional(),
   reason: z.string().min(1, 'Reason is required'),
   voidedByName: z.string().min(1, 'Voided by name is required'),
   managerPin: z.string().regex(/^\d{4,6}$/, 'PIN must be 4-6 digits').optional(),
@@ -289,6 +290,7 @@ export class OrderController extends BaseController {
       id: req.params.id,
       tenantId: req.tenantId,
       itemIndex: parsed.data.itemIndex,
+      quantity: parsed.data.quantity,
       reason: parsed.data.reason,
       voidedBy: req.userId,
       voidedByName: parsed.data.voidedByName,

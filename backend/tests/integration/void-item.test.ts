@@ -53,4 +53,39 @@ describe('Void Item Integration Test', () => {
     }
     expect(voidRes.status).toBe(200);
   });
+
+  it('should void only a partial quantity of an item', async () => {
+    const createRes = await request(ctx.app)
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${ctx.token}`)
+      .send({
+        items: [
+          { productId: 'p1', productName: 'Item A', quantity: 3, unitPrice: 10000, totalPrice: 30000, variantId: null, modifiers: [], tax: { rate: 0, amount: 0 } },
+        ],
+        source: 'pos',
+      });
+
+    expect(createRes.status).toBe(201);
+    const orderId = createRes.body.data.id;
+
+    const voidRes = await request(ctx.app)
+      .post(`/api/orders/${orderId}/void-item`)
+      .set('Authorization', `Bearer ${ctx.token}`)
+      .send({
+        itemIndex: 0,
+        quantity: 1,
+        reason: 'Customer dropped an item',
+        voidedByName: 'Cashier Test',
+      });
+
+    expect(voidRes.status).toBe(200);
+
+    const data = voidRes.body.data;
+    expect(data.status).toBe('partially-voided');
+    expect(data.items[0].quantity).toBe(2);
+    expect(data.items[0].totalPrice).toBe(20000);
+    expect(data.voidedItems[0].quantity).toBe(1);
+    expect(data.voidedItems[0].totalPrice).toBe(10000);
+    expect(data.total).toBe(20000);
+  });
 });

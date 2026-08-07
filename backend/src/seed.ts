@@ -112,6 +112,8 @@ async function seed() {
   ]);
 
   const passwordHash = await bcrypt.hash('admin123', 12);
+  const managerPinHash = await bcrypt.hash('1234', 12);
+  const managerUserId = id('usr');
 
   console.log('Seeding users...');
   await User.create([
@@ -122,6 +124,18 @@ async function seed() {
       passwordHash,
       displayName: 'Admin Toko',
       roleId: adminRoleId,
+      isActive: true,
+      lastLoginAt: null,
+      preferences: {},
+    },
+    {
+      _id: managerUserId,
+      tenantId,
+      email: 'manager@demo.com',
+      passwordHash,
+      displayName: 'Manager Demo',
+      roleId: managerRoleId,
+      pin: managerPinHash,
       isActive: true,
       lastLoginAt: null,
       preferences: {},

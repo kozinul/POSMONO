@@ -210,6 +210,10 @@ export function useVoidOrder() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['orders'] });
+      qc.invalidateQueries({ queryKey: ['daily-report'] });
+      qc.invalidateQueries({ queryKey: ['dashboard-summary'] });
+      qc.invalidateQueries({ queryKey: ['sales-report'] });
+      qc.invalidateQueries({ queryKey: ['finance-report'] });
     },
   });
 }
@@ -217,12 +221,16 @@ export function useVoidOrder() {
 export function useVoidItem() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ orderId, itemIndex, reason, voidedByName }: { orderId: string; itemIndex: number; reason: string; voidedByName: string }) => {
-      const res = await api.post<{ success: boolean; data: Order }>(`/orders/${orderId}/void-item`, { itemIndex, reason, voidedByName });
+    mutationFn: async ({ orderId, itemIndex, quantity, reason, voidedByName, managerPin }: { orderId: string; itemIndex: number; quantity?: number; reason: string; voidedByName: string; managerPin?: string }) => {
+      const res = await api.post<{ success: boolean; data: Order }>(`/orders/${orderId}/void-item`, { itemIndex, quantity: quantity ?? undefined, reason, voidedByName, managerPin: managerPin ?? undefined });
       return res.data.data;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['orders'] });
+      qc.invalidateQueries({ queryKey: ['daily-report'] });
+      qc.invalidateQueries({ queryKey: ['dashboard-summary'] });
+      qc.invalidateQueries({ queryKey: ['sales-report'] });
+      qc.invalidateQueries({ queryKey: ['finance-report'] });
     },
   });
 }

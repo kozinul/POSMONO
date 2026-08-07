@@ -97,11 +97,26 @@ export default function DashboardPage() {
                     <td className="px-6 py-4 text-sm font-medium text-gray-900">{order.orderNumber}</td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        order.status === 'paid' ? 'bg-green-100 text-green-800' :
-                        order.status === 'confirmed' ? 'bg-blue-100 text-blue-800' :
+                        order.status === 'paid' || order.status === 'completed' ? 'bg-green-100 text-green-800' :
+                        order.status === 'confirmed' || order.status === 'preparing' ? 'bg-blue-100 text-blue-800' :
+                        order.status === 'held' || order.status === 'draft' ? 'bg-yellow-100 text-yellow-800' :
+                        order.status === 'voided' ? 'bg-red-100 text-red-700' :
+                        order.status === 'partially-voided' ? 'bg-orange-100 text-orange-700' :
+                        order.status === 'cancelled' || order.status === 'refunded' ? 'bg-red-100 text-red-700' :
                         'bg-gray-100 text-gray-800'
                       }`}>
-                        {order.status}
+                        {{
+                          paid: 'Lunas',
+                          completed: 'Selesai',
+                          confirmed: 'Terkonfirmasi',
+                          preparing: 'Dibuat',
+                          held: 'Draft',
+                          draft: 'Draft',
+                          voided: 'Void',
+                          'partially-voided': 'Sebagian Void',
+                          cancelled: 'Batal',
+                          refunded: 'Refund',
+                        }[order.status] ?? order.status}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">{formatCurrency(order.total)}</td>

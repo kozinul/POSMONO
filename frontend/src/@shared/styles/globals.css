@@ -71,4 +71,11 @@
   .receipt-print .receipt-actions {
     display: none !important;
   }
+  .report-print {
+    position: static;
+    width: 100%;
+    max-height: none;
+    overflow: visible !important;
+    margin: 0 auto;
+  }
 }

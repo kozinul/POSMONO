@@ -11,6 +11,7 @@ import { useAuthStore, hasPermission } from '../../../@shared/hooks/useAuth';
 import { VOID_ORDER_PERMISSION } from '../../../@shared/utils/permissions';
 import { formatIDR } from '../utils/money';
 import { toast } from '../../../@shared/hooks/useToast';
+import { ReportPrintModal } from './ReportPrintModal';
 
 interface PosActionPanelProps {
   open: boolean;
@@ -20,6 +21,22 @@ interface PosActionPanelProps {
 
 const today = new Date().toISOString().split('T')[0];
 
+function statusBadge(status: string) {
+  const map: Record<string, { label: string; classes: string }> = {
+    paid: { label: 'Lunas', classes: 'bg-green-100 text-green-700' },
+    completed: { label: 'Selesai', classes: 'bg-green-100 text-green-700' },
+    held: { label: 'Draft', classes: 'bg-yellow-100 text-yellow-700' },
+    draft: { label: 'Draft', classes: 'bg-yellow-100 text-yellow-700' },
+    confirmed: { label: 'Terkonfirmasi', classes: 'bg-blue-100 text-blue-700' },
+    preparing: { label: 'Dibuat', classes: 'bg-blue-100 text-blue-700' },
+    cancelled: { label: 'Batal', classes: 'bg-red-100 text-red-700' },
+    refunded: { label: 'Refund', classes: 'bg-red-100 text-red-700' },
+    voided: { label: 'Void', classes: 'bg-red-100 text-red-700' },
+    'partially-voided': { label: 'Sebagian Void', classes: 'bg-orange-100 text-orange-700' },
+  };
+  return map[status] ?? { label: status ?? '—', classes: 'bg-gray-100 text-gray-600' };
+}
+
 export function PosActionPanel(props: PosActionPanelProps) {
   const { open, onOpenChange, onViewTransaction } = props;
 
@@ -27,6 +44,7 @@ export function PosActionPanel(props: PosActionPanelProps) {
   const [paidSearch, setPaidSearch] = useState('');
   const [billModalOpen, setBillModalOpen] = useState(false);
   const [billSearch, setBillSearch] = useState('');
+  const [reportModal, setReportModal] = useState<null | 'transactions' | 'receipt'>(null);
 
   const { heldOrders, tapBill, dismissHeldOrder } = usePOSStore();
 
@@ -160,6 +178,20 @@ export function PosActionPanel(props: PosActionPanelProps) {
                   Excel
                 </button>
               </div>
+              <div className="px-3 pt-2 space-y-1">
+                <button
+                  onClick={() => setReportModal('transactions')}
+                  className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg"
+                >
+                  Laporan Transaksi
+                </button>
+                <button
+                  onClick={() => setReportModal('receipt')}
+                  className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg"
+                >
+                  Laporan Penerimaan Kasir
+                </button>
+              </div>
             </div>
 
             <div className="p-3 space-y-1">
@@ -191,11 +223,32 @@ export function PosActionPanel(props: PosActionPanelProps) {
 
       {/* Daftar transaksi hari ini */}
       {paidOrderSelectOpen && (
-        <div className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-lg w-full max-w-md">
-            <div className="p-4 border-b border-gray-200">
-              <h3 className="text-lg font-bold text-gray-800">Daftar Transaksi</h3>
-              <p className="text-sm text-gray-400 mt-0.5">Order pada hari dan shift yang sama.</p>
+        <div
+          className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4"
+          onClick={() => {
+            setPaidOrderSelectOpen(false);
+            setPaidSearch('');
+          }}
+        >
+          <div
+            className="bg-white rounded-xl shadow-lg w-full max-w-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-gray-800">Daftar Transaksi</h3>
+                <p className="text-sm text-gray-400 mt-0.5">Order pada hari dan shift yang sama.</p>
+              </div>
+              <button
+                onClick={() => {
+                  setPaidOrderSelectOpen(false);
+                  setPaidSearch('');
+                }}
+                className="text-gray-400 hover:text-gray-600 text-lg leading-none"
+                aria-label="Tutup"
+              >
+                ✕
+              </button>
             </div>
             <div className="p-4">
               <input
@@ -222,16 +275,24 @@ export function PosActionPanel(props: PosActionPanelProps) {
                     );
                   }
 
-                  return filtered.map((o: any) => (
-                    <button
-                      key={o.id}
-                      onClick={() => handleViewTransaction(o)}
-                      className="w-full flex items-center justify-between text-left px-3 py-2 text-sm hover:bg-gray-50 rounded-lg"
-                    >
-                      <span className="text-gray-700 font-medium">{o.orderNumber}</span>
-                      <span className="text-gray-900">Rp {formatIDR(o.total ?? 0)}</span>
-                    </button>
-                  ));
+                  return filtered.map((o: any) => {
+                    const badge = statusBadge(o.status);
+                    return (
+                      <button
+                        key={o.id}
+                        onClick={() => handleViewTransaction(o)}
+                        className="w-full flex items-center justify-between text-left px-3 py-2 text-sm hover:bg-gray-50 rounded-lg"
+                      >
+                        <span className="flex flex-col items-start">
+                          <span className="text-gray-700 font-medium">{o.orderNumber}</span>
+                          <span className={`mt-0.5 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${badge.classes}`}>
+                            {badge.label}
+                          </span>
+                        </span>
+                        <span className="text-gray-900">Rp {formatIDR(o.total ?? 0)}</span>
+                      </button>
+                    );
+                  });
                 })()}
               </div>
             </div>
@@ -292,7 +353,7 @@ export function PosActionPanel(props: PosActionPanelProps) {
                           onClick={() => {
                             tapBill(bill);
                             setBillModalOpen(false);
-                            onOpenChange(true);
+                            onOpenChange(false);
                           }}
                           className="px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded"
                         >
@@ -324,6 +385,16 @@ export function PosActionPanel(props: PosActionPanelProps) {
           </div>
         </div>
       )}
+
+      <ReportPrintModal
+        open={reportModal !== null}
+        variant={reportModal ?? 'transactions'}
+        orders={todayOrders}
+        paymentBreakdown={daily?.paymentBreakdown}
+        totalOrders={daily?.totalOrders}
+        totalRevenue={daily?.totalRevenue}
+        onClose={() => setReportModal(null)}
+      />
     </>
   );
 }

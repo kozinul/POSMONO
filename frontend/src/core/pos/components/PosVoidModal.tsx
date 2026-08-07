@@ -6,14 +6,18 @@ interface PosVoidModalProps {
   requiresPin: boolean;
   isPending: boolean;
   error?: string | null;
-  onSubmit: (reason: string, managerPin?: string) => void;
+  availableQuantity?: number;
+  onSubmit: (reason: string, managerPin?: string, quantity?: number) => void;
   onClose: () => void;
 }
 
-export function PosVoidModal({ title, description, requiresPin, isPending, error, onSubmit, onClose }: PosVoidModalProps) {
+export function PosVoidModal({ title, description, requiresPin, isPending, error, availableQuantity, onSubmit, onClose }: PosVoidModalProps) {
   const [step, setStep] = useState(1);
   const [reason, setReason] = useState('');
   const [managerPin, setManagerPin] = useState('');
+  const [quantity, setQuantity] = useState(availableQuantity ?? 1);
+
+  const showQuantity = !!availableQuantity && availableQuantity > 1;
 
   const handleNext = () => {
     if (reason.trim().length === 0) return;
@@ -21,12 +25,12 @@ export function PosVoidModal({ title, description, requiresPin, isPending, error
       setStep(2);
       return;
     }
-    onSubmit(reason.trim());
+    onSubmit(reason.trim(), undefined, quantity);
   };
 
   const handleConfirm = () => {
     if (requiresPin && managerPin.trim().length === 0) return;
-    onSubmit(reason.trim(), requiresPin ? managerPin.trim() : undefined);
+    onSubmit(reason.trim(), requiresPin ? managerPin.trim() : undefined, quantity);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -63,6 +67,35 @@ export function PosVoidModal({ title, description, requiresPin, isPending, error
           {step === 1 ? (
             <>
               <p className="text-sm text-gray-600">{description}</p>
+              {showQuantity && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Jumlah yang divoid <span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                      className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 text-lg font-bold leading-none"
+                    >
+                      −
+                    </button>
+                    <span className="w-12 text-center text-lg font-bold text-gray-800">
+                      {quantity}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setQuantity((q) => Math.min(availableQuantity ?? q, q + 1))
+                      }
+                      className="w-9 h-9 flex items-center justify-center rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 text-lg font-bold leading-none"
+                    >
+                      +
+                    </button>
+                    <span className="text-sm text-gray-400">/ {availableQuantity}</span>
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Alasan Void <span className="text-red-500">*</span>
