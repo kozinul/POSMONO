@@ -717,6 +717,11 @@ families.view, families.edit
 | GET | `/api/reports/sales` | ✅ admin | Sales report (by date range, outlet) |
 | GET | `/api/reports/finance` | ✅ admin | Finance report |
 | GET | `/api/reports/cashier` | ✅ admin | Cashier performance report |
+| GET | `/api/reports/daily` | ✅ | Daily sales summary + top products + payment breakdown |
+| GET | `/api/reports/best-sellers` | ✅ | Top products by quantity over `days` (default 7) — untuk ⭐ Favorit POS |
+| GET | `/api/reports/daily/export` | ✅ | Daily report export (pdf/xlsx) |
+| GET | `/api/reports/sales/export` | ✅ | Sales report export (pdf/xlsx) |
+| GET | `/api/reports/finance/export` | ✅ | Finance report export (pdf/xlsx) |
 
 ### Business Logic
 - **Sales report**: total penjualan, jumlah transaksi, rata-rata per transaksi
@@ -846,6 +851,8 @@ families.view, families.edit
 - Search by name/barcode
 - Popular products section
 - Product image display
+- **Click-to-add card** (2026-08-07): seluruh kartu bisa diklik untuk menambah ke cart (tombol `Add` dihapus); kartu habis `cursor-not-allowed` & tidak bisa diklik
+- **⭐ Favorit toggle** (2026-08-07): tombol di kanan filter family → grid hanya menampilkan produk terlaris 7 hari terakhir (sumber: `GET /reports/best-sellers?days=`)
 
 #### B. Cart Management
 - Add item to cart
@@ -904,6 +911,9 @@ families.view, families.edit
 #### I. Cashier Reports
 - Display cashier report
 - Print report
+- **Laporan Transaksi** (2026-08-07): daftar per order + rincian item, print struk / download PDF
+- **Laporan Penerimaan Kasir** (2026-08-07): breakdown per metode bayar (Tunai/QRIS/Kartu/...). Sumber: aggregasi koleksi `payments` (bukan `order.paymentBreakdown`), exlude order voided/cancelled
+- Print via `window.print()` (`ReportPrintModal.tsx`, `.report-print` CSS); PDF via `html2pdf.js` (client-side, dep `html2pdf.js`)
 
 #### J. Receipt Printing
 - Print receipt (CSS print media)

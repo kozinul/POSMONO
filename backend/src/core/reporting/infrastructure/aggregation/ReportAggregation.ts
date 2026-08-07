@@ -1,5 +1,11 @@
 import { Model } from 'mongoose';
 
+interface IPaymentBreakdownGroup {
+  method: string;
+  code: string;
+  amount: number;
+}
+
 export class ReportAggregation {
   constructor(
     private readonly orderModel: Model<any>,
@@ -80,6 +86,80 @@ export class ReportAggregation {
       acc[item._id] = item.total;
       return acc;
     }, {});
+  }
+
+  async getShiftSalesAggregation(params: {
+    tenantId: string;
+    fromAt: Date;
+    toAt: Date;
+    shiftId?: string | null;
+  }): Promise<{
+    totalSales: number;
+    cashSales: number;
+    nonCashSales: number;
+    totalTransactions: number;
+    paymentBreakdown: IPaymentBreakdownGroup[];
+  }> {
+    const { tenantId, fromAt, toAt, shiftId } = params;
+
+    const timeMatch = { paidAt: { $gte: fromAt, $lte: toAt } };
+    const shiftMatch = shiftId ? { shiftId } : {};
+    const rows = await this.paymentModel.aggregate([
+      {
+        $match: {
+          tenantId,
+          status: 'completed',
+          ...timeMatch,
+          ...shiftMatch,
+        },
+      },
+      {
+        $lookup: {
+          from: 'orders',
+          localField: 'orderId',
+          foreignField: '_id',
+          as: 'order',
+        },
+      },
+      { $unwind: { path: '$order', preserveNullAndEmptyArrays: true } },
+      {
+        $match: {
+          $or: [
+            { 'order._id': { $exists: false } },
+            { 'order.status': { $in: ['paid', 'completed'] } },
+          ],
+        },
+      },
+      {
+        $group: {
+          _id: '$method',
+          total: { $sum: '$amount' },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    let totalSales = 0;
+    let cashSales = 0;
+    let nonCashSales = 0;
+    let totalTransactions = 0;
+    const breakdownMap = new Map<string, IPaymentBreakdownGroup>();
+
+    for (const row of rows) {
+      totalSales += row.total;
+      totalTransactions += row.count;
+      if (row._id === 'cash') cashSales += row.total;
+      else nonCashSales += row.total;
+      breakdownMap.set(row._id, { method: row._id, code: row._id, amount: row.total });
+    }
+
+    return {
+      totalSales: Math.round(totalSales),
+      cashSales: Math.round(cashSales),
+      nonCashSales: Math.round(nonCashSales),
+      totalTransactions,
+      paymentBreakdown: Array.from(breakdownMap.values()),
+    };
   }
 
   async getTopProductsAggregation(tenantId: string, date: string, limit: number = 10) {

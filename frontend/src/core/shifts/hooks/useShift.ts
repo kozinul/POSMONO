@@ -71,7 +71,7 @@ export function useCloseShiftMutation() {
   return useMutation({
     mutationFn: async (data: { shiftId: string; closingBalance: number }) => {
       const res = await api.post<{ success: boolean; data: Shift }>(`/shifts/${data.shiftId}/close`, {
-        closingBalance: data.closingBalance,
+        physicalCash: data.closingBalance,
       });
       return res.data.data;
     },

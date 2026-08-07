@@ -4,6 +4,7 @@ import { Shift, IPaymentBreakdownEntry } from '../../domain/Shift';
 export class ShiftService {
   constructor(
     private readonly shiftRepository: any,
+    private readonly reportAggregation?: any,
   ) {}
 
   async open(input: { tenantId: string; registerId: string; cashierId: string; openingBalance: number }): Promise<Shift> {
@@ -19,7 +20,14 @@ export class ShiftService {
       openingBalance: input.openingBalance,
     });
 
-    await this.shiftRepository.save(shift);
+    try {
+      await this.shiftRepository.save(shift);
+    } catch (err: any) {
+      if (err && (err.code === 11000 || err.name === 'MongoServerError')) {
+        throw new ValidationError('Cashier already has an open shift');
+      }
+      throw err;
+    }
     return shift;
   }
 
@@ -33,6 +41,7 @@ export class ShiftService {
       throw new ValidationError('Shift is already closed');
     }
 
+    await this.refreshSales(shift);
     shift.close(input.physicalCash);
     await this.shiftRepository.save(shift);
     return shift;
@@ -63,17 +72,34 @@ export class ShiftService {
       throw new ValidationError('Shift is already closed');
     }
 
-    shift.updateSales(input);
+    await this.refreshSales(shift);
     await this.shiftRepository.save(shift);
     return shift;
   }
 
   async getCurrent(tenantId: string, cashierId: string): Promise<Shift | null> {
-    return this.shiftRepository.findOpenShift(tenantId, cashierId);
+    const shift = await this.shiftRepository.findOpenShift(tenantId, cashierId);
+    if (shift) {
+      await this.refreshSales(shift);
+      await this.shiftRepository.save(shift);
+    }
+    return shift;
   }
 
   async getActiveShifts(tenantId: string): Promise<Shift[]> {
     return this.shiftRepository.findActiveShifts(tenantId);
+  }
+
+  async refreshSales(shift: Shift): Promise<void> {
+    if (!this.reportAggregation) return;
+    const data = shift.serialize();
+    const snapshot = await this.reportAggregation.getShiftSalesAggregation({
+      tenantId: data.tenantId,
+      fromAt: data.openedAt,
+      toAt: data.closedAt ?? new Date(),
+      shiftId: data.id,
+    });
+    shift.updateSales(snapshot);
   }
 
   async list(tenantId: string): Promise<Shift[]> {

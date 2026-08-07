@@ -13,6 +13,9 @@ Modular SaaS POS Platform (Node.js/Express + React/Tailwind). Multi-tenant, mult
 - `frontend/src/core/pos/components/PosActionPanel.tsx` — Drawer (☰ menu): Daftar Bill, Daftar Transaksi, Laporan Kasir, Shift
 - `frontend/src/core/pos/components/PosVoidModal.tsx` — Generic void confirmation (reason + PIN)
 - `frontend/src/core/pos/components/ReceiptDisplay.tsx` — Receipt viewer with Print button
+- `frontend/src/core/pos/components/ReportPrintModal.tsx` — Printable kasir reports (struk style: window.print + html2pdf download)
+- `frontend/src/core/pos/components/ProductCard.tsx` — Whole card clickable to add to cart (no Add button)
+- `frontend/src/core/pos/utils/paymentLabels.ts` — payment method label + sort helpers
 - `frontend/src/core/pos/store/posStore.ts` — Zustand store (cart, bill, payment state)
 
 ## Recent Changes (2026-08)
@@ -37,6 +40,44 @@ Modular SaaS POS Platform (Node.js/Express + React/Tailwind). Multi-tenant, mult
 
 ### HeldOrdersPanel Removed
 - Floating held-orders panel removed; held orders now accessible only via "Daftar Bill" in drawer
+
+### Void Approval (Manager PIN) — 2026-08-06
+- Cashier without `order:void` permission must enter a Manager PIN to void (order/item). Manager auto-seeds a hashed PIN; PIN approval recorded in `voidApprovals[]`
+- Manager has order:void so can self-approve; option "B" (keep PIN approval) chosen
+
+### Partial Quantity Void
+- `voidItem(..., quantity?)` decrements the item qty (instead of removing) and recomputes prices/tax; sets status `partially-voided` when items remain
+- Void modal stepper for quantity (shown only when `availableQuantity > 1`); `managerPin` & `quantity` forwarded on both Daftar Transaksi paths
+- Backend: `OrderController.voidItemSchema.quantity`, `OrderService.VoidItemInput.quantity`, `Order.voidItem` partial logic
+
+### Persistent Dev MongoDB
+- `backend/src/dev.ts` loads `import 'dotenv/config'` at top so `MONGO_URI` is read before the connect branch decision
+- `backend/.env` default `MONGO_URI=mongodb://mongodb:27017/posmono` → persistent Mongo (`db:"persistent"`); in-memory only when `MONGO_URI` unset or contains `localhost:27017/posmono`
+- Keeps data + login sessions across restarts (avoided stale-token "User not found" on void)
+
+### Stale-Invalidation for Void (fixed)
+- `useVoidOrder`/`useVoidItem` now invalidate `orders`, `daily-report`, `dashboard-summary`, `sales-report`, `finance-report` so dashboard reflects voided orders
+
+### Kasir Printable Reports (Laporan Transaksi & Penerimaan) — 2026-08-07
+- `ReportPrintModal.tsx` renders 80mm struk (monospace) with **Print** (`window.print()` + `.report-print` CSS) and **Download PDF** (`html2pdf.js`, client-side)
+- "Laporan Transaksi" = per-order with item lines; "Laporan Penerimaan Kasir" = payment-method breakdown
+- `ReportAggregation.getPaymentBreakdownAggregation` aggregates from the `payments` collection (was `order.paymentBreakdown`, which is empty) with an `orders` lookup to exclude voided/cancelled; `paymentModel` injected in `container.ts`
+- Payment methods: `cash|qris|transfer|card|debit|credit|ewallet` → labels in `paymentLabels.ts`
+
+### Best-Seller "⭐ Favorit" Toggle — 2026-08-07
+- `GET /reports/best-sellers?days=7` (top products by qty over range) via `ReportService.getBestSellers` + `ReportAggregation.getBestSellersAggregation`
+- `useBestSellers(days)` hook; PosPage `showFavorites` state filters/orders the product grid, ignoring category (only best sellers, refreshed ~60s)
+
+### Product Card — Click to Add — 2026-08-07
+- `ProductCard` root is now `role="button"`, clickable to call `addItem` (Enter/Space support); "Add" button removed; sold-out cards are `cursor-not-allowed` and non-clickable
+
+### Shift: Server-Side Source of Truth + Contract Fixes — 2026-08-07
+- **Contract fixes**: `POST /shifts/open` accepts only `{openingBalance}` (`registerId` optional, defaults `register-default`); `POST /shifts/:id/close` accepts `physicalCash` **or** `closingBalance` alias. Frontend `useCloseShiftMutation` sends `physicalCash`.
+- **Race condition closed at DB**: partial unique index `one_open_shift_per_cashier` on `{tenantId, cashierId}` where `status='open'` (`ShiftSchema`); `ShiftService.open` catches `E11000` → `ValidationError`; `ShiftModel.syncIndexes()` at boot in `container.ts`
+- **Shift sales computed server-side** (Shift = projection cache, not source of truth): `ReportAggregation.getShiftSalesAggregation` aggregates `payments` (`status:'completed'`, `paidAt` in `[openedAt, closedAt]`, `shiftId`) with `orders` lookup excluding voided/cancelled → void auto-reflects, closed shifts are snapshotted
+- `Payment` domain + `PaymentSchema` gained `shiftId` (indexed); threaded through `payCash`/`processByOrderId`/`splitBill` (`PaymentController` schemas accept `shiftId`)
+- `PaymentModal` sends `shiftId` from `openShiftId` in posStore
+- `ShiftService.refreshSales()` recomputes from server on `getCurrent` (10s poll) and `close`; `PUT /shifts/:id/sales` no longer trusts client body (recomputes instead)
 
 ## Key Patterns
 - `useQueryClient()` for cache invalidation after mutations

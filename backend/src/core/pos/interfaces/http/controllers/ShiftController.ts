@@ -5,12 +5,13 @@ import { z } from 'zod';
 import { ValidationError } from '../../../../../@shared/infrastructure/error/AppError';
 
 const openSchema = z.object({
-  registerId: z.string().min(1),
+  registerId: z.string().min(1).optional().default('register-default'),
   openingBalance: z.number().nonnegative().default(0),
 });
 
 const closeSchema = z.object({
-  physicalCash: z.number().nonnegative(),
+  physicalCash: z.number().nonnegative().optional(),
+  closingBalance: z.number().nonnegative().optional(),
 });
 
 const cashPickupSchema = z.object({
@@ -73,7 +74,8 @@ export class ShiftController extends BaseController {
     const parsed = closeSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError('Invalid input');
 
-    const shift = await this.shiftService.close(req.tenantId, req.params.id, parsed.data);
+    const physicalCash = parsed.data.physicalCash ?? parsed.data.closingBalance ?? 0;
+    const shift = await this.shiftService.close(req.tenantId, req.params.id, { physicalCash });
     this.ok(res, shift.serialize());
   }
 

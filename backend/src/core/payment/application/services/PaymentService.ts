@@ -61,6 +61,7 @@ export class PaymentService {
     cardLastFour?: string;
     splitIndex?: number;
     splitBaseOrderNumber?: string;
+    shiftId?: string | null;
   }): Promise<{ payment: Payment; order: any; receipt: ReceiptRenderResult | null }> {
     const roundMoney = (value: number) => Math.round(value);
     const rawSubtotal = input.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
@@ -213,6 +214,7 @@ export class PaymentService {
       amount: input.amountPaid,
       status: 'pending',
       method: paymentMethod,
+      shiftId: input.shiftId ?? null,
       referenceNumber: refNumber,
       splitBills: [],
       qrCodeUrl: null,
@@ -281,6 +283,7 @@ export class PaymentService {
     provider?: string;
     qrCodeUrl?: string;
     paymentTransactionId?: string;
+    shiftId?: string | null;
   }): Promise<{ payment: Payment; order: Order; receipt: ReceiptRenderResult | null }> {
     const order = await this.orderRepository.findById(input.orderId);
     if (!order) throw new NotFoundError('Order not found');
@@ -302,6 +305,7 @@ export class PaymentService {
       amount: input.amount,
       status: 'pending',
       method: input.method,
+      shiftId: input.shiftId ?? null,
       referenceNumber: `${input.method.toUpperCase()}-${uuidv4().replace(/-/g, '').substring(0, 12).toUpperCase()}`,
       splitBills: [],
       qrCodeUrl: input.qrCodeUrl ?? null,
@@ -423,6 +427,7 @@ export class PaymentService {
     orderId: string;
     splitBills: ISplitBill[];
     cashierId: string;
+    shiftId?: string | null;
   }): Promise<{ payments: Payment[]; order: Order; receipts: (ReceiptRenderResult | null)[] }> {
     const order = await this.orderRepository.findById(input.orderId);
     if (!order) throw new NotFoundError('Order not found');
@@ -451,6 +456,7 @@ export class PaymentService {
         amount: bill.amount,
         status: 'pending',
         method: bill.method as PaymentMethod,
+        shiftId: input.shiftId ?? null,
         referenceNumber: bill.referenceNumber || `${bill.method.toUpperCase()}-${uuidv4().replace(/-/g, '').substring(0, 12).toUpperCase()}`,
         splitBills: input.splitBills,
         qrCodeUrl: null,

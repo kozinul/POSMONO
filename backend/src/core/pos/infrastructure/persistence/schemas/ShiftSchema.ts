@@ -51,3 +51,11 @@ export const ShiftSchema = new Schema(
 
 ShiftSchema.index({ tenantId: 1, status: 1 });
 ShiftSchema.index({ tenantId: 1, cashierId: 1, status: 1 });
+ShiftSchema.index(
+  { tenantId: 1, cashierId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { status: 'open' },
+    name: 'one_open_shift_per_cashier',
+  },
+);

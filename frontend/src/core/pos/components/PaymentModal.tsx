@@ -168,6 +168,7 @@ export function PaymentModal() {
         referenceNumber: referenceNumber || undefined,
         ...(isSplitPortion ? { splitIndex: portionIndex } : {}),
         ...(splitBase ? { splitBaseOrderNumber: splitBase } : {}),
+        ...(usePOSStore.getState().openShiftId ? { shiftId: usePOSStore.getState().openShiftId } : {}),
       };
       if (!splitMode) {
         payload.discount = manualDiscount;

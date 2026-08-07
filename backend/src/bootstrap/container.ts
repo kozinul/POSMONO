@@ -147,6 +147,7 @@ export function buildContainer() {
   const SettingModel = systemConnection.model('Setting', SettingSchema);
   const PromotionModel = systemConnection.model('Promotion', PromotionSchema);
   PromotionModel.syncIndexes().catch(() => {});
+  ShiftModel.syncIndexes().catch(() => {});
   const PaymentMethodModel = systemConnection.model('PaymentMethod', PaymentMethodSchema);
   const MenuTypeModel = systemConnection.model('MenuType', MenuTypeSchema);
   const TemplateModel = systemConnection.model('Template', TemplateSchema);
@@ -574,6 +575,7 @@ export function buildContainer() {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
         shiftRepository: container.resolve('shiftRepository'),
+        reportAggregation: container.resolve('reportAggregation'),
       }),
     }),
     shiftController: asClass(ShiftController, {

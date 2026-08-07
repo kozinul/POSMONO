@@ -32,6 +32,7 @@ export interface IPayment {
   amount: number;
   status: PaymentStatus;
   method: PaymentMethod;
+  shiftId: string | null;
   referenceNumber: string;
   splitBills: ISplitBill[];
   qrCodeUrl: string | null;
@@ -50,6 +51,7 @@ export class Payment extends AggregateRoot<PaymentId> {
   private amount: number;
   private status: PaymentStatus;
   private method: PaymentMethod;
+  private shiftId: string | null;
   private referenceNumber: string;
   private splitBills: ISplitBill[];
   private qrCodeUrl: string | null;
@@ -68,6 +70,7 @@ export class Payment extends AggregateRoot<PaymentId> {
     this.amount = props.amount;
     this.status = props.status;
     this.method = props.method;
+    this.shiftId = props.shiftId ?? null;
     this.referenceNumber = props.referenceNumber;
     this.splitBills = [...(props.splitBills ?? [])];
     this.qrCodeUrl = props.qrCodeUrl ?? null;
@@ -184,6 +187,7 @@ export class Payment extends AggregateRoot<PaymentId> {
       amount: this.amount,
       status: this.status,
       method: this.method,
+      shiftId: this.shiftId,
       referenceNumber: this.referenceNumber,
       splitBills: [...this.splitBills],
       qrCodeUrl: this.qrCodeUrl,

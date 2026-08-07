@@ -36,6 +36,7 @@ const payCashSchema = z.object({
   cardLastFour: z.string().optional(),
   splitIndex: z.number().int().positive().optional(),
   splitBaseOrderNumber: z.string().optional(),
+  shiftId: z.string().optional().nullable(),
 });
 
 const processPaymentSchema = z.object({
@@ -47,6 +48,7 @@ const processPaymentSchema = z.object({
   qrCodeUrl: z.string().optional(),
   paymentTransactionId: z.string().optional(),
   cashierName: z.string().optional().default(''),
+  shiftId: z.string().optional().nullable(),
 });
 
 const refundSchema = z.object({
@@ -62,6 +64,7 @@ const splitBillSchema = z.object({
     method: z.enum(['cash', 'qris', 'transfer', 'card', 'debit', 'credit', 'ewallet']),
     referenceNumber: z.string().optional().default(''),
   })).min(2, 'At least 2 split portions required'),
+  shiftId: z.string().optional().nullable(),
 });
 
 export class PaymentController extends BaseController {
@@ -89,6 +92,7 @@ export class PaymentController extends BaseController {
       cardLastFour: parsed.data.cardLastFour,
       splitIndex: parsed.data.splitIndex,
       splitBaseOrderNumber: parsed.data.splitBaseOrderNumber,
+      shiftId: parsed.data.shiftId,
     });
 
     const paymentData = result.payment.serialize();
@@ -120,6 +124,7 @@ export class PaymentController extends BaseController {
       provider: parsed.data.provider,
       qrCodeUrl: parsed.data.qrCodeUrl,
       paymentTransactionId: parsed.data.paymentTransactionId,
+      shiftId: parsed.data.shiftId,
     });
 
     this.ok(res, {
@@ -156,6 +161,7 @@ export class PaymentController extends BaseController {
       orderId: parsed.data.orderId,
       splitBills: parsed.data.splitBills,
       cashierId: req.userId,
+      shiftId: parsed.data.shiftId,
     });
 
     this.ok(res, {

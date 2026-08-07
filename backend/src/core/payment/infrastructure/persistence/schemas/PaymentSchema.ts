@@ -43,6 +43,7 @@ export const PaymentSchema = new Schema(
       enum: ['cash', 'qris', 'transfer', 'card'],
       required: true,
     },
+    shiftId: { type: String, default: null, index: true },
     referenceNumber: { type: String, default: '' },
     splitBills: { type: [SplitBillSchema], default: [] },
     qrCodeUrl: { type: String, default: null },
