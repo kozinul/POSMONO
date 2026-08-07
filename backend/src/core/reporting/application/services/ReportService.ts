@@ -3,6 +3,7 @@ import { MongoShiftRepository } from '../../../pos/infrastructure/persistence/Mo
 import { MongoDailyMetricRepository } from '../../infrastructure/persistence/MongoDailyMetricRepository';
 import { ReportAggregation } from '../../infrastructure/aggregation/ReportAggregation';
 import { DailyMetric } from '../../domain/Report';
+import { NotFoundError } from '../../../../@shared/infrastructure/error/AppError';
 
 function toDateString(d: Date): string {
   return d.toISOString().split('T')[0];
@@ -86,6 +87,28 @@ export class ReportService {
       date,
       cashierPerformance,
       shifts: shifts.map((s) => s.serialize()),
+    };
+  }
+
+  async getShiftReport(tenantId: string, shiftId: string) {
+    const shift = await this.shiftRepository.findById(shiftId);
+    if (!shift || shift.serialize().tenantId !== tenantId) {
+      throw new NotFoundError('Shift', shiftId);
+    }
+
+    const sales = await this.reportAggregation.getShiftSalesAggregation({
+      tenantId,
+      fromAt: shift.serialize().openedAt,
+      toAt: shift.serialize().closedAt ?? new Date(),
+      shiftId,
+    });
+
+    const orders = await this.reportAggregation.getShiftOrdersAggregation(tenantId, shiftId);
+
+    return {
+      shift: shift.serialize(),
+      sales,
+      orders,
     };
   }
 

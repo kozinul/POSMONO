@@ -162,6 +162,29 @@ export class ReportAggregation {
     };
   }
 
+  async getShiftOrdersAggregation(tenantId: string, shiftId: string) {
+    return this.paymentModel.aggregate([
+      { $match: { tenantId, shiftId, status: 'completed' } },
+      {
+        $lookup: {
+          from: 'orders',
+          localField: 'orderId',
+          foreignField: '_id',
+          as: 'order',
+        },
+      },
+      { $unwind: { path: '$order', preserveNullAndEmptyArrays: true } },
+      {
+        $match: {
+          'order._id': { $exists: true },
+          'order.status': { $in: ['paid', 'completed'] },
+        },
+      },
+      { $replaceRoot: { newRoot: '$order' } },
+      { $sort: { createdAt: 1 } },
+    ]);
+  }
+
   async getTopProductsAggregation(tenantId: string, date: string, limit: number = 10) {
     const startOfDay = new Date(date);
     startOfDay.setHours(0, 0, 0, 0);

@@ -79,6 +79,11 @@ Modular SaaS POS Platform (Node.js/Express + React/Tailwind). Multi-tenant, mult
 - `PaymentModal` sends `shiftId` from `openShiftId` in posStore
 - `ShiftService.refreshSales()` recomputes from server on `getCurrent` (10s poll) and `close`; `PUT /shifts/:id/sales` no longer trusts client body (recomputes instead)
 
+### Laporan Kasir is Per-Shift — 2026-08-07
+- PosActionPanel "Laporan Kasir" section is scoped to the **current open shift**, not the day: shows shift totals (Transaksi/Penjualan/Tunai/Non-Tunai) from `useShiftReport(openShift.id)`; if no shift is open it prompts "Buka shift terlebih dahulu"
+- New backend `GET /reports/shift?shiftId=` via `ReportService.getShiftReport` returns `{ shift, sales, orders }`; `ReportAggregation.getShiftOrdersAggregation` joins `payments`→`orders` (paid/completed, excludes voided/cancelled) to list that shift's orders
+- Frontend `useShiftReport(shiftId)` hook (10s refetch); ReportPrintModal fed shift orders + shift `paymentBreakdown`/totals
+
 ## Key Patterns
 - `useQueryClient()` for cache invalidation after mutations
 - `useVoidOrder` for full order void; `useVoidItem` for per-item void

@@ -1,9 +1,7 @@
 import { useState } from 'react';
 import { usePOSStore } from '../store/posStore';
-import { useDailyReport, useOrders } from '../../orders/hooks/useOrders';
-import { useReportExport } from '../../reports/hooks/useReportExport';
-import {
-  useOpenShift,
+import { useOrders, useShiftReport } from '../../orders/hooks/useOrders';
+import { useOpenShift,
   useOpenShiftMutation,
   useCloseShiftMutation,
 } from '../../shifts/hooks/useShift';
@@ -55,10 +53,9 @@ export function PosActionPanel(props: PosActionPanelProps) {
   const openShiftMut = useOpenShiftMutation();
   const closeShiftMut = useCloseShiftMutation();
 
-  const { data: daily } = useDailyReport(today);
   const { data: todayOrdersRes } = useOrders({ dateFrom: today, dateTo: today, limit: 100 });
   const todayOrders = todayOrdersRes?.data ?? [];
-  const exportReport = useReportExport();
+  const shiftReport = useShiftReport(openShift?.id);
 
   const handleOpenShift = async () => {
     const balance = window.prompt('Saldo buka kasir (Rp):', '0') ?? '0';
@@ -84,9 +81,18 @@ export function PosActionPanel(props: PosActionPanelProps) {
     }
   };
 
-  const handleExport = (format: 'pdf' | 'xlsx') => {
-    exportReport.mutate({ type: 'daily', params: { date: today }, format });
-  };
+  const shiftSales = shiftReport.data?.sales;
+  const shiftOrders = shiftReport.data?.orders ?? [];
+  const shiftBreakdown = (shiftSales?.paymentBreakdown ?? []).reduce(
+    (acc: Record<string, number>, p) => {
+      acc[p.method] = (acc[p.method] ?? 0) + p.amount;
+      return acc;
+    },
+    {},
+  );
+  const shiftTotalSales = shiftSales?.totalSales ?? openShift?.totalSales ?? 0;
+  const shiftTotalTransactions =
+    shiftSales?.totalTransactions ?? openShift?.totalTransactions ?? 0;
 
   return (
     <>
@@ -144,54 +150,52 @@ export function PosActionPanel(props: PosActionPanelProps) {
               <p className="px-2 pt-1 pb-1 text-xs font-medium text-gray-500 uppercase">
                 Laporan Kasir
               </p>
-              {daily ? (
-                <div className="px-3 py-2 space-y-1">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Orders</span>
-                    <span className="text-gray-900 font-medium">{daily.totalOrders}</span>
+              {openShift ? (
+                <>
+                  <div className="px-3 py-2 space-y-1">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Transaksi</span>
+                      <span className="text-gray-900 font-medium">{shiftTotalTransactions}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Penjualan</span>
+                      <span className="text-gray-900 font-medium">
+                        Rp {formatIDR(shiftTotalSales)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Tunai</span>
+                      <span className="text-gray-900 font-medium">
+                        Rp {formatIDR(shiftSales?.cashSales ?? 0)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Non-Tunai</span>
+                      <span className="text-gray-900 font-medium">
+                        Rp {formatIDR(shiftSales?.nonCashSales ?? 0)}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Revenue</span>
-                    <span className="text-gray-900 font-medium">
-                      Rp {formatIDR(daily.totalRevenue)}
-                    </span>
+                  <div className="px-3 pt-2 space-y-1">
+                    <button
+                      onClick={() => setReportModal('transactions')}
+                      className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg"
+                    >
+                      Laporan Transaksi (Shift)
+                    </button>
+                    <button
+                      onClick={() => setReportModal('receipt')}
+                      className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg"
+                    >
+                      Laporan Penerimaan Kasir
+                    </button>
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Item</span>
-                    <span className="text-gray-900 font-medium">{daily.totalItems}</span>
-                  </div>
-                </div>
+                </>
               ) : (
-                <p className="px-3 py-2 text-sm text-gray-400">Memuat...</p>
+                <p className="px-3 py-2 text-sm text-gray-400">
+                  Buka shift terlebih dahulu untuk melihat laporan kasir per shift.
+                </p>
               )}
-              <div className="flex gap-2 px-3 pt-1">
-                <button
-                  onClick={() => handleExport('pdf')}
-                  className="flex-1 bg-red-600 text-white text-xs py-1.5 rounded hover:bg-red-700"
-                >
-                  PDF
-                </button>
-                <button
-                  onClick={() => handleExport('xlsx')}
-                  className="flex-1 bg-green-600 text-white text-xs py-1.5 rounded hover:bg-green-700"
-                >
-                  Excel
-                </button>
-              </div>
-              <div className="px-3 pt-2 space-y-1">
-                <button
-                  onClick={() => setReportModal('transactions')}
-                  className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg"
-                >
-                  Laporan Transaksi
-                </button>
-                <button
-                  onClick={() => setReportModal('receipt')}
-                  className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg"
-                >
-                  Laporan Penerimaan Kasir
-                </button>
-              </div>
             </div>
 
             <div className="p-3 space-y-1">
@@ -389,10 +393,10 @@ export function PosActionPanel(props: PosActionPanelProps) {
       <ReportPrintModal
         open={reportModal !== null}
         variant={reportModal ?? 'transactions'}
-        orders={todayOrders}
-        paymentBreakdown={daily?.paymentBreakdown}
-        totalOrders={daily?.totalOrders}
-        totalRevenue={daily?.totalRevenue}
+        orders={shiftOrders}
+        paymentBreakdown={shiftBreakdown}
+        totalOrders={shiftTotalTransactions}
+        totalRevenue={shiftTotalSales}
         onClose={() => setReportModal(null)}
       />
     </>

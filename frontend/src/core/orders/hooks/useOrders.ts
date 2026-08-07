@@ -165,6 +165,30 @@ export function useDailyReport(date: string) {
   });
 }
 
+interface ShiftReportData {
+  shift: any;
+  sales: {
+    totalSales: number;
+    cashSales: number;
+    nonCashSales: number;
+    totalTransactions: number;
+    paymentBreakdown: Array<{ method: string; code: string; amount: number }>;
+  };
+  orders: Order[];
+}
+
+export function useShiftReport(shiftId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['shift-report', shiftId],
+    queryFn: async () => {
+      const res = await api.get<{ success: boolean; data: ShiftReportData }>(`/reports/shift?shiftId=${shiftId}`);
+      return res.data.data;
+    },
+    enabled: !!shiftId,
+    refetchInterval: 10_000,
+  });
+}
+
 export function useSalesReport(dateFrom: string, dateTo: string) {
   return useQuery({
     queryKey: ['sales-report', dateFrom, dateTo],

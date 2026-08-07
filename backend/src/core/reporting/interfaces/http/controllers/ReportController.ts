@@ -60,6 +60,16 @@ export class ReportController extends BaseController {
     this.ok(res, result);
   }
 
+  async shiftReport(req: Request, res: Response): Promise<void> {
+    const { shiftId } = req.query;
+    if (!shiftId) {
+      res.status(400).json({ success: false, message: 'shiftId query parameter is required' });
+      return;
+    }
+    const result = await this.reportService.getShiftReport(req.tenantId, shiftId as string);
+    this.ok(res, result);
+  }
+
   async generateDailyMetric(req: Request, res: Response): Promise<void> {
     const { date } = req.query;
     if (!date) {
