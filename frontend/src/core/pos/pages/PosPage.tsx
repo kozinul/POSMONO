@@ -22,6 +22,7 @@ import { PosActionPanel } from '../components/PosActionPanel';
 import { useAuthStore, hasPermission } from '../../../@shared/hooks/useAuth';
 import { VOID_ORDER_PERMISSION } from '../../../@shared/utils/permissions';
 import { useVoidOrder, useVoidItem } from '../../orders/hooks/useOrders';
+import { useBestSellers } from '../../orders/hooks/useOrders';
 import type { CartItem } from '../store/posStore';
 
 export default function PosPage() {
@@ -78,6 +79,7 @@ export default function PosPage() {
   const [search, setSearch] = useState('');
   const [selectedFamily, setSelectedFamily] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [showFavorites, setShowFavorites] = useState(false);
   const [voidTarget, setVoidTarget] = useState<{ item: CartItem; itemIndex: number } | null>(null);
   const [voidError, setVoidError] = useState<string | null>(null);
   const [voidPending, setVoidPending] = useState(false);
@@ -162,7 +164,8 @@ export default function PosPage() {
     data: products = [],
     isLoading,
     isError,
-  } = useProducts(search || undefined, selectedCategory ?? undefined);
+  } = useProducts(search || undefined, showFavorites ? undefined : (selectedCategory ?? undefined));
+  const { data: bestSellerIds = [] } = useBestSellers(7);
   const { data: categories = [], isError: categoriesError } = useCategories();
   const { data: families = [] } = useFamilies();
 
@@ -191,6 +194,14 @@ export default function PosPage() {
   const filteredCategories = selectedFamily
     ? categories.filter((c) => c.familyId === selectedFamily)
     : categories;
+
+  const displayProducts = useMemo(() => {
+    if (!showFavorites || bestSellerIds.length === 0) return products;
+    const idRank = new Map(bestSellerIds.map((id, i) => [id, i]));
+    return products
+      .filter((p) => idRank.has(p.id))
+      .sort((a, b) => (idRank.get(a.id) ?? 0) - (idRank.get(b.id) ?? 0));
+  }, [showFavorites, bestSellerIds, products]);
 
   const p = pricing;
   const itemCount = items.reduce((s, i) => s + i.quantity, 0);
@@ -342,7 +353,7 @@ export default function PosPage() {
 
         {/* Family Filter */}
         {families.length > 0 && (
-          <div className="flex gap-3 flex-wrap mb-4">
+          <div className="flex gap-3 flex-wrap mb-4 items-center">
             <button
               onClick={() => {
                 setSelectedFamily(null);
@@ -372,6 +383,16 @@ export default function PosPage() {
                 {fam.name}
               </button>
             ))}
+            <button
+              onClick={() => setShowFavorites((v) => !v)}
+              className={`ml-auto px-6 py-2 rounded-full font-medium text-sm transition-colors whitespace-nowrap ${
+                showFavorites
+                  ? 'bg-amber-400 text-white shadow'
+                  : 'bg-gray-100 text-gray-700 border border-gray-200 hover:bg-amber-50'
+              }`}
+            >
+              ⭐ Favorit
+            </button>
           </div>
         )}
 
@@ -412,8 +433,9 @@ export default function PosPage() {
             <p className="text-red-500 font-medium">Gagal memuat data. Silakan coba lagi.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {products.map((product) => {
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+              {displayProducts.map((product) => {
               const discount = getProductDiscount(
                 activeProductDiscounts,
                 product.id,
@@ -440,7 +462,15 @@ export default function PosPage() {
                 />
               );
             })}
-          </div>
+            </div>
+            {showFavorites && displayProducts.length === 0 && (
+              <div className="flex items-center justify-center flex-1 py-16">
+                <p className="text-gray-400 font-medium">
+                  Belum ada produk terlaris dalam 7 hari terakhir.
+                </p>
+              </div>
+            )}
+          </>
         )}
       </section>
 

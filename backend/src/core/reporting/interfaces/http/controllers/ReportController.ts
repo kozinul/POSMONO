@@ -98,6 +98,12 @@ export class ReportController extends BaseController {
     this.ok(res, result);
   }
 
+  async bestSellers(req: Request, res: Response): Promise<void> {
+    const days = req.query.days ? parseInt(req.query.days as string, 10) : 7;
+    const result = await this.reportService.getBestSellers(req.tenantId, Number.isFinite(days) ? days : 7);
+    this.ok(res, result);
+  }
+
   async finance(req: Request, res: Response): Promise<void> {
     const { dateFrom, dateTo } = req.query;
     if (!dateFrom || !dateTo) {

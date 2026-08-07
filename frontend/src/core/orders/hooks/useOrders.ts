@@ -246,4 +246,34 @@ export function useRecentOrders(limit = 10) {
   });
 }
 
+interface BestSellerItem {
+  productId: string;
+  name: string;
+  quantity: number;
+  revenue: number;
+}
+
+interface BestSellersResponse {
+  success: boolean;
+  data: {
+    dateFrom: string;
+    dateTo: string;
+    days: number;
+    products: BestSellerItem[];
+  };
+}
+
+export function useBestSellers(days = 7) {
+  return useQuery({
+    queryKey: ['best-sellers', days],
+    queryFn: async () => {
+      const res = await api.get<BestSellersResponse>(`/reports/best-sellers?days=${days}`);
+      return res.data.data;
+    },
+    select: (data) => data.products.map((p) => p.productId),
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+  });
+}
+
 export type { Order, OrderItem, IVoidedItem, IPaymentBreakdownEntry };

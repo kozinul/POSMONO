@@ -12,6 +12,7 @@ export function createReportRoutes(reportController: ReportController): Router {
   router.get('/cashier', authenticate, asyncHandler(reportController.cashier.bind(reportController)));
   router.get('/daily-metrics', authenticate, asyncHandler(reportController.dailyMetrics.bind(reportController)));
   router.get('/sales-per-product', authenticate, asyncHandler(reportController.salesPerProduct.bind(reportController)));
+  router.get('/best-sellers', authenticate, asyncHandler(reportController.bestSellers.bind(reportController)));
   router.get('/finance', authenticate, asyncHandler(reportController.finance.bind(reportController)));
   router.post('/daily-metrics/generate', authenticate, asyncHandler(reportController.generateDailyMetric.bind(reportController)));
 

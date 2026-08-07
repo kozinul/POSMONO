@@ -19,10 +19,28 @@ export function ProductCard({ id, name, price, imageUrl, categoryId, pricingProf
   const isTracked = stock !== undefined && stock > 0;
   const isSoldOut = isTracked && (remaining ?? stock) <= 0;
 
+  const addToCart = () => {
+    if (isSoldOut) return;
+    addItem({ productId: id, name, price, imageUrl, categoryId, pricingProfileId, pricingMode, stock });
+  };
+
   return (
     <div
+      role="button"
+      tabIndex={isSoldOut ? -1 : 0}
+      aria-disabled={isSoldOut}
+      onClick={addToCart}
+      onKeyDown={(e) => {
+        if (isSoldOut) return;
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          addToCart();
+        }
+      }}
       className={`product-card bg-white rounded-xl shadow-sm overflow-hidden flex flex-col border border-gray-100 ${
-        isSoldOut ? 'opacity-60 relative' : ''
+        isSoldOut
+          ? 'opacity-60 relative cursor-not-allowed'
+          : 'cursor-pointer hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary-300'
       }`}
     >
       <div className="relative">
@@ -65,17 +83,6 @@ export function ProductCard({ id, name, price, imageUrl, categoryId, pricingProf
           <span className={`text-xs ${isSoldOut ? 'text-red-500 font-medium' : 'text-gray-500'}`}>
             {isTracked ? `Stok: ${remaining ?? stock}` : 'Stok: ∞'}
           </span>
-          <button
-            onClick={() => addItem({ productId: id, name, price, imageUrl, categoryId, pricingProfileId, pricingMode, stock })}
-            disabled={isSoldOut}
-            className={`px-4 py-1.5 rounded-lg text-sm font-medium ${
-              isSoldOut
-                ? 'bg-gray-300 text-white cursor-not-allowed'
-                : 'blue-primary text-white hover:opacity-90 transition-opacity'
-            }`}
-          >
-            {isSoldOut ? 'Habis' : 'Add'}
-          </button>
         </div>
       </div>
     </div>

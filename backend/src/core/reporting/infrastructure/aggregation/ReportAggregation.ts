@@ -5,6 +5,7 @@ export class ReportAggregation {
     private readonly orderModel: Model<any>,
     private readonly shiftModel: Model<any>,
     private readonly productModel: Model<any>,
+    private readonly paymentModel: Model<any>,
   ) {}
 
   async getDailySalesAggregation(tenantId: string, date: string) {
@@ -41,19 +42,35 @@ export class ReportAggregation {
     const endOfDay = new Date(date);
     endOfDay.setHours(23, 59, 59, 999);
 
-    const result = await this.orderModel.aggregate([
+    const result = await this.paymentModel.aggregate([
       {
         $match: {
           tenantId,
-          createdAt: { $gte: startOfDay, $lte: endOfDay },
-          status: { $in: ['paid', 'completed'] },
+          status: 'completed',
+          paidAt: { $gte: startOfDay, $lte: endOfDay },
         },
       },
-      { $unwind: '$paymentBreakdown' },
+      {
+        $lookup: {
+          from: 'orders',
+          localField: 'orderId',
+          foreignField: '_id',
+          as: 'order',
+        },
+      },
+      { $unwind: { path: '$order', preserveNullAndEmptyArrays: true } },
+      {
+        $match: {
+          $or: [
+            { 'order._id': { $exists: false } },
+            { 'order.status': { $in: ['paid', 'completed'] } },
+          ],
+        },
+      },
       {
         $group: {
-          _id: '$paymentBreakdown.method',
-          total: { $sum: '$paymentBreakdown.amount' },
+          _id: '$method',
+          total: { $sum: '$amount' },
           count: { $sum: 1 },
         },
       },
@@ -96,6 +113,46 @@ export class ReportAggregation {
       productId: item._id,
       name: item.name,
       total: item.total,
+      revenue: item.revenue,
+    }));
+  }
+
+  async getBestSellersAggregation(
+    tenantId: string,
+    dateFrom: string,
+    dateTo: string,
+    limit: number = 20,
+  ) {
+    const startOfDay = new Date(dateFrom);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(dateTo);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const result = await this.orderModel.aggregate([
+      {
+        $match: {
+          tenantId,
+          createdAt: { $gte: startOfDay, $lte: endOfDay },
+          status: { $in: ['paid', 'completed'] },
+        },
+      },
+      { $unwind: '$items' },
+      {
+        $group: {
+          _id: '$items.productId',
+          name: { $first: '$items.productName' },
+          quantity: { $sum: '$items.quantity' },
+          revenue: { $sum: { $multiply: ['$items.unitPrice', '$items.quantity'] } },
+        },
+      },
+      { $sort: { quantity: -1, revenue: -1 } },
+      { $limit: limit },
+    ]);
+
+    return result.map((item: any) => ({
+      productId: item._id,
+      name: item.name,
+      quantity: item.quantity,
       revenue: item.revenue,
     }));
   }

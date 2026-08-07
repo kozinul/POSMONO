@@ -4,6 +4,10 @@ import { MongoDailyMetricRepository } from '../../infrastructure/persistence/Mon
 import { ReportAggregation } from '../../infrastructure/aggregation/ReportAggregation';
 import { DailyMetric } from '../../domain/Report';
 
+function toDateString(d: Date): string {
+  return d.toISOString().split('T')[0];
+}
+
 export class ReportService {
   constructor(
     private readonly orderRepository: MongoOrderRepository,
@@ -122,6 +126,30 @@ export class ReportService {
 
   async getSalesPerProduct(tenantId: string, dateFrom: string, dateTo: string) {
     return this.reportAggregation.getSalesPerProductAggregation(tenantId, dateFrom, dateTo);
+  }
+
+  async getBestSellers(tenantId: string, days: number = 7, limit: number = 20) {
+    const capped = Math.max(1, Math.min(days, 365));
+    const dateTo = new Date();
+    const dateFrom = new Date();
+    dateFrom.setDate(dateFrom.getDate() - (capped - 1));
+
+    const toStr = toDateString(dateTo);
+    const fromStr = toDateString(dateFrom);
+
+    const products = await this.reportAggregation.getBestSellersAggregation(
+      tenantId,
+      fromStr,
+      toStr,
+      limit,
+    );
+
+    return {
+      dateFrom: fromStr,
+      dateTo: toStr,
+      days: capped,
+      products,
+    };
   }
 
   async getFinanceReport(tenantId: string, dateFrom: string, dateTo: string) {

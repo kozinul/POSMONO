@@ -701,6 +701,7 @@ export function buildContainer() {
         orderModel: OrderModel,
         shiftModel: ShiftModel,
         productModel: ProductModel,
+        paymentModel: PaymentModel,
       }),
     }),
     reportService: asClass(ReportService, {
