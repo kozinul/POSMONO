@@ -69,6 +69,9 @@ export function ReceiptDisplay() {
               <h2 className="text-lg font-bold text-gray-800">POSMono</h2>
               <p className="text-sm text-gray-500 mt-1">Pesanan {receipt.displayOrderNumber}</p>
               <p className="text-xs text-gray-400 mt-0.5">
+                Kasir: {receipt.cashierName || 'Kasir'}
+              </p>
+              <p className="text-xs text-gray-400 mt-0.5">
                 {new Date(receipt.createdAt).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
               </p>
               {receipt.hasRemaining && (

@@ -87,8 +87,9 @@ export default function DashboardPage() {
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kasir</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tanggal & Waktu</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -119,9 +120,16 @@ export default function DashboardPage() {
                         }[order.status] ?? order.status}
                       </span>
                     </td>
+                    <td className="px-6 py-4 text-sm text-gray-500">{order.cashierName || 'Kasir'}</td>
                     <td className="px-6 py-4 text-sm text-gray-900">{formatCurrency(order.total)}</td>
                     <td className="px-6 py-4 text-sm text-gray-500">
-                      {new Date(order.createdAt).toLocaleTimeString('id-ID')}
+                      {new Date(order.createdAt).toLocaleString('id-ID', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
                     </td>
                   </tr>
                 ))}

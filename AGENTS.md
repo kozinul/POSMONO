@@ -82,7 +82,26 @@ Modular SaaS POS Platform (Node.js/Express + React/Tailwind). Multi-tenant, mult
 ### Laporan Kasir is Per-Shift — 2026-08-07
 - PosActionPanel "Laporan Kasir" section is scoped to the **current open shift**, not the day: shows shift totals (Transaksi/Penjualan/Tunai/Non-Tunai) from `useShiftReport(openShift.id)`; if no shift is open it prompts "Buka shift terlebih dahulu"
 - New backend `GET /reports/shift?shiftId=` via `ReportService.getShiftReport` returns `{ shift, sales, orders }`; `ReportAggregation.getShiftOrdersAggregation` joins `payments`→`orders` (paid/completed, excludes voided/cancelled) to list that shift's orders
-- Frontend `useShiftReport(shiftId)` hook (10s refetch); ReportPrintModal fed shift orders + shift `paymentBreakdown`/totals
+- Frontend `useShiftReport(shiftId)` hook (10s polling); ReportPrintModal fed shift orders + shift `paymentBreakdown`/totals
+
+### Shift Wajib Dibuka (Enforcement) + Carried-Over Bills — 2026-08-08
+- **Backend enforcement**: `PaymentService.assertOpenShift` (di `payCash`/`processByOrderId`/`splitBill`) dan `CreateOrderService` (hanya `source='pos'`) melempar `ValidationError('Buka shift terlebih dahulu sebelum bertransaksi')` bila `findOpenShift(tenantId, cashierId)` null; `source='waiter'` tidak diblokir
+- **Client-submitted shiftId tidak dipercaya** — selalu diganti dengan `shift.id` dari server saat `assertOpenShift`
+- **Carried-Over Bills (rollover)**: `ShiftService.close` snapshot bill `status='held'` milik kasir via `MongoOrderRepository.findOpenBillsForCarryOver` → `Shift.setCarriedOverBills`; tersimpan di `ShiftSchema.carriedOverBills` (sub-doc schema `CarriedOverBillSchema`)
+- `ReportService.getShiftReport` mengisi `inheritedCarriedBills` dari shift tertutup sebelumnya (`findLastClosedByCashierBefore`) hanya saat shift **open**; tampil di ShiftPage + Laporan Kasir
+- **Jebakan Mongoose**: snapshot carried bills awalnya bocor wrapper sub-doc (`$__`/`_doc`/`__parentArray`) → disanitasi via `Shift.toCarriedOverBillValue()` + field eksplisit di `MongoShiftRepository.toDomain`
+- Frontend: full-screen gate `z-[80]` di `PosPage.tsx` saat `!openShift?.id && !isLoading`; `OpenShiftModal.tsx` (buka shift + "Logout & Ganti Pengguna" untuk kasir yang salah shift)
+
+### Login & Receipt Kasir — 2026-08-08
+- `LoginPage.tsx`: `navigate(roleName === 'Cashier' ? '/pos' : '/dashboard')` — kasir mendarat langsung ke POS
+- `ReceiptDisplay.tsx` menampilkan `Kasir: {receipt.cashierName}`; template "Struktur Kasir Default" (seed.ts/dev.ts) memuat node `r4b 'Kasir: {{ order.cashier }}'` setelah `order.time`; template live di DB di-patch manual
+- `backend/src/scripts/backfillCashierName.ts` (`pnpm backfill:cashier` di backend): mengisi `cashierName` kosong pada order dari `User.displayName` via `cashierId`
+
+### MongoPaymentRepository shiftId Bug — 2026-08-08
+- **Gejala**: laporan kasir per-shift selalu kosong (`totalSales=0`) padahal ada transaksi
+- **Root cause**: `MongoPaymentRepository.toPersistence()` tidak mengirim `shiftId` → semua record `payments` tersimpan `shiftId:null`; `getShiftSalesAggregation`/`getShiftOrdersAggregation` memfilter `{ shiftId }` sehingga tak ada yang cocok
+- **Fix**: `shiftId` ditambahkan di `PaymentDoc` interface + `toDomain` + `toPersistence` (schema/domain `Payment` sudah punya field sejak awal)
+- Cache: fix hanya berlaku untuk transaksi baru; `shiftId:null` lama tidak terpetakan ke shift mana pun
 
 ## Key Patterns
 - `useQueryClient()` for cache invalidation after mutations

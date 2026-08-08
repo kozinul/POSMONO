@@ -8,6 +8,7 @@ interface PaymentDoc extends Document<string> {
   amount: number;
   status: string;
   method: string;
+  shiftId: string | null;
   referenceNumber: string;
   splitBills: Array<{ portion: number; amount: number; method: string; referenceNumber: string }>;
   qrCodeUrl: string | null;
@@ -30,6 +31,7 @@ export class MongoPaymentRepository {
       amount: doc.amount,
       status: doc.status as IPayment['status'],
       method: doc.method as IPayment['method'],
+      shiftId: doc.shiftId ?? null,
       referenceNumber: doc.referenceNumber,
       splitBills: doc.splitBills ?? [],
       qrCodeUrl: doc.qrCodeUrl ?? null,
@@ -51,6 +53,7 @@ export class MongoPaymentRepository {
       amount: data.amount,
       status: data.status,
       method: data.method,
+      shiftId: data.shiftId,
       referenceNumber: data.referenceNumber,
       splitBills: data.splitBills,
       qrCodeUrl: data.qrCodeUrl,

@@ -27,7 +27,8 @@ export default function LoginPage() {
       const tokenPayload = JSON.parse(atob(data.data.accessToken.split('.')[1]));
       localStorage.setItem('tenantId', tokenPayload.tenant);
       setUser(data.data.user);
-      navigate('/dashboard');
+      const roleName = data.data.user?.roleName ?? '';
+      navigate(roleName === 'Cashier' ? '/pos' : '/dashboard');
     } catch (err: any) {
       setError(err?.response?.data?.error?.message || 'Invalid credentials');
     } finally {

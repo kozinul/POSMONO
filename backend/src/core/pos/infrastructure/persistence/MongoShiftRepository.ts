@@ -1,5 +1,5 @@
 import { Model, Document } from 'mongoose';
-import { Shift, IShift, ICashPickup, IPaymentBreakdownEntry } from '../../domain/Shift';
+import { Shift, IShift, ICashPickup, ICarriedOverBill, IPaymentBreakdownEntry } from '../../domain/Shift';
 
 interface ShiftDoc extends Document<string> {
   _id: string;
@@ -18,6 +18,7 @@ interface ShiftDoc extends Document<string> {
   totalTransactions: number;
   paymentBreakdown: Array<{ method: string; code: string; amount: number }>;
   cashPickups: Array<{ amount: number; reason: string; pickedAt: Date; pickedBy: string }>;
+  carriedOverBills: Array<{ orderId: string; orderNumber: string; total: number; cashierName: string; status: string; createdAt: Date }>;
   expectedTotal: number | null;
   actualTotal: number | null;
   openedAt: Date;
@@ -47,6 +48,14 @@ export class MongoShiftRepository {
       totalTransactions: doc.totalTransactions,
       paymentBreakdown: doc.paymentBreakdown.map((p) => ({ method: p.method, code: p.code, amount: p.amount })) as IPaymentBreakdownEntry[],
       cashPickups: doc.cashPickups.map((c) => ({ amount: c.amount, reason: c.reason, pickedAt: c.pickedAt, pickedBy: c.pickedBy })) as ICashPickup[],
+      carriedOverBills: doc.carriedOverBills.map((b) => ({
+        orderId: b.orderId,
+        orderNumber: b.orderNumber,
+        total: typeof b.total === 'number' ? b.total : Number(b.total ?? 0),
+        cashierName: b.cashierName ?? '',
+        status: b.status ?? '',
+        createdAt: new Date(b.createdAt),
+      })) as ICarriedOverBill[],
       expectedTotal: doc.expectedTotal,
       actualTotal: doc.actualTotal,
       openedAt: doc.openedAt,
@@ -75,6 +84,7 @@ export class MongoShiftRepository {
       totalTransactions: data.totalTransactions,
       paymentBreakdown: data.paymentBreakdown,
       cashPickups: data.cashPickups,
+      carriedOverBills: data.carriedOverBills,
       expectedTotal: data.expectedTotal,
       actualTotal: data.actualTotal,
       openedAt: data.openedAt,
@@ -99,6 +109,15 @@ export class MongoShiftRepository {
 
   async findOpenShift(tenantId: string, cashierId: string): Promise<Shift | null> {
     const doc = await this.model.findOne({ tenantId, cashierId, status: 'open' }).exec();
+    if (!doc) return null;
+    return this.toDomain(doc);
+  }
+
+  async findLastClosedByCashierBefore(tenantId: string, cashierId: string, before: Date): Promise<Shift | null> {
+    const doc = await this.model
+      .findOne({ tenantId, cashierId, status: 'closed', closedAt: { $lt: before } })
+      .sort({ closedAt: -1 })
+      .exec();
     if (!doc) return null;
     return this.toDomain(doc);
   }

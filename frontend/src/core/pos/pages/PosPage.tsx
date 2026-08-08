@@ -19,6 +19,7 @@ import { useStockList } from '../../inventory/hooks/useInventory';
 import { useOpenShift } from '../../shifts/hooks/useShift';
 import { PosVoidModal } from '../components/PosVoidModal';
 import { PosActionPanel } from '../components/PosActionPanel';
+import { OpenShiftModal } from '../components/OpenShiftModal';
 import { useAuthStore, hasPermission } from '../../../@shared/hooks/useAuth';
 import { VOID_ORDER_PERMISSION } from '../../../@shared/utils/permissions';
 import { useVoidOrder, useVoidItem } from '../../orders/hooks/useOrders';
@@ -63,7 +64,10 @@ export default function PosPage() {
   const [actionDrawerOpen, setActionDrawerOpen] = useState(false);
 
   const { data: discountConfig } = useDiscountConfiguration();
-  const { data: openShift } = useOpenShift();
+  const openShiftQuery = useOpenShift();
+  const openShift = openShiftQuery.data;
+
+  const shiftGateVisible = !openShift?.id && !openShiftQuery.isLoading;
 
   useEffect(() => {
     seedOpenShift(openShift ?? null);
@@ -288,6 +292,18 @@ export default function PosPage() {
 
   return (
     <div className="flex-1 min-h-0 w-full flex overflow-hidden">
+      {shiftGateVisible && (
+        <div className="fixed inset-0 z-[80] bg-black/60 flex items-center justify-center p-4">
+          <OpenShiftModal
+            error={
+              openShiftQuery.isError
+                ? 'Layanan sedang bermasalah. Coba lagi untuk memuat status shift.'
+                : null
+            }
+            onRetry={() => openShiftQuery.refetch()}
+          />
+        </div>
+      )}
       {/* Left: Product Catalog */}
       <section className="flex-1 flex flex-col p-6 overflow-y-auto">
         <div className="flex items-center gap-3 mb-6">

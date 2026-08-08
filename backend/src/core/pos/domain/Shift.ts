@@ -11,6 +11,15 @@ export interface ICashPickup {
   pickedBy: string;
 }
 
+export interface ICarriedOverBill {
+  orderId: string;
+  orderNumber: string;
+  total: number;
+  cashierName: string;
+  status: string;
+  createdAt: Date;
+}
+
 export interface IPaymentBreakdownEntry {
   method: string;
   code: string;
@@ -34,6 +43,7 @@ export interface IShift {
   totalTransactions: number;
   paymentBreakdown: IPaymentBreakdownEntry[];
   cashPickups: ICashPickup[];
+  carriedOverBills: ICarriedOverBill[];
   expectedTotal: number | null;
   actualTotal: number | null;
   difference: number | null;
@@ -59,6 +69,7 @@ export class Shift extends AggregateRoot<ShiftId> {
   private totalTransactions: number;
   private paymentBreakdown: IPaymentBreakdownEntry[];
   private cashPickups: ICashPickup[];
+  private carriedOverBills: ICarriedOverBill[];
   private expectedTotal: number | null;
   private actualTotal: number | null;
   private openedAt: Date;
@@ -88,6 +99,7 @@ export class Shift extends AggregateRoot<ShiftId> {
     this.totalTransactions = props.totalTransactions;
     this.paymentBreakdown = [...props.paymentBreakdown];
     this.cashPickups = [...props.cashPickups];
+    this.carriedOverBills = [...(props.carriedOverBills ?? [])];
     this.expectedTotal = props.expectedTotal;
     this.actualTotal = props.actualTotal;
     this.openedAt = props.openedAt;
@@ -96,7 +108,18 @@ export class Shift extends AggregateRoot<ShiftId> {
     this.updatedAt = props.updatedAt;
   }
 
-  static open(props: Omit<IShift, 'id' | 'status' | 'closingBalance' | 'physicalCash' | 'expectedCash' | 'totalCashPickups' | 'totalSales' | 'cashSales' | 'nonCashSales' | 'totalTransactions' | 'paymentBreakdown' | 'cashPickups' | 'expectedTotal' | 'actualTotal' | 'difference' | 'closedAt' | 'openedAt' | 'createdAt' | 'updatedAt'>): Shift {
+  private toCarriedOverBillValue(b: ICarriedOverBill): ICarriedOverBill {
+    return {
+      orderId: b.orderId,
+      orderNumber: b.orderNumber,
+      total: typeof b.total === 'number' ? b.total : Number(b.total ?? 0),
+      cashierName: b.cashierName ?? '',
+      status: b.status ?? '',
+      createdAt: new Date(b.createdAt),
+    };
+  }
+
+  static open(props: Omit<IShift, 'id' | 'status' | 'closingBalance' | 'physicalCash' | 'expectedCash' | 'totalCashPickups' | 'totalSales' | 'cashSales' | 'nonCashSales' | 'totalTransactions' | 'paymentBreakdown' | 'cashPickups' | 'carriedOverBills' | 'expectedTotal' | 'actualTotal' | 'difference' | 'closedAt' | 'openedAt' | 'createdAt' | 'updatedAt'>): Shift {
     const shift = new Shift({
       ...props,
       id: new ShiftId().toValue(),
@@ -111,6 +134,7 @@ export class Shift extends AggregateRoot<ShiftId> {
       totalTransactions: 0,
       paymentBreakdown: [],
       cashPickups: [],
+      carriedOverBills: [],
       expectedTotal: null,
       actualTotal: null,
       difference: null,
@@ -188,6 +212,13 @@ export class Shift extends AggregateRoot<ShiftId> {
     this.updatedAt = new Date();
   }
 
+  setCarriedOverBills(bills: ICarriedOverBill[]): void {
+    this.carriedOverBills = bills.map((b) =>
+      this.toCarriedOverBillValue(b),
+    );
+    this.updatedAt = new Date();
+  }
+
   close(physicalCash: number): void {
     if (this.status === 'closed') {
       throw new Error('Shift is already closed');
@@ -236,6 +267,7 @@ export class Shift extends AggregateRoot<ShiftId> {
       totalTransactions: this.totalTransactions,
       paymentBreakdown: [...this.paymentBreakdown],
       cashPickups: [...this.cashPickups],
+      carriedOverBills: this.carriedOverBills.map((b) => this.toCarriedOverBillValue(b)),
       expectedTotal: this.expectedTotal,
       actualTotal: this.actualTotal,
       difference: this.difference,

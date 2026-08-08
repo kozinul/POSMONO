@@ -404,6 +404,8 @@ export function buildContainer() {
       injector: () => ({
         orderRepository: container.resolve('orderRepository'),
         eventBus: container.resolve('eventBus'),
+        userRepository: container.resolve('userRepository'),
+        shiftRepository: container.resolve('shiftRepository'),
       }),
     }),
     updateOrderService: asClass(UpdateOrderService, {
@@ -443,6 +445,7 @@ export function buildContainer() {
       injector: () => ({
         orderRepository: container.resolve('orderRepository'),
         eventBus: container.resolve('eventBus'),
+        userRepository: container.resolve('userRepository'),
       }),
     }),
     voidPaymentService: asClass(VoidPaymentService, {
@@ -495,6 +498,7 @@ export function buildContainer() {
       injector: () => ({
         orderRepository: container.resolve('orderRepository'),
         eventBus: container.resolve('eventBus'),
+        userRepository: container.resolve('userRepository'),
       }),
     }),
     refundService: asClass(RefundService, {
@@ -576,6 +580,7 @@ export function buildContainer() {
       injector: () => ({
         shiftRepository: container.resolve('shiftRepository'),
         reportAggregation: container.resolve('reportAggregation'),
+        orderRepository: container.resolve('orderRepository'),
       }),
     }),
     shiftController: asClass(ShiftController, {
@@ -608,6 +613,8 @@ export function buildContainer() {
         eventBus: container.resolve('eventBus'),
         receiptRenderService: container.resolve('receiptRenderService'),
         inventoryService: container.resolve('inventoryService'),
+        userRepository: container.resolve('userRepository'),
+        shiftRepository: container.resolve('shiftRepository'),
       }),
     }),
     paymentController: asClass(PaymentController, {

@@ -13,6 +13,7 @@
     "test:db:down": "docker compose -f docker-compose.test.yml down -v",
     "lint": "eslint src/",
     "seed": "ts-node src/seed.ts",
+    "backfill:cashier": "ts-node src/scripts/backfillCashierName.ts",
     "clean": "rm -rf dist"
   },
   "dependencies": {

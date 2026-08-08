@@ -1,4 +1,5 @@
 import { UseCase } from '../../../../@shared/application/UseCase';
+import { ValidationError } from '../../../../@shared/infrastructure/error/AppError';
 import {
   Order,
   IOrderItem,
@@ -13,6 +14,21 @@ import {
   VOID_ORDER_PERMISSION,
   VOID_PAYMENT_PERMISSION,
 } from './VoidApprovalService';
+
+async function resolveCashierName(
+  userRepository: any,
+  cashierId: string,
+  tenantId: string,
+  fallback: string,
+): Promise<string> {
+  if (!userRepository) return fallback;
+  try {
+    const user = await userRepository.findByIdAndTenant(cashierId, tenantId);
+    return user?.serialize().displayName || fallback;
+  } catch {
+    return fallback;
+  }
+}
 
 interface CreateOrderInput {
   tenantId: string;
@@ -194,14 +210,24 @@ export class CreateOrderService implements UseCase<CreateOrderInput, Order> {
   constructor(
     private readonly orderRepository: any,
     private readonly eventBus: any,
+    private readonly userRepository?: any,
+    private readonly shiftRepository?: any,
   ) {}
 
   async execute(input: CreateOrderInput): Promise<Order> {
+    if (input.source === 'pos' && this.shiftRepository) {
+      const shift = await this.shiftRepository.findOpenShift(input.tenantId, input.cashierId);
+      if (!shift) {
+        throw new ValidationError('Buka shift terlebih dahulu sebelum bertransaksi');
+      }
+    }
     const subtotal = input.items.reduce((sum, item) => sum + item.totalPrice, 0);
     const tax = input.items.reduce((sum, item) => sum + (item.tax?.amount || 0), 0);
     const discount = 0;
     const serviceCharge = 0;
     const dppTotal = subtotal - discount;
+
+    const cashierName = await resolveCashierName(this.userRepository, input.cashierId, input.tenantId, input.cashierName ?? '');
 
     const order = Order.create({
       tenantId: input.tenantId,
@@ -234,7 +260,7 @@ export class CreateOrderService implements UseCase<CreateOrderInput, Order> {
       customerId: input.customerId,
       customerName: input.customerName ?? null,
       cashierId: input.cashierId,
-      cashierName: input.cashierName ?? '',
+      cashierName,
       tableNumber: input.tableNumber || null,
       transactionType: input.transactionType || 'dine_in',
       notes: input.notes || '',
@@ -389,13 +415,16 @@ export class PayOrderService implements UseCase<PayOrderInput, Order> {
   constructor(
     private readonly orderRepository: any,
     private readonly eventBus: any,
+    private readonly userRepository?: any,
   ) {}
 
   async execute(input: PayOrderInput): Promise<Order> {
     const order = await this.orderRepository.findById(input.id);
     if (!order) throw new Error('Order not found');
 
-    order.pay(input.paymentBreakdown, input.cashierId, input.cashierName);
+    const orderData = order.serialize();
+    const cashierName = await resolveCashierName(this.userRepository, input.cashierId, orderData.tenantId, input.cashierName);
+    order.pay(input.paymentBreakdown, input.cashierId, cashierName);
 
     await this.orderRepository.save(order);
 
@@ -594,13 +623,16 @@ export class TopayService implements UseCase<TopayInput, Order> {
   constructor(
     private readonly orderRepository: any,
     private readonly eventBus: any,
+    private readonly userRepository?: any,
   ) {}
 
   async execute(input: TopayInput): Promise<Order> {
     const order = await this.orderRepository.findById(input.id);
     if (!order) throw new Error('Order not found');
 
-    order.topay(input.paymentBreakdown, input.cashierId, input.cashierName);
+    const orderData = order.serialize();
+    const cashierName = await resolveCashierName(this.userRepository, input.cashierId, orderData.tenantId, input.cashierName);
+    order.topay(input.paymentBreakdown, input.cashierId, cashierName);
 
     await this.orderRepository.save(order);
 

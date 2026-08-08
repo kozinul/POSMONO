@@ -265,4 +265,29 @@ export class MongoOrderRepository {
       lowStockCount: 0,
     };
   }
+
+  async findOpenBillsForCarryOver(
+    tenantId: string,
+    cashierId: string,
+  ): Promise<Array<{ orderId: string; orderNumber: string; total: number; cashierName: string; status: string; createdAt: Date }>> {
+    const docs = await this.model
+      .find({
+        tenantId,
+        cashierId,
+        paymentStatus: 'pending',
+        status: { $in: ['draft', 'held', 'confirmed', 'preparing'] },
+      })
+      .select({ _id: 1, orderNumber: 1, total: 1, cashierName: 1, status: 1, createdAt: 1 })
+      .lean()
+      .exec();
+
+    return (docs as any[]).map((d) => ({
+      orderId: String(d._id),
+      orderNumber: d.orderNumber,
+      total: d.total,
+      cashierName: d.cashierName ?? '',
+      status: d.status,
+      createdAt: new Date(d.createdAt),
+    }));
+  }
 }

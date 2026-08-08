@@ -222,6 +222,7 @@ export function PaymentModal() {
         paidItems: splitMode ? selectedItems : items,
         hasRemaining,
         createdAt: orderData.createdAt,
+        cashierName: orderData.cashierName || '',
         layout: receiptData?.layout ?? null,
         thermal: receiptData?.thermal ?? null,
         pdf: receiptData?.pdf ?? null,

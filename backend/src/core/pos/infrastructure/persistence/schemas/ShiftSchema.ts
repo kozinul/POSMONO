@@ -19,6 +19,18 @@ const PaymentBreakdownEntrySchema = new Schema(
   { _id: false },
 );
 
+const CarriedOverBillSchema = new Schema(
+  {
+    orderId: { type: String, required: true },
+    orderNumber: { type: String, required: true },
+    total: { type: Number, required: true },
+    cashierName: { type: String, default: '' },
+    status: { type: String, required: true },
+    createdAt: { type: Date, required: true },
+  },
+  { _id: false },
+);
+
 export const ShiftSchema = new Schema(
   {
     _id: { type: String },
@@ -37,6 +49,7 @@ export const ShiftSchema = new Schema(
     totalTransactions: { type: Number, default: 0 },
     paymentBreakdown: { type: [PaymentBreakdownEntrySchema], default: [] },
     cashPickups: { type: [CashPickupSchema], default: [] },
+    carriedOverBills: { type: [CarriedOverBillSchema], default: [] },
     expectedTotal: { type: Number, default: null },
     actualTotal: { type: Number, default: null },
     openedAt: { type: Date },

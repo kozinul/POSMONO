@@ -16,7 +16,31 @@ export class PaymentService {
     private readonly eventBus: any,
     private readonly receiptRenderService?: any,
     private readonly inventoryService?: any,
+    private readonly userRepository?: any,
+    private readonly shiftRepository?: any,
   ) {}
+
+  private async assertOpenShift(tenantId: string, cashierId: string, providedShiftId?: string | null): Promise<string> {
+    if (!this.shiftRepository) return providedShiftId ?? '';
+    const shift = await this.shiftRepository.findOpenShift(tenantId, cashierId);
+    if (!shift) {
+      throw new ValidationError('Buka shift terlebih dahulu sebelum bertransaksi');
+    }
+    return shift.serialize().id;
+  }
+
+  private async resolveCashierName(cashierId: string, tenantId: string, fallback?: string): Promise<string> {
+    if (this.userRepository) {
+      try {
+        const user = await this.userRepository.findByIdAndTenant(cashierId, tenantId);
+        const name = user?.serialize().displayName;
+        if (name) return name;
+      } catch {
+        // fall through to fallback
+      }
+    }
+    return fallback ?? '';
+  }
 
   private async applyStockDeductions(order: Order, tenantId: string, userId: string): Promise<void> {
     if (!this.inventoryService) return;
@@ -62,7 +86,9 @@ export class PaymentService {
     splitIndex?: number;
     splitBaseOrderNumber?: string;
     shiftId?: string | null;
+    cashierName?: string;
   }): Promise<{ payment: Payment; order: any; receipt: ReceiptRenderResult | null }> {
+    const shiftId = await this.assertOpenShift(input.tenantId, input.cashierId, input.shiftId);
     const roundMoney = (value: number) => Math.round(value);
     const rawSubtotal = input.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
     const manualDiscountInput = input.discount ?? 0;
@@ -160,6 +186,8 @@ export class PaymentService {
     const dppTotal = roundMoney(taxResult.taxBase);
     const tax = roundMoney(taxResult.taxAmount);
 
+    const cashierName = await this.resolveCashierName(input.cashierId, input.tenantId, input.cashierName);
+
     const order = Order.create({
       tenantId: input.tenantId,
       items: orderItems,
@@ -181,7 +209,7 @@ export class PaymentService {
       customerId: null,
       customerName: null,
       cashierId: input.cashierId,
-      cashierName: '',
+      cashierName,
       tableNumber: null,
       transactionType: 'dine_in',
       notes: '',
@@ -214,7 +242,7 @@ export class PaymentService {
       amount: input.amountPaid,
       status: 'pending',
       method: paymentMethod,
-      shiftId: input.shiftId ?? null,
+      shiftId,
       referenceNumber: refNumber,
       splitBills: [],
       qrCodeUrl: null,
@@ -223,6 +251,7 @@ export class PaymentService {
       cardLastFour: input.cardLastFour || null,
       metadata: {
         cashierId: input.cashierId,
+        cashierName,
         discountAmount: discount,
         promoCode: input.promoCode ?? null,
         promoDiscount,
@@ -285,6 +314,7 @@ export class PaymentService {
     paymentTransactionId?: string;
     shiftId?: string | null;
   }): Promise<{ payment: Payment; order: Order; receipt: ReceiptRenderResult | null }> {
+    const shiftId = await this.assertOpenShift(input.tenantId, input.cashierId, input.shiftId);
     const order = await this.orderRepository.findById(input.orderId);
     if (!order) throw new NotFoundError('Order not found');
 
@@ -305,7 +335,7 @@ export class PaymentService {
       amount: input.amount,
       status: 'pending',
       method: input.method,
-      shiftId: input.shiftId ?? null,
+      shiftId,
       referenceNumber: `${input.method.toUpperCase()}-${uuidv4().replace(/-/g, '').substring(0, 12).toUpperCase()}`,
       splitBills: [],
       qrCodeUrl: input.qrCodeUrl ?? null,
@@ -327,7 +357,8 @@ export class PaymentService {
     };
 
     const updatedBreakdown = [...orderData.paymentBreakdown, breakdownEntry];
-    order.pay(updatedBreakdown, input.cashierId, input.cashierName ?? '');
+    const cashierName = await this.resolveCashierName(input.cashierId, input.tenantId, input.cashierName);
+    order.pay(updatedBreakdown, input.cashierId, cashierName);
 
     await this.orderRepository.save(order);
     await this.paymentRepository.save(payment);
@@ -399,6 +430,7 @@ export class PaymentService {
     cashierId: string;
     cashierName: string;
   }): Promise<Order> {
+    await this.assertOpenShift(input.tenantId, input.cashierId);
     const order = await this.orderRepository.findById(input.orderId);
     if (!order) throw new NotFoundError('Order not found');
 
@@ -407,7 +439,8 @@ export class PaymentService {
 
     const wasUnpaid = orderData.paymentBreakdown.length === 0;
 
-    order.pay(input.paymentBreakdown, input.cashierId, input.cashierName);
+    const cashierName = await this.resolveCashierName(input.cashierId, input.tenantId, input.cashierName);
+    order.pay(input.paymentBreakdown, input.cashierId, cashierName);
 
     await this.orderRepository.save(order);
 
@@ -429,6 +462,7 @@ export class PaymentService {
     cashierId: string;
     shiftId?: string | null;
   }): Promise<{ payments: Payment[]; order: Order; receipts: (ReceiptRenderResult | null)[] }> {
+    const shiftId = await this.assertOpenShift(input.tenantId, input.cashierId, input.shiftId);
     const order = await this.orderRepository.findById(input.orderId);
     if (!order) throw new NotFoundError('Order not found');
 
@@ -456,7 +490,7 @@ export class PaymentService {
         amount: bill.amount,
         status: 'pending',
         method: bill.method as PaymentMethod,
-        shiftId: input.shiftId ?? null,
+        shiftId,
         referenceNumber: bill.referenceNumber || `${bill.method.toUpperCase()}-${uuidv4().replace(/-/g, '').substring(0, 12).toUpperCase()}`,
         splitBills: input.splitBills,
         qrCodeUrl: null,
@@ -486,7 +520,8 @@ export class PaymentService {
       receipts.push(receipt);
     }
 
-    order.pay(breakdown, input.cashierId, '');
+    const cashierName = await this.resolveCashierName(input.cashierId, input.tenantId, '');
+    order.pay(breakdown, input.cashierId, cashierName);
     await this.orderRepository.save(order);
 
     if (wasUnpaid) {

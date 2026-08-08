@@ -175,6 +175,14 @@ interface ShiftReportData {
     paymentBreakdown: Array<{ method: string; code: string; amount: number }>;
   };
   orders: Order[];
+  inheritedCarriedBills: Array<{
+    orderId: string;
+    orderNumber: string;
+    total: number;
+    cashierName: string;
+    status: string;
+    createdAt: string;
+  }>;
 }
 
 export function useShiftReport(shiftId: string | null | undefined) {

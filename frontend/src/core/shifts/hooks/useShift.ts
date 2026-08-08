@@ -18,6 +18,14 @@ interface Shift {
   totalTransactions: number;
   paymentBreakdown: Array<{ method: string; code: string; amount: number }>;
   cashPickups: Array<{ amount: number; reason: string; pickedAt: string; pickedBy: string }>;
+  carriedOverBills: Array<{
+    orderId: string;
+    orderNumber: string;
+    total: number;
+    cashierName: string;
+    status: string;
+    createdAt: string;
+  }>;
   expectedTotal: number | null;
   actualTotal: number | null;
   openedAt: string;

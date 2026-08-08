@@ -112,6 +112,9 @@ function CloseoutSummaryModal({ shift, onClose }: { shift: Shift | null; onClose
     const pickups = (shift.cashPickups ?? [])
       .map((p) => `<tr><td>${new Date(p.pickedAt).toLocaleString('id-ID')}</td><td>${p.reason}</td><td style="text-align:right">${formatCurrency(p.amount)}</td></tr>`)
       .join('');
+    const carried = (shift.carriedOverBills ?? [])
+      .map((b) => `<tr><td>${b.orderNumber}</td><td>${b.cashierName || 'Kasir'}</td><td style="text-align:right">${formatCurrency(b.total)}</td></tr>`)
+      .join('');
 
     const win = window.open('', '_blank', 'width=520,height=760');
     if (!win) return;
@@ -143,6 +146,7 @@ function CloseoutSummaryModal({ shift, onClose }: { shift: Shift | null; onClose
 <div class="row total"><span>Kas Fisik (Physical)</span><span>${formatCurrency(shift.physicalCash ?? 0)}</span></div>
 <div class="row total ${difference < 0 ? 'diff-neg' : difference > 0 ? 'diff-pos' : ''}"><span>Selisih</span><span>${formatCurrency(difference)}</span></div>
 ${pickups ? `<h2>Cash Pickups</h2><table><tr><th>Waktu</th><th>Alasan</th><th style="text-align:right">Jumlah</th></tr>${pickups}</table>` : ''}
+${carried ? `<h2>Bill Diteruskan ke Shift Berikutnya</h2><table><tr><th>Bill</th><th>Kasir</th><th style="text-align:right">Total</th></tr>${carried}</table>` : ''}
 ${rows ? `<h2>Breakdown Pembayaran</h2><table><tr><th>Metode</th><th style="text-align:right">Jumlah</th></tr>${rows}</table>` : ''}
 <script>window.onload = function () { window.print(); };</script>
 </body></html>`);
@@ -205,6 +209,25 @@ ${rows ? `<h2>Breakdown Pembayaran</h2><table><tr><th>Metode</th><th style="text
                 <div key={i} className="flex justify-between">
                   <span className="text-gray-500">{p.method.toUpperCase()}</span>
                   <span className="font-medium">{formatCurrency(p.amount)}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {(shift.carriedOverBills ?? []).length > 0 && (
+          <>
+            <h3 className="text-sm font-semibold text-gray-700 border-b border-gray-200 pb-1 mb-2 mt-4">
+              Bill Diteruskan ke Shift Berikutnya
+            </h3>
+            <div className="space-y-1 text-sm">
+              {shift.carriedOverBills.map((b, i) => (
+                <div key={i} className="flex justify-between">
+                  <span className="text-gray-500">
+                    {b.orderNumber}
+                    <span className="block text-xs text-gray-400">{b.cashierName || 'Kasir'}</span>
+                  </span>
+                  <span className="font-medium">{formatCurrency(b.total)}</span>
                 </div>
               ))}
             </div>

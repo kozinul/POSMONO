@@ -49,6 +49,7 @@ interface Receipt {
   paidItems: CartItem[];
   hasRemaining: boolean;
   createdAt: string;
+  cashierName?: string;
   layout?: ReceiptLayout | null;
   thermal?: string | null;
   pdf?: string | null;

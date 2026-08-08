@@ -10,6 +10,7 @@ import { VOID_ORDER_PERMISSION } from '../../../@shared/utils/permissions';
 import { formatIDR } from '../utils/money';
 import { toast } from '../../../@shared/hooks/useToast';
 import { ReportPrintModal } from './ReportPrintModal';
+import { OpenShiftModal } from './OpenShiftModal';
 
 interface PosActionPanelProps {
   open: boolean;
@@ -43,6 +44,7 @@ export function PosActionPanel(props: PosActionPanelProps) {
   const [billModalOpen, setBillModalOpen] = useState(false);
   const [billSearch, setBillSearch] = useState('');
   const [reportModal, setReportModal] = useState<null | 'transactions' | 'receipt'>(null);
+  const [openShiftModalOpen, setOpenShiftModalOpen] = useState(false);
 
   const { heldOrders, tapBill, dismissHeldOrder } = usePOSStore();
 
@@ -50,17 +52,14 @@ export function PosActionPanel(props: PosActionPanelProps) {
   const canVoidSelf = hasPermission(currentUser, VOID_ORDER_PERMISSION);
 
   const { data: openShift } = useOpenShift();
-  const openShiftMut = useOpenShiftMutation();
   const closeShiftMut = useCloseShiftMutation();
 
   const { data: todayOrdersRes } = useOrders({ dateFrom: today, dateTo: today, limit: 100 });
   const todayOrders = todayOrdersRes?.data ?? [];
   const shiftReport = useShiftReport(openShift?.id);
 
-  const handleOpenShift = async () => {
-    const balance = window.prompt('Saldo buka kasir (Rp):', '0') ?? '0';
-    await openShiftMut.mutateAsync({ openingBalance: Number(balance) || 0 });
-    toast({ title: 'Shift dibuka', icon: 'success' });
+  const handleOpenShift = () => {
+    setOpenShiftModalOpen(true);
   };
 
   const handleCloseShift = async () => {
@@ -83,6 +82,7 @@ export function PosActionPanel(props: PosActionPanelProps) {
 
   const shiftSales = shiftReport.data?.sales;
   const shiftOrders = shiftReport.data?.orders ?? [];
+  const inheritedCarriedBills = shiftReport.data?.inheritedCarriedBills ?? [];
   const shiftBreakdown = (shiftSales?.paymentBreakdown ?? []).reduce(
     (acc: Record<string, number>, p) => {
       acc[p.method] = (acc[p.method] ?? 0) + p.amount;
@@ -192,9 +192,17 @@ export function PosActionPanel(props: PosActionPanelProps) {
                   </div>
                 </>
               ) : (
-                <p className="px-3 py-2 text-sm text-gray-400">
-                  Buka shift terlebih dahulu untuk melihat laporan kasir per shift.
-                </p>
+                <div className="px-3 py-2 space-y-1">
+                  <p className="text-sm text-gray-400">
+                    Buka shift terlebih dahulu untuk melihat laporan kasir per shift.
+                  </p>
+                  <button
+                    onClick={handleOpenShift}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg"
+                  >
+                    Buka Shift
+                  </button>
+                </div>
               )}
             </div>
 
@@ -397,8 +405,15 @@ export function PosActionPanel(props: PosActionPanelProps) {
         paymentBreakdown={shiftBreakdown}
         totalOrders={shiftTotalTransactions}
         totalRevenue={shiftTotalSales}
+        carriedOverBills={reportModal === 'receipt' ? inheritedCarriedBills : undefined}
         onClose={() => setReportModal(null)}
       />
+
+      {openShiftModalOpen && (
+        <div className="fixed inset-0 z-[70] bg-black/60 flex items-center justify-center p-4">
+          <OpenShiftModal onClose={() => setOpenShiftModalOpen(false)} />
+        </div>
+      )}
     </>
   );
 }

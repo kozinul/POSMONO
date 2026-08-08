@@ -23,7 +23,17 @@ interface OrderLike {
   createdAt?: string;
   items?: OrderItemLike[];
   total?: number;
+  cashierName?: string;
   paymentBreakdown?: Array<{ method?: string; amount?: number }>;
+}
+
+interface CarriedOverBill {
+  orderId: string;
+  orderNumber: string;
+  total: number;
+  cashierName: string;
+  status: string;
+  createdAt: string;
 }
 
 interface ReportPrintModalProps {
@@ -34,6 +44,7 @@ interface ReportPrintModalProps {
   totalOrders?: number;
   totalRevenue?: number;
   storeName?: string;
+  carriedOverBills?: CarriedOverBill[];
   onClose: () => void;
 }
 
@@ -151,6 +162,27 @@ export function ReportPrintModal(props: ReportPrintModalProps) {
                 <span>Total Penerimaan</span>
                 <span>Rp {formatIDR(grandTotal)}</span>
               </div>
+
+              {(props.carriedOverBills ?? []).length > 0 && (
+                <>
+                  <div className="border-t border-dashed border-gray-300 my-2" />
+                  <p className="font-bold text-gray-700">DIBERIKAN DARI SHIFT SEBELUMNYA</p>
+                  <p className="text-[10px] text-gray-500">
+                    Bill aktif yang belum dibayar diteruskan ke shift ini.
+                  </p>
+                  {(props.carriedOverBills ?? []).map((bill) => (
+                    <div key={bill.orderId} className="flex justify-between py-0.5">
+                      <span className="flex flex-col items-start">
+                        <span>{bill.orderNumber}</span>
+                        <span className="text-[10px] text-gray-500">
+                          {bill.cashierName || 'Kasir'}
+                        </span>
+                      </span>
+                      <span className="whitespace-nowrap">Rp {formatIDR(bill.total)}</span>
+                    </div>
+                  ))}
+                </>
+              )}
             </div>
           ) : (
             <div className="px-5 py-3">
@@ -175,6 +207,18 @@ export function ReportPrintModal(props: ReportPrintModalProps) {
                       <div className="mt-0.5">
                         <span className={`inline-block rounded px-1.5 py-0.5 text-[9px] font-semibold ${badge.classes}`}>
                           {badge.label}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-[10px] text-gray-500 mt-0.5">
+                        <span>Kasir: {order.cashierName || 'Kasir'}</span>
+                        <span>
+                          {order.createdAt
+                            ? new Date(order.createdAt).toLocaleDateString('id-ID', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                              })
+                            : ''}
                         </span>
                       </div>
                       {(order.items ?? []).map((item, idx) => (

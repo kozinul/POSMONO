@@ -5,6 +5,7 @@ export class ShiftService {
   constructor(
     private readonly shiftRepository: any,
     private readonly reportAggregation?: any,
+    private readonly orderRepository?: any,
   ) {}
 
   async open(input: { tenantId: string; registerId: string; cashierId: string; openingBalance: number }): Promise<Shift> {
@@ -42,6 +43,13 @@ export class ShiftService {
     }
 
     await this.refreshSales(shift);
+
+    if (this.orderRepository) {
+      const shiftData = shift.serialize();
+      const openBills = await this.orderRepository.findOpenBillsForCarryOver(shiftData.tenantId, shiftData.cashierId);
+      shift.setCarriedOverBills(openBills);
+    }
+
     shift.close(input.physicalCash);
     await this.shiftRepository.save(shift);
     return shift;

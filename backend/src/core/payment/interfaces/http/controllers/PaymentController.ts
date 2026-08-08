@@ -37,6 +37,7 @@ const payCashSchema = z.object({
   splitIndex: z.number().int().positive().optional(),
   splitBaseOrderNumber: z.string().optional(),
   shiftId: z.string().optional().nullable(),
+  cashierName: z.string().optional().default(''),
 });
 
 const processPaymentSchema = z.object({
@@ -93,6 +94,7 @@ export class PaymentController extends BaseController {
       splitIndex: parsed.data.splitIndex,
       splitBaseOrderNumber: parsed.data.splitBaseOrderNumber,
       shiftId: parsed.data.shiftId,
+      cashierName: parsed.data.cashierName,
     });
 
     const paymentData = result.payment.serialize();

@@ -3,6 +3,7 @@ import { MongoShiftRepository } from '../../../pos/infrastructure/persistence/Mo
 import { MongoDailyMetricRepository } from '../../infrastructure/persistence/MongoDailyMetricRepository';
 import { ReportAggregation } from '../../infrastructure/aggregation/ReportAggregation';
 import { DailyMetric } from '../../domain/Report';
+import { ICarriedOverBill } from '../../../pos/domain/Shift';
 import { NotFoundError } from '../../../../@shared/infrastructure/error/AppError';
 
 function toDateString(d: Date): string {
@@ -96,19 +97,32 @@ export class ReportService {
       throw new NotFoundError('Shift', shiftId);
     }
 
+    const shiftData = shift.serialize();
+
     const sales = await this.reportAggregation.getShiftSalesAggregation({
       tenantId,
-      fromAt: shift.serialize().openedAt,
-      toAt: shift.serialize().closedAt ?? new Date(),
+      fromAt: shiftData.openedAt,
+      toAt: shiftData.closedAt ?? new Date(),
       shiftId,
     });
 
     const orders = await this.reportAggregation.getShiftOrdersAggregation(tenantId, shiftId);
 
+    let inheritedCarriedBills: ICarriedOverBill[] = [];
+    if (shiftData.status === 'open') {
+      const previous = await this.shiftRepository.findLastClosedByCashierBefore(
+        tenantId,
+        shiftData.cashierId,
+        shiftData.openedAt,
+      );
+      inheritedCarriedBills = previous?.serialize().carriedOverBills ?? [];
+    }
+
     return {
-      shift: shift.serialize(),
+      shift: shiftData,
       sales,
       orders,
+      inheritedCarriedBills,
     };
   }
 

@@ -279,6 +279,7 @@ async function seed() {
       { id: 'r2', type: 'field', field: 'store.name', style: { font: { size: 14, weight: 'bold', align: 'center' } } },
       { id: 'r3', type: 'text', text: 'Pesanan {{ order.documentNumber }}', style: { font: { align: 'center' } } },
       { id: 'r4', type: 'text', text: '{{ order.date }} {{ order.time }}', style: { font: { align: 'center' } } },
+      { id: 'r4b', type: 'text', text: 'Kasir: {{ order.cashier }}', style: { font: { align: 'center' } } },
       { id: 'r5', type: 'divider', style: {} },
     ]},
     { id: 'sec-items', type: 'items', enabled: true, order: 2, nodes: [
