@@ -9,6 +9,7 @@ import { useAuthStore, hasPermission } from '../../../@shared/hooks/useAuth';
 import { VOID_ORDER_PERMISSION } from '../../../@shared/utils/permissions';
 import { formatIDR } from '../utils/money';
 import { toast } from '../../../@shared/hooks/useToast';
+import Swal from 'sweetalert2';
 import { ReportPrintModal } from './ReportPrintModal';
 import { OpenShiftModal } from './OpenShiftModal';
 
@@ -64,13 +65,60 @@ export function PosActionPanel(props: PosActionPanelProps) {
 
   const handleCloseShift = async () => {
     if (!openShift) return;
-    const balance =
-      window.prompt('Saldo tutup kasir (Rp):', String(openShift.closingBalance ?? 0)) ?? '0';
-    await closeShiftMut.mutateAsync({
-      shiftId: openShift.id,
-      closingBalance: Number(balance) || 0,
+    const expectedCash =
+      openShift.expectedCash ??
+      openShift.openingBalance + openShift.cashSales - openShift.totalCashPickups;
+
+    await Swal.fire({
+      title: 'Tutup Shift',
+      html: `
+        <div style="text-align:left;font-size:14px;line-height:1.9">
+          <div style="display:flex;justify-content:space-between">
+            <span style="color:#6b7280">Kas Diharapkan</span>
+            <b>Rp ${formatIDR(expectedCash)}</b>
+          </div>
+          <div style="display:flex;justify-content:space-between">
+            <span style="color:#6b7280">Penjualan Tunai</span>
+            <b>Rp ${formatIDR(openShift.cashSales ?? 0)}</b>
+          </div>
+          <div style="display:flex;justify-content:space-between">
+            <span style="color:#6b7280">Non-Tunai</span>
+            <b>Rp ${formatIDR(openShift.nonCashSales ?? 0)}</b>
+          </div>
+        </div>
+      `,
+      input: 'text',
+      inputLabel: 'Saldo Tutup Kasir (Rp)',
+      inputPlaceholder: '0',
+      inputValue: String(openShift.closingBalance ?? 0),
+      showCancelButton: true,
+      confirmButtonColor: '#dc2626',
+      cancelButtonColor: '#6b7280',
+      confirmButtonText: 'Ya, Tutup Shift',
+      cancelButtonText: 'Batal',
+      showLoaderOnConfirm: true,
+      inputValidator: (val: string) => {
+        const num = Number((val || '').replace(/\D/g, ''));
+        if (!String(val).trim() || !Number.isFinite(num) || num < 0) return 'Saldo tidak valid';
+        return null;
+      },
+      preConfirm: async (val: string) => {
+        const cash = Number((val || '').replace(/\D/g, '')) || 0;
+        try {
+          await closeShiftMut.mutateAsync({ shiftId: openShift.id, closingBalance: cash });
+          toast({ title: 'Shift ditutup', icon: 'success' });
+          return true;
+        } catch (err: any) {
+          const msg =
+            err?.response?.data?.error?.message ||
+            err?.response?.data?.message ||
+            err?.message ||
+            'Gagal menutup shift';
+          Swal.showValidationMessage(msg);
+          return false;
+        }
+      },
     });
-    toast({ title: 'Shift ditutup', icon: 'success' });
   };
 
   const handleViewTransaction = (order: any) => {

@@ -55,16 +55,27 @@ export function DashboardLayout() {
             <nav className="p-4 space-y-1">
               {navigation.map((item) => {
                 const active = location.pathname === item.href || location.pathname.startsWith(`${item.href}/`);
-                return (
+                const classes = clsx(
+                  'flex items-center rounded-xl px-4 py-2.5 text-sm font-medium transition-colors',
+                  active
+                    ? 'bg-primary-50 text-primary-700'
+                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
+                );
+                return item.href === '/pos' ? (
+                  <a
+                    key={item.href}
+                    href={item.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={classes}
+                  >
+                    {item.name}
+                  </a>
+                ) : (
                   <Link
                     key={item.href}
                     to={item.href}
-                    className={clsx(
-                      'flex items-center rounded-xl px-4 py-2.5 text-sm font-medium transition-colors',
-                      active
-                        ? 'bg-primary-50 text-primary-700'
-                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
-                    )}
+                    className={classes}
                   >
                     {item.name}
                   </Link>

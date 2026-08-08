@@ -103,6 +103,10 @@ Modular SaaS POS Platform (Node.js/Express + React/Tailwind). Multi-tenant, mult
 - **Fix**: `shiftId` ditambahkan di `PaymentDoc` interface + `toDomain` + `toPersistence` (schema/domain `Payment` sudah punya field sejak awal)
 - Cache: fix hanya berlaku untuk transaksi baru; `shiftId:null` lama tidak terpetakan ke shift mana pun
 
+### Close Shift SweetAlert + POS Opens In New Tab — 2026-08-08
+- `PosActionPanel.handleCloseShift` menggantikan `window.prompt` dengan **SweetAlert2** (`Swal.fire`): dialog satu-set menunjukkan ringkasan (Penjualan Tunai / Non-Tunai / Kas Diharapkan = `expectedCash ?? openingBalance + cashSales - totalCashPickups`), input rupiah difilter digit, `inputValidator`, `showLoaderOnConfirm`, error via `Swal.showValidationMessage`, toast sukses setelah `closeShiftMut`
+- `DashboardLayout` nav link "POS" dirender sebagai `<a target="_blank" rel="noopener noreferrer">` (bukan `<Link>`) → POS selalu terbuka tab baru dari dashboard; link lain tetap `<Link>`
+
 ## Key Patterns
 - `useQueryClient()` for cache invalidation after mutations
 - `useVoidOrder` for full order void; `useVoidItem` for per-item void
