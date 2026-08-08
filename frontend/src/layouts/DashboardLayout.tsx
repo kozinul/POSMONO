@@ -30,6 +30,11 @@ export function DashboardLayout() {
 
   useRealtimeSync();
 
+  const visibleNavigation =
+    user?.roleName === 'Cashier'
+      ? navigation.filter((item) => item.href === '/pos')
+      : navigation;
+
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       <header className="blue-primary text-white h-16 flex items-center justify-between px-6 shrink-0 shadow-md z-10">
@@ -53,7 +58,7 @@ export function DashboardLayout() {
         {!isPOSPage && (
           <aside className="w-60 shrink-0 border-r border-gray-200 bg-white shadow-sm overflow-y-auto">
             <nav className="p-4 space-y-1">
-              {navigation.map((item) => {
+              {visibleNavigation.map((item) => {
                 const active = location.pathname === item.href || location.pathname.startsWith(`${item.href}/`);
                 const classes = clsx(
                   'flex items-center rounded-xl px-4 py-2.5 text-sm font-medium transition-colors',

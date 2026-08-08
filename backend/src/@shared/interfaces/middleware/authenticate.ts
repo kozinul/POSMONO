@@ -8,6 +8,7 @@ interface JwtPayload {
   tenant: string;
   role: string;
   roleName?: string;
+  permissions?: string[];
 }
 
 export function authenticate(req: Request, _res: Response, next: NextFunction): void {
@@ -25,7 +26,7 @@ export function authenticate(req: Request, _res: Response, next: NextFunction): 
     req.tenantId = decoded.tenant;
     req.userRole = decoded.role;
     req.userRoleName = decoded.roleName ?? '';
-    req.userPermissions = [];
+    req.userPermissions = decoded.permissions ?? [];
     next();
   } catch {
     throw new UnauthorizedError('Invalid or expired token');

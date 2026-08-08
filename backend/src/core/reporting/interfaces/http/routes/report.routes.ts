@@ -1,26 +1,27 @@
 import { Router } from 'express';
 import { asyncHandler } from '../../../../../@shared/interfaces/middleware/asyncHandler';
 import { authenticate } from '../../../../../@shared/interfaces/middleware/authenticate';
+import { authorize } from '../../../../../@shared/interfaces/middleware/authorize';
 import { ReportController } from '../controllers/ReportController';
 
 export function createReportRoutes(reportController: ReportController): Router {
   const router = Router();
 
-  router.get('/dashboard', authenticate, asyncHandler(reportController.dashboard.bind(reportController)));
-  router.get('/daily', authenticate, asyncHandler(reportController.daily.bind(reportController)));
-  router.get('/sales', authenticate, asyncHandler(reportController.sales.bind(reportController)));
-  router.get('/cashier', authenticate, asyncHandler(reportController.cashier.bind(reportController)));
+  router.get('/dashboard', authenticate, authorize('reports:read'), asyncHandler(reportController.dashboard.bind(reportController)));
+  router.get('/daily', authenticate, authorize('reports:read'), asyncHandler(reportController.daily.bind(reportController)));
+  router.get('/sales', authenticate, authorize('reports:read'), asyncHandler(reportController.sales.bind(reportController)));
+  router.get('/cashier', authenticate, authorize('reports:read'), asyncHandler(reportController.cashier.bind(reportController)));
   router.get('/shift', authenticate, asyncHandler(reportController.shiftReport.bind(reportController)));
-  router.get('/daily-metrics', authenticate, asyncHandler(reportController.dailyMetrics.bind(reportController)));
-  router.get('/sales-per-product', authenticate, asyncHandler(reportController.salesPerProduct.bind(reportController)));
+  router.get('/daily-metrics', authenticate, authorize('reports:read'), asyncHandler(reportController.dailyMetrics.bind(reportController)));
+  router.get('/sales-per-product', authenticate, authorize('reports:read'), asyncHandler(reportController.salesPerProduct.bind(reportController)));
   router.get('/best-sellers', authenticate, asyncHandler(reportController.bestSellers.bind(reportController)));
-  router.get('/finance', authenticate, asyncHandler(reportController.finance.bind(reportController)));
-  router.post('/daily-metrics/generate', authenticate, asyncHandler(reportController.generateDailyMetric.bind(reportController)));
+  router.get('/finance', authenticate, authorize('reports:read'), asyncHandler(reportController.finance.bind(reportController)));
+  router.post('/daily-metrics/generate', authenticate, authorize('reports:read'), asyncHandler(reportController.generateDailyMetric.bind(reportController)));
 
-  router.get('/daily/export', authenticate, asyncHandler(reportController.exportDaily.bind(reportController)));
-  router.get('/sales/export', authenticate, asyncHandler(reportController.exportSales.bind(reportController)));
-  router.get('/finance/export', authenticate, asyncHandler(reportController.exportFinance.bind(reportController)));
-  router.get('/sales-per-product/export', authenticate, asyncHandler(reportController.exportSalesPerProduct.bind(reportController)));
+  router.get('/daily/export', authenticate, authorize('reports:read'), asyncHandler(reportController.exportDaily.bind(reportController)));
+  router.get('/sales/export', authenticate, authorize('reports:read'), asyncHandler(reportController.exportSales.bind(reportController)));
+  router.get('/finance/export', authenticate, authorize('reports:read'), asyncHandler(reportController.exportFinance.bind(reportController)));
+  router.get('/sales-per-product/export', authenticate, authorize('reports:read'), asyncHandler(reportController.exportSalesPerProduct.bind(reportController)));
 
   return router;
 }

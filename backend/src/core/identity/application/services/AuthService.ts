@@ -55,6 +55,7 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
       tenant: input.tenantId,
       role: user.roleIdValue,
       roleName: roleName ?? undefined,
+      permissions,
     });
 
     await this.sessionService.create({
@@ -70,6 +71,7 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
       tenant: input.tenantId,
       role: user.roleIdValue,
       roleName: roleName ?? undefined,
+      permissions,
     });
 
     return { user, roleName, permissions, accessToken, refreshToken };
@@ -104,6 +106,7 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
       tenant: payload.tenant,
       role: payload.role,
       roleName: payload.roleName,
+      permissions: payload.permissions,
     });
 
     await this.sessionService.create({
@@ -117,6 +120,7 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
       tenant: payload.tenant,
       role: payload.role,
       roleName: payload.roleName,
+      permissions: payload.permissions,
     });
 
     return { accessToken, refreshToken: newRefreshToken };

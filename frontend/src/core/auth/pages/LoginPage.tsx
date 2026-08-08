@@ -19,6 +19,7 @@ export default function LoginPage() {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('tenantId');
+    localStorage.removeItem('authUser');
 
     try {
       const { data } = await api.post('/auth/login', { email: email.trim(), password });

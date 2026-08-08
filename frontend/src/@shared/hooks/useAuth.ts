@@ -17,13 +17,25 @@ interface AuthState {
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
-  user: null,
+  user: (() => {
+    try {
+      const raw = localStorage.getItem('authUser');
+      return raw ? (JSON.parse(raw) as AuthUser) : null;
+    } catch {
+      return null;
+    }
+  })(),
   isAuthenticated: !!localStorage.getItem('accessToken'),
-  setUser: (user) => set({ user, isAuthenticated: true }),
+  setUser: (user) => {
+    if (user) localStorage.setItem('authUser', JSON.stringify(user));
+    else localStorage.removeItem('authUser');
+    set({ user, isAuthenticated: !!user });
+  },
   logout: () => {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('tenantId');
+    localStorage.removeItem('authUser');
     set({ user: null, isAuthenticated: false });
     window.location.href = '/login';
   },

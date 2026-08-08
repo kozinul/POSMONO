@@ -107,6 +107,14 @@ Modular SaaS POS Platform (Node.js/Express + React/Tailwind). Multi-tenant, mult
 - `PosActionPanel.handleCloseShift` menggantikan `window.prompt` dengan **SweetAlert2** (`Swal.fire`): dialog satu-set menunjukkan ringkasan (Penjualan Tunai / Non-Tunai / Kas Diharapkan = `expectedCash ?? openingBalance + cashSales - totalCashPickups`), input rupiah difilter digit, `inputValidator`, `showLoaderOnConfirm`, error via `Swal.showValidationMessage`, toast sukses setelah `closeShiftMut`
 - `DashboardLayout` nav link "POS" dirender sebagai `<a target="_blank" rel="noopener noreferrer">` (bukan `<Link>`) → POS selalu terbuka tab baru dari dashboard; link lain tetap `<Link>`
 
+### Auth Persist & RBAC (Cashier Restricted) — 2026-08-08
+- **Auth store persist**: `useAuthStore.user` dipersist ke `localStorage.authUser` (di-set saat login, direstore saat store dibuat) → nama user tampil di top bar setelah refresh/tab baru; `logout` & `LoginPage` membersihkannya
+- **Frontend guard**: `ProtectedRoute` redirect non-`/pos` ke `/pos` saat `user.roleName === 'Cashier'`; `DashboardLayout` sidebar kasir hanya filter `navigation` untuk `/pos` (dinamis `visibleNavigation`)
+- **Backend RBAC (JWT permissions)**: `TokenService`/`AuthService` embeds `permissions` di access+refresh JWT; `authenticate` mengisi `req.userPermissions` dari token (bukan `[]` hardcode); `authorize(...)` kini berfungsi
+- **Route guard diterapkan** (permission dari seed): `users` → `users:read`/`users:write`; `roles` → `roles:read`/`roles:write`; `settings` → `settings:read`/`settings:write`; `reports` dashboard/daily/sales/cashier/finance+exports → `reports:read`; products/categories/families/modifiers+promotions mutations → `products:write`; inventory/warehouse mutations → `inventory:write` (untuk `stock-in`/`stock-out`/`adjust`/`reserve`/`release`/`import`)
+- **Tetap terbuka untuk kasir**: `GET /reports/shift`, `GET /reports/best-sellers`, `GET /inventory` (list stok sold-out di POS), produk/kategori/family GET, shifts, orders, payments, customers (kasir wajib bisa buat member di POS)
+- Terverifikasi E2E: **Owner** → `/reports/dashboard`/`/users`/`/settings` 200; **Cashier** → semuanya 403 & tetap bisa akses `/products` `/inventory` `/shifts` `/reports/shift` `/reports/best-sellers`
+
 ## Key Patterns
 - `useQueryClient()` for cache invalidation after mutations
 - `useVoidOrder` for full order void; `useVoidItem` for per-item void
