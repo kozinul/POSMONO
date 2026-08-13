@@ -12,3 +12,4 @@ uploads/
 .pnpm-store/
 .vscode/
 home/
+*.tsbuildinfo

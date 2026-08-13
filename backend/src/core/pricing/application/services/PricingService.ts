@@ -1,5 +1,6 @@
 import { DiscountServiceAdapter } from '../../../discount/application/services/DiscountServiceAdapter';
 import { PricingEngine, PricingInput, PricingResult as TaxPricingResult } from '../../../tax/domain/PricingEngine';
+import { roundToDenomination, TotalRoundingMode } from '../../../tax/domain/RoundingEngine';
 import { TaxConfiguration } from '../../../tax/domain/TaxConfiguration';
 import { ITaxConfigurationRepository } from '../../../tax/infrastructure/persistence/ITaxConfigurationRepository';
 import { logger } from '../../../../@shared/infrastructure/logger/Logger';
@@ -29,6 +30,7 @@ export interface PricingResult {
   taxRate: number;
   rounding: number;
   grandTotal: number;
+  roundedPayable: number;
   lineItems: PricingLineItem[];
   adjustments: TaxPricingResult['adjustments'];
   appliedRules: Array<{
@@ -45,6 +47,7 @@ export class PricingService {
   constructor(
     private readonly discountService: DiscountServiceAdapter,
     private readonly taxConfigRepo: ITaxConfigurationRepository,
+    private readonly tenantRepository?: { findById(id: string): Promise<{ serialize(): { config: any } } | null> },
   ) {}
 
   async calculate(input: {
@@ -248,7 +251,22 @@ export class PricingService {
 
     grandTotal = Math.round(grandTotal);
 
-    logger.info({ originalSubtotal, promotionDiscount: discountResult.totalDiscount, tax, taxRate, serviceCharge, grandTotal }, 'Pricing calculated');
+    let rounding = 0;
+    if (this.tenantRepository) {
+      const tenant = await this.tenantRepository.findById(input.tenantId);
+      const cfg = tenant?.serialize().config;
+      if (cfg?.roundingEnabled && cfg.roundingDenomination > 0) {
+        const rounded = roundToDenomination(
+          grandTotal,
+          (cfg.roundingMode || 'nearest') as TotalRoundingMode,
+          cfg.roundingDenomination,
+        );
+        rounding = rounded - grandTotal;
+      }
+    }
+    const roundedPayable = grandTotal + rounding;
+
+    logger.info({ originalSubtotal, promotionDiscount: discountResult.totalDiscount, tax, taxRate, serviceCharge, grandTotal, rounding }, 'Pricing calculated');
 
     return {
       originalSubtotal,
@@ -260,8 +278,9 @@ export class PricingService {
       tax,
       taxName,
       taxRate,
-      rounding: 0,
+      rounding,
       grandTotal,
+      roundedPayable,
       lineItems,
       adjustments,
       appliedRules: discountResult.appliedRules,

@@ -26,6 +26,7 @@ export interface PricingResult {
   taxRate: number;
   rounding: number;
   grandTotal: number;
+  roundedPayable: number;
   lineItems: PricingLineItem[];
   adjustments: Array<{
     id: string;

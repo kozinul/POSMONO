@@ -1,6 +1,7 @@
 import { AggregateRoot } from '../../../@shared/domain/AggregateRoot';
 import { OrderId } from '../../../@shared/domain/Identifier';
 import { DomainEvent } from '../../../@shared/domain/DomainEvent';
+import { roundToDenomination } from '../../tax/domain/RoundingEngine';
 
 export type OrderStatus = 'draft' | 'confirmed' | 'paid' | 'preparing' | 'completed' | 'cancelled' | 'refunded' | 'voided' | 'partially-voided' | 'held';
 export type PaymentStatus = 'pending' | 'completed' | 'failed' | 'refunded';
@@ -93,6 +94,7 @@ export interface IOrder {
   roundingAdjustment: number;
   roundedPayable: number;
   roundingMethod: string;
+  roundingDenomination: number;
   serviceCharge: number;
   serviceChargeRate: number;
   paymentStatus: PaymentStatus;
@@ -134,6 +136,7 @@ export class Order extends AggregateRoot<OrderId> {
   private roundingAdjustment: number;
   private roundedPayable: number;
   private roundingMethod: string;
+  private roundingDenomination: number;
   private serviceCharge: number;
   private serviceChargeRate: number;
   private paymentStatus: PaymentStatus;
@@ -172,9 +175,10 @@ export class Order extends AggregateRoot<OrderId> {
     this.tax = props.tax;
     this.taxDetails = [...props.taxDetails];
     this.total = props.total;
-    this.roundingAdjustment = props.roundingAdjustment;
-    this.roundedPayable = props.roundedPayable;
-    this.roundingMethod = props.roundingMethod;
+    this.roundingAdjustment = props.roundingAdjustment ?? 0;
+    this.roundedPayable = props.roundedPayable ?? 0;
+    this.roundingMethod = props.roundingMethod ?? 'nearest';
+    this.roundingDenomination = props.roundingDenomination ?? 0;
     this.serviceCharge = props.serviceCharge;
     this.serviceChargeRate = props.serviceChargeRate;
     this.paymentStatus = props.paymentStatus;
@@ -572,6 +576,14 @@ export class Order extends AggregateRoot<OrderId> {
     this.updatedAt = new Date();
   }
 
+  applyCashRounding(adjustment: number, method: string, denomination: number): void {
+    this.roundingAdjustment = Math.round(adjustment);
+    this.roundingMethod = method;
+    this.roundingDenomination = denomination;
+    this.roundedPayable = Math.round(this.total + this.roundingAdjustment);
+    this.updatedAt = new Date();
+  }
+
   voidAndRollback(reason: string, voidedBy: string, voidedByName: string): void {
     if (this.status === 'voided' || this.status === 'refunded') {
       throw new Error('Cannot void an already voided/refunded order');
@@ -824,21 +836,15 @@ export class Order extends AggregateRoot<OrderId> {
 
     const rawTotal = afterDiscount + this.serviceCharge + this.tax;
 
+    const denomination = this.roundingDenomination > 0 ? this.roundingDenomination : 1;
     if (this.roundingMethod === 'nearest' || this.roundingMethod === 'up' || this.roundingMethod === 'down') {
-      const precision = 100;
-      if (this.roundingMethod === 'nearest') {
-        this.roundingAdjustment = Math.round(rawTotal * precision) / precision - rawTotal;
-      } else if (this.roundingMethod === 'up') {
-        this.roundingAdjustment = Math.ceil(rawTotal * precision) / precision - rawTotal;
-      } else {
-        this.roundingAdjustment = Math.floor(rawTotal * precision) / precision - rawTotal;
-      }
+      this.roundingAdjustment = roundToDenomination(rawTotal, this.roundingMethod, denomination) - rawTotal;
     } else {
       this.roundingAdjustment = 0;
     }
 
-    this.total = rawTotal;
-    this.roundedPayable = Math.round((rawTotal + this.roundingAdjustment) * 100) / 100;
+    this.total = Math.round(rawTotal);
+    this.roundedPayable = Math.round(rawTotal + this.roundingAdjustment);
   }
 
   serialize(): IOrder {
@@ -858,6 +864,7 @@ export class Order extends AggregateRoot<OrderId> {
       roundingAdjustment: this.roundingAdjustment,
       roundedPayable: this.roundedPayable,
       roundingMethod: this.roundingMethod,
+      roundingDenomination: this.roundingDenomination,
       serviceCharge: this.serviceCharge,
       serviceChargeRate: this.serviceChargeRate,
       paymentStatus: this.paymentStatus,

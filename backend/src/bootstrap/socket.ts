@@ -15,7 +15,7 @@ export function initSocketServer(httpServer: HTTPServer): Server {
     if (token) {
       try {
         const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
-        const tenantId = payload.tenantId || payload.tenant_id;
+        const tenantId = payload.tenant || payload.tenantId || payload.tenant_id;
         if (tenantId) {
           socket.join(tenantId);
         }

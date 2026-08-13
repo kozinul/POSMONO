@@ -80,7 +80,7 @@ export class ReceiptRenderService {
         serviceCharge: order.serviceCharge,
         tax: order.tax,
         rounding: order.roundingAdjustment,
-        grandTotal: order.total,
+        grandTotal: order.roundedPayable || order.total,
       },
       payments: [{
         method: payment.method,

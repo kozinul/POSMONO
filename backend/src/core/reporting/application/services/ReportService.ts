@@ -45,6 +45,7 @@ export class ReportService {
       date,
       totalOrders: sales.totalOrders,
       totalRevenue: sales.totalRevenue,
+      totalRounding: sales.totalRounding,
       totalItems: sales.totalItems,
       paymentBreakdown,
       topProducts,
@@ -60,6 +61,10 @@ export class ReportService {
     });
 
     const totalRevenue = orders.orders.reduce((sum, o) => sum + o.serialize().total, 0);
+    const totalRounding = orders.orders.reduce(
+      (sum, o) => sum + (o.serialize().roundingAdjustment ?? 0),
+      0,
+    );
     const totalItems = orders.orders.reduce(
       (sum, o) => sum + o.serialize().items.reduce((s, i) => s + i.quantity, 0),
       0,
@@ -73,6 +78,7 @@ export class ReportService {
       dateTo,
       totalOrders: orders.total,
       totalRevenue,
+      totalRounding,
       totalItems,
       salesByCategory,
       topProducts,
@@ -108,6 +114,11 @@ export class ReportService {
 
     const orders = await this.reportAggregation.getShiftOrdersAggregation(tenantId, shiftId);
 
+    const totalRounding = orders.reduce(
+      (sum, o: any) => sum + (o.roundingAdjustment ?? 0),
+      0,
+    );
+
     let inheritedCarriedBills: ICarriedOverBill[] = [];
     if (shiftData.status === 'open') {
       const previous = await this.shiftRepository.findLastClosedByCashierBefore(
@@ -122,6 +133,7 @@ export class ReportService {
       shift: shiftData,
       sales,
       orders,
+      totalRounding,
       inheritedCarriedBills,
     };
   }
@@ -201,6 +213,7 @@ export class ReportService {
       totalTax: finance.totalTax,
       totalServiceCharge: finance.totalServiceCharge,
       totalDiscount: finance.totalDiscount,
+      totalRounding: finance.totalRounding,
       categories: finance.categories,
     };
   }

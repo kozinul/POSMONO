@@ -112,11 +112,16 @@ export function PaymentModal() {
   const portionTotal = splitMode && portionPricing.data ? portionPricing.data.grandTotal : selectedTotal;
   const portionPending = splitMode && selectedTotal > 0 && portionPricing.isPending;
 
-  const grandTotal = splitMode ? portionTotal : (pricing?.grandTotal ?? 0);
-  const change = paid - grandTotal;
+  const rawTotal = splitMode ? portionTotal : (pricing?.grandTotal ?? 0);
+  const roundedPayable = splitMode
+    ? (portionPricing.data?.roundedPayable ?? portionTotal)
+    : (pricing?.roundedPayable ?? pricing?.grandTotal ?? 0);
+  const payable = isCash ? roundedPayable : rawTotal;
+  const rounding = isCash ? roundedPayable - rawTotal : 0;
+  const change = paid - payable;
 
   const canSubmit = selectedMethod !== null
-    && (isCash ? paid >= grandTotal && grandTotal > 0 : true)
+    && (isCash ? paid >= payable && payable > 0 : true)
     && (splitMode ? selectedTotal > 0 && !portionPending : items.length > 0)
     && paymentState !== 'processing';
 
@@ -163,7 +168,7 @@ export function PaymentModal() {
           pricingMode: i.pricingMode || undefined,
           isFreeItem: i.isFreeItem || undefined,
         })),
-        amountPaid: isCash ? paid : grandTotal,
+        amountPaid: isCash ? paid : rawTotal,
         method: selectedMethod.code,
         referenceNumber: referenceNumber || undefined,
         ...(isSplitPortion ? { splitIndex: portionIndex } : {}),
@@ -208,6 +213,7 @@ export function PaymentModal() {
       queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
       queryClient.invalidateQueries({ queryKey: ['shifts'] });
       queryClient.invalidateQueries({ queryKey: ['open-shift'] });
+      queryClient.invalidateQueries({ queryKey: ['shift-report'] });
 
       const displayOrderNumber = isSplitPortion
         ? `${splitBase ?? orderData.orderNumber}/${portionIndex}`
@@ -216,9 +222,9 @@ export function PaymentModal() {
       setReceipt({
         orderNumber: isSplitPortion ? (splitBase ?? orderData.orderNumber) : orderData.orderNumber,
         displayOrderNumber,
-        paid: isCash ? paid : grandTotal,
+        paid: isCash ? paid : rawTotal,
         change: isCash ? change : 0,
-        grandTotal,
+        grandTotal: payable,
         paidItems: splitMode ? selectedItems : items,
         hasRemaining,
         createdAt: orderData.createdAt,
@@ -229,7 +235,7 @@ export function PaymentModal() {
         templateName: receiptData?.templateName ?? null,
         pricing: splitMode ? (portionPricing.data ?? null) : (pricing ?? null),
       });
-      usePOSStore.getState().registerShiftPayment({ total: grandTotal, method: selectedMethod.code, isCash });
+      usePOSStore.getState().registerShiftPayment({ total: payable, method: selectedMethod.code, isCash });
 
       if (hasRemaining) {
         if (activeBillId) {
@@ -254,7 +260,7 @@ export function PaymentModal() {
             <h2 className="text-lg font-bold text-gray-800">Pembayaran</h2>
             <div className="blue-primary rounded-lg px-4 py-1.5 text-white">
               <span className="text-xs font-medium text-white/80">Total</span>
-              <span className="text-xl font-extrabold ml-2">Rp {formatIDR(grandTotal)}</span>
+              <span className="text-xl font-extrabold ml-2">Rp {formatIDR(rawTotal)}</span>
             </div>
             <span className="text-sm text-gray-500">
               {splitMode ? `${selectedUnits}/${totalUnits} unit` : `${items.length} item`}
@@ -468,6 +474,20 @@ export function PaymentModal() {
 
             {isCash && selectedMethod && (
               <div className="mt-4">
+                {rounding !== 0 && (
+                  <div className="flex items-center justify-between bg-purple-50 rounded-lg px-3 py-2 mb-3 border border-purple-200">
+                    <span className="text-xs font-medium text-purple-700">Pembulatan</span>
+                    <span className={`text-sm font-bold ${rounding > 0 ? 'text-purple-700' : 'text-green-700'}`}>
+                      {rounding > 0 ? '+' : '-'}Rp {formatIDR(Math.abs(rounding))}
+                    </span>
+                  </div>
+                )}
+                {rounding !== 0 && (
+                  <div className="flex items-center justify-between bg-blue-50 rounded-lg px-3 py-2 mb-3 border border-blue-200">
+                    <span className="text-xs font-medium text-blue-700">Total Tagihan (dibulatkan)</span>
+                    <span className="text-sm font-bold text-blue-800">Rp {formatIDR(payable)}</span>
+                  </div>
+                )}
                 <label className="block text-xs font-medium text-gray-500 mb-1.5">Jumlah Bayar</label>
                 <input
                   type="text"
@@ -479,14 +499,14 @@ export function PaymentModal() {
                   disabled={paymentState === 'processing'}
                 />
                 <div className="flex gap-2 mt-2">
-                  <button onClick={() => setQuickAmount(grandTotal)} className="flex-1 py-2 text-xs font-semibold bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200">Uang Pas</button>
+                  <button onClick={() => setQuickAmount(payable)} className="flex-1 py-2 text-xs font-semibold bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200">Uang Pas</button>
                   {QUICK_AMOUNTS.map((amt) => (
-                    <button key={amt} onClick={() => setQuickAmount(amt)} disabled={amt < grandTotal} className="flex-1 py-2 text-xs font-semibold bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-100 disabled:opacity-40">
+                    <button key={amt} onClick={() => setQuickAmount(amt)} disabled={amt < payable} className="flex-1 py-2 text-xs font-semibold bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-100 disabled:opacity-40">
                       {amt === 50000 ? '50rb' : '100rb'}
                     </button>
                   ))}
                 </div>
-                {paid >= grandTotal && grandTotal > 0 && (
+                {paid >= payable && payable > 0 && (
                   <div className="bg-green-50 rounded-xl p-3 text-center mt-3 border border-green-200">
                     <p className="text-xs text-green-700 font-medium">Kembalian</p>
                     <p className="text-xl font-extrabold text-green-600">Rp {formatIDR(change)}</p>
@@ -519,7 +539,7 @@ export function PaymentModal() {
             <div className="mt-auto pt-4">
               {splitMode && (
                 <p className="text-xs text-amber-600 font-medium text-center mb-2">
-                  Bayar {selectedUnits} dari {totalUnits} unit · Rp {formatIDR(grandTotal)}
+                  Bayar {selectedUnits} dari {totalUnits} unit · Rp {formatIDR(rawTotal)}
                 </p>
               )}
               <button
@@ -533,7 +553,7 @@ export function PaymentModal() {
                   ? 'Memproses...'
                   : portionPending
                     ? 'Menghitung...'
-                    : `Bayar Rp ${formatIDR(grandTotal)}`}
+                    : `Bayar Rp ${formatIDR(payable)}`}
               </button>
             </div>
           </div>

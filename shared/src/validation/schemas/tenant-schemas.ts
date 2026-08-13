@@ -26,6 +26,17 @@ export const updateTenantConfigSchema = z.object({
   discountMaxNominal: z.number().min(0).optional(),
   receiptFooter: z.string().optional(),
   receiptLogo: z.string().optional(),
-});
+  roundingEnabled: z.boolean().optional(),
+  roundingMode: z.enum(['nearest', 'up', 'down']).optional(),
+  roundingDenomination: z.union([z.literal(0), z.literal(100), z.literal(500), z.literal(1000)]).optional(),
+}).refine(
+  (cfg) => {
+    if (cfg.roundingEnabled === true) {
+      return cfg.roundingMode !== undefined && cfg.roundingDenomination !== undefined && cfg.roundingDenomination > 0;
+    }
+    return true;
+  },
+  { message: 'roundingMode dan roundingDenomination wajib saat roundingEnabled' },
+);
 
 export type CreateTenantInput = z.infer<typeof createTenantSchema>;

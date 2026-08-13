@@ -245,6 +245,14 @@ export default function ReportPage() {
                           <p className="text-xl font-bold text-gray-900">{daily.totalItems}</p>
                         </div>
                       </div>
+                      {daily.totalRounding != null && daily.totalRounding !== 0 && (
+                        <div className="flex justify-between text-sm bg-purple-50 rounded-lg p-3">
+                          <span className="text-purple-700">Total Pembulatan</span>
+                          <span className="text-purple-800 font-bold">
+                            {daily.totalRounding > 0 ? '+' : '-'}Rp {formatCurrency(Math.abs(daily.totalRounding))}
+                          </span>
+                        </div>
+                      )}
                       {daily.shifts.length > 0 && (
                         <div>
                           <h3 className="text-sm font-medium text-gray-700 mb-2">Shifts</h3>
@@ -315,6 +323,14 @@ export default function ReportPage() {
                           <p className="text-xl font-bold text-gray-900">{sales.totalItems}</p>
                         </div>
                       </div>
+                      {sales.totalRounding != null && sales.totalRounding !== 0 && (
+                        <div className="flex justify-between text-sm bg-purple-50 rounded-lg p-3">
+                          <span className="text-purple-700">Total Pembulatan</span>
+                          <span className="text-purple-800 font-bold">
+                            {sales.totalRounding > 0 ? '+' : '-'}Rp {formatCurrency(Math.abs(sales.totalRounding))}
+                          </span>
+                        </div>
+                      )}
                       <div>
                         <h3 className="text-sm font-medium text-gray-700 mb-2">Orders in Period</h3>
                         <div className="max-h-48 overflow-y-auto space-y-1">
@@ -387,6 +403,14 @@ export default function ReportPage() {
                           <p className="text-xs text-gray-500">Orders</p>
                           <p className="text-xl font-bold text-gray-900">{finance.totalOrders}</p>
                         </div>
+                        {finance.totalRounding != null && finance.totalRounding !== 0 && (
+                          <div>
+                            <p className="text-xs text-gray-500">Pembulatan</p>
+                            <p className="text-xl font-bold text-gray-900">
+                              {finance.totalRounding > 0 ? '+' : '-'}Rp {formatCurrency(Math.abs(finance.totalRounding))}
+                            </p>
+                          </div>
+                        )}
                       </div>
 
                       {finance.categories.length > 0 && (

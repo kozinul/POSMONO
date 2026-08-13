@@ -36,6 +36,9 @@ export class TenantService {
         discountMaxPercent: 100, discountMaxNominal: 1_000_000,
         receiptFooter: 'Terima kasih telah berbelanja',
         receiptLogo: '',
+        roundingEnabled: false,
+        roundingMode: 'nearest',
+        roundingDenomination: 0,
       },
       billingEmail: input.billingEmail,
     });

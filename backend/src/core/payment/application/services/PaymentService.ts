@@ -3,6 +3,7 @@ import { NotFoundError, ValidationError } from '../../../../@shared/infrastructu
 import { Payment, PaymentMethod, ISplitBill } from '../../domain/Payment';
 import { Refund } from '../../domain/Refund';
 import { Order, IOrderItem, IPromotionBreakdown, IDiscountBreakdown } from '../../../ordering/domain/Order';
+import { roundToDenomination, TotalRoundingMode } from '../../../tax/domain/RoundingEngine';
 import { ReceiptRenderResult } from '../../../template/application/services/ReceiptRenderService';
 
 export class PaymentService {
@@ -40,6 +41,14 @@ export class PaymentService {
       }
     }
     return fallback ?? '';
+  }
+
+  private async getRoundingConfig(tenantId: string): Promise<{ enabled: boolean; mode: TotalRoundingMode; denomination: number }> {
+    if (!this.tenantRepository) return { enabled: false, mode: 'nearest', denomination: 0 };
+    const tenant = await this.tenantRepository.findById(tenantId);
+    const cfg = tenant?.serialize().config;
+    if (!cfg?.roundingEnabled || !cfg.roundingDenomination) return { enabled: false, mode: 'nearest', denomination: 0 };
+    return { enabled: true, mode: (cfg.roundingMode || 'nearest') as TotalRoundingMode, denomination: cfg.roundingDenomination };
   }
 
   private async applyStockDeductions(order: Order, tenantId: string, userId: string): Promise<void> {
@@ -149,6 +158,16 @@ export class PaymentService {
     });
 
     const total = roundMoney(taxResult.grandTotal);
+
+    const paymentMethod = (input.method || 'cash') as PaymentMethod;
+    const roundingConfig = await this.getRoundingConfig(input.tenantId);
+    const isCash = paymentMethod === 'cash';
+    const roundedPayable = isCash && roundingConfig.enabled
+      ? roundToDenomination(total, roundingConfig.mode, roundingConfig.denomination)
+      : total;
+    const roundingAdjustment = roundedPayable - total;
+    const roundingMethod = isCash && roundingConfig.enabled ? roundingConfig.mode : 'none';
+
     const serviceChargeTotal = roundMoney(taxResult.charges.reduce((sum: number, c: { amount: number }) => sum + c.amount, 0));
     const taxRate = taxResult.taxes.length > 0 ? taxResult.taxes[0].rate : 0;
 
@@ -198,9 +217,10 @@ export class PaymentService {
       tax,
       taxDetails: [],
       total,
-      roundingAdjustment: 0,
-      roundedPayable: 0,
-      roundingMethod: 'nearest',
+      roundingAdjustment,
+      roundedPayable,
+      roundingMethod,
+      roundingDenomination: isCash && roundingConfig.enabled ? roundingConfig.denomination : 0,
       serviceCharge: serviceChargeTotal,
       serviceChargeRate: 0,
       paymentBreakdown: [],
@@ -229,11 +249,10 @@ export class PaymentService {
 
     order.confirm();
 
-    if (input.amountPaid < total) {
-      throw new ValidationError(`Insufficient amount. Need ${total}, got ${input.amountPaid}`);
+    if (input.amountPaid < roundedPayable) {
+      throw new ValidationError(`Insufficient amount. Need ${roundedPayable}, got ${input.amountPaid}`);
     }
 
-    const paymentMethod = (input.method || 'cash') as PaymentMethod;
     const refNumber = input.referenceNumber || `${paymentMethod.toUpperCase()}-${uuidv4().replace(/-/g, '').substring(0, 12).toUpperCase()}`;
 
     const payment = Payment.create({
@@ -325,8 +344,17 @@ export class PaymentService {
     const wasUnpaid = orderData.paymentBreakdown.length === 0;
 
     const totalDue = orderData.total - orderData.paymentBreakdown.reduce((s: number, p: { amount: number }) => s + p.amount, 0);
-    if (input.amount < totalDue) {
-      throw new ValidationError(`Insufficient amount. Need ${totalDue}, got ${input.amount}`);
+
+    let expectedPayable = totalDue;
+    if (wasUnpaid && input.method === 'cash') {
+      const roundingConfig = await this.getRoundingConfig(input.tenantId);
+      if (roundingConfig.enabled) {
+        expectedPayable = roundToDenomination(orderData.roundedPayable || totalDue, roundingConfig.mode, roundingConfig.denomination);
+      }
+    }
+
+    if (input.amount < expectedPayable) {
+      throw new ValidationError(`Insufficient amount. Need ${expectedPayable}, got ${input.amount}`);
     }
 
     const payment = Payment.create({
@@ -352,12 +380,18 @@ export class PaymentService {
       method: input.method,
       code: payment.serialize().referenceNumber,
       amount: input.amount,
-      change: Math.max(0, input.amount - totalDue),
+      change: Math.max(0, input.amount - expectedPayable),
       cardLastFour: input.cardLastFour,
     };
 
     const updatedBreakdown = [...orderData.paymentBreakdown, breakdownEntry];
     const cashierName = await this.resolveCashierName(input.cashierId, input.tenantId, input.cashierName);
+
+    if (wasUnpaid && input.method === 'cash' && expectedPayable !== totalDue) {
+      const roundingConfig = await this.getRoundingConfig(input.tenantId);
+      order.applyCashRounding(expectedPayable - totalDue, roundingConfig.mode, roundingConfig.denomination);
+    }
+
     order.pay(updatedBreakdown, input.cashierId, cashierName);
 
     await this.orderRepository.save(order);

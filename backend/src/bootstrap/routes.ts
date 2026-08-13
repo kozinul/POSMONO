@@ -108,5 +108,6 @@ export function registerRoutes(app: Express, container: DIContainer): void {
   const templateController = container.resolve('templateController');
   app.use('/api/templates', createTemplateRoutes(templateController));
 
-  app.use('/api/pricing', createPricingRouter(discountConfigRepo, taxConfigRepo, promoCodeRepo));
+  const tenantRepository = container.resolve('tenantRepository');
+  app.use('/api/pricing', createPricingRouter(discountConfigRepo, taxConfigRepo, promoCodeRepo, tenantRepository));
 }

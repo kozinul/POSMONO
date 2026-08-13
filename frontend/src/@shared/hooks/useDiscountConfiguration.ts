@@ -60,6 +60,8 @@ export function useDiscountConfiguration() {
       const { data } = await api.get('/discount');
       return data;
     },
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
   });
 }
 

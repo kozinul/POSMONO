@@ -115,6 +115,28 @@ Modular SaaS POS Platform (Node.js/Express + React/Tailwind). Multi-tenant, mult
 - **Tetap terbuka untuk kasir**: `GET /reports/shift`, `GET /reports/best-sellers`, `GET /inventory` (list stok sold-out di POS), produk/kategori/family GET, shifts, orders, payments, customers (kasir wajib bisa buat member di POS)
 - Terverifikasi E2E: **Owner** → `/reports/dashboard`/`/users`/`/settings` 200; **Cashier** → semuanya 403 & tetap bisa akses `/products` `/inventory` `/shifts` `/reports/shift` `/reports/best-sellers`
 
+### Stale POS Data Fixes (Drawer Transaksi + Badge Diskon) — 2026-08-13
+- **Drawer transaksi basi**: `PosActionPanel` membaca `today` dari module-scope (stale) dan tidak me-refetch setelah drawer dibuka → daftar transaksi & laporan shift menampilkan data lama
+  - Fix: `today` dihitung di dalam komponen; `useEffect` me-refetch `todayOrders` + `shiftReport` setiap drawer dibuka; tombol "Daftar Transaksi" & "Laporan Transaksi" me-refetch sebelum modal dibuka
+- **Badge diskon basi**: perubahan promo/discount-config di dashboard tidak tampil di POS
+  - Fix: `useDiscountConfiguration` + `refetchInterval: 60_000` + `refetchOnWindowFocus`; `usePromotions` (create/update/delete) invalidate `discount-config`
+- **Invalidasi realtime diperluas**: `useRealtimeSync` kini invalidate `orders` + `shift-report` pada event `voided`/`cancelled`/`paid`/`pos.sale.completed`; `useVoidOrder`/`useVoidItem`/`PaymentModal` juga invalidate `shift-report`
+- **Socket room join**: `socket.ts` membaca `payload.tenant` sebagai fallback selain `tenantId`/`tenant_id` → event realtime sampai ke room tenant dengan benar
+
+### Cash Rounding (Pembulatan Total Tunai) — 2026-08-13
+- **Config per tenant**: `TenantConfig` + `TenantSchema` + `updateTenantConfigSchema` (shared zod) + field `roundingEnabled`, `roundingMode` ('nearest'|'up'|'down'), `roundingDenomination` (0|100|500|1000, hanya kelipatan genap Rupiah); `.refine` mewajibkan `roundingMode`+`roundingDenomination>0` saat `roundingEnabled`
+- **Backend engine**: `RoundingEngine.roundToDenomination(value, mode, denom)` + `TotalRoundingMode`; `Order.recalculateTotals` memakai engine (hapus hardcode `precision=100`; denom 0 → no-op); `Order` + `OrderSchema` + `MongoOrderRepository` gain `roundingDenomination`; `Order.applyCashRounding(adjustment, method, denomination)`
+- **Hanya untuk tunai (cash)**: `PaymentService.payCash`/`processByOrderId` membaca config tenant via `getRoundingConfig`, menghitung `roundedPayable = roundToDenomination(total, mode, denom)` hanya saat `method === 'cash'`, validasi `amountPaid >= roundedPayable`; non-cash tidak dibulatkan; `roundingDenomination` dikirim ke order hanya untuk cash
+- **Pricing API**: `PricingService.calculate` menerima `tenantRepository` opsional, menghitung `rounding` & `roundedPayable` dari config tenant; `createPricingRouter` + `routes.ts` me-wire `tenantRepository` dari DI container
+- **Frontend POS**: `usePricing` mengekspos `roundedPayable`; `PaymentModal` menampilkan baris "Pembulatan" (±) dan "Total Tagihan (dibulatkan)" untuk cash, `Uang Pas`/quick-amount/kembalian memakai `payable`; `amountPaid` dikirim apa adanya (bukan grandTotal)
+- **Receipt**: `ReceiptRenderService` memakai `order.roundedPayable || order.total` sebagai `grandTotal`
+- **Settings UI**: `GeneralSettingsPage` section baru "Pembulatan" (toggle aktifkan + denominasi Rp 100/500/1.000 + mode terdekat/ke atas/ke bawah) + helper `formatRounding`; config disimpan via `updateTenantConfigSchema`
+
+### Rounding in Reports (Laporan Memuat Pembulatan) — 2026-08-13
+- **Backend**: `totalRounding` ditambahkan di `MongoOrderRepository.getDailySales` ($sum `roundingAdjustment` via `$ifNull`), `ReportAggregation.getFinanceAggregation`, dan `ReportService` (`getDailyReport`/`getSalesReport`/`getShiftReport`/`getFinanceReport` — shift via `orders.reduce` di `roundingAdjustment`)
+- **Frontend**: `useOrders` interface `Order.roundingAdjustment`/`roundedPayable`, `DailyReport`/`SalesReport`/`FinanceReport`/`ShiftReportData` + `totalRounding`; `PosActionPanel` summary shift menampilkan baris "Pembulatan"; `ReportPrintModal` menampilkan per-order "Pembulatan" + "Total Pembulatan" di footer (Laporan Transaksi & Penerimaan); `ReportPage` menampilkan "Total Pembulatan" di tab Harian/Penjualan dan "Pembulatan" di tab Keuangan (hanya bila ≠ 0)
+- **Tests**: `RoundingEngine.test.ts` +9 (roundToDenomination nearest/up/down/denom 0); backend 210 pass; frontend 73/73 pass; tsc frontend & shared bersih; tsc backend masih error pre-existing `ApplyDiscountUseCase.ts(25,7)`
+
 ## Key Patterns
 - `useQueryClient()` for cache invalidation after mutations
 - `useVoidOrder` for full order void; `useVoidItem` for per-item void

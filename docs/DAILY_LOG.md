@@ -36,6 +36,53 @@ Copy this block for each new day:
 
 ## Entries
 
+### DATE: 2026-08-13 — Cash rounding (pembulatan tunai) + rounding di laporan + fix stale data POS
+
+**Today I worked on:**
+
+- **Cash rounding (Pembulatan Total Tunai)** — fitur pembulatan total pembayaran ke denominasi genap Rupiah (Rp 100/500/1.000), berlaku HANYA untuk metode tunai (`cash`):
+  - Config per tenant: `roundingEnabled` (boolean), `roundingMode` ('nearest'|'up'|'down'), `roundingDenomination` (0|100|500|1000) di `TenantConfig`/`TenantSchema`/`updateTenantConfigSchema` (shared zod). `.refine` mewajibkan mode + denom>0 saat enabled.
+  - `RoundingEngine.roundToDenomination(value, mode, denom)` + `TotalRoundingMode`; `Order.recalculateTotals` kini memakai engine (menghapus hardcode `precision=100`), denom 0 = no-op; `Order.applyCashRounding(adjustment, method, denomination)`.
+  - `PricingService.calculate` menerima `tenantRepository` opsional dan menghitung `rounding` + `roundedPayable`; `createPricingRouter`/`routes.ts` me-wire dari DI container.
+  - `PaymentService.getRoundingConfig` — saat `method==='cash'`, `roundedPayable = roundToDenomination(total, mode, denom)`; validasi `amountPaid >= roundedPayable`; `processByOrderId` memanggil `order.applyCashRounding` untuk cash unpaid pertama.
+  - Frontend `usePricing` mengekspos `roundedPayable`; `PaymentModal` menampilkan baris "Pembulatan" (±) + "Total Tagihan (dibulatkan)" untuk cash; `Uang Pas`/quick-amount/kembalian memakai payable.
+  - `ReceiptRenderService` `grandTotal` = `roundedPayable || total`.
+  - UI Settings: section "Pembulatan" baru di `GeneralSettingsPage` (toggle + denominasi + mode) via `updateTenantConfigSchema`.
+- **Rounding in Reports** — laporan kini memuat pembulatan:
+  - Backend: `totalRounding` ($sum `roundingAdjustment` via `$ifNull`) di `MongoOrderRepository.getDailySales`, `ReportAggregation.getFinanceAggregation`, dan `ReportService` (getDailyReport/getSalesReport/getShiftReport/getFinanceReport).
+  - Frontend: `useOrders` interfaces + `totalRounding`; `PosActionPanel` summary shift + baris "Pembulatan"; `ReportPrintModal` per-order "Pembulatan" + "Total Pembulatan" di footer; `ReportPage` "Total Pembulatan" di tab Harian/Penjualan, "Pembulatan" di tab Keuangan.
+- **Fix stale data POS** (bug lama yang baru dibereskan):
+  - Drawer transaksi: `today` dipindah ke dalam komponen + `useEffect` me-refetch `todayOrders`/`shiftReport` setiap drawer dibuka.
+  - Badge diskon: `useDiscountConfiguration` `refetchInterval: 60_000` + `refetchOnWindowFocus`; `usePromotions` invalidate `discount-config`.
+  - `useRealtimeSync` invalidate `orders` + `shift-report` pada event voided/cancelled/paid/pos.sale.completed; `socket.ts` room join fallback `payload.tenant`.
+
+**Files changed:**
+
+- `backend/src/core/tax/domain/RoundingEngine.ts` (+`roundToDenomination`, +`TotalRoundingMode`)
+- `backend/src/core/tenant/domain/Tenant.ts`, `infrastructure/persistence/schemas/TenantSchema.ts`, `application/services/TenantService.ts`
+- `shared/src/validation/schemas/tenant-schemas.ts` (+ rounding fields + `.refine`)
+- `backend/src/core/pricing/application/services/PricingService.ts`, `api/pricing.routes.ts`, `bootstrap/routes.ts` (wiring tenantRepository)
+- `backend/src/core/payment/application/services/PaymentService.ts` (`getRoundingConfig`, validasi cash, `applyCashRounding`)
+- `backend/src/core/ordering/domain/Order.ts` (`applyCashRounding`, `roundingDenomination`, `recalculateTotals` engine), `OrderSchema.ts`, `MongoOrderRepository.ts`
+- `backend/src/core/template/application/services/ReceiptRenderService.ts` (grandTotal roundedPayable)
+- `backend/src/core/reporting/application/services/ReportService.ts`, `infrastructure/aggregation/ReportAggregation.ts` (+`totalRounding`)
+- `frontend/src/@shared/hooks/usePricing.ts`, `useTenant.ts`, `useDiscountConfiguration.ts`, `useRealtimeSync.ts`
+- `frontend/src/core/orders/hooks/useOrders.ts`, `core/promotions/hooks/usePromotions.ts`
+- `frontend/src/core/pos/components/PaymentModal.tsx`, `PosActionPanel.tsx`, `ReportPrintModal.tsx`
+- `frontend/src/core/reports/pages/ReportPage.tsx`, `frontend/src/core/settings/pages/GeneralSettingsPage.tsx`
+- `backend/src/bootstrap/socket.ts` (room join fallback tenant)
+- Tests: `backend/src/core/tax/domain/__tests__/RoundingEngine.test.ts` +9
+
+**What I learned:**
+
+- Pembulatan total sebaiknya hanya untuk cash (pembulatan uang fisik); non-cash harus tetap nilai asli agar tidak mengganggu rekonsiliasi bank/ewallet.
+- Frontend harus mengirim `amountPaid` apa adanya (nilai yang dibayar kasir), bukan grandTotal yang sudah dibulatkan — `change`/kembalian dihitung dari `paid - roundedPayable`.
+- `tsconfig.tsbuildinfo` tidak boleh ikut di-track git (build artifact) → ditambahkan ke `.gitignore`.
+
+**Productivity score:** 9
+
+---
+
 ### DATE: 2026-08-05 — Split bill untuk semua transaksi
 
 **Today I worked on:**

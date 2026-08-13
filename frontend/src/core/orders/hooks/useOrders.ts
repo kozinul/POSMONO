@@ -42,6 +42,8 @@ interface Order {
   discount: number;
   tax: number;
   total: number;
+  roundingAdjustment?: number;
+  roundedPayable?: number;
   paymentStatus: string;
   customerId: string | null;
   customerName: string | null;
@@ -80,6 +82,7 @@ interface DailyReport {
   date: string;
   totalOrders: number;
   totalRevenue: number;
+  totalRounding: number;
   totalItems: number;
   paymentBreakdown: Record<string, number>;
   shifts: any[];
@@ -90,6 +93,7 @@ interface SalesReport {
   dateTo: string;
   totalOrders: number;
   totalRevenue: number;
+  totalRounding: number;
   totalItems: number;
   orders: Order[];
 }
@@ -113,6 +117,7 @@ interface FinanceReport {
   totalTax: number;
   totalServiceCharge: number;
   totalDiscount: number;
+  totalRounding: number;
   categories: FinanceCategory[];
 }
 
@@ -175,6 +180,7 @@ interface ShiftReportData {
     paymentBreakdown: Array<{ method: string; code: string; amount: number }>;
   };
   orders: Order[];
+  totalRounding: number;
   inheritedCarriedBills: Array<{
     orderId: string;
     orderNumber: string;
@@ -246,6 +252,7 @@ export function useVoidOrder() {
       qc.invalidateQueries({ queryKey: ['dashboard-summary'] });
       qc.invalidateQueries({ queryKey: ['sales-report'] });
       qc.invalidateQueries({ queryKey: ['finance-report'] });
+      qc.invalidateQueries({ queryKey: ['shift-report'] });
     },
   });
 }
@@ -263,6 +270,7 @@ export function useVoidItem() {
       qc.invalidateQueries({ queryKey: ['dashboard-summary'] });
       qc.invalidateQueries({ queryKey: ['sales-report'] });
       qc.invalidateQueries({ queryKey: ['finance-report'] });
+      qc.invalidateQueries({ queryKey: ['shift-report'] });
     },
   });
 }

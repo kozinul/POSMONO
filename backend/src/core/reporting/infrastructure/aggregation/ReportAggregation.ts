@@ -363,6 +363,7 @@ export class ReportAggregation {
           totalDiscount: {
             $sum: { $add: [{ $ifNull: ['$discount', 0] }, { $ifNull: ['$discountTotal', 0] }] },
           },
+          totalRounding: { $sum: { $ifNull: ['$roundingAdjustment', 0] } },
         },
       },
     ]);
@@ -400,6 +401,7 @@ export class ReportAggregation {
       totalTax: totals?.totalTax ?? 0,
       totalServiceCharge: totals?.totalServiceCharge ?? 0,
       totalDiscount: totals?.totalDiscount ?? 0,
+      totalRounding: totals?.totalRounding ?? 0,
       categories: categories.map((item: any) => ({
         categoryId: item._id,
         totalOrders: item.totalOrders,

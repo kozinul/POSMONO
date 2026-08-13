@@ -18,6 +18,7 @@ interface OrderDoc extends Document<string> {
   roundingAdjustment: number;
   roundedPayable: number;
   roundingMethod: string;
+  roundingDenomination: number;
   serviceCharge: number;
   serviceChargeRate: number;
   paymentStatus: string;
@@ -63,6 +64,7 @@ export class MongoOrderRepository {
       roundingAdjustment: doc.roundingAdjustment ?? 0,
       roundedPayable: doc.roundedPayable ?? 0,
       roundingMethod: doc.roundingMethod ?? 'nearest',
+      roundingDenomination: doc.roundingDenomination ?? 0,
       serviceCharge: doc.serviceCharge ?? 0,
       serviceChargeRate: doc.serviceChargeRate ?? 0,
       paymentStatus: doc.paymentStatus as IOrder['paymentStatus'],
@@ -107,6 +109,7 @@ export class MongoOrderRepository {
       roundingAdjustment: data.roundingAdjustment,
       roundedPayable: data.roundedPayable,
       roundingMethod: data.roundingMethod,
+      roundingDenomination: data.roundingDenomination,
       serviceCharge: data.serviceCharge,
       serviceChargeRate: data.serviceChargeRate,
       paymentStatus: data.paymentStatus,
@@ -182,6 +185,7 @@ export class MongoOrderRepository {
     totalOrders: number;
     totalRevenue: number;
     totalItems: number;
+    totalRounding: number;
     paymentBreakdown: Record<string, number>;
   }> {
     const startOfDay = new Date(date);
@@ -202,6 +206,7 @@ export class MongoOrderRepository {
           _id: null,
           totalOrders: { $sum: 1 },
           totalRevenue: { $sum: '$total' },
+          totalRounding: { $sum: { $ifNull: ['$roundingAdjustment', 0] } },
           totalItems: { $sum: { $sum: '$items.quantity' } },
         },
       },
@@ -220,6 +225,7 @@ export class MongoOrderRepository {
     return {
       totalOrders: aggregation?.totalOrders || 0,
       totalRevenue: aggregation?.totalRevenue || 0,
+      totalRounding: aggregation?.totalRounding || 0,
       totalItems: aggregation?.totalItems || 0,
       paymentBreakdown: { cash: (paymentBreakdown[0]?.total || 0) },
     };

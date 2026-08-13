@@ -12,11 +12,12 @@ export function createPricingRouter(
   discountRepo: IDiscountConfigurationRepository,
   taxRepo: ITaxConfigurationRepository,
   promoCodeRepo?: IPromoCodeRepository,
+  tenantRepo?: { findById(id: string): Promise<any | null> },
 ): Router {
   const router = Router();
 
   const discountService = new DiscountServiceAdapter(discountRepo, promoCodeRepo);
-  const pricingService = new PricingService(discountService, taxRepo);
+  const pricingService = new PricingService(discountService, taxRepo, tenantRepo);
   const controller = new PricingController(pricingService);
 
   const asyncHandler: AsyncHandler = (fn) => (req, res, next) =>

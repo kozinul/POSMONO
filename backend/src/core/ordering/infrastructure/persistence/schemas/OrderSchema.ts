@@ -117,6 +117,7 @@ export const OrderSchema = new Schema(
     roundingAdjustment: { type: Number, default: 0 },
     roundedPayable: { type: Number, default: 0 },
     roundingMethod: { type: String, default: 'nearest' },
+    roundingDenomination: { type: Number, default: 0 },
     serviceCharge: { type: Number, default: 0 },
     serviceChargeRate: { type: Number, default: 0 },
     paymentStatus: {

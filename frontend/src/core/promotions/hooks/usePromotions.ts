@@ -71,7 +71,10 @@ export function useCreatePromotion() {
       const res = await api.post('/promotions', data);
       return res.data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['promotions'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['promotions'] });
+      qc.invalidateQueries({ queryKey: ['discount-config'] });
+    },
   });
 }
 
@@ -82,7 +85,10 @@ export function useUpdatePromotion() {
       const res = await api.put(`/promotions/${id}`, data);
       return res.data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['promotions'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['promotions'] });
+      qc.invalidateQueries({ queryKey: ['discount-config'] });
+    },
   });
 }
 
@@ -93,7 +99,10 @@ export function useDeletePromotion() {
       const res = await api.delete(`/promotions/${id}`);
       return res.data;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['promotions'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['promotions'] });
+      qc.invalidateQueries({ queryKey: ['discount-config'] });
+    },
   });
 }
 

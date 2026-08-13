@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { usePOSStore } from '../store/posStore';
 import { useOrders, useShiftReport } from '../../orders/hooks/useOrders';
 import { useOpenShift,
@@ -18,8 +18,6 @@ interface PosActionPanelProps {
   onOpenChange: (open: boolean) => void;
   onViewTransaction?: (order: any) => void;
 }
-
-const today = new Date().toISOString().split('T')[0];
 
 function statusBadge(status: string) {
   const map: Record<string, { label: string; classes: string }> = {
@@ -55,9 +53,17 @@ export function PosActionPanel(props: PosActionPanelProps) {
   const { data: openShift } = useOpenShift();
   const closeShiftMut = useCloseShiftMutation();
 
-  const { data: todayOrdersRes } = useOrders({ dateFrom: today, dateTo: today, limit: 100 });
+  const today = new Date().toISOString().split('T')[0];
+
+  const { data: todayOrdersRes, refetch: refetchTodayOrders } = useOrders({ dateFrom: today, dateTo: today, limit: 100 });
   const todayOrders = todayOrdersRes?.data ?? [];
-  const shiftReport = useShiftReport(openShift?.id);
+  const { data: shiftReport, refetch: refetchShiftReport } = useShiftReport(openShift?.id);
+
+  useEffect(() => {
+    if (!open) return;
+    refetchTodayOrders();
+    refetchShiftReport();
+  }, [open, refetchTodayOrders, refetchShiftReport]);
 
   const handleOpenShift = () => {
     setOpenShiftModalOpen(true);
@@ -128,9 +134,9 @@ export function PosActionPanel(props: PosActionPanelProps) {
     }
   };
 
-  const shiftSales = shiftReport.data?.sales;
-  const shiftOrders = shiftReport.data?.orders ?? [];
-  const inheritedCarriedBills = shiftReport.data?.inheritedCarriedBills ?? [];
+  const shiftSales = shiftReport?.sales;
+  const shiftOrders = shiftReport?.orders ?? [];
+  const inheritedCarriedBills = shiftReport?.inheritedCarriedBills ?? [];
   const shiftBreakdown = (shiftSales?.paymentBreakdown ?? []).reduce(
     (acc: Record<string, number>, p) => {
       acc[p.method] = (acc[p.method] ?? 0) + p.amount;
@@ -186,7 +192,9 @@ export function PosActionPanel(props: PosActionPanelProps) {
               </button>
               <button
                 onClick={() => {
+                  setPaidSearch('');
                   setPaidOrderSelectOpen(true);
+                  refetchTodayOrders();
                 }}
                 className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg"
               >
@@ -223,16 +231,31 @@ export function PosActionPanel(props: PosActionPanelProps) {
                         Rp {formatIDR(shiftSales?.nonCashSales ?? 0)}
                       </span>
                     </div>
+                    {shiftReport?.totalRounding != null && shiftReport.totalRounding !== 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Pembulatan</span>
+                        <span className="text-gray-900 font-medium">
+                          {shiftReport.totalRounding > 0 ? '+' : '-'}Rp{' '}
+                          {formatIDR(Math.abs(shiftReport.totalRounding))}
+                        </span>
+                      </div>
+                    )}
                   </div>
                   <div className="px-3 pt-2 space-y-1">
                     <button
-                      onClick={() => setReportModal('transactions')}
+                      onClick={() => {
+                        refetchShiftReport();
+                        setReportModal('transactions');
+                      }}
                       className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg"
                     >
                       Laporan Transaksi (Shift)
                     </button>
                     <button
-                      onClick={() => setReportModal('receipt')}
+                      onClick={() => {
+                        refetchShiftReport();
+                        setReportModal('receipt');
+                      }}
                       className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg"
                     >
                       Laporan Penerimaan Kasir
@@ -453,6 +476,7 @@ export function PosActionPanel(props: PosActionPanelProps) {
         paymentBreakdown={shiftBreakdown}
         totalOrders={shiftTotalTransactions}
         totalRevenue={shiftTotalSales}
+        totalRounding={shiftReport?.totalRounding ?? 0}
         carriedOverBills={reportModal === 'receipt' ? inheritedCarriedBills : undefined}
         onClose={() => setReportModal(null)}
       />

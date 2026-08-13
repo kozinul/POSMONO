@@ -699,6 +699,7 @@ Unified pricing calculation — single source of truth for all frontend totals. 
     "taxRate": 12,
     "rounding": 0,
     "grandTotal": 16783,
+    "roundedPayable": 16783,
     "lineItems": [
       {
         "productId": "uuid",
@@ -730,6 +731,7 @@ Unified pricing calculation — single source of truth for all frontend totals. 
 5. **Tax** — calculated on (netSubtotal + serviceCharge)
 6. **Rounding** — configurable rounding to nearest value
 7. **Grand Total** — netSubtotal + serviceCharge + tax + rounding
+8. **roundedPayable** — pembulatan total ke denominasi Rupiah genap (config tenant: `roundingEnabled`/`roundingMode`/`roundingDenomination`); **hanya relevan untuk metode tunai (cash)** — non-cash memakai `grandTotal` asli
 
 **Free items:** When a promo produces free items, the response includes them in `lineItems[]` with `isFreeItem: true`, `discount: unitPrice`, and `lineTotal: 0`.
 

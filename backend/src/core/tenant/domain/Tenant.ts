@@ -40,6 +40,9 @@ export interface TenantConfig {
   discountMaxNominal: number;
   receiptFooter: string;
   receiptLogo: string;
+  roundingEnabled: boolean;
+  roundingMode: 'nearest' | 'up' | 'down';
+  roundingDenomination: number;
 }
 
 export class Tenant extends AggregateRoot<TenantId> {

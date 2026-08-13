@@ -20,12 +20,12 @@ const EVENT_TO_QUERY: Record<string, Array<Array<string>>> = {
   'ordering.order.held': [['held-orders']],
   'ordering.order.recalled': [['held-orders']],
   'ordering.order.updated': [['held-orders']],
-  'ordering.order.voided': [['held-orders']],
-  'ordering.order.cancelled': [['held-orders']],
+  'ordering.order.voided': [['held-orders'], ['orders'], ['shift-report']],
+  'ordering.order.cancelled': [['held-orders'], ['orders'], ['shift-report']],
   // Payment & POS
-  'ordering.order.paid': [['inventory']],
-  'payment.transaction.completed': [['inventory']],
-  'pos.sale.completed': [['inventory']],
+  'ordering.order.paid': [['inventory'], ['orders'], ['shift-report']],
+  'payment.transaction.completed': [['inventory'], ['orders'], ['shift-report']],
+  'pos.sale.completed': [['inventory'], ['orders'], ['shift-report']],
 };
 
 export function useRealtimeSync() {

@@ -506,7 +506,8 @@ families.view, families.edit
   taxName: string;                 // "PPN"
   taxRate: number;                 // 12
   rounding: number;                // Rounding adjustment
-  grandTotal: number;              // Final amount
+  grandTotal: number;              // Final amount (before cash rounding)
+  roundedPayable: number;          // Cash rounding target (grandTotal + rounding) — hanya relevan untuk tunai
   lineItems: PricingLineItem[];    // Per-item breakdown with discounts
   appliedRules: AppliedRule[];     // Which promo rules were applied
   adjustments: Adjustment[];       // Full adjustment pipeline output
@@ -523,6 +524,7 @@ families.view, families.edit
 6. Rounding → configurable rounding to nearest value
 7. Grand Total → netSubtotal + serviceCharge + tax + rounding
 ```
+- **Cash rounding (pembulatan tunai)**: selain rounding internal engine, ada pembulatan total ke denominasi Rupiah genap (Rp 100/500/1.000) dari config tenant (`roundingEnabled`/`roundingMode`/'nearest'|'up'|'down'/`roundingDenomination`). Berlaku **hanya untuk pembayaran tunai (cash)** — non-cash memakai `grandTotal` asli. `PricingService.calculate` mengembalikan `roundedPayable`; backend `PaymentService.payCash`/`processByOrderId` menegakkan `amountPaid >= roundedPayable` untuk cash dan menulis `roundingAdjustment`/`roundedPayable`/`roundingDenomination` ke order. Struk memakai `roundedPayable || total` sebagai grand total. Settings UI: `GeneralSettingsPage` section "Pembulatan".
 
 ### Free Items
 - When promo produces free items, they appear in `lineItems[]` with `isFreeItem: true`
@@ -604,6 +606,7 @@ families.view, families.edit
   - `items` (IOrderItem[]) — `{ product, qty, price, subtotal, modifiers[] }`
   - `total`, `originalTotal`, `roundedPayable`, `roundingAdjustment`
   - `roundingMethod` (string)
+  - `roundingDenomination` (number) — 0 | 100 | 500 | 1000, hanya di-set untuk order tunai yang dibulatkan
   - `subtotal`, `discountTotal`, `dppTotal`, `taxTotal`
   - `taxDetails` (ITaxDetail[]) — detail per pajak
   - `serviceCharge`, `serviceChargeRate` — legacy field, kept for backward compatibility; new system uses Charge entity + adjustments[]
@@ -718,6 +721,7 @@ families.view, families.edit
 | GET | `/api/reports/finance` | ✅ admin | Finance report |
 | GET | `/api/reports/cashier` | ✅ admin | Cashier performance report |
 | GET | `/api/reports/daily` | ✅ | Daily sales summary + top products + payment breakdown |
+| GET | `/api/reports/shift?shiftId=` | ✅ | Laporan per-shift (sales, orders, paymentBreakdown, inheritedCarriedBills) — untuk Laporan Kasir POS |
 | GET | `/api/reports/best-sellers` | ✅ | Top products by quantity over `days` (default 7) — untuk ⭐ Favorit POS |
 | GET | `/api/reports/daily/export` | ✅ | Daily report export (pdf/xlsx) |
 | GET | `/api/reports/sales/export` | ✅ | Sales report export (pdf/xlsx) |
@@ -727,6 +731,7 @@ families.view, families.edit
 - **Sales report**: total penjualan, jumlah transaksi, rata-rata per transaksi
 - **Finance report**: pendapatan bersih, pajak, service charge
 - **Cashier report**: per kasir, total transaksi, total penjualan
+- **Rounding di laporan**: daily/sales/finance/shift report mengembalikan `totalRounding` ($sum `roundingAdjustment`) — selisih pembulatan tunai; ditampilkan POS (`PosActionPanel`), `ReportPrintModal`, dan `ReportPage` bila ≠ 0
 
 ---
 
@@ -763,6 +768,7 @@ families.view, families.edit
 ### Business Logic
 - Key-value store untuk pengaturan sistem
 - Contoh: `roundingConfig` — konfigurasi pembulatan global
+- **Konfigurasi pembulatan tunai** (per tenant, bukan key-value global): `roundingEnabled`/`roundingMode`/`roundingDenomination` di `TenantConfig` (`TenantSchema`), diedit lewat `GeneralSettingsPage` section "Pembulatan" dan divalidasi `updateTenantConfigSchema` (shared zod)
 
 ---
 

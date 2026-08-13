@@ -59,6 +59,16 @@ const sections = [
     ),
   },
   {
+    id: 'rounding',
+    label: 'Pembulatan',
+    keywords: 'pembulatan rounding pembulatan total genap rupiah 500 1000 tunai cash',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+        <path d="M15.75 9a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM12 21c4.5 0 7.5-2.4 7.5-6.75 0-1.875-1.08-3.135-2.465-4.072A8.25 8.25 0 0012 8.25c-2.32 0-4.5 1.5-4.5 3.6 0 1.656 1.08 3.6 2.51 4.1A4.72 4.72 0 0111.25 18h.75" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  {
     id: 'charges',
     label: 'Biaya Tambahan',
     keywords: 'service charge biaya delivery ongkir fee tambahan',
@@ -93,6 +103,10 @@ function getActiveCharges(taxConfig: { versions: Array<{ id: string; charges?: A
   return activeVer?.charges ?? [];
 }
 
+function formatRounding(value: number): string {
+  return value.toLocaleString('id-ID');
+}
+
 export default function GeneralSettingsPage() {
   const { data: tenant, isLoading } = useTenant();
   const updateSettings = useUpdateSettings();
@@ -120,6 +134,9 @@ export default function GeneralSettingsPage() {
   const [discountMaxNominal, setDiscountMaxNominal] = useState(1_000_000);
   const [receiptFooter, setReceiptFooter] = useState('');
   const [receiptLogo, setReceiptLogo] = useState('');
+  const [roundingEnabled, setRoundingEnabled] = useState(false);
+  const [roundingMode, setRoundingMode] = useState<'nearest' | 'up' | 'down'>('nearest');
+  const [roundingDenomination, setRoundingDenomination] = useState(0);
 
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -199,6 +216,9 @@ export default function GeneralSettingsPage() {
     setDiscountMaxNominal(tenant.config.discountMaxNominal ?? 1_000_000);
     setReceiptFooter(tenant.config.receiptFooter || '');
     setReceiptLogo(tenant.config.receiptLogo || '');
+    setRoundingEnabled(tenant.config.roundingEnabled ?? false);
+    setRoundingMode(tenant.config.roundingMode ?? 'nearest');
+    setRoundingDenomination(tenant.config.roundingDenomination ?? 0);
   }, [tenant]);
 
   const filteredSections = useMemo(() => {
@@ -237,6 +257,9 @@ export default function GeneralSettingsPage() {
           discountMaxNominal,
           receiptFooter,
           receiptLogo,
+          roundingEnabled,
+          roundingMode,
+          roundingDenomination,
         }),
         updateTaxConfig.mutateAsync({ taxEnabled, pricingMode }),
       ];
@@ -590,6 +613,73 @@ export default function GeneralSettingsPage() {
                       className="block w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
+                </div>
+              </section>
+            )}
+
+            {activeSection === 'rounding' && (
+              <section className="bg-white rounded-2xl shadow-sm border border-gray-100">
+                <div className="px-6 py-5 border-b border-gray-100">
+                  <h2 className="text-lg font-bold text-gray-800">Pembulatan Total</h2>
+                  <p className="text-sm text-gray-400 mt-0.5">Bulatkan total pembayaran tunai ke nominal yang genap</p>
+                </div>
+                <div className="px-6 py-5 space-y-5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-gray-800">Aktifkan Pembulatan</p>
+                      <p className="text-sm text-gray-400">Berlaku hanya untuk pembayaran tunai (cash)</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={roundingEnabled}
+                        onChange={(e) => setRoundingEnabled(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600" />
+                    </label>
+                  </div>
+
+                  {roundingEnabled && (
+                    <>
+                      <div className="border-t border-gray-100" />
+                      <div>
+                        <label className="block text-sm font-medium text-gray-600 mb-1.5">Denominasi</label>
+                        <select
+                          value={roundingDenomination}
+                          onChange={(e) => setRoundingDenomination(Number(e.target.value))}
+                          className="block w-full max-w-xs px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                        >
+                          <option value={0}>Tidak ada pembulatan</option>
+                          <option value={100}>Rp 100</option>
+                          <option value={500}>Rp 500</option>
+                          <option value={1000}>Rp 1.000</option>
+                        </select>
+                        <p className="text-xs text-gray-400 mt-1">
+                          Total akan dibulatkan ke kelipatan {roundingDenomination > 0 ? `Rp ${formatRounding(roundingDenomination)}` : 'nominal yang dipilih'}.
+                        </p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-600 mb-1.5">Mode Pembulatan</label>
+                        <select
+                          value={roundingMode}
+                          onChange={(e) => setRoundingMode(e.target.value as 'nearest' | 'up' | 'down')}
+                          className="block w-full max-w-xs px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                        >
+                          <option value="nearest">Terdekat (round)</option>
+                          <option value="up">Ke Atas (ceil)</option>
+                          <option value="down">Ke Bawah (floor)</option>
+                        </select>
+                        <p className="text-xs text-gray-400 mt-1">
+                          {roundingMode === 'nearest'
+                            ? 'Total dibulatkan ke kelipatan terdekat (mis. Rp 1.240 → Rp 1.200 atau Rp 1.300)'
+                            : roundingMode === 'up'
+                              ? 'Total selalu dibulatkan ke atas (mis. Rp 1.240 → Rp 1.300)'
+                              : 'Total selalu dibulatkan ke bawah (mis. Rp 1.240 → Rp 1.200)'}
+                        </p>
+                      </div>
+                    </>
+                  )}
                 </div>
               </section>
             )}

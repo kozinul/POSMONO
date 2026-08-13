@@ -23,6 +23,7 @@ interface OrderLike {
   createdAt?: string;
   items?: OrderItemLike[];
   total?: number;
+  roundingAdjustment?: number;
   cashierName?: string;
   paymentBreakdown?: Array<{ method?: string; amount?: number }>;
 }
@@ -43,6 +44,7 @@ interface ReportPrintModalProps {
   paymentBreakdown?: Record<string, number>;
   totalOrders?: number;
   totalRevenue?: number;
+  totalRounding?: number;
   storeName?: string;
   carriedOverBills?: CarriedOverBill[];
   onClose: () => void;
@@ -162,6 +164,15 @@ export function ReportPrintModal(props: ReportPrintModalProps) {
                 <span>Total Penerimaan</span>
                 <span>Rp {formatIDR(grandTotal)}</span>
               </div>
+              {props.totalRounding != null && props.totalRounding !== 0 && (
+                <div className="flex justify-between text-[10px] text-purple-700">
+                  <span>Total Pembulatan</span>
+                  <span>
+                    {props.totalRounding > 0 ? '+' : '-'}Rp{' '}
+                    {formatIDR(Math.abs(props.totalRounding))}
+                  </span>
+                </div>
+              )}
 
               {(props.carriedOverBills ?? []).length > 0 && (
                 <>
@@ -237,6 +248,15 @@ export function ReportPrintModal(props: ReportPrintModalProps) {
                         <span>Total</span>
                         <span>Rp {formatIDR(order.total ?? 0)}</span>
                       </div>
+                      {order.roundingAdjustment != null && order.roundingAdjustment !== 0 && (
+                        <div className="flex justify-between text-[10px] text-purple-700">
+                          <span>Pembulatan</span>
+                          <span>
+                            {order.roundingAdjustment > 0 ? '+' : '-'}Rp{' '}
+                            {formatIDR(Math.abs(order.roundingAdjustment))}
+                          </span>
+                        </div>
+                      )}
                       <div className="flex justify-between text-[10px] text-gray-500">
                         <span>Bayar</span>
                         <span>{payMethodNames(order.paymentBreakdown)}</span>
@@ -250,6 +270,15 @@ export function ReportPrintModal(props: ReportPrintModalProps) {
                 <span>Total Transaksi</span>
                 <span>{totalOrders}</span>
               </div>
+              {props.totalRounding != null && props.totalRounding !== 0 && (
+                <div className="flex justify-between text-[10px] text-purple-700">
+                  <span>Total Pembulatan</span>
+                  <span>
+                    {props.totalRounding > 0 ? '+' : '-'}Rp{' '}
+                    {formatIDR(Math.abs(props.totalRounding))}
+                  </span>
+                </div>
+              )}
             </div>
           )}
         </div>
