@@ -43,6 +43,8 @@ export interface TenantConfig {
   roundingEnabled: boolean;
   roundingMode: 'nearest' | 'up' | 'down';
   roundingDenomination: number;
+  autoPrintReceipt: boolean;
+  autoPrintKot: boolean;
 }
 
 export class Tenant extends AggregateRoot<TenantId> {

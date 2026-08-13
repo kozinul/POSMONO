@@ -16,6 +16,7 @@ const CategoryListPage = lazy(() => import('../core/categories/pages/CategoryLis
 const StockListPage = lazy(() => import('../core/inventory/pages/StockListPage'));
 const WarehouseListPage = lazy(() => import('../core/inventory/pages/WarehouseListPage'));
 const SettingsPage = lazy(() => import('../core/settings/pages/GeneralSettingsPage'));
+const PrinterSettingsPage = lazy(() => import('../core/printing/pages/PrinterSettingsPage'));
 const ReportPage = lazy(() => import('../core/reports/pages/ReportPage'));
 const ShiftPage = lazy(() => import('../core/shifts/pages/ShiftPage'));
 const MemberListPage = lazy(() => import('../core/members/pages/MemberListPage'));
@@ -24,6 +25,7 @@ const PaymentMethodListPage = lazy(() => import('../core/payment-methods/pages/P
 const UserListPage = lazy(() => import('../core/users/pages/UserListPage'));
 const TemplateListPage = lazy(() => import('../core/templates/pages/TemplateListPage'));
 const DesignerPage = lazy(() => import('../core/templates/pages/DesignerPage'));
+const DatabasePage = lazy(() => import('../core/database/pages/DatabasePage'));
 
 const Loading = () => (
   <div className="flex items-center justify-center min-h-screen">
@@ -54,12 +56,14 @@ export function AppRouter() {
               <Route path="/reports/sales-per-product" element={<Navigate to="/reports" replace />} />
               <Route path="/shifts" element={<ShiftPage />} />
               <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/settings/printers" element={<PrinterSettingsPage />} />
               <Route path="/members" element={<MemberListPage />} />
               <Route path="/promotions" element={<PromotionListPage />} />
               <Route path="/payment-methods" element={<PaymentMethodListPage />} />
               <Route path="/users" element={<UserListPage />} />
               <Route path="/templates" element={<TemplateListPage />} />
               <Route path="/templates/:id/designer" element={<DesignerPage />} />
+              <Route path="/database" element={<DatabasePage />} />
             </Route>
           </Route>
           <Route path="*" element={<NotFoundPage />} />

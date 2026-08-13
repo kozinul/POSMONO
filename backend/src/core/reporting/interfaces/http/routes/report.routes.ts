@@ -16,12 +16,15 @@ export function createReportRoutes(reportController: ReportController): Router {
   router.get('/sales-per-product', authenticate, authorize('reports:read'), asyncHandler(reportController.salesPerProduct.bind(reportController)));
   router.get('/best-sellers', authenticate, asyncHandler(reportController.bestSellers.bind(reportController)));
   router.get('/finance', authenticate, authorize('reports:read'), asyncHandler(reportController.finance.bind(reportController)));
+  router.get('/refunds', authenticate, authorize('reports:read'), asyncHandler(reportController.refunds.bind(reportController)));
+  router.get('/refunds/:id/receipt.pdf', authenticate, authorize('reports:read'), asyncHandler(reportController.refundReceipt.bind(reportController)));
   router.post('/daily-metrics/generate', authenticate, authorize('reports:read'), asyncHandler(reportController.generateDailyMetric.bind(reportController)));
 
   router.get('/daily/export', authenticate, authorize('reports:read'), asyncHandler(reportController.exportDaily.bind(reportController)));
   router.get('/sales/export', authenticate, authorize('reports:read'), asyncHandler(reportController.exportSales.bind(reportController)));
   router.get('/finance/export', authenticate, authorize('reports:read'), asyncHandler(reportController.exportFinance.bind(reportController)));
   router.get('/sales-per-product/export', authenticate, authorize('reports:read'), asyncHandler(reportController.exportSalesPerProduct.bind(reportController)));
+  router.get('/refunds/export', authenticate, authorize('reports:read'), asyncHandler(reportController.exportRefunds.bind(reportController)));
 
   return router;
 }

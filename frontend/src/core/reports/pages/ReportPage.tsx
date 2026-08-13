@@ -1,8 +1,11 @@
 import { useState, useEffect, useMemo, Fragment } from 'react';
 import { useDailyReport, useSalesReport, useFinanceReport } from '../../orders/hooks/useOrders';
 import { useSalesPerProductReport } from '../hooks/useSalesPerProductReport';
+import { useRefundReport, refundReference, type RefundRow } from '../../payments/hooks/useRefund';
+import { RefundReceiptModal } from '../components/RefundReceiptModal';
 import { useReportExport, ReportType } from '../hooks/useReportExport';
 import { useCategories } from '../../pos/hooks/useProducts';
+import { paymentMethodLabel } from '../../pos/utils/paymentLabels';
 import { formatCurrency } from '../../../@shared/utils/format';
 
 const reports = [
@@ -43,6 +46,16 @@ const reports = [
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7.5A1.5 1.5 0 006 6.5v11A1.5 1.5 0 007.5 19h9a1.5 1.5 0 001.5-1.5v-11A1.5 1.5 0 0016.5 5H15m-6 0a1.5 1.5 0 001.5 1.5H12A1.5 1.5 0 0013.5 5m-6 0A1.5 1.5 0 016 3.5h3M10.5 9h6m-6 3h6m-6 3h3" />
+      </svg>
+    ),
+  },
+  {
+    id: 'refunds',
+    label: 'Laporan Refund',
+    keywords: 'refund pengembalian return uang kembali kompensasi pembatalan',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 12.75h3.75a2.25 2.25 0 100-4.5H7.5m3.75 4.5v-1.5m0 1.5h1.5m-1.5-3H9.75m-3 0H6M12 3v18m-7.5-6h15a1.5 1.5 0 001.5-1.5v-9A1.5 1.5 0 0019.5 3h-15A1.5 1.5 0 003 4.5v9a1.5 1.5 0 001.5 1.5z" />
       </svg>
     ),
   },
@@ -114,6 +127,9 @@ export default function ReportPage() {
   const [financeTo, setFinanceTo] = useState(today);
   const [sppFrom, setSppFrom] = useState(today);
   const [sppTo, setSppTo] = useState(today);
+  const [refundFrom, setRefundFrom] = useState(today);
+  const [refundTo, setRefundTo] = useState(today);
+  const [selectedRefund, setSelectedRefund] = useState<RefundRow | null>(null);
   const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
 
   const { data: daily, isLoading: dailyLoading } = useDailyReport(selectedDate);
@@ -128,6 +144,10 @@ export default function ReportPage() {
   const { data: spp, isLoading: sppLoading } = useSalesPerProductReport(
     sppFrom || today,
     sppTo || today,
+  );
+  const { data: refunds, isLoading: refundsLoading } = useRefundReport(
+    refundFrom || today,
+    refundTo || today,
   );
   const { data: categories = [] } = useCategories();
 
@@ -247,7 +267,7 @@ export default function ReportPage() {
                       </div>
                       {daily.totalRounding != null && daily.totalRounding !== 0 && (
                         <div className="flex justify-between text-sm bg-purple-50 rounded-lg p-3">
-                          <span className="text-purple-700">Total Pembulatan</span>
+                          <span className="text-purple-700">Total Pembulatan (termasuk revenue)</span>
                           <span className="text-purple-800 font-bold">
                             {daily.totalRounding > 0 ? '+' : '-'}Rp {formatCurrency(Math.abs(daily.totalRounding))}
                           </span>
@@ -325,7 +345,7 @@ export default function ReportPage() {
                       </div>
                       {sales.totalRounding != null && sales.totalRounding !== 0 && (
                         <div className="flex justify-between text-sm bg-purple-50 rounded-lg p-3">
-                          <span className="text-purple-700">Total Pembulatan</span>
+                          <span className="text-purple-700">Total Pembulatan (termasuk revenue)</span>
                           <span className="text-purple-800 font-bold">
                             {sales.totalRounding > 0 ? '+' : '-'}Rp {formatCurrency(Math.abs(sales.totalRounding))}
                           </span>
@@ -337,7 +357,17 @@ export default function ReportPage() {
                           {sales.orders.map((order: any) => (
                             <div key={order.id} className="flex items-center justify-between text-sm py-1">
                               <span className="text-gray-700">{order.orderNumber}</span>
-                              <span className="font-medium text-gray-900">{formatCurrency(order.total)}</span>
+                              <span className="flex items-center gap-2">
+                                {order.roundingAdjustment != null && order.roundingAdjustment !== 0 && (
+                                  <span className="text-xs text-purple-600">
+                                    {order.roundingAdjustment > 0 ? '+' : '-'}Rp{' '}
+                                    {formatCurrency(Math.abs(order.roundingAdjustment))}
+                                  </span>
+                                )}
+                                <span className="font-medium text-gray-900">
+                                  {formatCurrency(order.total + (order.roundingAdjustment ?? 0))}
+                                </span>
+                              </span>
                             </div>
                           ))}
                         </div>
@@ -405,7 +435,7 @@ export default function ReportPage() {
                         </div>
                         {finance.totalRounding != null && finance.totalRounding !== 0 && (
                           <div>
-                            <p className="text-xs text-gray-500">Pembulatan</p>
+                            <p className="text-xs text-gray-500">Pembulatan (termasuk revenue)</p>
                             <p className="text-xl font-bold text-gray-900">
                               {finance.totalRounding > 0 ? '+' : '-'}Rp {formatCurrency(Math.abs(finance.totalRounding))}
                             </p>
@@ -568,9 +598,115 @@ export default function ReportPage() {
                 </div>
               </section>
             )}
+
+            {activeReport === 'refunds' && (
+              <section className="bg-white rounded-2xl shadow-sm border border-gray-100">
+                <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-lg font-bold text-gray-800">Laporan Refund</h2>
+                    <p className="text-sm text-gray-400 mt-0.5">Rincian refund transaksi pada periode tertentu</p>
+                  </div>
+                  <ExportButtons
+                    type="refunds"
+                    params={{ dateFrom: refundFrom || today, dateTo: refundTo || today }}
+                    disabled={!refunds || refunds.refunds.length === 0}
+                  />
+                </div>
+                <div className="px-6 py-5 space-y-5">
+                  <div className="flex gap-4">
+                    <div>
+                      <label className={labelCls}>Dari</label>
+                      <input type="date" value={refundFrom} onChange={(e) => setRefundFrom(e.target.value)} className={inputCls} />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Sampai</label>
+                      <input type="date" value={refundTo} onChange={(e) => setRefundTo(e.target.value)} className={inputCls} />
+                    </div>
+                  </div>
+                  {refundsLoading ? (
+                    <Spinner />
+                  ) : refunds && refunds.refunds.length > 0 ? (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-xs text-gray-500">Total Refund</p>
+                          <p className="text-xl font-bold text-gray-900">{refunds.totalRefunds}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500">Total Amount</p>
+                          <p className="text-xl font-bold text-red-600">{formatCurrency(refunds.totalAmount)}</p>
+                        </div>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full text-sm">
+                          <thead className="bg-gray-50 border-b border-gray-200">
+                            <tr>
+                              <th className="text-left px-4 py-3 font-medium text-gray-700">No. Order</th>
+                              <th className="text-left px-4 py-3 font-medium text-gray-700">Tanggal</th>
+                              <th className="text-left px-4 py-3 font-medium text-gray-700">Metode</th>
+                              <th className="text-left px-4 py-3 font-medium text-gray-700">Kode Ref</th>
+                              <th className="text-left px-4 py-3 font-medium text-gray-700">Kasir</th>
+                              <th className="text-left px-4 py-3 font-medium text-gray-700">Refunded By</th>
+                              <th className="text-left px-4 py-3 font-medium text-gray-700">Alasan</th>
+                              <th className="text-right px-4 py-3 font-medium text-gray-700">Jumlah</th>
+                              <th className="text-right px-4 py-3 font-medium text-gray-700">Struk</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {refunds.refunds.map((r) => (
+                              <tr key={r.refundId} className="hover:bg-gray-50">
+                                <td className="px-4 py-3 text-gray-900 font-medium">{r.orderNumber}</td>
+                                <td className="px-4 py-3 text-gray-500">
+                                  {new Date(r.refundedAt).toLocaleString('id-ID', {
+                                    day: '2-digit',
+                                    month: 'short',
+                                    year: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                </td>
+                                <td className="px-4 py-3 text-gray-700">{paymentMethodLabel(r.method)}</td>
+                                <td className="px-4 py-3 text-gray-500">{refundReference(r)}</td>
+                                <td className="px-4 py-3 text-gray-500">{r.cashierName || '-'}</td>
+                                <td className="px-4 py-3 text-gray-500">{r.refundedByName || '-'}</td>
+                                <td className="px-4 py-3 text-gray-500 max-w-[180px] truncate" title={r.reason}>{r.reason || '-'}</td>
+                                <td className="px-4 py-3 text-right text-red-600 font-medium">{formatCurrency(r.amount)}</td>
+                                <td className="px-4 py-3 text-right">
+                                  <button
+                                    onClick={() => setSelectedRefund(r)}
+                                    className="px-3 py-1.5 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50"
+                                  >
+                                    Struk
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot className="bg-gray-50 border-t border-gray-200 font-semibold">
+                            <tr>
+                              <td className="px-4 py-3 text-gray-900">Total</td>
+                              <td colSpan={7} />
+                              <td className="px-4 py-3 text-right text-red-600">{formatCurrency(refunds.totalAmount)}</td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">Tidak ada refund pada periode ini</p>
+                  )}
+                </div>
+              </section>
+            )}
           </div>
         </div>
       </div>
+
+      <RefundReceiptModal
+        open={!!selectedRefund}
+        refund={selectedRefund}
+        onClose={() => setSelectedRefund(null)}
+      />
     </div>
   );
 }

@@ -39,6 +39,8 @@ export class TenantService {
         roundingEnabled: false,
         roundingMode: 'nearest',
         roundingDenomination: 0,
+        autoPrintReceipt: true,
+        autoPrintKot: false,
       },
       billingEmail: input.billingEmail,
     });

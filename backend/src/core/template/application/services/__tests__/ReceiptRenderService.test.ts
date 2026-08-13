@@ -124,4 +124,30 @@ describe('ReceiptRenderService.buildDocumentData', () => {
     const data = service.buildDocumentData({ order, payment: cardPayment, tenant });
     expect(data.payments[0].change).toBe(0);
   });
+
+  it('computes cash change against rounded payable when order is rounded', () => {
+    const roundedOrder = {
+      ...order,
+      total: 36630,
+      roundedPayable: 37000,
+      roundingAdjustment: 370,
+    } as unknown as IOrder;
+    const exactPayment = {
+      ...payment,
+      amount: 37000,
+    } as unknown as IPayment;
+    const data = service.buildDocumentData({ order: roundedOrder, payment: exactPayment, tenant });
+    expect(data.payments[0].change).toBe(0);
+  });
+
+  it('falls back to order total when order has no rounding', () => {
+    const noRounding = {
+      ...order,
+      total: 36630,
+      roundedPayable: 0,
+      roundingAdjustment: 0,
+    } as unknown as IOrder;
+    const data = service.buildDocumentData({ order: noRounding, payment, tenant });
+    expect(data.payments[0].change).toBe(13370);
+  });
 });

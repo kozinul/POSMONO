@@ -2,6 +2,7 @@ import { EventBus } from '../@shared/infrastructure/eventBus/EventBus';
 import { DOMAIN_EVENTS } from '@posmono/shared';
 import type { DomainEvent } from '../@shared/domain/DomainEvent';
 import { getIO } from './socket';
+import type { DIContainer } from './container';
 
 async function onOrderCreated(event: DomainEvent): Promise<void> {
   getIO()?.to(event.tenantId).emit('domain-event', event);
@@ -9,6 +10,21 @@ async function onOrderCreated(event: DomainEvent): Promise<void> {
 
 async function onOrderConfirmed(event: DomainEvent): Promise<void> {
   getIO()?.to(event.tenantId).emit('domain-event', event);
+}
+
+async function onOrderConfirmedAutoKot(event: DomainEvent, container: DIContainer): Promise<void> {
+  try {
+    const tenantRepository = container.resolve('tenantRepository');
+    const tenant = await tenantRepository.findById(event.tenantId);
+    if (!tenant) return;
+    if (!tenant.serialize().config?.autoPrintKot) return;
+
+    const orderId = event.aggregateId;
+    const documentPrintService = container.resolve('documentPrintService');
+    await documentPrintService.printKot({ tenantId: event.tenantId, orderId });
+  } catch {
+    // auto-print KOT must never break the ordering flow
+  }
 }
 
 async function onPaymentCompleted(event: DomainEvent): Promise<void> {
@@ -59,9 +75,10 @@ async function onTaxConfigUpdated(event: DomainEvent): Promise<void> {
   getIO()?.to(event.tenantId).emit('domain-event', event);
 }
 
-export function registerEventHandlers(eventBus: EventBus): void {
+export function registerEventHandlers(eventBus: EventBus, container: DIContainer): void {
   eventBus.subscribe(DOMAIN_EVENTS.ORDER_CREATED, onOrderCreated);
   eventBus.subscribe(DOMAIN_EVENTS.ORDER_CONFIRMED, onOrderConfirmed);
+  eventBus.subscribe(DOMAIN_EVENTS.ORDER_CONFIRMED, (event) => onOrderConfirmedAutoKot(event, container));
   eventBus.subscribe(DOMAIN_EVENTS.ORDER_CANCELLED, onOrderCancelled);
   eventBus.subscribe('ordering.order.paid', onOrderPaid);
   eventBus.subscribe('ordering.order.held', onOrderHeld);

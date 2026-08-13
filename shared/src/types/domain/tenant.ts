@@ -37,6 +37,8 @@ export interface TenantConfig {
   discountMaxNominal: number;
   receiptFooter: string;
   receiptLogo: string;
+  autoPrintReceipt: boolean;
+  autoPrintKot: boolean;
 }
 
 export interface Subscription {

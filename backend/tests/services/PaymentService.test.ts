@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PaymentService } from '../../src/core/payment/application/services/PaymentService';
 import { ValidationError } from '../../src/@shared/infrastructure/error/AppError';
+import { Payment } from '../../src/core/payment/domain/Payment';
+import { Order } from '../../src/core/ordering/domain/Order';
 
 const TENANT_ID = 'tenant-test-1';
 
@@ -164,6 +166,187 @@ describe('PaymentService', () => {
       paymentRepo.findByTenant.mockResolvedValue([{ id: 'pay-1' }]);
       const result = await service.list(TENANT_ID);
       expect(paymentRepo.findByTenant).toHaveBeenCalledWith(TENANT_ID);
+      expect(result).toHaveLength(1);
+    });
+  });
+
+  describe('refund', () => {
+    const reason = 'Salah input kasir';
+
+    function createPaidPayment(shiftId: string | null): Payment {
+      return Payment.hydrate({
+        id: 'pay-refund-1',
+        tenantId: TENANT_ID,
+        orderId: 'order-1',
+        amount: 55500,
+        status: 'completed',
+        method: 'cash',
+        shiftId,
+        referenceNumber: '',
+        splitBills: [],
+        qrCodeUrl: null,
+        paymentTransactionId: null,
+        provider: null,
+        cardLastFour: null,
+        metadata: {},
+        paidAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as never);
+    }
+
+    function createPaidOrder(): Order {
+      return Order.hydrate({
+        id: 'order-1',
+        tenantId: TENANT_ID,
+        orderNumber: 'ORD-001',
+        status: 'paid',
+        items: [],
+        subtotal: 50000,
+        discount: 0,
+        discountTotal: 0,
+        dppTotal: 50000,
+        tax: 5500,
+        taxDetails: [],
+        total: 55500,
+        roundingAdjustment: 0,
+        roundedPayable: 55500,
+        roundingMethod: 'nearest',
+        roundingDenomination: 0,
+        serviceCharge: 0,
+        serviceChargeRate: 0,
+        paymentStatus: 'completed',
+        paymentBreakdown: [{ method: 'cash', code: 'cash', amount: 55500, change: 0 }],
+        promotions: [],
+        discountBreakdown: [],
+        customerId: null,
+        customerName: null,
+        cashierId: 'cashier-1',
+        cashierName: 'Kasir',
+        tableNumber: null,
+        transactionType: 'dine-in',
+        notes: '',
+        source: 'pos',
+        voidedItems: [],
+        voidApprovals: [],
+        voidedAt: null,
+        voidedBy: null,
+        voidedByName: null,
+        voidReason: null,
+        metadata: {},
+        createdAt: new Date(),
+        paidAt: new Date(),
+        updatedAt: new Date(),
+      } as never);
+    }
+
+    function createShiftRepoMock(status: 'open' | 'closed' | null) {
+      return {
+        findById: vi.fn().mockResolvedValue(
+          status === null ? null : { serialize: () => ({ id: 'shift-1', status }) },
+        ),
+      };
+    }
+
+    function withShiftRepo(shiftRepo: unknown, refundRepo: { save: ReturnType<typeof vi.fn> }) {
+      return new PaymentService(
+        paymentRepo,
+        orderRepo,
+        refundRepo as never,
+        null as never,
+        taxService as never,
+        null as never,
+        eventBus,
+        undefined,
+        undefined,
+        undefined,
+        shiftRepo as never,
+      );
+    }
+
+    it('rejects refund when payment not found', async () => {
+      paymentRepo.findById.mockResolvedValue(null);
+      await expect(
+        service.refund({ tenantId: TENANT_ID, paymentId: 'nope', reason, refundedBy: 'u1', refundedByName: 'Owner' }),
+      ).rejects.toThrow('Payment not found');
+    });
+
+    it('rejects refund when payment has no shiftId', async () => {
+      paymentRepo.findById.mockResolvedValue(createPaidPayment(null));
+      const svc = withShiftRepo(createShiftRepoMock('closed'), { save: vi.fn() });
+      await expect(
+        svc.refund({ tenantId: TENANT_ID, paymentId: 'pay-refund-1', reason, refundedBy: 'u1', refundedByName: 'Owner' }),
+      ).rejects.toThrow('Transaksi tidak tercatat pada shift, tidak dapat direfund.');
+    });
+
+    it('rejects refund while shift is still open', async () => {
+      paymentRepo.findById.mockResolvedValue(createPaidPayment('shift-1'));
+      const svc = withShiftRepo(createShiftRepoMock('open'), { save: vi.fn() });
+      await expect(
+        svc.refund({ tenantId: TENANT_ID, paymentId: 'pay-refund-1', reason, refundedBy: 'u1', refundedByName: 'Owner' }),
+      ).rejects.toThrow('Shift masih berjalan. Gunakan void untuk membatalkan transaksi.');
+    });
+
+    it('refunds payment from closed shift and marks order refunded', async () => {
+      paymentRepo.findById.mockResolvedValue(createPaidPayment('shift-1'));
+      orderRepo.findById.mockResolvedValue(createPaidOrder());
+      const refundRepo = { save: vi.fn() };
+      const svc = withShiftRepo(createShiftRepoMock('closed'), refundRepo);
+
+      const result = await svc.refund({
+        tenantId: TENANT_ID,
+        paymentId: 'pay-refund-1',
+        reason,
+        refundedBy: 'u1',
+        refundedByName: 'Owner',
+      });
+
+      expect(result.payment.serialize().status).toBe('refunded');
+      expect(result.order?.serialize().status).toBe('refunded');
+      expect(result.order?.serialize().voidReason).toBe(reason);
+      expect(result.order?.serialize().voidedByName).toBe('Owner');
+      expect(refundRepo.save).toHaveBeenCalled();
+      expect(eventBus.publish).toHaveBeenCalled();
+    });
+
+    it('refunds without shift validation when shiftRepository not provided (legacy)', async () => {
+      paymentRepo.findById.mockResolvedValue(createPaidPayment('shift-1'));
+      orderRepo.findById.mockResolvedValue(null);
+      const refundRepo = { save: vi.fn() };
+      const svc = new PaymentService(
+        paymentRepo,
+        orderRepo,
+        refundRepo as never,
+        null as never,
+        taxService as never,
+        null as never,
+        eventBus,
+      );
+
+      const result = await svc.refund({
+        tenantId: TENANT_ID,
+        paymentId: 'pay-refund-1',
+        reason,
+        refundedBy: 'u1',
+        refundedByName: 'Owner',
+      });
+
+      expect(result.payment.serialize().status).toBe('refunded');
+      expect(result.order).toBeNull();
+      expect(refundRepo.save).toHaveBeenCalled();
+    });
+  });
+
+  describe('listRefundable', () => {
+    it('returns empty array when repository does not support findRefundable', async () => {
+      const result = await service.listRefundable(TENANT_ID);
+      expect(result).toEqual([]);
+    });
+
+    it('delegates to repository findRefundable', async () => {
+      paymentRepo.findRefundable = vi.fn().mockResolvedValue([{ paymentId: 'pay-1' }]);
+      const result = await service.listRefundable(TENANT_ID, '2026-08-01', '2026-08-13');
+      expect(paymentRepo.findRefundable).toHaveBeenCalledWith(TENANT_ID, '2026-08-01', '2026-08-13');
       expect(result).toHaveLength(1);
     });
   });

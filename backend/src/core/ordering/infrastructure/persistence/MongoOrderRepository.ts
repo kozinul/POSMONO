@@ -149,9 +149,11 @@ export class MongoOrderRepository {
     return this.toDomain(doc);
   }
 
-  async findByTenant(tenantId: string, filter?: { status?: string; dateFrom?: string; dateTo?: string; page?: number; limit?: number }): Promise<{ orders: Order[]; total: number }> {
+  async findByTenant(tenantId: string, filter?: { status?: string | string[]; dateFrom?: string; dateTo?: string; page?: number; limit?: number }): Promise<{ orders: Order[]; total: number }> {
     const query: any = { tenantId };
-    if (filter?.status) query.status = filter.status;
+    if (filter?.status) {
+      query.status = Array.isArray(filter.status) ? { $in: filter.status } : filter.status;
+    }
     if (filter?.dateFrom || filter?.dateTo) {
       query.createdAt = {};
       if (filter?.dateFrom) {
@@ -196,7 +198,7 @@ export class MongoOrderRepository {
     const match = {
       tenantId,
       createdAt: { $gte: startOfDay, $lte: endOfDay },
-      status: 'paid',
+      status: { $in: ['paid', 'completed'] },
     };
 
     const [aggregation] = await this.model.aggregate([
@@ -205,7 +207,9 @@ export class MongoOrderRepository {
         $group: {
           _id: null,
           totalOrders: { $sum: 1 },
-          totalRevenue: { $sum: '$total' },
+          totalRevenue: {
+            $sum: { $add: [{ $ifNull: ['$roundingAdjustment', 0] }, '$total'] },
+          },
           totalRounding: { $sum: { $ifNull: ['$roundingAdjustment', 0] } },
           totalItems: { $sum: { $sum: '$items.quantity' } },
         },
@@ -234,6 +238,7 @@ export class MongoOrderRepository {
   async getSummary(tenantId: string): Promise<{
     todayRevenue: number;
     todayOrders: number;
+    totalRounding: number;
     pendingOrders: number;
     lowStockCount: number;
   }> {
@@ -247,13 +252,16 @@ export class MongoOrderRepository {
         $match: {
           tenantId,
           createdAt: { $gte: startOfDay, $lte: endOfDay },
-          status: 'paid',
+          status: { $in: ['paid', 'completed'] },
         },
       },
       {
         $group: {
           _id: null,
-          totalRevenue: { $sum: '$total' },
+          totalRevenue: {
+            $sum: { $add: [{ $ifNull: ['$roundingAdjustment', 0] }, '$total'] },
+          },
+          totalRounding: { $sum: { $ifNull: ['$roundingAdjustment', 0] } },
           totalOrders: { $sum: 1 },
         },
       },
@@ -266,6 +274,7 @@ export class MongoOrderRepository {
 
     return {
       todayRevenue: todayAgg?.totalRevenue || 0,
+      totalRounding: todayAgg?.totalRounding || 0,
       todayOrders: todayAgg?.totalOrders || 0,
       pendingOrders: pendingCount,
       lowStockCount: 0,

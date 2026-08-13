@@ -19,6 +19,7 @@ export class PaymentService {
     private readonly inventoryService?: any,
     private readonly userRepository?: any,
     private readonly shiftRepository?: any,
+    private readonly printService?: any,
   ) {}
 
   private async assertOpenShift(tenantId: string, cashierId: string, providedShiftId?: string | null): Promise<string> {
@@ -298,7 +299,21 @@ export class PaymentService {
 
     const receipt = await this.renderReceipt(order, payment, input.splitIndex, undefined, input.splitBaseOrderNumber);
 
+    void this.autoPrintReceipt(input.tenantId, receipt);
+
     return { payment, order, receipt };
+  }
+
+  private async autoPrintReceipt(tenantId: string, receipt: ReceiptRenderResult | null): Promise<void> {
+    if (!receipt || !this.printService) return;
+    try {
+      const tenant = await this.tenantRepository.findById(tenantId);
+      if (!tenant) return;
+      if (!tenant.serialize().config?.autoPrintReceipt) return;
+      await this.printService.printEscPos({ tenantId, purpose: 'receipt', buffer: receipt.thermal });
+    } catch {
+      // auto-print must never break the transaction
+    }
   }
 
   private async renderReceipt(order: Order, payment: Payment, splitIndex?: number, totalSplits?: number, splitBaseOrderNumber?: string): Promise<ReceiptRenderResult | null> {
@@ -410,6 +425,8 @@ export class PaymentService {
 
     const receipt = await this.renderReceipt(order, payment);
 
+    void this.autoPrintReceipt(input.tenantId, receipt);
+
     return { payment, order, receipt };
   }
 
@@ -419,12 +436,24 @@ export class PaymentService {
     reason: string;
     refundedBy: string;
     refundedByName: string;
-  }): Promise<{ refund: Refund; payment: Payment }> {
+  }): Promise<{ refund: Refund; payment: Payment; order: Order | null }> {
     const payment = await this.paymentRepository.findById(input.paymentId);
     if (!payment) throw new NotFoundError('Payment not found');
 
     const paymentData = payment.serialize();
     if (paymentData.tenantId !== input.tenantId) throw new NotFoundError('Payment not found');
+
+    if (this.shiftRepository) {
+      const shift = paymentData.shiftId
+        ? await this.shiftRepository.findById(paymentData.shiftId)
+        : null;
+      if (!shift) {
+        throw new ValidationError('Transaksi tidak tercatat pada shift, tidak dapat direfund.');
+      }
+      if (shift.serialize().status === 'open') {
+        throw new ValidationError('Shift masih berjalan. Gunakan void untuk membatalkan transaksi.');
+      }
+    }
 
     payment.refund(input.refundedBy, input.refundedByName, input.reason);
 
@@ -445,6 +474,8 @@ export class PaymentService {
     const order = await this.orderRepository.findById(paymentData.orderId);
     if (order && order.serialize().paymentBreakdown.length === 1) {
       await this.applyStockRestore(order, input.tenantId, input.refundedBy);
+      order.markRefunded(input.refundedBy, input.refundedByName, input.reason);
+      await this.orderRepository.save(order);
     }
 
     for (const event of payment.domainEvents) {
@@ -453,8 +484,18 @@ export class PaymentService {
     for (const event of refund.domainEvents) {
       this.eventBus.publish(event);
     }
+    if (order) {
+      for (const event of order.domainEvents) {
+        this.eventBus.publish(event);
+      }
+    }
 
-    return { refund, payment };
+    return { refund, payment, order };
+  }
+
+  async listRefundable(tenantId: string, dateFrom?: string, dateTo?: string) {
+    if (!this.paymentRepository.findRefundable) return [];
+    return this.paymentRepository.findRefundable(tenantId, dateFrom, dateTo);
   }
 
   async payOpenBill(input: {
@@ -552,6 +593,7 @@ export class PaymentService {
 
       const receipt = await this.renderReceipt(order, payment, i + 1, totalSplits);
       receipts.push(receipt);
+      void this.autoPrintReceipt(input.tenantId, receipt);
     }
 
     const cashierName = await this.resolveCashierName(input.cashierId, input.tenantId, '');

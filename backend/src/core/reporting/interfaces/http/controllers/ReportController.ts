@@ -202,4 +202,45 @@ export class ReportController extends BaseController {
     );
     this.sendFile(res, file);
   }
+
+  async refunds(req: Request, res: Response): Promise<void> {
+    const { dateFrom, dateTo } = req.query;
+    if (!dateFrom || !dateTo) {
+      res.status(400).json({ success: false, message: 'dateFrom and dateTo query parameters are required' });
+      return;
+    }
+    const result = await this.reportService.getRefundReport(
+      req.tenantId,
+      dateFrom as string,
+      dateTo as string,
+    );
+    this.ok(res, result);
+  }
+
+  async exportRefunds(req: Request, res: Response): Promise<void> {
+    const { dateFrom, dateTo, format } = req.query;
+    if (!dateFrom || !dateTo) {
+      res.status(400).json({ success: false, message: 'dateFrom and dateTo query parameters are required' });
+      return;
+    }
+    const f = this.resolveFormat(format);
+    if (!f) {
+      res.status(400).json({ success: false, message: 'format must be pdf or xlsx' });
+      return;
+    }
+    const file = await this.reportExportService.exportRefunds(
+      req.tenantId,
+      dateFrom as string,
+      dateTo as string,
+      f,
+    );
+    this.sendFile(res, file);
+  }
+
+  async refundReceipt(req: Request, res: Response): Promise<void> {
+    const buffer = await this.reportExportService.refundReceiptPdf(req.tenantId, req.params.id);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="struk-refund-${req.params.id}.pdf"`);
+    res.send(buffer);
+  }
 }

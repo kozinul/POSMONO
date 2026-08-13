@@ -115,6 +115,15 @@ import { TemplateService } from '../core/template/application/services/TemplateS
 import { RenderService } from '../core/template/application/services/RenderService';
 import { ReceiptRenderService } from '../core/template/application/services/ReceiptRenderService';
 import { TemplateController } from '../core/template/interfaces/http/controllers/TemplateController';
+import { DatabaseService } from '../core/database/application/services/DatabaseService';
+import { DatabaseController } from '../core/database/interfaces/http/controllers/DatabaseController';
+import { PrinterSchema } from '../core/printing/infrastructure/persistence/schemas/PrinterSchema';
+import { MongoPrinterRepository } from '../core/printing/infrastructure/persistence/MongoPrinterRepository';
+import { PrinterService } from '../core/printing/application/services/PrinterService';
+import { PrintService } from '../core/printing/application/services/PrintService';
+import { DocumentPrintService } from '../core/printing/application/services/DocumentPrintService';
+import { PrinterController } from '../core/printing/interfaces/http/controllers/PrinterController';
+import { KotRenderService } from '../core/template/application/services/KotRenderService';
 
 export type DIContainer = ReturnType<typeof buildContainer>;
 
@@ -152,6 +161,8 @@ export function buildContainer() {
   const MenuTypeModel = systemConnection.model('MenuType', MenuTypeSchema);
   const TemplateModel = systemConnection.model('Template', TemplateSchema);
   const TemplateVersionModel = systemConnection.model('TemplateVersion', TemplateVersionSchema);
+  const PrinterModel = systemConnection.model('Printer', PrinterSchema);
+  PrinterModel.syncIndexes().catch(() => {});
 
   const eventBus = new EventBus();
 
@@ -187,6 +198,7 @@ export function buildContainer() {
     menuTypeModel: asValue(MenuTypeModel),
     templateModel: asValue(TemplateModel),
     templateVersionModel: asValue(TemplateVersionModel),
+    printerModel: asValue(PrinterModel),
     userRepository: asClass(MongoUserRepository, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
@@ -615,6 +627,7 @@ export function buildContainer() {
         inventoryService: container.resolve('inventoryService'),
         userRepository: container.resolve('userRepository'),
         shiftRepository: container.resolve('shiftRepository'),
+        printService: container.resolve('printService'),
       }),
     }),
     paymentController: asClass(PaymentController, {
@@ -711,6 +724,7 @@ export function buildContainer() {
         shiftModel: ShiftModel,
         productModel: ProductModel,
         paymentModel: PaymentModel,
+        refundModel: RefundModel,
       }),
     }),
     reportService: asClass(ReportService, {
@@ -831,6 +845,68 @@ export function buildContainer() {
       injector: () => ({
         templateService: container.resolve('templateService'),
         renderService: container.resolve('renderService'),
+      }),
+    }),
+    databaseService: asClass(DatabaseService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        orderModel: OrderModel,
+        paymentModel: PaymentModel,
+        refundModel: RefundModel,
+        dailyMetricModel: DailyMetricModel,
+        shiftModel: ShiftModel,
+        shiftRepository: container.resolve('shiftRepository'),
+        shiftService: container.resolve('shiftService'),
+        reportAggregation: container.resolve('reportAggregation'),
+      }),
+    }),
+    databaseController: asClass(DatabaseController, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        databaseService: container.resolve('databaseService'),
+      }),
+    }),
+    printerRepository: asClass(MongoPrinterRepository, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        model: PrinterModel,
+      }),
+    }),
+    printerService: asClass(PrinterService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        printerRepository: container.resolve('printerRepository'),
+      }),
+    }),
+    printService: asClass(PrintService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        printerRepository: container.resolve('printerRepository'),
+      }),
+    }),
+    printerController: asClass(PrinterController, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        printerService: container.resolve('printerService'),
+        printService: container.resolve('printService'),
+        documentPrintService: container.resolve('documentPrintService'),
+      }),
+    }),
+    kotRenderService: asClass(KotRenderService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        templateService: container.resolve('templateService'),
+      }),
+    }),
+    documentPrintService: asClass(DocumentPrintService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        printService: container.resolve('printService'),
+        orderRepository: container.resolve('orderRepository'),
+        paymentRepository: container.resolve('paymentRepository'),
+        tenantRepository: container.resolve('tenantRepository'),
+        receiptRenderService: container.resolve('receiptRenderService'),
+        kotRenderService: container.resolve('kotRenderService'),
       }),
     }),
   });

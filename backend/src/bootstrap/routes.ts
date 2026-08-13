@@ -26,6 +26,8 @@ import { createPaymentMethodRoutes } from '../core/payment/interfaces/http/route
 import { createMenuTypeRoutes } from '../core/catalog/interfaces/http/routes/menuType.routes';
 import { createPricingRouter } from '../core/pricing/api/pricing.routes';
 import { createTemplateRoutes } from '../core/template/interfaces/http/routes/template.routes';
+import { createDatabaseRoutes } from '../core/database/interfaces/http/routes/database.routes';
+import { createPrinterRoutes, createPrintRoutes } from '../core/printing/interfaces/http/routes/printer.routes';
 
 export function registerRoutes(app: Express, container: DIContainer): void {
   app.get('/health', (_req, res) => {
@@ -110,4 +112,11 @@ export function registerRoutes(app: Express, container: DIContainer): void {
 
   const tenantRepository = container.resolve('tenantRepository');
   app.use('/api/pricing', createPricingRouter(discountConfigRepo, taxConfigRepo, promoCodeRepo, tenantRepository));
+
+  const databaseController = container.resolve('databaseController');
+  app.use('/api/database', createDatabaseRoutes(databaseController));
+
+  const printerController = container.resolve('printerController');
+  app.use('/api/printers', createPrinterRoutes(printerController));
+  app.use('/api/print', createPrintRoutes(printerController));
 }

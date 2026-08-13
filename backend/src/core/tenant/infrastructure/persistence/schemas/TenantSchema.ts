@@ -41,6 +41,8 @@ export const TenantSchema = new Schema(
       roundingEnabled: { type: Boolean, default: false },
       roundingMode: { type: String, enum: ['nearest', 'up', 'down'], default: 'nearest' },
       roundingDenomination: { type: Number, default: 0 },
+      autoPrintReceipt: { type: Boolean, default: true },
+      autoPrintKot: { type: Boolean, default: false },
     },
     billingEmail: { type: String, required: true },
   },

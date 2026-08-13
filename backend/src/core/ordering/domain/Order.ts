@@ -441,6 +441,35 @@ export class Order extends AggregateRoot<OrderId> {
     );
   }
 
+  markRefunded(refundedBy: string, refundedByName: string, reason: string): void {
+    if (this.status === 'voided' || this.status === 'refunded' || this.status === 'cancelled') {
+      throw new Error('Cannot refund a voided/refunded/cancelled order');
+    }
+
+    this.status = 'refunded';
+    this.voidedAt = new Date();
+    this.voidedBy = refundedBy;
+    this.voidedByName = refundedByName;
+    this.voidReason = reason;
+    this.updatedAt = new Date();
+
+    this.addDomainEvent(
+      new DomainEvent({
+        eventName: 'ordering.order.refunded',
+        aggregateId: this.id.toValue(),
+        aggregateType: 'Order',
+        tenantId: this.tenantId,
+        payload: {
+          orderId: this.id.toValue(),
+          orderNumber: this.orderNumber,
+          refundedBy,
+          refundedByName,
+          reason,
+        },
+      }),
+    );
+  }
+
   pay(paymentBreakdown: IPaymentBreakdownEntry[], cashierId: string, cashierName: string): void {
     if (this.status === 'voided' || this.status === 'cancelled') {
       throw new Error('Cannot pay a voided/cancelled order');

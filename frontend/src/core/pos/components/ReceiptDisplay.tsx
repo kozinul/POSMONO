@@ -2,6 +2,8 @@ import { usePOSStore } from '../store/posStore';
 import { formatIDR } from '../utils/money';
 import { renderLayoutToHtml } from '../../templates/utils/renderLayoutToHtml';
 import type { PricingResult } from '../../../@shared/hooks/usePricing';
+import { useQueryClient } from '@tanstack/react-query';
+import { reprintReceipt } from '../../printing/utils/autoPrint';
 
 function getChargeRate(adjustments: PricingResult['adjustments']): number {
   const charge = adjustments.find((a) => a.type === 'CHARGE');
@@ -28,6 +30,7 @@ function downloadBase64(base64: string, filename: string, mime: string): void {
 
 export function ReceiptDisplay() {
   const { receipt, clearCart, openPaymentModal, clearReceipt, pricing } = usePOSStore();
+  const queryClient = useQueryClient();
 
   if (!receipt) return null;
 
@@ -174,7 +177,10 @@ export function ReceiptDisplay() {
             </button>
           )}
           <button
-            onClick={() => window.print()}
+            onClick={async () => {
+              const mode = await reprintReceipt(queryClient, receipt.thermal);
+              if (mode === 'browser') window.print();
+            }}
             className="flex-1 py-3 rounded-xl font-bold border-2 border-primary-600 text-primary-600 hover:bg-primary-50 transition-colors"
           >
             Print

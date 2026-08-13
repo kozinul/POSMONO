@@ -45,3 +45,4 @@ export class PricingProfileId extends Identifier {}
 export class DiscountConfigurationId extends Identifier {}
 export class PromoCodeId extends Identifier {}
 export class PromotionId extends Identifier {}
+export class PrinterId extends Identifier {}

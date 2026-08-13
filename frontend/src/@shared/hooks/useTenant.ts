@@ -16,6 +16,8 @@ export interface TenantConfig {
   discountMaxNominal: number;
   receiptFooter: string;
   receiptLogo: string;
+  autoPrintReceipt: boolean;
+  autoPrintKot: boolean;
   roundingEnabled: boolean;
   roundingMode: 'nearest' | 'up' | 'down';
   roundingDenomination: number;

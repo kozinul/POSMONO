@@ -26,6 +26,8 @@ export const updateTenantConfigSchema = z.object({
   discountMaxNominal: z.number().min(0).optional(),
   receiptFooter: z.string().optional(),
   receiptLogo: z.string().optional(),
+  autoPrintReceipt: z.boolean().optional(),
+  autoPrintKot: z.boolean().optional(),
   roundingEnabled: z.boolean().optional(),
   roundingMode: z.enum(['nearest', 'up', 'down']).optional(),
   roundingDenomination: z.union([z.literal(0), z.literal(100), z.literal(500), z.literal(1000)]).optional(),

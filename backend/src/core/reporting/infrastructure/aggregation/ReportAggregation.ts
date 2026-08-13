@@ -12,6 +12,7 @@ export class ReportAggregation {
     private readonly shiftModel: Model<any>,
     private readonly productModel: Model<any>,
     private readonly paymentModel: Model<any>,
+    private readonly refundModel?: Model<any>,
   ) {}
 
   async getDailySalesAggregation(tenantId: string, date: string) {
@@ -278,8 +279,12 @@ export class ReportAggregation {
         $group: {
           _id: '$cashierId',
           totalOrders: { $sum: 1 },
-          totalRevenue: { $sum: '$total' },
-          avgOrderValue: { $avg: '$total' },
+          totalRevenue: {
+            $sum: { $add: [{ $ifNull: ['$roundingAdjustment', 0] }, '$total'] },
+          },
+          avgOrderValue: {
+            $avg: { $add: [{ $ifNull: ['$roundingAdjustment', 0] }, '$total'] },
+          },
         },
       },
       { $sort: { totalRevenue: -1 } },
@@ -354,9 +359,16 @@ export class ReportAggregation {
         $group: {
           _id: null,
           totalOrders: { $sum: 1 },
-          totalRevenue: { $sum: '$total' },
+          totalRevenue: {
+            $sum: { $add: [{ $ifNull: ['$roundingAdjustment', 0] }, '$total'] },
+          },
           netRevenue: {
-            $sum: { $subtract: [{ $subtract: ['$total', '$tax'] }, { $ifNull: ['$serviceCharge', 0] }] },
+            $sum: {
+              $subtract: [
+                { $subtract: [{ $add: [{ $ifNull: ['$roundingAdjustment', 0] }, '$total'] }, '$tax'] },
+                { $ifNull: ['$serviceCharge', 0] },
+              ],
+            },
           },
           totalTax: { $sum: { $ifNull: ['$tax', 0] } },
           totalServiceCharge: { $sum: { $ifNull: ['$serviceCharge', 0] } },
@@ -474,5 +486,109 @@ export class ReportAggregation {
         })),
       })),
     );
+  }
+
+  async getRefundAggregation(tenantId: string, dateFrom: string, dateTo: string) {
+    const startOfDay = new Date(dateFrom);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(dateTo);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    if (!this.refundModel) return [];
+
+    return this.refundModel
+      .aggregate([
+        {
+          $match: {
+            tenantId,
+            status: 'completed',
+            refundedAt: { $gte: startOfDay, $lte: endOfDay },
+          },
+        },
+        {
+          $lookup: {
+            from: 'payments',
+            localField: 'paymentId',
+            foreignField: '_id',
+            as: 'payment',
+          },
+        },
+        { $unwind: { path: '$payment', preserveNullAndEmptyArrays: true } },
+        {
+          $lookup: {
+            from: 'orders',
+            localField: 'orderId',
+            foreignField: '_id',
+            as: 'order',
+          },
+        },
+        { $unwind: { path: '$order', preserveNullAndEmptyArrays: true } },
+        { $sort: { refundedAt: -1 } },
+      ])
+      .then((rows: any[]) =>
+        rows.map((r) => ({
+          refundId: r._id,
+          orderId: r.orderId,
+          orderNumber: r.order?.orderNumber ?? '',
+          cashierName: r.order?.cashierName ?? '',
+          amount: r.amount,
+          reason: r.reason,
+          refundedBy: r.refundedBy,
+          refundedByName: r.refundedByName,
+          refundedAt: r.refundedAt,
+          method: r.payment?.method ?? 'cash',
+          referenceNumber: r.payment?.referenceNumber ?? '',
+          provider: r.payment?.provider ?? null,
+          cardLastFour: r.payment?.cardLastFour ?? null,
+        })),
+      );
+  }
+
+  async getRefundByIdAggregation(tenantId: string, refundId: string) {
+    if (!this.refundModel) return null;
+
+    const rows = await this.refundModel.aggregate([
+      { $match: { _id: refundId, tenantId, status: 'completed' } },
+      {
+        $lookup: {
+          from: 'payments',
+          localField: 'paymentId',
+          foreignField: '_id',
+          as: 'payment',
+        },
+      },
+      { $unwind: { path: '$payment', preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: 'orders',
+          localField: 'orderId',
+          foreignField: '_id',
+          as: 'order',
+        },
+      },
+      { $unwind: { path: '$order', preserveNullAndEmptyArrays: true } },
+    ]);
+
+    const r = rows[0];
+    if (!r) return null;
+
+    return {
+      refundId: r._id,
+      orderId: r.orderId,
+      orderNumber: r.order?.orderNumber ?? '',
+      cashierName: r.order?.cashierName ?? '',
+      orderItems: r.order?.items ?? [],
+      orderTotal: r.order?.total ?? 0,
+      roundingAdjustment: r.order?.roundingAdjustment ?? 0,
+      amount: r.amount,
+      reason: r.reason,
+      refundedBy: r.refundedBy,
+      refundedByName: r.refundedByName,
+      refundedAt: r.refundedAt,
+      method: r.payment?.method ?? 'cash',
+      referenceNumber: r.payment?.referenceNumber ?? '',
+      provider: r.payment?.provider ?? null,
+      cardLastFour: r.payment?.cardLastFour ?? null,
+    };
   }
 }

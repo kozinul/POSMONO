@@ -72,6 +72,7 @@ interface OrdersResponse {
 
 interface DashboardSummary {
   todayRevenue: number;
+  totalRounding: number;
   todayOrders: number;
   pendingOrders: number;
   lowStockCount: number;

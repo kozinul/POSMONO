@@ -231,15 +231,6 @@ export function PosActionPanel(props: PosActionPanelProps) {
                         Rp {formatIDR(shiftSales?.nonCashSales ?? 0)}
                       </span>
                     </div>
-                    {shiftReport?.totalRounding != null && shiftReport.totalRounding !== 0 && (
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Pembulatan</span>
-                        <span className="text-gray-900 font-medium">
-                          {shiftReport.totalRounding > 0 ? '+' : '-'}Rp{' '}
-                          {formatIDR(Math.abs(shiftReport.totalRounding))}
-                        </span>
-                      </div>
-                    )}
                   </div>
                   <div className="px-3 pt-2 space-y-1">
                     <button

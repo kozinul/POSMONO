@@ -81,6 +81,7 @@ async function seedData() {
         'customers:read', 'customers:write',
         'settings:read', 'settings:write',
         'shifts:read', 'shifts:write',
+        'printers:read', 'printers:write',
       ],
       isSystem: true,
     },
@@ -97,6 +98,7 @@ async function seedData() {
         'customers:read', 'customers:write',
         'settings:read',
         'shifts:read', 'shifts:write',
+        'printers:read', 'printers:write',
       ],
       isSystem: true,
     },
@@ -106,7 +108,7 @@ async function seedData() {
       permissions: [
         'products:read',
         'orders:read', 'orders:write',
-        'payments:read', 'payments:write',
+        'payments:read',
         'customers:read', 'customers:write',
         'shifts:read', 'shifts:write',
       ],
@@ -463,7 +465,7 @@ async function main() {
   const container = buildContainer();
 
   const eventBus = container.resolve('eventBus');
-  registerEventHandlers(eventBus);
+  registerEventHandlers(eventBus, container);
 
   const app = createServer(container);
   const httpServer = http.createServer(app);

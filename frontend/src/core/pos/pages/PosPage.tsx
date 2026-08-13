@@ -24,6 +24,9 @@ import { useAuthStore, hasPermission } from '../../../@shared/hooks/useAuth';
 import { VOID_ORDER_PERMISSION } from '../../../@shared/utils/permissions';
 import { useVoidOrder, useVoidItem } from '../../orders/hooks/useOrders';
 import { useBestSellers } from '../../orders/hooks/useOrders';
+import { printReceipt as apiPrintReceipt, printKot as apiPrintKot } from '../../printing/hooks/usePrinters';
+import { printViaClient } from '../../printing/utils/PrintClient';
+import type { Printer } from '@posmono/shared';
 import type { CartItem } from '../store/posStore';
 
 export default function PosPage() {
@@ -663,7 +666,7 @@ export default function PosPage() {
           <div className="flex justify-between items-end pt-4">
             <span className="text-2xl font-bold text-gray-800">Total:</span>
             <span className="text-3xl font-extrabold text-gray-900">
-              Rp {formatIDR(p?.grandTotal ?? 0)}
+              Rp {formatIDR(p?.roundedPayable ?? p?.grandTotal ?? 0)}
             </span>
           </div>
            <div className="flex gap-4 pt-4">
@@ -682,43 +685,93 @@ export default function PosPage() {
                  >
                    Void
                  </button>
-                 <button
-                   onClick={() => {
-                     if (!viewTransaction) return;
-                     const paid = viewTransaction.paymentBreakdown?.reduce(
-                       (s: number, p: any) => s + (p.amount ?? 0),
-                       0,
-                     ) ?? 0;
-                     const change = viewTransaction.paymentBreakdown?.reduce(
-                       (s: number, p: any) => s + (p.change ?? 0),
-                       0,
-                     ) ?? 0;
-                     usePOSStore.getState().setReceipt({
-                       orderNumber: viewTransaction.orderNumber,
-                       displayOrderNumber: viewTransaction.orderNumber,
-                       paid,
-                       change,
-                       grandTotal: viewTransaction.total,
-                       paidItems: (viewTransaction.items ?? []).map((i: any) => ({
-                         productId: i.productId,
-                         name: i.productName,
-                         price: i.unitPrice,
-                         quantity: i.quantity,
-                         isFreeItem: false,
-                       })),
-                       hasRemaining: false,
-                       createdAt: viewTransaction.createdAt,
-                       layout: null,
-                       thermal: null,
-                       pdf: null,
-                       templateName: null,
-                       pricing: null,
-                     });
-                   }}
-                   className="flex-1 bg-primary-600 text-white py-4 rounded-xl font-bold hover:opacity-90 transition-opacity"
-                 >
-                   Print Ulang
-                 </button>
+                  <button
+                    onClick={async () => {
+                      if (!viewTransaction) return;
+                      let thermalClient: Printer | null = null;
+                      let clientBuffer: string | null = null;
+                      let dispatched = false;
+                      let serverError: string | null = null;
+                      try {
+                        const result = await apiPrintReceipt({ orderId: viewTransaction.id });
+                        if (result.clientPrint && result.buffer && result.printer) {
+                          thermalClient = result.printer as Printer;
+                          clientBuffer = result.buffer;
+                        } else if (result.dispatched) {
+                          dispatched = true;
+                        }
+                        if (result.error) serverError = result.error;
+                      } catch {
+                        serverError = 'Gagal mencetak ulang';
+                      }
+
+                      if (thermalClient && clientBuffer) {
+                        const res = await printViaClient(thermalClient, clientBuffer);
+                        if (res.ok) return;
+                        serverError = res.error || serverError;
+                      }
+                      if (dispatched) {
+                        toast({ title: 'Struk terkirim ke printer', icon: 'success' });
+                        return;
+                      }
+                      if (serverError) toast({ title: serverError, icon: 'error' });
+
+                      const paid = viewTransaction.paymentBreakdown?.reduce(
+                        (s: number, p: any) => s + (p.amount ?? 0),
+                        0,
+                      ) ?? 0;
+                      const change = viewTransaction.paymentBreakdown?.reduce(
+                        (s: number, p: any) => s + (p.change ?? 0),
+                        0,
+                      ) ?? 0;
+                      usePOSStore.getState().setReceipt({
+                        orderNumber: viewTransaction.orderNumber,
+                        displayOrderNumber: viewTransaction.orderNumber,
+                        paid,
+                        change,
+                        grandTotal: viewTransaction.total,
+                        paidItems: (viewTransaction.items ?? []).map((i: any) => ({
+                          productId: i.productId,
+                          name: i.productName,
+                          price: i.unitPrice,
+                          quantity: i.quantity,
+                          isFreeItem: false,
+                        })),
+                        hasRemaining: false,
+                        createdAt: viewTransaction.createdAt,
+                        layout: null,
+                        thermal: null,
+                        pdf: null,
+                        templateName: null,
+                        pricing: null,
+                      });
+                    }}
+                    className="flex-1 bg-primary-600 text-white py-4 rounded-xl font-bold hover:opacity-90 transition-opacity"
+                  >
+                    Print Ulang
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!viewTransaction) return;
+                      try {
+                        const result = await apiPrintKot({ orderId: viewTransaction.id });
+                        if (result.clientPrint && result.buffer && result.printer) {
+                          await printViaClient(result.printer as Printer, result.buffer);
+                          return;
+                        }
+                        if (result.error) {
+                          toast({ title: 'Cetak KOT gagal: ' + result.error, icon: 'error' });
+                          return;
+                        }
+                        toast({ title: 'KOT terkirim ke printer', icon: 'success' });
+                      } catch {
+                        toast({ title: 'Cetak KOT gagal', icon: 'error' });
+                      }
+                    }}
+                    className="flex-1 bg-[#9E9E9E] text-white py-4 rounded-xl font-bold hover:bg-gray-500 transition-colors"
+                  >
+                    Cetak KOT
+                  </button>
                </>
              ) : (
                <>

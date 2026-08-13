@@ -6,6 +6,7 @@ import { useValidatePromoCode } from '../../../@shared/hooks/useDiscountConfigur
 import { useCalculatePricing } from '../../../@shared/hooks/usePricing';
 import { useActivePaymentMethods, type PaymentMethod } from '../../payment-methods/hooks/usePaymentMethods';
 import { formatIDR } from '../utils/money';
+import { tryClientAutoPrint } from '../../printing/utils/autoPrint';
 
 const QUICK_AMOUNTS = [50000, 100000];
 
@@ -236,6 +237,8 @@ export function PaymentModal() {
         pricing: splitMode ? (portionPricing.data ?? null) : (pricing ?? null),
       });
       usePOSStore.getState().registerShiftPayment({ total: payable, method: selectedMethod.code, isCash });
+
+      void tryClientAutoPrint(queryClient, 'receipt', receiptData?.thermal);
 
       if (hasRemaining) {
         if (activeBillId) {

@@ -95,4 +95,72 @@ export class MongoPaymentRepository {
     const docs = await this.model.find({ tenantId, orderId }).sort({ createdAt: -1 }).exec();
     return docs.map((d: PaymentDoc) => this.toDomain(d));
   }
+
+  async findRefundable(tenantId: string, dateFrom?: string, dateTo?: string) {
+    const range: Record<string, Date> = {};
+    if (dateFrom) {
+      const d = new Date(dateFrom);
+      if (!isNaN(d.getTime())) {
+        d.setHours(0, 0, 0, 0);
+        range.$gte = d;
+      }
+    }
+    if (dateTo) {
+      const d = new Date(dateTo);
+      if (!isNaN(d.getTime())) {
+        d.setHours(23, 59, 59, 999);
+        range.$lte = d;
+      }
+    }
+
+    const timeMatch = Object.keys(range).length > 0
+      ? { $or: [{ paidAt: range }, { createdAt: range }] }
+      : {};
+
+    const rows = await this.model.aggregate([
+      { $match: { tenantId, status: 'completed', ...timeMatch } },
+      {
+        $lookup: {
+          from: 'shifts',
+          localField: 'shiftId',
+          foreignField: '_id',
+          as: 'shift',
+        },
+      },
+      {
+        $lookup: {
+          from: 'orders',
+          localField: 'orderId',
+          foreignField: '_id',
+          as: 'order',
+        },
+      },
+      {
+        $match: {
+          'shift.status': 'closed',
+          'order._id': { $exists: true },
+          'order.status': { $in: ['paid', 'completed'] },
+        },
+      },
+      { $unwind: { path: '$shift', preserveNullAndEmptyArrays: true } },
+      { $unwind: { path: '$order', preserveNullAndEmptyArrays: true } },
+      { $sort: { paidAt: -1 } },
+      { $limit: 200 },
+    ]);
+
+    return rows.map((r: any) => ({
+      paymentId: r._id,
+      orderId: r.orderId,
+      orderNumber: r.order?.orderNumber ?? '',
+      cashierName: r.order?.cashierName ?? '',
+      orderTotal: r.order?.total ?? 0,
+      amount: r.amount,
+      method: r.method,
+      referenceNumber: r.referenceNumber ?? '',
+      provider: r.provider ?? null,
+      cardLastFour: r.cardLastFour ?? null,
+      paidAt: r.paidAt,
+      shiftClosedAt: r.shift?.closedAt ?? null,
+    }));
+  }
 }

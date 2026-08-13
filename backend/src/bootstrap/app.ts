@@ -13,7 +13,7 @@ async function main() {
   const container = buildContainer();
   const eventBus = container.resolve('eventBus');
 
-  registerEventHandlers(eventBus);
+  registerEventHandlers(eventBus, container);
 
   const app = createServer(container);
   const httpServer = http.createServer(app);

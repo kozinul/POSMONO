@@ -103,7 +103,7 @@ export class PaymentController extends BaseController {
       payment: {
         ...paymentData,
         change: paymentData.method === 'cash'
-          ? paymentData.amount - orderData.total
+          ? paymentData.amount - (orderData.roundedPayable || orderData.total)
           : 0,
       },
       order: orderData,
@@ -151,7 +151,18 @@ export class PaymentController extends BaseController {
     this.ok(res, {
       refund: result.refund.serialize(),
       payment: result.payment.serialize(),
+      order: result.order ? result.order.serialize() : null,
     });
+  }
+
+  async listRefundable(req: Request, res: Response): Promise<void> {
+    const { dateFrom, dateTo } = req.query;
+    const result = await this.paymentService.listRefundable(
+      req.tenantId,
+      dateFrom ? (dateFrom as string) : undefined,
+      dateTo ? (dateTo as string) : undefined,
+    );
+    this.ok(res, result);
   }
 
   async splitBill(req: Request, res: Response): Promise<void> {

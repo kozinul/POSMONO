@@ -21,6 +21,8 @@ const navigation = [
   { name: 'Shifts', href: '/shifts' },
   { name: 'Users', href: '/users' },
   { name: 'Settings', href: '/settings' },
+  { name: 'Printer', href: '/settings/printers' },
+  { name: 'Database', href: '/database' },
 ];
 
 export function DashboardLayout() {

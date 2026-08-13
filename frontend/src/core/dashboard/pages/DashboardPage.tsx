@@ -2,10 +2,63 @@ import { useDashboardSummary } from '../../orders/hooks/useOrders';
 import { useTenant } from '../../../@shared/hooks/useTenant';
 import { Link } from 'react-router-dom';
 import { formatCurrency } from '../../../@shared/utils/format';
+import { useRefundable, useRefundMutation, refundReference, type RefundablePayment } from '../../payments/hooks/useRefund';
+import { useAuthStore, hasPermission } from '../../../@shared/hooks/useAuth';
+import { paymentMethodLabel } from '../../pos/utils/paymentLabels';
+import Swal from 'sweetalert2';
 
 export default function DashboardPage() {
   const { data: summary, isLoading, isError, refetch } = useDashboardSummary();
   const { data: tenant } = useTenant();
+  const user = useAuthStore((s) => s.user);
+  const canRefund = hasPermission(user, 'payments:write');
+  const { data: refundable } = useRefundable();
+  const refundMutation = useRefundMutation();
+
+  const handleRefund = (p: RefundablePayment) => {
+    void Swal.fire({
+      title: 'Refund Transaksi',
+      html: `
+        <div class="text-left text-sm space-y-1">
+          <p><strong>No. Order:</strong> ${p.orderNumber}</p>
+          <p><strong>Kasir:</strong> ${p.cashierName || '-'}</p>
+          <p><strong>Pembayaran:</strong> ${paymentMethodLabel(p.method)}${p.method !== 'cash' ? ` (${refundReference(p)})` : ''}</p>
+          <p><strong>Jumlah:</strong> ${formatCurrency(p.amount)}</p>
+        </div>`,
+      input: 'textarea',
+      inputLabel: 'Alasan refund',
+      inputPlaceholder: 'Tuliskan alasan refund...',
+      inputValidator: (v: string) => (!v || !v.trim() ? 'Alasan refund wajib diisi' : undefined),
+      showCancelButton: true,
+      confirmButtonText: 'Refund',
+      cancelButtonText: 'Batal',
+      confirmButtonColor: '#dc2626',
+      showLoaderOnConfirm: true,
+      preConfirm: async (reason) => {
+        try {
+          await refundMutation.mutateAsync({
+            paymentId: p.paymentId,
+            reason,
+            refundedByName: user?.displayName ?? '',
+          });
+        } catch (err: unknown) {
+          const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Refund gagal';
+          Swal.showValidationMessage(message);
+          throw err;
+        }
+      },
+    }).then((result) => {
+      if (result.isConfirmed) {
+        void Swal.fire({
+          title: 'Berhasil',
+          text: `Transaksi ${p.orderNumber} telah direfund.`,
+          icon: 'success',
+          timer: 2000,
+          showConfirmButton: false,
+        });
+      }
+    });
+  };
 
   if (isLoading) {
     return (
@@ -52,6 +105,12 @@ export default function DashboardPage() {
           <p className="mt-2 text-3xl font-bold text-gray-900">
             {summary ? formatCurrency(summary.todayRevenue) : 'Rp 0'}
           </p>
+          {summary && summary.totalRounding != null && summary.totalRounding !== 0 && (
+            <p className="mt-1 text-xs text-purple-600 font-medium">
+              Pembulatan {summary.totalRounding > 0 ? '+' : '-'}
+              {formatCurrency(Math.abs(summary.totalRounding))} (termasuk revenue)
+            </p>
+          )}
         </div>
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-sm font-medium text-gray-500">Orders Today</h3>
@@ -72,6 +131,69 @@ export default function DashboardPage() {
           </p>
         </div>
       </div>
+
+      {canRefund && refundable && refundable.length > 0 && (
+        <div className="mt-8">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Refund Transaksi</h2>
+              <p className="text-sm text-gray-500">Transaksi dari shift yang sudah ditutup. Void hanya untuk shift yang masih berjalan.</p>
+            </div>
+            <Link to="/reports" className="text-sm text-primary-600 hover:text-primary-700">
+              Laporan Refund
+            </Link>
+          </div>
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">No. Order</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kasir</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pembayaran</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Jumlah</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tanggal</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {refundable.slice(0, 10).map((p) => (
+                  <tr key={p.paymentId} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{p.orderNumber}</td>
+                    <td className="px-6 py-4 text-sm text-gray-500">{p.cashierName || '-'}</td>
+                    <td className="px-6 py-4 text-sm text-gray-500">
+                      {paymentMethodLabel(p.method)}
+                      {p.method !== 'cash' && (
+                        <span className="ml-1 text-xs text-gray-400">({refundReference(p)})</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-900">{formatCurrency(p.amount)}</td>
+                    <td className="px-6 py-4 text-sm text-gray-500">
+                      {p.paidAt
+                        ? new Date(p.paidAt).toLocaleString('id-ID', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })
+                        : '-'}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <button
+                        onClick={() => handleRefund(p)}
+                        disabled={refundMutation.isPending}
+                        className="px-3 py-1.5 text-xs font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50"
+                      >
+                        Refund
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {summary && summary.recentOrders.length > 0 && (
         <div className="mt-8">
@@ -121,7 +243,9 @@ export default function DashboardPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500">{order.cashierName || 'Kasir'}</td>
-                    <td className="px-6 py-4 text-sm text-gray-900">{formatCurrency(order.total)}</td>
+                    <td className="px-6 py-4 text-sm text-gray-900">
+                      {formatCurrency(order.total + (order.roundingAdjustment ?? 0))}
+                    </td>
                     <td className="px-6 py-4 text-sm text-gray-500">
                       {new Date(order.createdAt).toLocaleString('id-ID', {
                         day: 'numeric',

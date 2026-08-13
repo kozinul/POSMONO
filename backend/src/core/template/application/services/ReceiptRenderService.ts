@@ -41,7 +41,7 @@ export class ReceiptRenderService {
     const createdAt = order.createdAt ? new Date(order.createdAt) : new Date();
     const { date, time } = formatDateTime(createdAt);
     const change = payment.method === 'cash'
-      ? Math.max(0, payment.amount - order.total)
+      ? Math.max(0, payment.amount - (order.roundedPayable || order.total))
       : 0;
 
     const orderNumber = splitBaseOrderNumber || order.orderNumber;

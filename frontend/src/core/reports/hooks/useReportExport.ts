@@ -1,7 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 import { api } from '../../../@shared/services/api';
 
-export type ReportType = 'daily' | 'sales' | 'finance' | 'sales-per-product';
+export type ReportType = 'daily' | 'sales' | 'finance' | 'sales-per-product' | 'refunds';
 
 export function useReportExport() {
   return useMutation({

@@ -27,6 +27,7 @@ export class ReportService {
 
     return {
       todayRevenue: summary.todayRevenue,
+      totalRounding: summary.totalRounding,
       todayOrders: summary.todayOrders,
       pendingOrders: summary.pendingOrders,
       lowStockCount: summary.lowStockCount,
@@ -57,10 +58,13 @@ export class ReportService {
     const orders = await this.orderRepository.findByTenant(tenantId, {
       dateFrom,
       dateTo,
-      status: 'paid',
+      status: ['paid', 'completed'],
     });
 
-    const totalRevenue = orders.orders.reduce((sum, o) => sum + o.serialize().total, 0);
+    const totalRevenue = orders.orders.reduce(
+      (sum, o) => sum + o.serialize().total + (o.serialize().roundingAdjustment ?? 0),
+      0,
+    );
     const totalRounding = orders.orders.reduce(
       (sum, o) => sum + (o.serialize().roundingAdjustment ?? 0),
       0,
@@ -216,5 +220,21 @@ export class ReportService {
       totalRounding: finance.totalRounding,
       categories: finance.categories,
     };
+  }
+
+  async getRefundReport(tenantId: string, dateFrom: string, dateTo: string) {
+    const rows = await this.reportAggregation.getRefundAggregation(tenantId, dateFrom, dateTo);
+
+    return {
+      dateFrom,
+      dateTo,
+      totalRefunds: rows.length,
+      totalAmount: rows.reduce((sum, r) => sum + r.amount, 0),
+      refunds: rows,
+    };
+  }
+
+  async getRefundDetail(tenantId: string, refundId: string) {
+    return this.reportAggregation.getRefundByIdAggregation(tenantId, refundId);
   }
 }

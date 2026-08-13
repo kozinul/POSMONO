@@ -43,6 +43,20 @@ function fmtNum(n: number): string {
   return Math.round(n).toLocaleString('id-ID');
 }
 
+const PAYMENT_LABELS: Record<string, string> = {
+  cash: 'TUNAI',
+  qris: 'QRIS',
+  transfer: 'TRANSFER',
+  card: 'KARTU',
+  debit: 'DEBIT',
+  credit: 'KREDIT',
+  ewallet: 'EWALLET',
+};
+
+function paymentLabel(method: string): string {
+  return PAYMENT_LABELS[method] ?? method.toUpperCase();
+}
+
 export class ReportExportService {
   constructor(
     private readonly reportService: ReportService,
@@ -65,6 +79,9 @@ export class ReportExportService {
             ['Total Order', data.totalOrders],
             ['Total Pendapatan', data.totalRevenue],
             ['Total Item Terjual', data.totalItems],
+            ...(data.totalRounding
+              ? [[`Total Pembulatan (${data.totalRounding > 0 ? '+' : '-'})`, Math.abs(data.totalRounding)] as (string | number)[]]
+              : []),
           ],
         },
         {
@@ -114,6 +131,9 @@ export class ReportExportService {
             ['Total Order', data.totalOrders],
             ['Total Pendapatan', data.totalRevenue],
             ['Total Item Terjual', data.totalItems],
+            ...(data.totalRounding
+              ? [[`Total Pembulatan (${data.totalRounding > 0 ? '+' : '-'})`, Math.abs(data.totalRounding)] as (string | number)[]]
+              : []),
           ],
         },
         {
@@ -121,7 +141,7 @@ export class ReportExportService {
             { label: 'No. Order', flex: 2, align: 'left' },
             { label: 'Total', flex: 2, align: 'right', money: true },
           ],
-          rows: data.orders.map((o) => [o.orderNumber, o.total]),
+          rows: data.orders.map((o) => [o.orderNumber, o.total + (o.roundingAdjustment ?? 0)]),
           totals: ['Total', data.totalRevenue],
         },
         {
@@ -168,6 +188,9 @@ export class ReportExportService {
             ['Pajak (PPN)', data.totalTax],
             ['Service Charge', data.totalServiceCharge],
             ['Diskon', data.totalDiscount],
+            ...(data.totalRounding
+              ? [[`Pembulatan (${data.totalRounding > 0 ? '+' : '-'})`, Math.abs(data.totalRounding)] as (string | number)[]]
+              : []),
           ],
         },
         {
@@ -247,6 +270,94 @@ export class ReportExportService {
     };
 
     return this.build(doc, format, `penjualan-per-produk-${dateFrom}-${dateTo}`);
+  }
+
+  async exportRefunds(
+    tenantId: string,
+    dateFrom: string,
+    dateTo: string,
+    format: ReportExportFormat,
+  ): Promise<ReportFile> {
+    const data = await this.reportService.getRefundReport(tenantId, dateFrom, dateTo);
+
+    const doc: ReportDoc = {
+      title: 'Laporan Refund',
+      subtitle: `Periode: ${dateFrom} s/d ${dateTo}`,
+      tables: [
+        {
+          columns: [
+            { label: 'No. Refund', flex: 2, align: 'left' },
+            { label: 'No. Order', flex: 2, align: 'left' },
+            { label: 'Tanggal', flex: 2, align: 'left' },
+            { label: 'Metode', flex: 1, align: 'left' },
+            { label: 'Kode Ref', flex: 2, align: 'left' },
+            { label: 'Kasir', flex: 2, align: 'left' },
+            { label: 'Refunded By', flex: 2, align: 'left' },
+            { label: 'Jumlah', flex: 2, align: 'right', money: true },
+          ],
+          rows: data.refunds.map((r) => [
+            r.refundId,
+            r.orderNumber,
+            new Date(r.refundedAt).toISOString().slice(0, 16).replace('T', ' '),
+            paymentLabel(r.method),
+            r.method === 'cash' ? '-' : (r.referenceNumber || r.provider || r.cardLastFour || '-'),
+            r.cashierName || '-',
+            r.refundedByName || '-',
+            r.amount,
+          ]),
+          totals: ['Total', data.totalRefunds, '', '', '', '', '', data.totalAmount],
+        },
+      ],
+    };
+
+    return this.build(doc, format, `laporan-refund-${dateFrom}-${dateTo}`);
+  }
+
+  async refundReceiptPdf(tenantId: string, refundId: string): Promise<Buffer> {
+    const r = await this.reportService.getRefundDetail(tenantId, refundId);
+    if (!r) throw new Error('Refund not found');
+
+    return new Promise((resolve, reject) => {
+      const pdf = new PDFDocument({ size: [230, 700], margin: 10 });
+      const chunks: Buffer[] = [];
+      pdf.on('data', (chunk: Buffer) => chunks.push(chunk));
+      pdf.on('end', () => resolve(Buffer.concat(chunks)));
+      pdf.on('error', reject);
+
+      const line = (txt: string, opts?: { bold?: boolean; align?: 'left' | 'center' | 'right' }) => {
+        pdf.font(opts?.bold ? 'Courier-Bold' : 'Courier').fontSize(8).fillColor('#111827');
+        pdf.text(txt, { align: opts?.align ?? 'left', lineGap: 1 });
+      };
+      const sep = () => line('=====================================');
+
+      sep();
+      line('STRUK REFUND', { bold: true, align: 'center' });
+      sep();
+      line(`No. Refund : ${r.refundId}`);
+      line(`No. Order  : ${r.orderNumber}`);
+      line(`Tanggal    : ${new Date(r.refundedAt).toLocaleString('id-ID')}`);
+      line(`Kasir      : ${r.cashierName || '-'}`);
+      sep();
+      line('Pembayaran : ' + paymentLabel(r.method));
+      if (r.method !== 'cash') {
+        line(`Kode Ref   : ${r.referenceNumber || r.provider || r.cardLastFour || '-'}`);
+      }
+      line(`Alasan     : ${r.reason || '-'}`);
+      sep();
+      line('ITEM', { bold: true });
+      for (const it of r.orderItems ?? []) {
+        line(`${it.productName || '-'} x${it.quantity}`);
+        line(`  ${fmtIDR(it.unitPrice * it.quantity)}`);
+      }
+      sep();
+      line(`Total Order: ${fmtIDR(r.orderTotal + (r.roundingAdjustment ?? 0))}`);
+      line(`DIRUNDING   : ${fmtIDR(r.amount)}`, { bold: true });
+      sep();
+      line(`Refunded by: ${r.refundedByName || '-'}`);
+      pdf.moveDown(0.5);
+
+      pdf.end();
+    });
   }
 
   private async build(doc: ReportDoc, format: ReportExportFormat, baseName: string): Promise<ReportFile> {
