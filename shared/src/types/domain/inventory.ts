@@ -22,7 +22,7 @@ export interface Warehouse {
   updatedAt: Date;
 }
 
-export type StockMovementType = 'in' | 'out' | 'adjustment' | 'reserve' | 'release';
+export type StockMovementType = 'in' | 'out' | 'adjustment' | 'reserve' | 'release' | 'void';
 
 export interface StockMovement {
   id: string;

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { CreateOrderService, ReplaceOrderItemsService, HoldOrderService } from '../../src/core/ordering/application/services/OrderService';
-import { validOrderInput } from '../fixtures/ordering.fixtures';
+import { CreateOrderService, ReplaceOrderItemsService, HoldOrderService, VoidOrderService, VoidItemService, VoidAndRollbackService } from '../../src/core/ordering/application/services/OrderService';
+import { validOrderInput, validPaymentBreakdown } from '../fixtures/ordering.fixtures';
 
 function createMockRepo() {
   return { save: vi.fn() };
@@ -145,5 +145,295 @@ describe('ReplaceOrderItemsService', () => {
         items: [],
       }),
     ).rejects.toThrow('Order not found');
+  });
+});
+
+describe('VoidOrderService', () => {
+  function createService() {
+    let saved: any = null;
+    const orderRepo = {
+      save: vi.fn((order: any) => {
+        saved = order;
+      }),
+      findById: vi.fn(() => saved),
+    };
+    const eventBus = { publish: vi.fn() };
+    const inventoryService = {
+      restockForVoid: vi.fn().mockResolvedValue(undefined),
+      releaseStock: vi.fn().mockResolvedValue(undefined),
+    };
+    return { orderRepo, eventBus, inventoryService };
+  }
+
+  it('restocks items when voiding a PAID order', async () => {
+    const { orderRepo, eventBus, inventoryService } = createService();
+    const created = await new CreateOrderService(orderRepo, eventBus).execute(validOrderInput);
+    created.pay(validPaymentBreakdown, 'cashier-1', 'Kasir 1');
+
+    const voidService = new VoidOrderService(orderRepo, eventBus, undefined, inventoryService);
+    const voided = await voidService.execute({
+      id: created.id.toValue(),
+      tenantId: 'tenant-test-1',
+      voidedBy: 'user-1',
+      voidedByName: 'Admin',
+      reason: 'Salah input',
+    });
+
+    expect(voided.serialize().status).toBe('voided');
+    expect(inventoryService.restockForVoid).toHaveBeenCalledTimes(1);
+    expect(inventoryService.releaseStock).not.toHaveBeenCalled();
+    expect(inventoryService.restockForVoid).toHaveBeenCalledWith({
+      tenantId: 'tenant-test-1',
+      productId: 'product-1',
+      quantity: 2,
+      referenceId: created.id.toValue(),
+      orderNumber: created.serialize().orderNumber,
+      reason: 'Salah input',
+      userId: 'user-1',
+    });
+  });
+
+  it('releases reservation when voiding an UNPAID (open bill) order', async () => {
+    const { orderRepo, eventBus, inventoryService } = createService();
+    const created = await new CreateOrderService(orderRepo, eventBus).execute(validOrderInput);
+
+    const voidService = new VoidOrderService(orderRepo, eventBus, undefined, inventoryService);
+    await voidService.execute({
+      id: created.id.toValue(),
+      tenantId: 'tenant-test-1',
+      voidedBy: 'user-1',
+      voidedByName: 'Admin',
+      reason: 'Bill ditutup tanpa pembayaran',
+    });
+
+    expect(inventoryService.restockForVoid).not.toHaveBeenCalled();
+    expect(inventoryService.releaseStock).toHaveBeenCalledTimes(1);
+    expect(inventoryService.releaseStock).toHaveBeenCalledWith({
+      tenantId: 'tenant-test-1',
+      productId: 'product-1',
+      quantity: 2,
+      referenceId: created.id.toValue(),
+      userId: 'user-1',
+    });
+  });
+
+  it('skips free items when restoring stock', async () => {
+    const { orderRepo, eventBus, inventoryService } = createService();
+    const created = await new CreateOrderService(orderRepo, eventBus).execute({
+      ...validOrderInput,
+      items: [{ ...validOrderInput.items[0], isFreeItem: true }],
+    });
+    created.pay(validPaymentBreakdown, 'cashier-1', 'Kasir 1');
+
+    const voidService = new VoidOrderService(orderRepo, eventBus, undefined, inventoryService);
+    await voidService.execute({
+      id: created.id.toValue(),
+      tenantId: 'tenant-test-1',
+      voidedBy: 'user-1',
+      voidedByName: 'Admin',
+      reason: 'x',
+    });
+
+    expect(inventoryService.restockForVoid).not.toHaveBeenCalled();
+    expect(inventoryService.releaseStock).not.toHaveBeenCalled();
+  });
+
+  it('does not fail when stock restore throws (best-effort)', async () => {
+    const { orderRepo, eventBus, inventoryService } = createService();
+    inventoryService.restockForVoid.mockRejectedValue(new Error('db down'));
+    const created = await new CreateOrderService(orderRepo, eventBus).execute(validOrderInput);
+    created.pay(validPaymentBreakdown, 'cashier-1', 'Kasir 1');
+
+    const voidService = new VoidOrderService(orderRepo, eventBus, undefined, inventoryService);
+    await expect(
+      voidService.execute({
+        id: created.id.toValue(),
+        tenantId: 'tenant-test-1',
+        voidedBy: 'user-1',
+        voidedByName: 'Admin',
+        reason: 'x',
+      }),
+    ).resolves.toBeDefined();
+  });
+});
+
+describe('VoidItemService', () => {
+  function createService() {
+    let saved: any = null;
+    const orderRepo = {
+      save: vi.fn((order: any) => {
+        saved = order;
+      }),
+      findById: vi.fn(() => saved),
+    };
+    const eventBus = { publish: vi.fn() };
+    const inventoryService = {
+      restockForVoid: vi.fn().mockResolvedValue(undefined),
+      releaseStock: vi.fn().mockResolvedValue(undefined),
+    };
+    return { orderRepo, eventBus, inventoryService };
+  }
+
+  it('restores the voided quantity of a PAID item', async () => {
+    const { orderRepo, eventBus, inventoryService } = createService();
+    const created = await new CreateOrderService(orderRepo, eventBus).execute({
+      ...validOrderInput,
+      items: [{ ...validOrderInput.items[0], quantity: 3, totalPrice: 75000 }],
+    });
+    created.pay(validPaymentBreakdown, 'cashier-1', 'Kasir 1');
+
+    const voidService = new VoidItemService(orderRepo, eventBus, undefined, inventoryService);
+    await voidService.execute({
+      id: created.id.toValue(),
+      tenantId: 'tenant-test-1',
+      itemIndex: 0,
+      quantity: 2,
+      reason: 'Pesanan salah',
+      voidedBy: 'user-1',
+      voidedByName: 'Admin',
+    });
+
+    expect(inventoryService.restockForVoid).toHaveBeenCalledTimes(1);
+    expect(inventoryService.releaseStock).not.toHaveBeenCalled();
+    expect(inventoryService.restockForVoid).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: 'tenant-test-1',
+        productId: 'product-1',
+        quantity: 2,
+        reason: 'Pesanan salah',
+        userId: 'user-1',
+      }),
+    );
+  });
+
+  it('releases reservation when voiding an item on an UNPAID (open bill) order', async () => {
+    const { orderRepo, eventBus, inventoryService } = createService();
+    const created = await new CreateOrderService(orderRepo, eventBus).execute(validOrderInput);
+
+    const voidService = new VoidItemService(orderRepo, eventBus, undefined, inventoryService);
+    await voidService.execute({
+      id: created.id.toValue(),
+      tenantId: 'tenant-test-1',
+      itemIndex: 0,
+      reason: 'Item tidak jadi',
+      voidedBy: 'user-1',
+      voidedByName: 'Admin',
+    });
+
+    expect(inventoryService.restockForVoid).not.toHaveBeenCalled();
+    expect(inventoryService.releaseStock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        productId: 'product-1',
+        quantity: 2,
+        userId: 'user-1',
+      }),
+    );
+  });
+
+  it('restores full quantity when no partial quantity given', async () => {
+    const { orderRepo, eventBus, inventoryService } = createService();
+    const created = await new CreateOrderService(orderRepo, eventBus).execute(validOrderInput);
+    created.pay(validPaymentBreakdown, 'cashier-1', 'Kasir 1');
+
+    const voidService = new VoidItemService(orderRepo, eventBus, undefined, inventoryService);
+    await voidService.execute({
+      id: created.id.toValue(),
+      tenantId: 'tenant-test-1',
+      itemIndex: 0,
+      reason: 'x',
+      voidedBy: 'user-1',
+      voidedByName: 'Admin',
+    });
+
+    expect(inventoryService.restockForVoid).toHaveBeenCalledWith(
+      expect.objectContaining({ quantity: 2 }),
+    );
+  });
+
+  it('skips restock for free items', async () => {
+    const { orderRepo, eventBus, inventoryService } = createService();
+    const created = await new CreateOrderService(orderRepo, eventBus).execute({
+      ...validOrderInput,
+      items: [{ ...validOrderInput.items[0], isFreeItem: true }],
+    });
+    created.pay(validPaymentBreakdown, 'cashier-1', 'Kasir 1');
+
+    const voidService = new VoidItemService(orderRepo, eventBus, undefined, inventoryService);
+    await voidService.execute({
+      id: created.id.toValue(),
+      tenantId: 'tenant-test-1',
+      itemIndex: 0,
+      reason: 'x',
+      voidedBy: 'user-1',
+      voidedByName: 'Admin',
+    });
+
+    expect(inventoryService.restockForVoid).not.toHaveBeenCalled();
+    expect(inventoryService.releaseStock).not.toHaveBeenCalled();
+  });
+});
+
+describe('VoidAndRollbackService', () => {
+  function createService() {
+    let saved: any = null;
+    const orderRepo = {
+      save: vi.fn((order: any) => {
+        saved = order;
+      }),
+      findById: vi.fn(() => saved),
+    };
+    const eventBus = { publish: vi.fn() };
+    const inventoryService = {
+      restockForVoid: vi.fn().mockResolvedValue(undefined),
+      releaseStock: vi.fn().mockResolvedValue(undefined),
+    };
+    return { orderRepo, eventBus, inventoryService };
+  }
+
+  it('restocks PAID items and rolls back payment when voiding', async () => {
+    const { orderRepo, eventBus, inventoryService } = createService();
+    const created = await new CreateOrderService(orderRepo, eventBus).execute(validOrderInput);
+    created.pay(validPaymentBreakdown, 'cashier-1', 'Kasir 1');
+
+    const voidService = new VoidAndRollbackService(orderRepo, eventBus, undefined, inventoryService);
+    const voided = await voidService.execute({
+      id: created.id.toValue(),
+      tenantId: 'tenant-test-1',
+      reason: 'Rollback',
+      voidedBy: 'user-1',
+      voidedByName: 'Admin',
+    });
+
+    expect(voided.serialize().status).toBe('voided');
+    expect(inventoryService.restockForVoid).toHaveBeenCalledWith(
+      expect.objectContaining({
+        productId: 'product-1',
+        quantity: 2,
+        reason: 'Rollback',
+      }),
+    );
+    expect(inventoryService.releaseStock).not.toHaveBeenCalled();
+  });
+
+  it('releases reservation when rolling back an UNPAID (open bill) order', async () => {
+    const { orderRepo, eventBus, inventoryService } = createService();
+    const created = await new CreateOrderService(orderRepo, eventBus).execute(validOrderInput);
+
+    const voidService = new VoidAndRollbackService(orderRepo, eventBus, undefined, inventoryService);
+    await voidService.execute({
+      id: created.id.toValue(),
+      tenantId: 'tenant-test-1',
+      reason: 'Rollback',
+      voidedBy: 'user-1',
+      voidedByName: 'Admin',
+    });
+
+    expect(inventoryService.restockForVoid).not.toHaveBeenCalled();
+    expect(inventoryService.releaseStock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        productId: 'product-1',
+        quantity: 2,
+      }),
+    );
   });
 });

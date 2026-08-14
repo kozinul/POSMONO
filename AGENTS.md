@@ -154,6 +154,18 @@ Modular SaaS POS Platform (Node.js/Express + React/Tailwind). Multi-tenant, mult
   - UI Pages & Components: `/settings/printers` (`PrinterSettingsPage.tsx` with Uji Cetak test button), `GeneralSettingsPage.tsx` "Struk & Cetak" toggles, `PaymentModal.tsx` auto-print trigger, `PosPage.tsx` Print Ulang & Cetak KOT actions, `ReceiptDisplay.tsx` thermal reprint integration.
   - Permissions `printers:read` & `printers:write` assigned to Owner and Manager roles in `seed.ts` & `dev.ts`.
 
+### Void Stock History (Riwayat Stok + Restore Stok) — 2026-08-14
+- **Bug lama**: void tidak pernah menulis `stock_movements` — `VoidOrderService` membaca `order.serialize().items` **setelah** `voidOrder()` mengosongkannya (`items=[]`), jadi loop `releaseStock` tak pernah jalan; `VoidItemService`/`VoidAndRollbackService` bahkan tidak punya `inventoryService`
+- **Tipe movement baru `'void'`**: `StockMovementType` (backend domain + `StockMovementSchema` enum) + `shared/src/types/domain/inventory.ts`
+- **`InventoryService.restockForVoid`**: `stock.adjust(+qty)` + movement `type:'void'`, `referenceType:'void'`, `referenceId=orderId`, `notes='Void #ORD-xxx - {alasan}'` (restore stok yang terpotong saat penjualan)
+- **Helper `restoreVoidedStock`** di `OrderService.ts` dipakai oleh `VoidOrderService`/`VoidItemService`/`VoidAndRollbackService`, memutuskan berdasarkan status pembayaran order:
+  - **Sudah dibayar** (`paymentStatus='completed'` / `paymentBreakdown` non-empty) → `restockForVoid` → riwayat "Void" (+qty)
+  - **Belum dibayar / open bill (held)** → `releaseStock` → lepas reservasi, riwayat "Rilis" (mencegah qty fisik naik keliru karena bill di-hold hanya reserve, tidak decrement)
+- Items di-snapshot **sebelum** `voidOrder()`/`voidAndRollback()` mengosongkannya (agar `isFreeItem` terbaca); skip free item; best-effort (gagal restock/release tidak memblokir void)
+- **Frontend `StockListPage.tsx`**: badge rose "Void" + `+qty` untuk tipe `void`
+- **Wiring DI**: `inventoryService` di-inject ke `voidItemService` & `voidAndRollbackService` (`container.ts`)
+- **Tests**: `OrderService.test.ts` +10 (restock paid / release open-bill / free-item skip / best-effort), `InventoryService.test.ts` +4 (`restockForVoid` movement & notes); backend service/domain 190 pass; frontend 73/73; tsc frontend & shared bersih
+
 ## Key Patterns
 - `useQueryClient()` for cache invalidation after mutations
 - `useVoidOrder` for full order void; `useVoidItem` for per-item void

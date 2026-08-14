@@ -206,6 +206,43 @@ function appendVoidApproval(
   });
 }
 
+async function restoreVoidedStock(
+  inventoryService: any,
+  orderData: any,
+  item: { productId: string; quantity: number; isFreeItem?: boolean },
+  ctx: { reason: string; userId: string },
+): Promise<void> {
+  if (!inventoryService || item.isFreeItem || item.quantity <= 0) return;
+
+  const wasPaid =
+    orderData.paymentStatus === 'completed' ||
+    (Array.isArray(orderData.paymentBreakdown) && orderData.paymentBreakdown.length > 0);
+
+  try {
+    if (wasPaid) {
+      await inventoryService.restockForVoid({
+        tenantId: orderData.tenantId,
+        productId: item.productId,
+        quantity: item.quantity,
+        referenceId: orderData.id,
+        orderNumber: orderData.orderNumber,
+        reason: ctx.reason,
+        userId: ctx.userId,
+      });
+    } else {
+      await inventoryService.releaseStock({
+        tenantId: orderData.tenantId,
+        productId: item.productId,
+        quantity: item.quantity,
+        referenceId: orderData.id,
+        userId: ctx.userId,
+      });
+    }
+  } catch {
+    // Best-effort restore/release; never block the void
+  }
+}
+
 export class CreateOrderService implements UseCase<CreateOrderInput, Order> {
   constructor(
     private readonly orderRepository: any,
@@ -356,6 +393,9 @@ export class VoidOrderService implements UseCase<VoidOrderInput, Order> {
     const order = await this.orderRepository.findById(input.id);
     if (!order) throw new Error('Order not found');
 
+    const orderData = order.serialize();
+    const itemsToRestore = orderData.items;
+
     const approval = await resolveVoidApproval(this.voidApprovalService, input, VOID_ORDER_PERMISSION);
     order.voidOrder(input.voidedBy, input.voidedByName, input.reason);
     appendVoidApproval(order, approval, 'order', input);
@@ -363,19 +403,11 @@ export class VoidOrderService implements UseCase<VoidOrderInput, Order> {
     await this.orderRepository.save(order);
 
     if (this.inventoryService) {
-      const data = order.serialize();
-      for (const item of data.items) {
-        if (item.isFreeItem) continue;
-        try {
-          await this.inventoryService.releaseStock({
-            tenantId: data.tenantId,
-            productId: item.productId,
-            quantity: item.quantity,
-            referenceId: data.id,
-          });
-        } catch {
-          // Best-effort release
-        }
+      for (const item of itemsToRestore) {
+        await restoreVoidedStock(this.inventoryService, orderData, item, {
+          reason: input.reason,
+          userId: input.voidedBy,
+        });
       }
     }
 
@@ -392,17 +424,28 @@ export class VoidItemService implements UseCase<VoidItemInput, Order> {
     private readonly orderRepository: any,
     private readonly eventBus: any,
     private readonly voidApprovalService?: VoidApprovalService,
+    private readonly inventoryService?: any,
   ) {}
 
   async execute(input: VoidItemInput): Promise<Order> {
     const order = await this.orderRepository.findById(input.id);
     if (!order) throw new Error('Order not found');
 
+    const orderData = order.serialize();
+    const item = orderData.items[input.itemIndex];
+    if (!item) throw new Error('Item not found');
+    const voidQty = input.quantity && input.quantity < item.quantity ? input.quantity : item.quantity;
+
     const approval = await resolveVoidApproval(this.voidApprovalService, input, VOID_ORDER_PERMISSION);
     order.voidItem(input.itemIndex, input.reason, input.voidedBy, input.voidedByName, input.quantity);
     appendVoidApproval(order, approval, 'item', input);
 
     await this.orderRepository.save(order);
+
+    await restoreVoidedStock(this.inventoryService, orderData, { ...item, quantity: voidQty }, {
+      reason: input.reason,
+      userId: input.voidedBy,
+    });
 
     for (const event of order.domainEvents) {
       this.eventBus.publish(event);
@@ -601,17 +644,30 @@ export class VoidAndRollbackService implements UseCase<VoidAndRollbackInput, Ord
     private readonly orderRepository: any,
     private readonly eventBus: any,
     private readonly voidApprovalService?: VoidApprovalService,
+    private readonly inventoryService?: any,
   ) {}
 
   async execute(input: VoidAndRollbackInput): Promise<Order> {
     const order = await this.orderRepository.findById(input.id);
     if (!order) throw new Error('Order not found');
 
+    const orderData = order.serialize();
+    const itemsToRestore = orderData.items;
+
     const approval = await resolveVoidApproval(this.voidApprovalService, input, VOID_ORDER_PERMISSION);
     order.voidAndRollback(input.reason, input.voidedBy, input.voidedByName);
     appendVoidApproval(order, approval, 'order', input);
 
     await this.orderRepository.save(order);
+
+    if (this.inventoryService) {
+      for (const item of itemsToRestore) {
+        await restoreVoidedStock(this.inventoryService, orderData, item, {
+          reason: input.reason,
+          userId: input.voidedBy,
+        });
+      }
+    }
 
     for (const event of order.domainEvents) {
       this.eventBus.publish(event);

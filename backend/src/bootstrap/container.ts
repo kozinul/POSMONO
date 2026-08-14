@@ -450,6 +450,7 @@ export function buildContainer() {
         orderRepository: container.resolve('orderRepository'),
         eventBus: container.resolve('eventBus'),
         voidApprovalService: container.resolve('voidApprovalService'),
+        inventoryService: container.resolve('inventoryService'),
       }),
     }),
     payOrderService: asClass(PayOrderService, {
@@ -503,6 +504,7 @@ export function buildContainer() {
         orderRepository: container.resolve('orderRepository'),
         eventBus: container.resolve('eventBus'),
         voidApprovalService: container.resolve('voidApprovalService'),
+        inventoryService: container.resolve('inventoryService'),
       }),
     }),
     topayService: asClass(TopayService, {

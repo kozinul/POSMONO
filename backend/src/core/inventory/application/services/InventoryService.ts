@@ -199,6 +199,45 @@ export class InventoryService {
     });
   }
 
+  async restockForVoid(input: {
+    tenantId: string;
+    productId: string;
+    quantity: number;
+    referenceId?: string;
+    orderNumber?: string;
+    reason?: string;
+    userId?: string;
+  }): Promise<void> {
+    if (input.quantity <= 0) return;
+
+    const stock = await this.stockRepository.findByProduct(input.tenantId, input.productId);
+    if (!stock) return;
+
+    const beforeQty = stock.serialize().quantity;
+    const resolvedWarehouseId = stock.serialize().warehouseId;
+
+    stock.adjust(input.quantity, 'void');
+    await this.stockRepository.save(stock);
+
+    const movement = StockMovement.create({
+      tenantId: input.tenantId,
+      productId: input.productId,
+      variantId: stock.serialize().variantId,
+      warehouseId: resolvedWarehouseId,
+      type: 'void',
+      quantity: input.quantity,
+      beforeQuantity: beforeQty,
+      afterQuantity: stock.serialize().quantity,
+      referenceType: 'void',
+      referenceId: input.referenceId || '',
+      notes: `Void ${input.orderNumber ? `#${input.orderNumber}` : 'transaksi'}${input.reason ? ` - ${input.reason}` : ''}`,
+      userId: input.userId || '',
+    });
+
+    await this.stockMovementRepository.save(movement);
+    this.publishEvents(stock);
+  }
+
   async adjust(input: {
     tenantId: string;
     productId: string;

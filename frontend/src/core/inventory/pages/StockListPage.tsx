@@ -16,6 +16,7 @@ const STATUS_LABEL: Record<string, string> = {
   adjustment: 'Penyesuaian',
   reserve: 'Reservasi',
   release: 'Rilis',
+  void: 'Void',
 };
 
 const PAGE_SIZE = 20;
@@ -425,6 +426,7 @@ export default function StockListPage() {
                 const isIn = m.type === 'in';
                 const isReserve = m.type === 'reserve';
                 const isRelease = m.type === 'release';
+                const isVoid = m.type === 'void';
                 return (
                   <tr key={m.id} className="hover:bg-gray-50">
                     <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-500">
@@ -437,6 +439,7 @@ export default function StockListPage() {
                       <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
                         isIn ? 'bg-green-100 text-green-800'
                           : isReserve ? 'bg-purple-100 text-purple-800'
+                          : isVoid ? 'bg-rose-100 text-rose-700'
                           : isRelease ? 'bg-indigo-100 text-indigo-800'
                           : 'bg-orange-100 text-orange-800'
                       }`}>
@@ -444,9 +447,12 @@ export default function StockListPage() {
                       </span>
                     </td>
                     <td className={`px-6 py-3 whitespace-nowrap text-sm font-semibold ${
-                      isIn ? 'text-green-600' : isReserve || isRelease ? 'text-purple-600' : 'text-orange-600'
+                      isIn ? 'text-green-600'
+                        : isVoid ? 'text-rose-600'
+                        : isReserve || isRelease ? 'text-purple-600'
+                        : 'text-orange-600'
                     }`}>
-                      {isIn ? '+' : isRelease ? '+' : '-'}{m.quantity}
+                      {isIn || isVoid || isRelease ? '+' : '-'}{m.quantity}
                     </td>
                     <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-500">
                       {m.beforeQuantity} → {m.afterQuantity}

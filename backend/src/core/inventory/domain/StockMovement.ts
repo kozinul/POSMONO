@@ -1,7 +1,7 @@
 import { Entity } from '../../../@shared/domain/Entity';
 import { StockMovementId } from '../../../@shared/domain/Identifier';
 
-export type StockMovementType = 'in' | 'out' | 'adjustment' | 'reserve' | 'release';
+export type StockMovementType = 'in' | 'out' | 'adjustment' | 'reserve' | 'release' | 'void';
 
 export interface IStockMovement {
   id: string;

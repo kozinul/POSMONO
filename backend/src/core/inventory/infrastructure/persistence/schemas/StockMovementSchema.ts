@@ -9,7 +9,7 @@ export const StockMovementSchema = new Schema(
     warehouseId: { type: String, default: '' },
     type: {
       type: String,
-      enum: ['in', 'out', 'adjustment', 'reserve', 'release'],
+      enum: ['in', 'out', 'adjustment', 'reserve', 'release', 'void'],
       required: true,
     },
     quantity: { type: Number, required: true },

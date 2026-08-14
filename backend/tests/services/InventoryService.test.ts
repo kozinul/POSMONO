@@ -353,6 +353,62 @@ describe('InventoryService', () => {
     });
   });
 
+  describe('restockForVoid', () => {
+    it('restores stock and creates a void movement', async () => {
+      const existing = Stock.create({ tenantId: TENANT_ID, productId: 'p1', variantId: null, warehouseId: 'wh-1', quantity: 47, reservedQuantity: 0, minLevel: 5, maxLevel: 100 });
+      stockRepo.findByProduct.mockResolvedValue(existing);
+
+      await service.restockForVoid({
+        tenantId: TENANT_ID,
+        productId: 'p1',
+        quantity: 3,
+        referenceId: 'order-1',
+        orderNumber: 'ORD-0001',
+        reason: 'Salah input',
+        userId: 'u1',
+      });
+
+      const savedStock = stockRepo.save.mock.calls[0][0] as Stock;
+      expect(savedStock.serialize().quantity).toBe(50);
+
+      const movement = movementRepo.save.mock.calls[0][0] as StockMovement;
+      const data = movement.serialize();
+      expect(data.type).toBe('void');
+      expect(data.quantity).toBe(3);
+      expect(data.beforeQuantity).toBe(47);
+      expect(data.afterQuantity).toBe(50);
+      expect(data.referenceType).toBe('void');
+      expect(data.referenceId).toBe('order-1');
+      expect(data.notes).toBe('Void #ORD-0001 - Salah input');
+      expect(data.userId).toBe('u1');
+    });
+
+    it('silently returns when stock not found', async () => {
+      stockRepo.findByProduct.mockResolvedValue(null);
+
+      await service.restockForVoid({ tenantId: TENANT_ID, productId: 'p1', quantity: 3 });
+
+      expect(stockRepo.save).not.toHaveBeenCalled();
+      expect(movementRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('silently returns when quantity is zero', async () => {
+      await service.restockForVoid({ tenantId: TENANT_ID, productId: 'p1', quantity: 0 });
+
+      expect(stockRepo.findByProduct).not.toHaveBeenCalled();
+    });
+
+    it('formats notes without reason', async () => {
+      const existing = Stock.create({ tenantId: TENANT_ID, productId: 'p1', variantId: null, warehouseId: 'wh-1', quantity: 10, reservedQuantity: 0, minLevel: 5, maxLevel: 100 });
+      stockRepo.findByProduct.mockResolvedValue(existing);
+
+      await service.restockForVoid({ tenantId: TENANT_ID, productId: 'p1', quantity: 1 });
+
+      const movement = movementRepo.save.mock.calls[0][0] as StockMovement;
+      expect(movement.serialize().notes).toBe('Void transaksi');
+    });
+  });
+
   describe('getMovements', () => {
     it('returns movements with pagination', async () => {
       const movement = StockMovement.create({ tenantId: TENANT_ID, productId: 'p1', variantId: null, warehouseId: 'wh-1', type: 'in', quantity: 10, beforeQuantity: 0, afterQuantity: 10, referenceType: 'stock_in', referenceId: '', notes: '', userId: '' });
