@@ -435,7 +435,7 @@ export class ReportAggregation {
     const endOfDay = new Date(dateTo);
     endOfDay.setHours(23, 59, 59, 999);
 
-    return this.orderModel.aggregate([
+    const matched = await this.orderModel.aggregate([
       {
         $match: {
           tenantId,
@@ -443,49 +443,246 @@ export class ReportAggregation {
           status: { $in: ['paid', 'completed'] },
         },
       },
-      { $unwind: '$items' },
       {
-        $group: {
-          _id: { productId: '$items.productId', productName: '$items.productName' },
-          quantity: { $sum: '$items.quantity' },
-          totalSales: { $sum: { $multiply: ['$items.unitPrice', '$items.quantity'] } },
-          totalDpp: { $sum: { $ifNull: ['$items.dpp', 0] } },
-          totalTax: { $sum: { $ifNull: ['$items.tax.amount', 0] } },
-          totalSC: { $sum: { $ifNull: ['$items.serviceCharge', 0] } },
-          transactions: {
-            $push: {
-              orderId: '$orderNumber',
-              createdAt: '$createdAt',
-              quantity: '$items.quantity',
-              unitPrice: '$items.unitPrice',
-              dpp: { $ifNull: ['$items.dpp', 0] },
-              serviceCharge: { $ifNull: ['$items.serviceCharge', 0] },
-              tax: { $ifNull: ['$items.tax.amount', 0] },
+        $facet: {
+          products: [
+            { $unwind: '$items' },
+            {
+              $group: {
+                _id: { productId: '$items.productId', productName: '$items.productName' },
+                quantity: { $sum: '$items.quantity' },
+                totalSales: { $sum: { $multiply: ['$items.unitPrice', '$items.quantity'] } },
+                totalDpp: { $sum: { $ifNull: ['$items.dpp', 0] } },
+                totalTax: { $sum: { $ifNull: ['$items.tax.amount', 0] } },
+                totalSC: { $sum: { $ifNull: ['$items.serviceCharge', 0] } },
+                transactions: {
+                  $push: {
+                    orderId: '$orderNumber',
+                    createdAt: '$createdAt',
+                    quantity: '$items.quantity',
+                    unitPrice: '$items.unitPrice',
+                    dpp: { $ifNull: ['$items.dpp', 0] },
+                    serviceCharge: { $ifNull: ['$items.serviceCharge', 0] },
+                    tax: { $ifNull: ['$items.tax.amount', 0] },
+                  },
+                },
+              },
             },
-          },
+            { $sort: { totalSales: -1 } },
+          ],
+          rounding: [
+            {
+              $group: {
+                _id: null,
+                totalRounding: { $sum: { $ifNull: ['$roundingAdjustment', 0] } },
+              },
+            },
+          ],
         },
       },
-      { $sort: { totalSales: -1 } },
-    ]).then((rows: any[]) =>
-      rows.map((r) => ({
-        productId: r._id.productId,
-        productName: r._id.productName,
-        quantity: r.quantity,
-        totalSales: r.totalSales,
-        dpp: r.totalDpp > 0 ? Math.round(r.totalDpp) : Math.round(r.totalSales - r.totalTax - r.totalSC),
-        serviceCharge: Math.round(r.totalSC),
-        tax: r.totalTax,
-        transactions: r.transactions.map((t: any) => ({
-          orderId: t.orderId,
-          createdAt: t.createdAt,
-          quantity: t.quantity,
-          unitPrice: t.unitPrice,
-          dpp: Math.round(t.dpp),
-          serviceCharge: Math.round(t.serviceCharge),
-          tax: t.tax,
-        })),
+    ]);
+
+    const facet = matched[0];
+    const rows = (facet?.products ?? []).map((r: any) => ({
+      productId: r._id.productId,
+      productName: r._id.productName,
+      quantity: r.quantity,
+      totalSales: r.totalSales,
+      dpp: r.totalDpp > 0 ? Math.round(r.totalDpp) : Math.round(r.totalSales - r.totalTax - r.totalSC),
+      serviceCharge: Math.round(r.totalSC),
+      tax: r.totalTax,
+      transactions: r.transactions.map((t: any) => ({
+        orderId: t.orderId,
+        createdAt: t.createdAt,
+        quantity: t.quantity,
+        unitPrice: t.unitPrice,
+        dpp: Math.round(t.dpp),
+        serviceCharge: Math.round(t.serviceCharge),
+        tax: t.tax,
       })),
+    }));
+
+    return {
+      rows,
+      totalRounding: facet?.rounding?.[0]?.totalRounding ?? 0,
+    };
+  }
+
+  async getCashierReceiptsAggregation(tenantId: string, dateFrom: string, dateTo: string) {
+    const startOfDay = new Date(dateFrom);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(dateTo);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const rows = await this.paymentModel.aggregate([
+      {
+        $match: {
+          tenantId,
+          status: 'completed',
+          paidAt: { $gte: startOfDay, $lte: endOfDay },
+        },
+      },
+      {
+        $lookup: {
+          from: 'orders',
+          localField: 'orderId',
+          foreignField: '_id',
+          as: 'order',
+        },
+      },
+      { $unwind: { path: '$order', preserveNullAndEmptyArrays: true } },
+      {
+        $match: {
+          $or: [
+            { 'order._id': { $exists: false } },
+            { 'order.status': { $in: ['paid', 'completed'] } },
+          ],
+        },
+      },
+      {
+        $group: {
+          _id: {
+            cashierId: { $ifNull: ['$order.cashierId', 'unknown'] },
+            method: '$method',
+          },
+          cashierName: { $first: '$order.cashierName' },
+          total: { $sum: '$amount' },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const cashierMap = new Map<string, any>();
+    for (const r of rows as any[]) {
+      const id = String(r._id.cashierId);
+      if (!cashierMap.has(id)) {
+        cashierMap.set(id, {
+          cashierId: r._id.cashierId,
+          cashierName: r.cashierName || 'Kasir',
+          methods: [],
+          total: 0,
+          totalTransactions: 0,
+        });
+      }
+      const entry = cashierMap.get(id);
+      entry.methods.push({ method: r._id.method, total: Math.round(r.total), count: r.count });
+      entry.total += Math.round(r.total);
+      entry.totalTransactions += r.count;
+    }
+
+    const cashiers = Array.from(cashierMap.values()).sort(
+      (a, b) => b.total - a.total,
     );
+
+    const methodTotals = new Map<string, number>();
+    let total = 0;
+    let totalTransactions = 0;
+    for (const c of cashiers) {
+      total += c.total;
+      totalTransactions += c.totalTransactions;
+      for (const m of c.methods) {
+        methodTotals.set(m.method, (methodTotals.get(m.method) ?? 0) + m.total);
+      }
+    }
+
+    const totals = {
+      total: Math.round(total),
+      totalTransactions,
+      methods: Array.from(methodTotals.entries()).map(([method, amount]) => ({
+        method,
+        total: Math.round(amount),
+      })),
+    };
+
+    return { cashiers, totals };
+  }
+
+  async getSalesPerCashierAggregation(tenantId: string, dateFrom: string, dateTo: string) {
+    const startOfDay = new Date(dateFrom);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(dateTo);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const matched = await this.orderModel.aggregate([
+      {
+        $match: {
+          tenantId,
+          createdAt: { $gte: startOfDay, $lte: endOfDay },
+          status: { $in: ['paid', 'completed'] },
+        },
+      },
+      {
+        $facet: {
+          orders: [
+            {
+              $group: {
+                _id: { $ifNull: ['$cashierId', 'unknown'] },
+                cashierName: { $first: '$cashierName' },
+                totalOrders: { $sum: 1 },
+                totalRevenue: {
+                  $sum: { $add: [{ $ifNull: ['$roundingAdjustment', 0] }, '$total'] },
+                },
+                dpp: { $sum: { $ifNull: ['$dppTotal', 0] } },
+                serviceCharge: { $sum: { $ifNull: ['$serviceCharge', 0] } },
+                tax: { $sum: { $ifNull: ['$tax', 0] } },
+              },
+            },
+          ],
+          items: [
+            { $unwind: '$items' },
+            {
+              $group: {
+                _id: { $ifNull: ['$cashierId', 'unknown'] },
+                totalItems: { $sum: '$items.quantity' },
+              },
+            },
+          ],
+        },
+      },
+    ]);
+
+    const facet = matched[0];
+    const itemsById = new Map<string, number>((facet?.items ?? []).map((i: any) => [String(i._id), i.totalItems]));
+
+    const cashiers: Array<{
+      cashierId: unknown;
+      cashierName: string;
+      totalOrders: number;
+      totalItems: number;
+      totalRevenue: number;
+      dpp: number;
+      serviceCharge: number;
+      tax: number;
+      avgOrderValue: number;
+    }> = ((facet?.orders ?? []) as any[]).map((r: any) => {
+      const totalRevenue = r.totalRevenue;
+      return {
+        cashierId: r._id,
+        cashierName: r.cashierName || 'Kasir',
+        totalOrders: r.totalOrders,
+        totalItems: itemsById.get(String(r._id)) ?? 0,
+        totalRevenue: Math.round(totalRevenue),
+        dpp: Math.round(r.dpp),
+        serviceCharge: Math.round(r.serviceCharge),
+        tax: Math.round(r.tax),
+        avgOrderValue: r.totalOrders > 0 ? Math.round(totalRevenue / r.totalOrders) : 0,
+      };
+    });
+    cashiers.sort((a, b) => b.totalRevenue - a.totalRevenue);
+
+    const totals = cashiers.reduce(
+      (acc, c) => ({
+        totalOrders: acc.totalOrders + c.totalOrders,
+        totalItems: acc.totalItems + c.totalItems,
+        totalRevenue: acc.totalRevenue + c.totalRevenue,
+        dpp: acc.dpp + c.dpp,
+        serviceCharge: acc.serviceCharge + c.serviceCharge,
+        tax: acc.tax + c.tax,
+      }),
+      { totalOrders: 0, totalItems: 0, totalRevenue: 0, dpp: 0, serviceCharge: 0, tax: 0 },
+    );
+
+    return { cashiers, totals };
   }
 
   async getRefundAggregation(tenantId: string, dateFrom: string, dateTo: string) {

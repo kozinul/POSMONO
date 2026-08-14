@@ -12,9 +12,12 @@ interface ReportColumn {
   money?: boolean;
 }
 
+type RowStyle = 'group' | 'detail' | 'subtotal';
+
 interface ReportTable {
   columns: ReportColumn[];
   rows: (string | number)[][];
+  rowStyles?: RowStyle[];
   totals?: (string | number)[];
 }
 
@@ -56,6 +59,8 @@ const PAYMENT_LABELS: Record<string, string> = {
 function paymentLabel(method: string): string {
   return PAYMENT_LABELS[method] ?? method.toUpperCase();
 }
+
+const PAYMENT_METHOD_ORDER = ['cash', 'qris', 'transfer', 'card', 'debit', 'credit', 'ewallet'];
 
 export class ReportExportService {
   constructor(
@@ -235,7 +240,25 @@ export class ReportExportService {
     dateTo: string,
     format: ReportExportFormat,
   ): Promise<ReportFile> {
-    const rows = await this.reportService.getSalesPerProduct(tenantId, dateFrom, dateTo);
+    const result = await this.reportService.getSalesPerProduct(tenantId, dateFrom, dateTo);
+    const rows: Array<{
+      productId: string;
+      productName: string;
+      quantity: number;
+      totalSales: number;
+      dpp: number;
+      serviceCharge: number;
+      tax: number;
+      transactions?: Array<{
+        orderId: string;
+        quantity: number;
+        unitPrice: number;
+        dpp: number;
+        serviceCharge: number;
+        tax: number;
+      }>;
+    }> = result.rows;
+    const totalRounding = result.totalRounding ?? 0;
 
     const totals = rows.reduce(
       (acc, r) => ({
@@ -247,6 +270,50 @@ export class ReportExportService {
       }),
       { quantity: 0, totalSales: 0, dpp: 0, serviceCharge: 0, tax: 0 },
     );
+    const grandTotal = totals.totalSales + totals.serviceCharge + totals.tax + totalRounding;
+
+    const tableRows: (string | number)[][] = [];
+    const tableStyles: RowStyle[] = [];
+    for (const r of rows) {
+      tableRows.push([
+        r.productName,
+        r.quantity,
+        r.totalSales,
+        r.dpp,
+        r.serviceCharge,
+        r.tax,
+        '',
+        r.totalSales + r.serviceCharge + r.tax,
+      ]);
+      tableStyles.push('group');
+
+      for (const tx of r.transactions ?? []) {
+        const txSales = tx.unitPrice * tx.quantity;
+        tableRows.push([
+          `   ${tx.orderId}`,
+          tx.quantity,
+          txSales,
+          tx.dpp,
+          tx.serviceCharge,
+          tx.tax,
+          '',
+          txSales + tx.serviceCharge + tx.tax,
+        ]);
+        tableStyles.push('detail');
+      }
+
+      tableRows.push([
+        `Subtotal ${r.productName}`,
+        r.quantity,
+        r.totalSales,
+        r.dpp,
+        r.serviceCharge,
+        r.tax,
+        '',
+        r.totalSales + r.serviceCharge + r.tax,
+      ]);
+      tableStyles.push('subtotal');
+    }
 
     const doc: ReportDoc = {
       title: 'Penjualan per Produk',
@@ -260,15 +327,11 @@ export class ReportExportService {
             { label: 'DPP', flex: 2, align: 'right', money: true },
             { label: 'SC', flex: 2, align: 'right', money: true },
             { label: 'Pajak', flex: 2, align: 'right', money: true },
+            { label: 'Pembulatan', flex: 2, align: 'right', money: true },
+            { label: 'Grand Total', flex: 2, align: 'right', money: true },
           ],
-          rows: rows.map((r) => [
-            r.productName,
-            r.quantity,
-            r.totalSales,
-            r.dpp,
-            r.serviceCharge,
-            r.tax,
-          ]),
+          rows: tableRows,
+          rowStyles: tableStyles,
           totals: [
             'Total',
             totals.quantity,
@@ -276,12 +339,156 @@ export class ReportExportService {
             totals.dpp,
             totals.serviceCharge,
             totals.tax,
+            totalRounding,
+            grandTotal,
           ],
         },
       ],
     };
 
     return this.build(doc, format, `penjualan-per-produk-${dateFrom}-${dateTo}`);
+  }
+
+  async exportCashierReceipts(
+    tenantId: string,
+    dateFrom: string,
+    dateTo: string,
+    format: ReportExportFormat,
+  ): Promise<ReportFile> {
+    const data = await this.reportService.getCashierReceiptsReport(tenantId, dateFrom, dateTo);
+    const cashiers: Array<{
+      cashierId: string;
+      cashierName: string;
+      methods: Array<{ method: string; total: number; count: number }>;
+      total: number;
+      totalTransactions: number;
+    }> = data.cashiers;
+    const totals: {
+      total: number;
+      totalTransactions: number;
+      methods: Array<{ method: string; total: number }>;
+    } = data.totals;
+
+    const methodKeys = PAYMENT_METHOD_ORDER.filter(
+      (m) =>
+        cashiers.some((c) => c.methods.some((x) => x.method === m)) ||
+        totals.methods.some((x) => x.method === m),
+    );
+
+    const amountOf = (methods: Array<{ method: string; total: number }>, method: string) =>
+      methods.find((m) => m.method === method)?.total ?? 0;
+    const countOf = (methods: Array<{ method: string; count: number }>, method: string) =>
+      methods.find((m) => m.method === method)?.count ?? 0;
+
+    const columns: ReportColumn[] = [
+      { label: 'Kasir', flex: 3, align: 'left' },
+      { label: 'Transaksi', flex: 1, align: 'center' },
+      ...methodKeys.map((m) => ({ label: paymentLabel(m), flex: 2, align: 'right' as const, money: true })),
+      { label: 'Total', flex: 2, align: 'right' as const, money: true },
+    ];
+
+    const tableRows: (string | number)[][] = [];
+    const tableStyles: RowStyle[] = [];
+    for (const c of cashiers) {
+      tableRows.push([
+        c.cashierName,
+        c.totalTransactions,
+        ...methodKeys.map((m) => amountOf(c.methods, m)),
+        c.total,
+      ]);
+      tableStyles.push('group');
+
+      for (const m of c.methods) {
+        tableRows.push([
+          `   ${paymentLabel(m.method)}`,
+          countOf(c.methods, m.method),
+          ...methodKeys.map((k) => (k === m.method ? m.total : '')),
+          '',
+        ]);
+        tableStyles.push('detail');
+      }
+
+      tableRows.push([
+        `Subtotal ${c.cashierName}`,
+        c.totalTransactions,
+        ...methodKeys.map((m) => amountOf(c.methods, m)),
+        c.total,
+      ]);
+      tableStyles.push('subtotal');
+    }
+
+    const totalsRow: (string | number)[] = [
+      'Total',
+      totals.totalTransactions,
+      ...methodKeys.map((m) => amountOf(totals.methods, m)),
+      totals.total,
+    ];
+
+    const doc: ReportDoc = {
+      title: 'Penerimaan per Kasir',
+      subtitle: `Periode: ${dateFrom} s/d ${dateTo}`,
+      tables: [
+        {
+          columns,
+          rows: tableRows,
+          rowStyles: tableStyles,
+          totals: totalsRow,
+        },
+      ],
+    };
+
+    return this.build(doc, format, `penerimaan-per-kasir-${dateFrom}-${dateTo}`);
+  }
+
+  async exportSalesPerCashier(
+    tenantId: string,
+    dateFrom: string,
+    dateTo: string,
+    format: ReportExportFormat,
+  ): Promise<ReportFile> {
+    const data = await this.reportService.getSalesPerCashierReport(tenantId, dateFrom, dateTo);
+    const totals = data.totals;
+
+    const doc: ReportDoc = {
+      title: 'Penjualan per Kasir',
+      subtitle: `Periode: ${dateFrom} s/d ${dateTo}`,
+      tables: [
+        {
+          columns: [
+            { label: 'Kasir', flex: 3, align: 'left' },
+            { label: 'Jumlah Order', flex: 1, align: 'center' },
+            { label: 'Qty Item', flex: 1, align: 'center' },
+            { label: 'Total Penjualan', flex: 2, align: 'right', money: true },
+            { label: 'DPP', flex: 2, align: 'right', money: true },
+            { label: 'SC', flex: 2, align: 'right', money: true },
+            { label: 'Pajak', flex: 2, align: 'right', money: true },
+            { label: 'Rata-rata/Order', flex: 2, align: 'right', money: true },
+          ],
+          rows: data.cashiers.map((c) => [
+            c.cashierName,
+            c.totalOrders,
+            c.totalItems,
+            c.totalRevenue,
+            c.dpp,
+            c.serviceCharge,
+            c.tax,
+            c.avgOrderValue,
+          ]),
+          totals: [
+            'Total',
+            totals.totalOrders,
+            totals.totalItems,
+            totals.totalRevenue,
+            totals.dpp,
+            totals.serviceCharge,
+            totals.tax,
+            totals.totalOrders > 0 ? Math.round(totals.totalRevenue / totals.totalOrders) : 0,
+          ],
+        },
+      ],
+    };
+
+    return this.build(doc, format, `penjualan-per-kasir-${dateFrom}-${dateTo}`);
   }
 
   async exportRefunds(
@@ -429,11 +636,22 @@ export class ReportExportService {
 
     this.drawHeaderRow(pdf, xs, colW, table.columns);
 
-    for (const row of table.rows) {
-      const cells = row.map((v, i) => this.formatCell(v, table.columns[i]));
-      const h = this.cellHeight(pdf, cells, colW);
+    for (let i = 0; i < table.rows.length; i++) {
+      const row = table.rows[i];
+      const style = table.rowStyles?.[i];
+      const cells = row.map((v, idx) => this.formatCell(v, table.columns[idx]));
+      const h = this.cellHeight(pdf, cells, colW, style);
       ensureSpace(h);
-      this.drawRow(pdf, xs, colW, cells, h, alignments);
+
+      const opts =
+        style === 'group'
+          ? { bold: true, bg: '#eef2ff' }
+          : style === 'subtotal'
+            ? { bold: true, bg: '#f9fafb' }
+            : style === 'detail'
+              ? { color: '#6b7280', fontSize: 8 }
+              : undefined;
+      this.drawRow(pdf, xs, colW, cells, h, alignments, opts);
     }
 
     if (table.totals) {
@@ -472,7 +690,7 @@ export class ReportExportService {
     cells: string[],
     h: number,
     alignments: Array<'left' | 'center' | 'right'>,
-    opts?: { bold?: boolean; bg?: string },
+    opts?: { bold?: boolean; bg?: string; fontSize?: number; color?: string },
   ): void {
     const top = pdf.y;
 
@@ -482,8 +700,11 @@ export class ReportExportService {
       pdf.restore();
     }
 
+    const fontSize = opts?.fontSize ?? 9;
+    const color = opts?.color ?? '#1f2937';
+
     cells.forEach((cell, i) => {
-      pdf.font(opts?.bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(9).fillColor('#1f2937');
+      pdf.font(opts?.bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(fontSize).fillColor(color);
       pdf.text(cell, xs[i] + 4, top + 3, { width: colW[i] - 8, align: alignments[i] });
     });
 
@@ -494,8 +715,9 @@ export class ReportExportService {
     pdf.restore();
   }
 
-  private cellHeight(pdf: PDFKit.PDFDocument, cells: string[], colW: number[]): number {
-    pdf.font('Helvetica').fontSize(9);
+  private cellHeight(pdf: PDFKit.PDFDocument, cells: string[], colW: number[], style?: RowStyle): number {
+    const fontSize = style === 'detail' ? 8 : 9;
+    pdf.font('Helvetica').fontSize(fontSize);
     let max = 18;
     cells.forEach((cell, i) => {
       const h = pdf.heightOfString(cell, { width: colW[i] - 8 });
@@ -544,14 +766,42 @@ export class ReportExportService {
       headerRow.height = 20;
       row += 1;
 
-      for (const r of table.rows) {
+      for (let i = 0; i < table.rows.length; i++) {
+        const r = table.rows[i];
+        const style = table.rowStyles?.[i];
         const dataRow = ws.getRow(row);
-        r.forEach((v, i) => {
-          const cell = dataRow.getCell(i + 1);
+        r.forEach((v, idx) => {
+          const cell = dataRow.getCell(idx + 1);
           cell.value = v;
-          this.applyCellStyle(cell, v, table.columns[i]);
+          this.applyCellStyle(cell, v, table.columns[idx]);
         });
+
+        if (style === 'group') {
+          for (let c = 1; c <= table.columns.length; c++) {
+            const cell = dataRow.getCell(c);
+            cell.font = { bold: true, color: { argb: 'FF1F2937' } };
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2FF' } };
+          }
+        } else if (style === 'detail') {
+          for (let c = 1; c <= table.columns.length; c++) {
+            dataRow.getCell(c).font = { size: 9, color: { argb: 'FF6B7280' } };
+          }
+        } else if (style === 'subtotal') {
+          for (let c = 1; c <= table.columns.length; c++) {
+            const cell = dataRow.getCell(c);
+            cell.font = { bold: true, color: { argb: 'FF1F2937' } };
+            cell.border = { top: { style: 'thin', color: { argb: 'FFD1D5DB' } } };
+          }
+        }
+
         row += 1;
+      }
+
+      if (table.rowStyles?.length) {
+        const dataStart = row - table.rows.length;
+        table.rowStyles.forEach((style, i) => {
+          if (style === 'detail') ws.getRow(dataStart + i).outlineLevel = 1;
+        });
       }
 
       if (table.totals) {

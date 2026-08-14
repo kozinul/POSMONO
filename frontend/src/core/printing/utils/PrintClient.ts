@@ -13,13 +13,16 @@ export interface USBDeviceLike {
   manufacturerName?: string;
   vendorId?: number;
   productId?: number;
+  configuration?: { configurationValue: number } | null;
   open: () => Promise<void>;
-  selectConfiguration: (config: number) => Promise<void>;
-  claimInterface: (iface: number) => Promise<void>;
-  releaseInterface: (iface: number) => Promise<void>;
+  selectConfiguration: (configValue: number) => Promise<void>;
+  claimInterface: (ifaceNumber: number) => Promise<void>;
+  releaseInterface: (ifaceNumber: number) => Promise<void>;
   close: () => Promise<void>;
   configurations?: Array<{
+    configurationValue?: number;
     interfaces: Array<{
+      interfaceNumber?: number;
       alternate: { endpoints: Array<{ direction: 'in' | 'out'; endpointNumber: number; type: string }> };
     }>;
   }>;
@@ -84,8 +87,11 @@ export function isClientSupported(): boolean {
 }
 
 function findEndpoint(device: USBDeviceLike): number | null {
-  const endpoint = device.configurations?.[0]?.interfaces?.[0]?.alternate?.endpoints?.find(
-    (e) => e.direction === 'out' && e.type === 'bulk',
+  const iface = device.configurations?.[0]?.interfaces?.[0];
+  if (!iface) return null;
+  const endpoints = iface.alternate?.endpoints || (iface as any).endpoints || [];
+  const endpoint = endpoints.find(
+    (e: any) => e.direction === 'out' && (e.type === 'bulk' || e.type === 'interrupt'),
   );
   return endpoint?.endpointNumber ?? null;
 }
@@ -115,13 +121,13 @@ export async function sendToUsb(printer: Printer, bufferBase64: string): Promise
 
     await device.open();
     try {
-      if (device.configurations && device.configurations.length > 0) {
-        await device.selectConfiguration(0);
+      const targetConfigValue = device.configurations?.[0]?.configurationValue ?? 1;
+      if (device.configuration?.configurationValue !== targetConfigValue) {
+        await device.selectConfiguration(targetConfigValue);
       }
-      const iface = device.configurations?.[0]?.interfaces?.[0];
-      if (iface) {
-        await device.claimInterface(iface.alternate ? 0 : 0);
-      }
+      const ifaceNumber = device.configurations?.[0]?.interfaces?.[0]?.interfaceNumber ?? 0;
+      await device.claimInterface(ifaceNumber);
+
       const endpoint = findEndpoint(device);
       if (endpoint == null) return { ok: false, error: 'Endpoint output tidak ditemukan di printer USB' };
       await device.transferOut(endpoint, bytes);
@@ -129,8 +135,8 @@ export async function sendToUsb(printer: Printer, bufferBase64: string): Promise
       return { ok: true, method: 'usb' };
     } finally {
       try {
-        const iface = device.configurations?.[0]?.interfaces?.[0];
-        if (iface) await device.releaseInterface(0);
+        const ifaceNumber = device.configurations?.[0]?.interfaces?.[0]?.interfaceNumber ?? 0;
+        await device.releaseInterface(ifaceNumber);
       } catch {
         // ignore release failure
       }

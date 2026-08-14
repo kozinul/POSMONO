@@ -28,6 +28,7 @@ export interface SalesPerProductSummary {
   dpp: number;
   serviceCharge: number;
   tax: number;
+  totalRounding: number;
   grandTotal: number;
 }
 
@@ -35,10 +36,11 @@ export function useSalesPerProductReport(dateFrom: string, dateTo: string) {
   return useQuery({
     queryKey: ['sales-per-product', dateFrom, dateTo],
     queryFn: async () => {
-      const res = await api.get<{ success: boolean; data: SalesPerProductRow[] }>(
+      const res = await api.get<{ success: boolean; data: { rows: SalesPerProductRow[]; totalRounding: number } }>(
         `/reports/sales-per-product?dateFrom=${dateFrom}&dateTo=${dateTo}`,
       );
-      const rows: SalesPerProductRow[] = res.data.data;
+      const rows: SalesPerProductRow[] = res.data.data.rows;
+      const totalRounding: number = res.data.data.totalRounding ?? 0;
 
       const summary: SalesPerProductSummary = rows.reduce(
         (acc, r) => ({
@@ -47,12 +49,14 @@ export function useSalesPerProductReport(dateFrom: string, dateTo: string) {
           dpp: acc.dpp + r.dpp,
           serviceCharge: acc.serviceCharge + r.serviceCharge,
           tax: acc.tax + r.tax,
+          totalRounding,
           grandTotal: acc.grandTotal + r.totalSales + r.tax + r.serviceCharge,
         }),
-        { quantity: 0, totalSales: 0, dpp: 0, serviceCharge: 0, tax: 0, grandTotal: 0 },
+        { quantity: 0, totalSales: 0, dpp: 0, serviceCharge: 0, tax: 0, totalRounding: 0, grandTotal: 0 },
       );
+      summary.grandTotal += totalRounding;
 
-      return { rows, summary };
+      return { rows, totalRounding, summary };
     },
     enabled: !!dateFrom && !!dateTo,
   });

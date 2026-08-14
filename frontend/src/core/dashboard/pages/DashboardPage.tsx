@@ -210,7 +210,9 @@ export default function DashboardPage() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kasir</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pembayaran</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pembulatan</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tanggal & Waktu</th>
                 </tr>
               </thead>
@@ -243,8 +245,22 @@ export default function DashboardPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500">{order.cashierName || 'Kasir'}</td>
+                    <td className="px-6 py-4 text-sm text-gray-500">
+                      {order.paymentBreakdown?.length
+                        ? [...new Set(order.paymentBreakdown.map((p) => p.method))].map(paymentMethodLabel).join(' + ')
+                        : '-'}
+                    </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
                       {formatCurrency(order.total + (order.roundingAdjustment ?? 0))}
+                    </td>
+                    <td className="px-6 py-4 text-sm">
+                      {order.roundingAdjustment ? (
+                        <span className="text-purple-700 font-medium">
+                          {order.roundingAdjustment > 0 ? '+' : '-'}{formatCurrency(Math.abs(order.roundingAdjustment))}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500">
                       {new Date(order.createdAt).toLocaleString('id-ID', {

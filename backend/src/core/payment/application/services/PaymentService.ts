@@ -283,7 +283,15 @@ export class PaymentService {
     });
 
     payment.complete();
-    order.markPaid();
+
+    const paymentBreakdownEntry = {
+      method: paymentMethod,
+      code: refNumber,
+      amount: input.amountPaid,
+      change: Math.max(0, input.amountPaid - roundedPayable),
+      cardLastFour: input.cardLastFour || undefined,
+    };
+    order.pay([paymentBreakdownEntry], input.cashierId, cashierName);
 
     await this.orderRepository.save(order);
     await this.paymentRepository.save(payment);

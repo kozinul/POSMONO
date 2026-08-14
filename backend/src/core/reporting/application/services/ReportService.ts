@@ -101,6 +101,16 @@ export class ReportService {
     };
   }
 
+  async getCashierReceiptsReport(tenantId: string, dateFrom: string, dateTo: string) {
+    const result = await this.reportAggregation.getCashierReceiptsAggregation(tenantId, dateFrom, dateTo);
+    return { dateFrom, dateTo, ...result };
+  }
+
+  async getSalesPerCashierReport(tenantId: string, dateFrom: string, dateTo: string) {
+    const result = await this.reportAggregation.getSalesPerCashierAggregation(tenantId, dateFrom, dateTo);
+    return { dateFrom, dateTo, ...result };
+  }
+
   async getShiftReport(tenantId: string, shiftId: string) {
     const shift = await this.shiftRepository.findById(shiftId);
     if (!shift || shift.serialize().tenantId !== tenantId) {

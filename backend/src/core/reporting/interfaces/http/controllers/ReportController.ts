@@ -60,6 +60,34 @@ export class ReportController extends BaseController {
     this.ok(res, result);
   }
 
+  async cashierReceipts(req: Request, res: Response): Promise<void> {
+    const { dateFrom, dateTo } = req.query;
+    if (!dateFrom || !dateTo) {
+      res.status(400).json({ success: false, message: 'dateFrom and dateTo query parameters are required' });
+      return;
+    }
+    const result = await this.reportService.getCashierReceiptsReport(
+      req.tenantId,
+      dateFrom as string,
+      dateTo as string,
+    );
+    this.ok(res, result);
+  }
+
+  async salesPerCashier(req: Request, res: Response): Promise<void> {
+    const { dateFrom, dateTo } = req.query;
+    if (!dateFrom || !dateTo) {
+      res.status(400).json({ success: false, message: 'dateFrom and dateTo query parameters are required' });
+      return;
+    }
+    const result = await this.reportService.getSalesPerCashierReport(
+      req.tenantId,
+      dateFrom as string,
+      dateTo as string,
+    );
+    this.ok(res, result);
+  }
+
   async shiftReport(req: Request, res: Response): Promise<void> {
     const { shiftId } = req.query;
     if (!shiftId) {
@@ -195,6 +223,46 @@ export class ReportController extends BaseController {
       return;
     }
     const file = await this.reportExportService.exportSalesPerProduct(
+      req.tenantId,
+      dateFrom as string,
+      dateTo as string,
+      f,
+    );
+    this.sendFile(res, file);
+  }
+
+  async exportCashierReceipts(req: Request, res: Response): Promise<void> {
+    const { dateFrom, dateTo, format } = req.query;
+    if (!dateFrom || !dateTo) {
+      res.status(400).json({ success: false, message: 'dateFrom and dateTo query parameters are required' });
+      return;
+    }
+    const f = this.resolveFormat(format);
+    if (!f) {
+      res.status(400).json({ success: false, message: 'format must be pdf or xlsx' });
+      return;
+    }
+    const file = await this.reportExportService.exportCashierReceipts(
+      req.tenantId,
+      dateFrom as string,
+      dateTo as string,
+      f,
+    );
+    this.sendFile(res, file);
+  }
+
+  async exportSalesPerCashier(req: Request, res: Response): Promise<void> {
+    const { dateFrom, dateTo, format } = req.query;
+    if (!dateFrom || !dateTo) {
+      res.status(400).json({ success: false, message: 'dateFrom and dateTo query parameters are required' });
+      return;
+    }
+    const f = this.resolveFormat(format);
+    if (!f) {
+      res.status(400).json({ success: false, message: 'format must be pdf or xlsx' });
+      return;
+    }
+    const file = await this.reportExportService.exportSalesPerCashier(
       req.tenantId,
       dateFrom as string,
       dateTo as string,

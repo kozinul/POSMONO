@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, Fragment } from 'react';
 import { useDailyReport, useSalesReport, useFinanceReport } from '../../orders/hooks/useOrders';
 import { useSalesPerProductReport } from '../hooks/useSalesPerProductReport';
+import { useCashierReceiptsReport } from '../hooks/useCashierReceiptsReport';
+import { useSalesPerCashierReport } from '../hooks/useSalesPerCashierReport';
 import { useRefundReport, refundReference, type RefundRow } from '../../payments/hooks/useRefund';
 import { RefundReceiptModal } from '../components/RefundReceiptModal';
 import { useReportExport, ReportType } from '../hooks/useReportExport';
@@ -46,6 +48,26 @@ const reports = [
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7.5A1.5 1.5 0 006 6.5v11A1.5 1.5 0 007.5 19h9a1.5 1.5 0 001.5-1.5v-11A1.5 1.5 0 0016.5 5H15m-6 0a1.5 1.5 0 001.5 1.5H12A1.5 1.5 0 0013.5 5m-6 0A1.5 1.5 0 016 3.5h3M10.5 9h6m-6 3h6m-6 3h3" />
+      </svg>
+    ),
+  },
+  {
+    id: 'cashier-receipts',
+    label: 'Penerimaan per Kasir',
+    keywords: 'penerimaan kasir cashier pembayaran metode tunai qris transfer',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 10.5a1.5 1.5 0 011.5-1.5h15a1.5 1.5 0 011.5 1.5v7.5a1.5 1.5 0 01-1.5 1.5h-15A1.5 1.5 0 013 18v-7.5zM6.75 9.75V6a2.25 2.25 0 012.25-2.25h6A2.25 2.25 0 0117.25 6v3.75M8.25 14.25h.008v.008H8.25v-.008zm3 0h.008v.008H11.25v-.008zm3 0h.008v.008H14.25v-.008zm-6 3h.008v.008H8.25v-.008zm3 0h.008v.008H11.25v-.008zm3 0h.008v.008H14.25v-.008z" />
+      </svg>
+    ),
+  },
+  {
+    id: 'sales-per-cashier',
+    label: 'Penjualan per Kasir',
+    keywords: 'penjualan kasir cashier order transaksi item rata-rata',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z" />
       </svg>
     ),
   },
@@ -127,6 +149,10 @@ export default function ReportPage() {
   const [financeTo, setFinanceTo] = useState(today);
   const [sppFrom, setSppFrom] = useState(today);
   const [sppTo, setSppTo] = useState(today);
+  const [cashierReceiptsFrom, setCashierReceiptsFrom] = useState(today);
+  const [cashierReceiptsTo, setCashierReceiptsTo] = useState(today);
+  const [spcFrom, setSpcFrom] = useState(today);
+  const [spcTo, setSpcTo] = useState(today);
   const [refundFrom, setRefundFrom] = useState(today);
   const [refundTo, setRefundTo] = useState(today);
   const [selectedRefund, setSelectedRefund] = useState<RefundRow | null>(null);
@@ -144,6 +170,14 @@ export default function ReportPage() {
   const { data: spp, isLoading: sppLoading } = useSalesPerProductReport(
     sppFrom || today,
     sppTo || today,
+  );
+  const { data: cashierReceipts, isLoading: cashierReceiptsLoading } = useCashierReceiptsReport(
+    cashierReceiptsFrom || today,
+    cashierReceiptsTo || today,
+  );
+  const { data: spc, isLoading: spcLoading } = useSalesPerCashierReport(
+    spcFrom || today,
+    spcTo || today,
   );
   const { data: refunds, isLoading: refundsLoading } = useRefundReport(
     refundFrom || today,
@@ -269,7 +303,7 @@ export default function ReportPage() {
                         <div className="flex justify-between text-sm bg-purple-50 rounded-lg p-3">
                           <span className="text-purple-700">Total Pembulatan (termasuk revenue)</span>
                           <span className="text-purple-800 font-bold">
-                            {daily.totalRounding > 0 ? '+' : '-'}Rp {formatCurrency(Math.abs(daily.totalRounding))}
+                            {daily.totalRounding > 0 ? '+' : '-'}{formatCurrency(Math.abs(daily.totalRounding))}
                           </span>
                         </div>
                       )}
@@ -347,7 +381,7 @@ export default function ReportPage() {
                         <div className="flex justify-between text-sm bg-purple-50 rounded-lg p-3">
                           <span className="text-purple-700">Total Pembulatan (termasuk revenue)</span>
                           <span className="text-purple-800 font-bold">
-                            {sales.totalRounding > 0 ? '+' : '-'}Rp {formatCurrency(Math.abs(sales.totalRounding))}
+                            {sales.totalRounding > 0 ? '+' : '-'}{formatCurrency(Math.abs(sales.totalRounding))}
                           </span>
                         </div>
                       )}
@@ -385,8 +419,7 @@ export default function ReportPage() {
                               <span className="flex items-center gap-2">
                                 {order.roundingAdjustment != null && order.roundingAdjustment !== 0 && (
                                   <span className="text-xs text-purple-600">
-                                    {order.roundingAdjustment > 0 ? '+' : '-'}Rp{' '}
-                                    {formatCurrency(Math.abs(order.roundingAdjustment))}
+                                    {order.roundingAdjustment > 0 ? '+' : '-'}{formatCurrency(Math.abs(order.roundingAdjustment))}
                                   </span>
                                 )}
                                 <span className="font-medium text-gray-900">
@@ -462,7 +495,7 @@ export default function ReportPage() {
                           <div>
                             <p className="text-xs text-gray-500">Pembulatan (termasuk revenue)</p>
                             <p className="text-xl font-bold text-gray-900">
-                              {finance.totalRounding > 0 ? '+' : '-'}Rp {formatCurrency(Math.abs(finance.totalRounding))}
+                              {finance.totalRounding > 0 ? '+' : '-'}{formatCurrency(Math.abs(finance.totalRounding))}
                             </p>
                           </div>
                         )}
@@ -604,6 +637,16 @@ export default function ReportPage() {
                           })}
                         </tbody>
                         <tfoot className="bg-gray-50 border-t border-gray-200 font-semibold">
+                          {spp.summary.totalRounding !== 0 && (
+                            <tr>
+                              <td />
+                              <td className="px-4 py-2 text-gray-500 font-medium">Pembulatan</td>
+                              <td colSpan={5} />
+                              <td className="px-4 py-2 text-right text-purple-700">
+                                {spp.summary.totalRounding > 0 ? '+' : '-'}{formatCurrency(Math.abs(spp.summary.totalRounding))}
+                              </td>
+                            </tr>
+                          )}
                           <tr>
                             <td />
                             <td className="px-4 py-3 text-gray-900">Total</td>
@@ -619,6 +662,160 @@ export default function ReportPage() {
                     </div>
                   ) : (
                     <p className="text-sm text-gray-500">Select a date range</p>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {activeReport === 'cashier-receipts' && (
+              <section className="bg-white rounded-2xl shadow-sm border border-gray-100">
+                <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-lg font-bold text-gray-800">Penerimaan per Kasir</h2>
+                    <p className="text-sm text-gray-400 mt-0.5">Rincian penerimaan tiap kasir menurut metode pembayaran</p>
+                  </div>
+                  <ExportButtons
+                    type="cashier-receipts"
+                    params={{ dateFrom: cashierReceiptsFrom || today, dateTo: cashierReceiptsTo || today }}
+                    disabled={!cashierReceipts || cashierReceipts.cashiers.length === 0}
+                  />
+                </div>
+                <div className="px-6 py-5 space-y-5">
+                  <div className="flex gap-4">
+                    <div>
+                      <label className={labelCls}>Dari</label>
+                      <input type="date" value={cashierReceiptsFrom} onChange={(e) => setCashierReceiptsFrom(e.target.value)} className={inputCls} />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Sampai</label>
+                      <input type="date" value={cashierReceiptsTo} onChange={(e) => setCashierReceiptsTo(e.target.value)} className={inputCls} />
+                    </div>
+                  </div>
+                  {cashierReceiptsLoading ? (
+                    <Spinner />
+                  ) : cashierReceipts && cashierReceipts.cashiers.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-gray-50 border-b border-gray-200">
+                          <tr>
+                            <th className="text-left px-4 py-3 font-medium text-gray-700">Kasir</th>
+                            <th className="text-left px-4 py-3 font-medium text-gray-700">Metode</th>
+                            <th className="text-right px-4 py-3 font-medium text-gray-700">Transaksi</th>
+                            <th className="text-right px-4 py-3 font-medium text-gray-700">Penerimaan</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {cashierReceipts.cashiers.map((c) => (
+                            <Fragment key={c.cashierId}>
+                              <tr className="bg-blue-50/50">
+                                <td className="px-4 py-3 text-gray-900 font-semibold">{c.cashierName}</td>
+                                <td className="px-4 py-3 text-gray-400" />
+                                <td className="px-4 py-3 text-right text-gray-700 font-medium">{c.totalTransactions}</td>
+                                <td className="px-4 py-3 text-right text-gray-900 font-bold">
+                                  {formatCurrency(c.total)}
+                                </td>
+                              </tr>
+                              {c.methods.map((m) => (
+                                <tr key={`${c.cashierId}-${m.method}`}>
+                                  <td />
+                                  <td className="px-4 py-2 pl-10 text-gray-600">{paymentMethodLabel(m.method)}</td>
+                                  <td className="px-4 py-2 text-right text-gray-500">{m.count}</td>
+                                  <td className="px-4 py-2 text-right text-gray-700">{formatCurrency(m.total)}</td>
+                                </tr>
+                              ))}
+                            </Fragment>
+                          ))}
+                        </tbody>
+                        <tfoot className="bg-gray-50 border-t border-gray-200 font-semibold">
+                          <tr>
+                            <td className="px-4 py-3 text-gray-900">Total</td>
+                            <td />
+                            <td className="px-4 py-3 text-right text-gray-900">{cashierReceipts.totals.totalTransactions}</td>
+                            <td className="px-4 py-3 text-right text-gray-900">{formatCurrency(cashierReceipts.totals.total)}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">Tidak ada penerimaan pada periode ini</p>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {activeReport === 'sales-per-cashier' && (
+              <section className="bg-white rounded-2xl shadow-sm border border-gray-100">
+                <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-lg font-bold text-gray-800">Penjualan per Kasir</h2>
+                    <p className="text-sm text-gray-400 mt-0.5">Ringkasan penjualan tiap kasir pada periode tertentu</p>
+                  </div>
+                  <ExportButtons
+                    type="sales-per-cashier"
+                    params={{ dateFrom: spcFrom || today, dateTo: spcTo || today }}
+                    disabled={!spc || spc.cashiers.length === 0}
+                  />
+                </div>
+                <div className="px-6 py-5 space-y-5">
+                  <div className="flex gap-4">
+                    <div>
+                      <label className={labelCls}>Dari</label>
+                      <input type="date" value={spcFrom} onChange={(e) => setSpcFrom(e.target.value)} className={inputCls} />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Sampai</label>
+                      <input type="date" value={spcTo} onChange={(e) => setSpcTo(e.target.value)} className={inputCls} />
+                    </div>
+                  </div>
+                  {spcLoading ? (
+                    <Spinner />
+                  ) : spc && spc.cashiers.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-sm">
+                        <thead className="bg-gray-50 border-b border-gray-200">
+                          <tr>
+                            <th className="text-left px-4 py-3 font-medium text-gray-700">Kasir</th>
+                            <th className="text-right px-4 py-3 font-medium text-gray-700">Jumlah Order</th>
+                            <th className="text-right px-4 py-3 font-medium text-gray-700">Qty Item</th>
+                            <th className="text-right px-4 py-3 font-medium text-gray-700">Total Penjualan</th>
+                            <th className="text-right px-4 py-3 font-medium text-gray-700">DPP</th>
+                            <th className="text-right px-4 py-3 font-medium text-gray-700">SC</th>
+                            <th className="text-right px-4 py-3 font-medium text-gray-700">Pajak</th>
+                            <th className="text-right px-4 py-3 font-medium text-gray-700">Rata-rata/Order</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {spc.cashiers.map((c) => (
+                            <tr key={c.cashierId} className="hover:bg-gray-50">
+                              <td className="px-4 py-3 text-gray-900 font-medium">{c.cashierName}</td>
+                              <td className="px-4 py-3 text-right text-gray-700">{c.totalOrders}</td>
+                              <td className="px-4 py-3 text-right text-gray-700">{c.totalItems}</td>
+                              <td className="px-4 py-3 text-right text-gray-700">{formatCurrency(c.totalRevenue)}</td>
+                              <td className="px-4 py-3 text-right text-gray-500">{formatCurrency(c.dpp)}</td>
+                              <td className="px-4 py-3 text-right text-gray-500">{formatCurrency(c.serviceCharge)}</td>
+                              <td className="px-4 py-3 text-right text-gray-500">{formatCurrency(c.tax)}</td>
+                              <td className="px-4 py-3 text-right text-gray-700">{formatCurrency(c.avgOrderValue)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot className="bg-gray-50 border-t border-gray-200 font-semibold">
+                          <tr>
+                            <td className="px-4 py-3 text-gray-900">Total</td>
+                            <td className="px-4 py-3 text-right text-gray-900">{spc.totals.totalOrders}</td>
+                            <td className="px-4 py-3 text-right text-gray-900">{spc.totals.totalItems}</td>
+                            <td className="px-4 py-3 text-right text-gray-900">{formatCurrency(spc.totals.totalRevenue)}</td>
+                            <td className="px-4 py-3 text-right text-gray-900">{formatCurrency(spc.totals.dpp)}</td>
+                            <td className="px-4 py-3 text-right text-gray-900">{formatCurrency(spc.totals.serviceCharge)}</td>
+                            <td className="px-4 py-3 text-right text-gray-900">{formatCurrency(spc.totals.tax)}</td>
+                            <td className="px-4 py-3 text-right text-gray-900">
+                              {formatCurrency(spc.totals.totalOrders > 0 ? Math.round(spc.totals.totalRevenue / spc.totals.totalOrders) : 0)}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">Tidak ada penjualan pada periode ini</p>
                   )}
                 </div>
               </section>

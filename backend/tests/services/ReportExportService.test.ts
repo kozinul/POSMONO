@@ -12,6 +12,8 @@ function createMockReportService() {
     getSalesReport: vi.fn(),
     getFinanceReport: vi.fn(),
     getSalesPerProduct: vi.fn(),
+    getCashierReceiptsReport: vi.fn(),
+    getSalesPerCashierReport: vi.fn(),
   } as unknown as ReportService;
   return service;
 }
@@ -102,19 +104,25 @@ describe('ReportExportService', () => {
     expect(categoryRepo.findByTenant).toHaveBeenCalledWith(TENANT_ID);
   });
 
-  it('generates sales per product xlsx with totals row', async () => {
-    vi.mocked(reportService.getSalesPerProduct).mockResolvedValue([
-      {
-        productId: 'p1',
-        productName: 'Kopi Susu',
-        quantity: 2,
-        totalSales: 40_000,
-        dpp: 36_400,
-        serviceCharge: 0,
-        tax: 3_600,
-        transactions: [],
-      },
-    ]);
+  it('generates sales per product xlsx with totals row and transaction details', async () => {
+    vi.mocked(reportService.getSalesPerProduct).mockResolvedValue({
+      rows: [
+        {
+          productId: 'p1',
+          productName: 'Kopi Susu',
+          quantity: 2,
+          totalSales: 40_000,
+          dpp: 36_400,
+          serviceCharge: 0,
+          tax: 3_600,
+          transactions: [
+            { orderId: 'ORD-1', quantity: 1, unitPrice: 20_000, dpp: 18_200, serviceCharge: 0, tax: 1_800 },
+            { orderId: 'ORD-2', quantity: 1, unitPrice: 20_000, dpp: 18_200, serviceCharge: 0, tax: 1_800 },
+          ],
+        },
+      ],
+      totalRounding: 500,
+    });
 
     const file = await service.exportSalesPerProduct(TENANT_ID, '2026-08-01', '2026-08-06', 'xlsx');
 
@@ -127,5 +135,160 @@ describe('ReportExportService', () => {
     ws.eachRow((r) => values.push(r.getCell(1).value?.toString() ?? ''));
     expect(values).toContain('Kopi Susu');
     expect(values).toContain('Total');
+
+    const headerValues: string[] = [];
+    const headerRow = ws.getRow(4);
+    for (let i = 1; i <= 8; i++) headerValues.push(headerRow.getCell(i).value as string);
+    expect(headerValues).toContain('Pembulatan');
+    expect(headerValues).toContain('Grand Total');
+
+    const productRow = ws.getRow(5);
+    expect(productRow.getCell(1).value).toBe('Kopi Susu');
+    expect(productRow.getCell(2).value).toBe(2);
+    expect(productRow.getCell(8).value).toBe(43_600);
+
+    const detail1 = ws.getRow(6);
+    expect(detail1.getCell(1).value).toContain('ORD-1');
+    expect(detail1.getCell(2).value).toBe(1);
+    expect(detail1.getCell(8).value).toBe(21_800);
+
+    const detail2 = ws.getRow(7);
+    expect(detail2.getCell(1).value).toContain('ORD-2');
+    expect(detail2.getCell(2).value).toBe(1);
+    expect(detail2.getCell(8).value).toBe(21_800);
+
+    const subtotalRow = ws.getRow(8);
+    expect(subtotalRow.getCell(1).value).toBe('Subtotal Kopi Susu');
+    expect(subtotalRow.getCell(2).value).toBe(2);
+    expect(subtotalRow.getCell(8).value).toBe(43_600);
+
+    const totalRow = ws.getRow(9);
+    expect(totalRow.getCell(2).value).toBe(2);
+    expect(totalRow.getCell(7).value).toBe(500);
+    expect(totalRow.getCell(8).value).toBe(44_100);
+
+    expect(ws.getRow(6).outlineLevel).toBe(1);
+    expect(ws.getRow(7).outlineLevel).toBe(1);
+    expect(ws.getRow(5).outlineLevel).toBe(0);
+    expect(ws.getRow(8).outlineLevel).toBe(0);
+  });
+
+  it('generates cashier receipts xlsx grouped per cashier with method columns', async () => {
+    vi.mocked(reportService.getCashierReceiptsReport).mockResolvedValue({
+      dateFrom: '2026-08-01',
+      dateTo: '2026-08-06',
+      cashiers: [
+        {
+          cashierId: 'c1',
+          cashierName: 'Kasir 1',
+          methods: [
+            { method: 'cash', total: 200_000, count: 3 },
+            { method: 'qris', total: 100_000, count: 1 },
+          ],
+          total: 300_000,
+          totalTransactions: 4,
+        },
+      ],
+      totals: {
+        total: 300_000,
+        totalTransactions: 4,
+        methods: [
+          { method: 'cash', total: 200_000 },
+          { method: 'qris', total: 100_000 },
+        ],
+      },
+    });
+
+    const file = await service.exportCashierReceipts(TENANT_ID, '2026-08-01', '2026-08-06', 'xlsx');
+
+    expect(file.filename).toBe('penerimaan-per-kasir-2026-08-01-2026-08-06.xlsx');
+
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(file.buffer as any);
+    const ws = wb.getWorksheet('Laporan');
+    expect(ws.getCell('A1').value).toBe('Penerimaan per Kasir');
+
+    const header = ws.getRow(4);
+    const headerVals: string[] = [];
+    for (let i = 1; i <= 5; i++) headerVals.push(header.getCell(i).value as string);
+    expect(headerVals).toContain('TUNAI');
+    expect(headerVals).toContain('QRIS');
+    expect(headerVals).toContain('Total');
+
+    const groupRow = ws.getRow(5);
+    expect(groupRow.getCell(1).value).toBe('Kasir 1');
+    expect(groupRow.getCell(2).value).toBe(4);
+    expect(groupRow.getCell(3).value).toBe(200_000);
+    expect(groupRow.getCell(4).value).toBe(100_000);
+    expect(groupRow.getCell(5).value).toBe(300_000);
+
+    const detailRow = ws.getRow(6);
+    expect(detailRow.getCell(1).value).toContain('TUNAI');
+    expect(detailRow.getCell(3).value).toBe(200_000);
+
+    const detail2 = ws.getRow(7);
+    expect(detail2.getCell(1).value).toContain('QRIS');
+    expect(detail2.getCell(4).value).toBe(100_000);
+
+    const subtotalRow = ws.getRow(8);
+    expect(subtotalRow.getCell(1).value).toBe('Subtotal Kasir 1');
+
+    const totalsRow = ws.getRow(9);
+    expect(totalsRow.getCell(1).value).toBe('Total');
+    expect(totalsRow.getCell(3).value).toBe(200_000);
+    expect(totalsRow.getCell(4).value).toBe(100_000);
+    expect(totalsRow.getCell(5).value).toBe(300_000);
+
+    expect(ws.getRow(6).outlineLevel).toBe(1);
+    expect(ws.getRow(5).outlineLevel).toBe(0);
+  });
+
+  it('generates sales per cashier xlsx with totals', async () => {
+    vi.mocked(reportService.getSalesPerCashierReport).mockResolvedValue({
+      dateFrom: '2026-08-01',
+      dateTo: '2026-08-06',
+      cashiers: [
+        {
+          cashierId: 'c1',
+          cashierName: 'Kasir 1',
+          totalOrders: 5,
+          totalItems: 12,
+          totalRevenue: 400_000,
+          dpp: 360_000,
+          serviceCharge: 10_000,
+          tax: 30_000,
+          avgOrderValue: 80_000,
+        },
+      ],
+      totals: {
+        totalOrders: 5,
+        totalItems: 12,
+        totalRevenue: 400_000,
+        dpp: 360_000,
+        serviceCharge: 10_000,
+        tax: 30_000,
+      },
+    });
+
+    const file = await service.exportSalesPerCashier(TENANT_ID, '2026-08-01', '2026-08-06', 'xlsx');
+
+    expect(file.filename).toBe('penjualan-per-kasir-2026-08-01-2026-08-06.xlsx');
+
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(file.buffer as any);
+    const ws = wb.getWorksheet('Laporan');
+    expect(ws.getCell('A1').value).toBe('Penjualan per Kasir');
+
+    const dataRow = ws.getRow(5);
+    expect(dataRow.getCell(1).value).toBe('Kasir 1');
+    expect(dataRow.getCell(2).value).toBe(5);
+    expect(dataRow.getCell(3).value).toBe(12);
+    expect(dataRow.getCell(4).value).toBe(400_000);
+    expect(dataRow.getCell(8).value).toBe(80_000);
+
+    const totalsRow = ws.getRow(6);
+    expect(totalsRow.getCell(2).value).toBe(5);
+    expect(totalsRow.getCell(4).value).toBe(400_000);
+    expect(totalsRow.getCell(8).value).toBe(80_000);
   });
 });

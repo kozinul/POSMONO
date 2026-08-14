@@ -7,8 +7,8 @@ import { PrinterController } from '../controllers/PrinterController';
 export function createPrinterRoutes(printerController: PrinterController): Router {
   const router = Router();
 
-  router.get('/', authenticate, authorize('printers:read'), asyncHandler(printerController.list.bind(printerController)));
-  router.get('/:id', authenticate, authorize('printers:read'), asyncHandler(printerController.getById.bind(printerController)));
+  router.get('/', authenticate, asyncHandler(printerController.list.bind(printerController)));
+  router.get('/:id', authenticate, asyncHandler(printerController.getById.bind(printerController)));
   router.post('/', authenticate, authorize('printers:write'), asyncHandler(printerController.create.bind(printerController)));
   router.put('/:id', authenticate, authorize('printers:write'), asyncHandler(printerController.update.bind(printerController)));
   router.delete('/:id', authenticate, authorize('printers:write'), asyncHandler(printerController.delete.bind(printerController)));

@@ -120,7 +120,10 @@ async function seedData() {
     roleDocs.map((r) => ({
       updateOne: {
         filter: { tenantId, name: r.name },
-        update: { $setOnInsert: { _id: r._id, tenantId, description: r.description, permissions: r.permissions, isSystem: r.isSystem } },
+        update: {
+          $setOnInsert: { _id: r._id, tenantId, description: r.description, isSystem: r.isSystem },
+          $set: { permissions: r.permissions },
+        },
         upsert: true,
       },
     })),
@@ -446,6 +449,38 @@ async function main() {
 
   const { ensurePromotionIndexes } = await import('./core/promotion/infrastructure/persistence/ensurePromotionIndexes');
   await ensurePromotionIndexes();
+
+  // Always keep system role permissions in sync (idempotent) — fixes roles that
+  // predate a permission being added and would otherwise only set on $setOnInsert.
+  const RoleSync = mongoose.model('Role', RoleSchema);
+  const OWNER_PERMS = [
+    'users:read', 'users:write', 'users:delete',
+    'roles:read', 'roles:write',
+    'products:read', 'products:write', 'products:delete',
+    'orders:read', 'orders:write', 'orders:cancel',
+    'order:void', 'payment:void',
+    'payments:read', 'payments:write',
+    'inventory:read', 'inventory:write', 'inventory:adjust',
+    'reports:read',
+    'customers:read', 'customers:write',
+    'settings:read', 'settings:write',
+    'shifts:read', 'shifts:write',
+    'printers:read', 'printers:write',
+  ];
+  const MANAGER_PERMS = [
+    'products:read', 'products:write',
+    'orders:read', 'orders:write', 'orders:cancel',
+    'order:void', 'payment:void',
+    'payments:read', 'payments:write',
+    'inventory:read', 'inventory:write',
+    'reports:read',
+    'customers:read', 'customers:write',
+    'settings:read',
+    'shifts:read', 'shifts:write',
+    'printers:read', 'printers:write',
+  ];
+  await RoleSync.updateOne({ tenantId: DEV_TENANT_ID, name: 'Owner' }, { $set: { permissions: OWNER_PERMS, isSystem: true } });
+  await RoleSync.updateOne({ tenantId: DEV_TENANT_ID, name: 'Manager' }, { $set: { permissions: MANAGER_PERMS, isSystem: true } });
 
   await seedData();
 

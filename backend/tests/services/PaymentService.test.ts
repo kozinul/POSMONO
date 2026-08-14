@@ -79,6 +79,13 @@ describe('PaymentService', () => {
       expect(orderData.total).toBe(55500);
       expect(orderData.discount).toBe(0);
 
+      expect(orderData.paymentBreakdown).toHaveLength(1);
+      expect(orderData.paymentBreakdown[0]).toMatchObject({
+        method: 'cash',
+        amount: 55500,
+        change: 0,
+      });
+
       expect(result.payment.serialize().status).toBe('completed');
       expect(result.payment.serialize().orderId).toBe(orderData.id);
       expect(paymentRepo.save).toHaveBeenCalledTimes(1);
