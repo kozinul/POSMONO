@@ -49,6 +49,7 @@ Monorepo (pnpm + Turborepo)
 | 18 | Setting | Setting | `/api/settings` | ✅ |
 | 19 | Upload | (file) | `/api/upload` | ✅ |
 | 20 | Pricing | PricingResult | `/api/pricing` | ✅ |
+| 21 | Printer | Printer | `/api/printers`, `/api/print` | ✅ |
 
 ---
 
@@ -1079,6 +1080,40 @@ export type CreateOrderInput = {
 
 ---
 
+## 21. Domain: Printer & Hardware Printing
+
+### Models
+- **Printer** (`Printer.ts` aggregate)
+  - `id` (PrinterId)
+  - `name` (string)
+  - `connectionType` ('network' | 'usb' | 'bluetooth')
+  - `ip` (string) & `port` (number) — untuk network printer (TCP socket)
+  - `paperSize` ('thermal58' | 'thermal80' | 'a4-portrait')
+  - `purpose` ('receipt' | 'kot')
+  - `copies` (number, default 1)
+  - `isDefault` (boolean, unique partial index per purpose)
+  - `enabled` (boolean)
+  - `bluetoothName`, `usbVendorId`, `usbProductId` (string)
+
+### API Endpoints
+| Method | Endpoint | Auth | Permission | Description |
+|--------|----------|------|------------|-------------|
+| GET | `/api/printers` | ✅ | `printers:read` | List semua printer tenant |
+| GET | `/api/printers/:id` | ✅ | `printers:read` | Detail printer by ID |
+| POST | `/api/printers` | ✅ | `printers:write` | Tambah printer baru |
+| PUT | `/api/printers/:id` | ✅ | `printers:write` | Update printer |
+| DELETE | `/api/printers/:id` | ✅ | `printers:write` | Hapus printer |
+| POST | `/api/printers/:id/test` | ✅ | `printers:write` | Test cetak buffer ESC/POS |
+| POST | `/api/print/receipt` | ✅ | - | Cetak struk pembayaran (ESC/POS thermal) |
+| POST | `/api/print/kot/:orderId` | ✅ | - | Cetak Kitchen Order Ticket (KOT) |
+
+### Features & Capabilities
+- **Hybrid Transport**: Network printers dikirim via server-side TCP socket (`net.Socket`), sedangkan USB/Bluetooth dicetak langsung via browser WebUSB & WebBluetooth API.
+- **Auto-Print Struk & KOT**: Struk otomatis dicetak setelah pembayaran jika `autoPrintReceipt: true`. KOT otomatis dicetak via event `ORDER_CONFIRMED` jika `autoPrintKot: true`.
+- **Client Fallback & Pairing**: Pairing USB/Bluetooth disimpan di `localStorage` (`posmono.pairedPrinters`). Reprint otomatis fallback ke browser print jika hardware client tidak merespon.
+
+---
+
 ## Seed Data Default
 
 | Data | Isi |
@@ -1137,6 +1172,7 @@ Untuk rewrite ke Modular Monolith + DDD, berikut rekomendasi domain boundaries:
 | **Shift** | Closing | Closing, CashPickup | PaymentBreakdown, ShiftStatus | ShiftOpened, ShiftClosed, CashPickedUp |
 | **Reporting** | Report | (read models) | DateRange, SalesSummary | ReportGenerated |
 | **Configuration** | Setting | Setting | SettingKey, SettingValue | SettingUpdated |
+| **Printing** | Printer | Printer | PrinterId, ConnectionType, Purpose, PaperSize | PrinterCreated, PrintJobDispatched |
 
 ---
 

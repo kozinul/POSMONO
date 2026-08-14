@@ -36,6 +36,44 @@ Copy this block for each new day:
 
 ## Entries
 
+### DATE: 2026-08-13 — Printer Integration (Network ESC/POS, WebUSB, WebBluetooth, Auto-Print Struk & KOT)
+
+**Today I worked on:**
+
+- **Printer Domain & Schemas**:
+  - `shared/src/types/domain/printer.ts` and `printer-schemas.ts` defining `PrinterConnectionType` (`network` | `usb` | `bluetooth`), `PrinterPurpose` (`receipt` | `kot`), and paper sizes (`thermal58` | `thermal80` | `a4-portrait`).
+  - Added `autoPrintReceipt` & `autoPrintKot` to `TenantConfig` and `TenantSchema`.
+- **Backend Infrastructure & Services**:
+  - `Printer` Aggregate Root and `MongoPrinterRepository` with collection `printers` and a partial unique index on `{tenantId, purpose, isDefault: 1}` where `isDefault: true`.
+  - `PrintService`: ESC/POS encoding, network socket direct printing (`net.Socket` with 3s timeout and retry), test print, settled race handling.
+  - `PrinterService`: CRUD and default printer auto-reassignment on delete/update.
+  - `KotRenderService` and `DocumentPrintService`: document generation for Kitchen Order Tickets (KOT) & Struk.
+  - REST API routes: `/api/printers`, `/api/printers/:id/test`, `/api/print/receipt`, `/api/print/kot/:orderId` guarded by `printers:read` / `printers:write`.
+- **Auto-Print & Events**:
+  - `PaymentService` auto-prints receipts upon payment completion if `autoPrintReceipt` is active.
+  - Event listener `onOrderConfirmedAutoKot` attached to `ORDER_CONFIRMED` event triggers KOT print when `autoPrintKot` is active.
+- **Frontend Hardware & POS Integration**:
+  - `PrintClient.ts`: Direct client-side hardware printing via WebUSB (bulk transfers) & WebBluetooth GATT chunks with pairing memory in `localStorage`.
+  - `autoPrint.ts`: `tryClientAutoPrint` and `reprintReceipt` helpers.
+  - UI Settings: `/settings/printers` (`PrinterSettingsPage.tsx` with Uji Cetak test print button) and `GeneralSettingsPage.tsx` toggles for Struk & KOT auto-print.
+  - POS Actions: Payment modal auto-print trigger, `PosPage.tsx` Print Ulang & Cetak KOT actions, `ReceiptDisplay.tsx` thermal reprint integration.
+
+**Files changed:**
+
+- `shared/src/types/domain/printer.ts`, `shared/src/validation/schemas/printer-schemas.ts`
+- `backend/src/core/printing/domain/Printer.ts`, `schemas/PrinterSchema.ts`, `MongoPrinterRepository.ts`
+- `backend/src/core/printing/application/services/PrintService.ts`, `PrinterService.ts`, `DocumentPrintService.ts`
+- `backend/src/core/printing/interfaces/http/controllers/PrinterController.ts`, `routes/printer.routes.ts`
+- `backend/src/core/template/application/services/KotRenderService.ts`
+- `backend/src/bootstrap/container.ts`, `routes.ts`, `eventBus.ts`, `app.ts`
+- `backend/src/core/payment/application/services/PaymentService.ts`
+- `frontend/src/core/printing/hooks/usePrinters.ts`, `utils/PrintClient.ts`, `utils/autoPrint.ts`, `pages/PrinterSettingsPage.tsx`
+- `frontend/src/core/settings/pages/GeneralSettingsPage.tsx`, `frontend/src/core/pos/pages/PosPage.tsx`, `components/ReceiptDisplay.tsx`, `components/PaymentModal.tsx`
+
+**Productivity score:** 10
+
+---
+
 ### DATE: 2026-08-13 — Cash rounding (pembulatan tunai) + rounding di laporan + fix stale data POS
 
 **Today I worked on:**

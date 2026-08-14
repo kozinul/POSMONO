@@ -137,6 +137,23 @@ Modular SaaS POS Platform (Node.js/Express + React/Tailwind). Multi-tenant, mult
 - **Frontend**: `useOrders` interface `Order.roundingAdjustment`/`roundedPayable`, `DailyReport`/`SalesReport`/`FinanceReport`/`ShiftReportData` + `totalRounding`; `PosActionPanel` summary shift menampilkan baris "Pembulatan"; `ReportPrintModal` menampilkan per-order "Pembulatan" + "Total Pembulatan" di footer (Laporan Transaksi & Penerimaan); `ReportPage` menampilkan "Total Pembulatan" di tab Harian/Penjualan dan "Pembulatan" di tab Keuangan (hanya bila ≠ 0)
 - **Tests**: `RoundingEngine.test.ts` +9 (roundToDenomination nearest/up/down/denom 0); backend 210 pass; frontend 73/73 pass; tsc frontend & shared bersih; tsc backend masih error pre-existing `ApplyDiscountUseCase.ts(25,7)`
 
+### Integrated Hardware Printer & Auto-Print Struk/KOT — 2026-08-13
+- **Shared Schemas & Types**: `printer.ts` & `printer-schemas.ts` (`PrinterConnectionType` = `network` | `usb` | `bluetooth`, `PrinterPurpose` = `receipt` | `kot`, `PrinterPaperSize` = `thermal58` | `thermal80` | `a4-portrait`). Zod schema refines required IP/port for network printers. Added `autoPrintReceipt` (default `true`) & `autoPrintKot` (default `false`) config fields to `TenantConfig` and `TenantSchema`.
+- **Backend Printing Infrastructure**:
+  - `Printer` Aggregate Root & `MongoPrinterRepository` with collection `printers` and partial unique index on `{tenantId, purpose, isDefault: 1}` where `isDefault: true`.
+  - `PrintService`: ESC/POS formatting, copy multiplication, direct TCP socket printing (`net.Socket` with 3s timeout, retry once, and settled race guard), test print generator.
+  - `PrinterService`: CRUD & automatic default printer reassignment per purpose on deletion/update.
+  - `KotRenderService` & `DocumentPrintService`: renders layout and binary thermal buffer for Struk and KOT (Kitchen Order Ticket).
+  - API Endpoints: `GET/POST/PUT/DELETE /api/printers`, `POST /api/printers/:id/test`, `POST /api/print/receipt`, `POST /api/print/kot/:orderId` guarded by `printers:read` / `printers:write` permissions.
+- **Auto-Print Hooks & Event Bus**:
+  - `PaymentService` auto-prints receipt thermal buffer upon payment completion if tenant `autoPrintReceipt` is active.
+  - `eventBus` listens to `ORDER_CONFIRMED` event and invokes `onOrderConfirmedAutoKot` to trigger auto-KOT print if tenant `autoPrintKot` is active.
+- **Frontend WebUSB & WebBluetooth Support**:
+  - `PrintClient.ts`: Direct client-side hardware printing via WebUSB (bulk endpoints) & WebBluetooth GATT characteristic chunks (20-byte chunks), with pairing memory saved in `localStorage` (`posmono.pairedPrinters`).
+  - `autoPrint.ts`: `tryClientAutoPrint` & `reprintReceipt` helper with query client prefetching.
+  - UI Pages & Components: `/settings/printers` (`PrinterSettingsPage.tsx` with Uji Cetak test button), `GeneralSettingsPage.tsx` "Struk & Cetak" toggles, `PaymentModal.tsx` auto-print trigger, `PosPage.tsx` Print Ulang & Cetak KOT actions, `ReceiptDisplay.tsx` thermal reprint integration.
+  - Permissions `printers:read` & `printers:write` assigned to Owner and Manager roles in `seed.ts` & `dev.ts`.
+
 ## Key Patterns
 - `useQueryClient()` for cache invalidation after mutations
 - `useVoidOrder` for full order void; `useVoidItem` for per-item void
