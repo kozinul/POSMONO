@@ -50,7 +50,7 @@
 
 | Item | Priority | Notes |
 |------|----------|-------|
-| `[ ]` Kitchen display / printer | 🔴 | Requires thermal printer integration |
+| `[~]` Kitchen display / printer | 🔴 | KOT printing selesai; Kitchen Display System (KDS) belum |
 | `[ ]` Table management | 🔴 | Table mapping + floor plan |
 | `[ ]` Online ordering | 🔴 | Customer-facing ordering portal |
 | `[ ]` Menu management (variants) | 🔴 | Complicated by modifiers/groups |
@@ -90,7 +90,9 @@
 
 | Item | Priority | Notes |
 |------|----------|-------|
-| `[ ]` Bluetooth ESC/POS printer | 🟡 | Portable receipt printing |
+| `[x]` Bluetooth ESC/POS printer | 🟡 | Done (2026-08-13) — WebBluetooth client-side printing |
+| `[x]` Network ESC/POS printer | 🟡 | Done (2026-08-13) — server TCP socket via `PrintService` |
+| `[x]` KOT printing | 🟡 | Done (2026-08-13) — `KotRenderService` + auto-print on order confirmed |
 | `[ ]` Barcode scanner (hardware) | 🟡 | USB/Bluetooth scanner support |
 | `[ ]` Cash drawer | 🟡 | Automatic drawer open on payment |
 | `[ ]` Customer-facing display | 🟡 | Second screen for checkout |

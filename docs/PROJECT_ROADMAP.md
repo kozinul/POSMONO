@@ -289,7 +289,8 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | POS cart (add/remove/qty) | `[x]` |
 | Checkout & order processing | `[x]` |
 | Cash payment | `[x]` |
-| Receipt printing (thermal) | `[~]` |
+| Receipt printing (thermal) | `[x]` |
+| KOT (Kitchen Order Ticket) printing | `[x]` |
 | Basic reporting (daily sales) | `[x]` |
 | Shift management (open/close register) | `[x]` |
 | Dashboard (summary cards + recent orders) | `[x]` |
@@ -305,12 +306,13 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 
 | Feature | Notes |
 |---------|-------|
-| `[ ]` Restaurant module | Kitchen printer, table management, online ordering |
+| `[ ]` Restaurant module | Table management, online ordering (Kitchen printer & KOT sudah selesai) |
 | `[ ]` Villa / hospitality module | Reservation calendar, check-in/out, housekeeping |
 | `[ ]` Mobile app (Capacitor) | Wraps existing frontend for mobile install |
 | `[ ]` Desktop app (Electron) | Offline-first desktop POS |
 | `[ ]` Offline sync | Local-first with background sync when online |
-| `[ ]` Bluetooth printer | ESC/POS over Bluetooth |
+| `[x]` Bluetooth printer | ESC/POS over Bluetooth (WebBluetooth client-side) |
+| `[x]` Network printer (TCP ESC/POS) | Printer network langsung via server `net.Socket` |
 | `[ ]` Barcode scanner | Hardware scanner integration |
 | `[ ]` Payment gateway | QRIS, GoPay, OVO, bank transfer |
 | `[ ]` Multi-currency | For tourism/hospitality |
@@ -336,7 +338,7 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | Infrastructure (Docker, networking) | `[x]` |
 | Transaction engine design | `[x]` |
 | Offline sync architecture | `[ ]` |
-| Printer architecture | `[ ]` |
+| Printer architecture | `[x]` (Printer aggregate, ESC/POS, WebUSB/WebBluetooth, auto-print struk/KOT) |
 | Plugin architecture | `[ ]` |
 | Deployment architecture | `[ ]` |
 

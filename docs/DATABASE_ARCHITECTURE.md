@@ -617,6 +617,41 @@ Indexes:
   { tenantId: 1, status: 1 }
 
 
+── PRINTING DOMAIN ─────────────────────────────────────────────
+
+PRINTERS
+────────
+{
+  _id: string,                // "prn_" + nanoid (PrinterId)
+  tenantId: string,
+  name: string,               // "Printer Kasir", "Printer Dapur"
+  connectionType: "network" | "usb" | "bluetooth",
+  ip: string,                 // network printer (IP + port required)
+  port: number,               // TCP port (default 9100)
+  paperSize: "thermal58" | "thermal80" | "a4-portrait",
+  purpose: "receipt" | "kot",
+  copies: number,             // default 1
+  isDefault: boolean,         // max 1 default per (tenantId, purpose)
+  enabled: boolean,
+  bluetoothName: string,
+  usbVendorId: string,        // hex, untuk filter WebUSB
+  usbProductId: string,       // hex
+  createdAt: Date,
+  updatedAt: Date
+}
+Indexes:
+  { tenantId: 1, purpose: 1, isDefault: 1 }  // PARTIAL UNIQUE where isDefault = true
+  { tenantId: 1, purpose: 1 }
+  { tenantId: 1, enabled: 1 }
+
+Note: collection `printers` diimplementasikan 2026-08-13 (PrinterSchema,
+MongoPrinterRepository). Partial unique index `{tenantId, purpose, isDefault:1}`
+dengan partialFilterExpression `{ isDefault: true }` — menjamin hanya satu
+printer default per purpose per tenant (race condition ditutup di level DB).
+Buffer thermal (ESC/POS) tidak disimpan di DB — di-render on-demand saat
+cetak/auto-print (ReceiptRenderService / KotRenderService).
+
+
 ── CUSTOMER DOMAIN ────────────────────────────────────────────
 
 CUSTOMERS
@@ -1850,6 +1885,7 @@ loyalty_points           ~50
 notifications            ~3000/month
 daily_metrics            ~365/year
 audit_logs               ~5000/month
+printers                 <10 (per tenant; partial unique default per purpose)
 
 EXTENSION COLLECTIONS
 ──────────────────────
@@ -1873,6 +1909,7 @@ IDs:               prefix_nanoid
   Customer:        cst_
   Warehouse:       wh_
   Inventory:       inv_
+  Printer:         prn_
   Audit:           aud_
   Notification:    not_
   Restaurant:      rst_

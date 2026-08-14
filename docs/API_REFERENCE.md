@@ -656,6 +656,120 @@ Same deduction applies on `POST /api/payments/process` (first full payment only)
 
 ---
 
+## Printers (`/api/printers`)
+
+> **Hybrid transport:** printer `network` dicetak server-side via TCP socket (`net.Socket`); printer `usb`/`bluetooth` dikirim sebagai base64 buffer untuk dicetak klien via WebUSB/WebBluetooth.
+
+### `GET /api/printers`
+
+List printers untuk tenant. Permission: `printers:read`.
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "data": [{ "id": "...", "tenantId": "...", "name": "Printer Dapur", "connectionType": "network", "ip": "192.168.1.50", "port": 9100, "paperSize": "thermal58", "purpose": "kot", "copies": 1, "isDefault": true, "enabled": true, "bluetoothName": "", "usbVendorId": "", "usbProductId": "", "createdAt": "...", "updatedAt": "..." }]
+}
+```
+
+### `GET /api/printers/:id`
+
+Get printer by ID. Permission: `printers:read`.
+
+**Response 200:** Single printer object.
+
+### `POST /api/printers`
+
+Create printer. Permission: `printers:write`.
+
+**Body:**
+```json
+{ "name": "Printer Kasir", "connectionType": "network", "ip": "192.168.1.50", "port": 9100, "paperSize": "thermal58", "purpose": "receipt", "copies": 1, "isDefault": true, "enabled": true }
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| name | string | yes | Nama printer |
+| connectionType | string | yes | `network` \| `usb` \| `bluetooth` |
+| ip | string | hanya network | IP printer (wajib saat `connectionType='network'`) |
+| port | number | hanya network | Port TCP (default 9100) |
+| paperSize | string | no | `thermal58` \| `thermal80` \| `a4-portrait` |
+| purpose | string | no | `receipt` \| `kot` (default receipt) |
+| copies | number | no | Jumlah salinan (default 1) |
+| isDefault | boolean | no | Default per `purpose` (partial unique index) |
+| enabled | boolean | no | Aktif/nonaktif |
+| bluetoothName | string | no | Nama perangkat Bluetooth |
+| usbVendorId / usbProductId | string | no | Vendor/product ID USB (hex) |
+
+**Response 201:** Full printer object.
+
+### `PUT /api/printers/:id`
+
+Update printer (all optional). Permission: `printers:write`. Menghapus default lama otomatis jika `isDefault` dipindah; re-assign default saat default dihapus/nonaktif.
+
+**Body:** `{ "name": "Printer Baru", "isDefault": true }`
+
+**Response 200:** Full printer object.
+
+### `DELETE /api/printers/:id`
+
+Hapus printer. Permission: `printers:write`. Default printer lain di-purpose yang sama otomatis di-assign.
+
+**Response:** `204 No Content`
+
+### `POST /api/printers/:id/test`
+
+Cetak halaman uji (test buffer ESC/POS). Permission: `printers:write`.
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "data": {
+    "dispatched": true,
+    "clientPrint": false,
+    "printer": { "id": "...", "connectionType": "network", "ip": "192.168.1.50", "port": 9100, "...": "..." },
+    "error": null
+  }
+}
+```
+
+---
+
+## Print (`/api/print`)
+
+### `POST /api/print/receipt`
+
+Cetak ulang struk pembayaran (ESC/POS thermal). Auth required (tidak butuh permission khusus; kasir boleh print ulang).
+
+**Body:** `{ "orderId": "uuid", "paymentId": "uuid?", "printerId": "uuid?" }`
+
+Jika `paymentId` tidak diberikan, backend memakai payment `status:'completed'` pertama dari order.
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "data": {
+    "dispatched": false,
+    "clientPrint": true,
+    "printer": { "id": "...", "connectionType": "usb", "...": "..." },
+    "buffer": "<base64 thermal buffer>",
+    "payload": { "layout": "...", "thermal": "<base64>", "pdf": "<base64>", "paper": "thermal58", "templateId": "...", "templateName": "..." }
+  }
+}
+```
+
+### `POST /api/print/kot/:orderId`
+
+Cetak Kitchen Order Ticket (KOT). Auth required.
+
+**Body:** `{ "printerId": "uuid?" }`
+
+**Response 200:** Sama seperti `print/receipt` (buffer/payload KOT dari template default `kot`).
+
+---
+
 ## Pricing (`/api/pricing`)
 
 ### `POST /api/pricing/calculate`
@@ -862,3 +976,11 @@ id, tenantId, email, displayName, roleId, isActive, lastLoginAt, createdAt, upda
 | 78 | PUT | `/api/pricing-profiles/:id` | ✓ |
 | 79 | DELETE | `/api/pricing-profiles/:id` | ✓ |
 | 80 | POST | `/api/pricing/calculate` | ✓ |
+| 81 | GET | `/api/printers` | ✓ |
+| 82 | GET | `/api/printers/:id` | ✓ |
+| 83 | POST | `/api/printers` | ✓ |
+| 84 | PUT | `/api/printers/:id` | ✓ |
+| 85 | DELETE | `/api/printers/:id` | ✓ |
+| 86 | POST | `/api/printers/:id/test` | ✓ |
+| 87 | POST | `/api/print/receipt` | ✓ |
+| 88 | POST | `/api/print/kot/:orderId` | ✓ |

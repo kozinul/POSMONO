@@ -125,9 +125,12 @@ SHIFT      shift:open, shift:close, shift:reopen, cash:count, cash-diff:approve
 TABLE      table:open, table:transfer, table:force-close
 KDS        kds:view, kds:status, drink-queue:view, drink-queue:status
 DEVICE     device:pair, device:manage
+PRINT      printer:manage, print:receipt, print:kot
 SYSTEM     system:settings, smtp:manage, gateway:manage, api-key:manage, integration:manage
 USER       user:manage, role:manage
 ```
+
+> **Implementasi aktual printer (2026-08-13):** permission yang dipakai di seed/dev adalah `printers:read` & `printers:write` (Owner + Manager), guard di `printer.routes.ts` (`/api/printers` CRUD + test → `printers:read`/`printers:write`). `POST /api/print/receipt` & `POST /api/print/kot/:orderId` cukup `authenticate` (kasir boleh print ulang/cetak KOT). Nama permission di atas adalah target konvensi rencana; saat ini kedua permission printer hidup di katalog `PRINT`.
 
 > Catatan: daftar ini hidup (bukan statis) — permission baru dapat ditambahkan ke katalog saat fitur baru lahir. Setiap penambahan permission membutuhkan peninjauan permission default tiap role template.
 

@@ -1,7 +1,7 @@
 # Test Progress
 
-> **Updated:** 2026-07-30
-> **Total Tests:** 346 passing · 0 failing · 31 test files (30 backend + 1 frontend)
+> **Updated:** 2026-08-13
+> **Total Tests:** 346 passing (legacy) · Backend vitest: **749 passing** (63 files) + 11 files fail hanya karena Mongo ECONNREFUSED (tanpa Docker) · Frontend vitest: **73 passing** (8 files)
 
 ---
 
@@ -32,6 +32,8 @@
 | Tenant | `TenantService.test.ts` | 10 | ✅ |
 | Catalog | `ProductService.test.ts` | 14 | ✅ |
 | Inventory | `InventoryService.test.ts` | 16 | ✅ |
+| Printing | `PrintService.test.ts` | 6 | ✅ |
+| Tax | `RoundingEngine.test.ts` | 9 | ✅ |
 
 ## Layer 3 — Repository Testing (66 tests) ✅
 
@@ -95,6 +97,13 @@
 | Test File | Tests | Status |
 |-----------|-------|--------|
 | `posStore.test.ts` | 11 | ✅ |
+| `taxCalculator.test.ts` | 14 | ✅ |
+| `paymentLabels.test.ts` | 4 | ✅ |
+| `TransactionHistory.test.tsx` | 9 | ✅ |
+| `VoidOrderModal.test.tsx` | 7 | ✅ |
+| `VoidItemModal.test.tsx` | 7 | ✅ |
+| `VoidPayment.test.tsx` | 7 | ✅ |
+| `UserListPage.test.tsx` | 7 | ✅ |
 
 ## Next Priority
 

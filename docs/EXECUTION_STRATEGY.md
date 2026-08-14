@@ -161,7 +161,7 @@ EXCLUDED FROM MVP — BUILD LATER:
   ❌ WhatsApp notifications
   ❌ Capacitor mobile app
   ❌ Electron desktop app
-  ❌ Bluetooth/USB printer
+  ❌ Bluetooth/USB printer   → ✅ DONE (2026-08-13): printer network via TCP socket; USB/Bluetooth via WebUSB/WebBluetooth; auto-print struk & KOT
   ❌ Kitchen Display System
   ❌ Multi-warehouse
   ❌ Purchase orders
