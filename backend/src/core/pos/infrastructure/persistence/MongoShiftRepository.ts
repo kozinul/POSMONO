@@ -6,6 +6,7 @@ interface ShiftDoc extends Document<string> {
   tenantId: string;
   registerId: string;
   cashierId: string;
+  cashierName: string;
   status: string;
   openingBalance: number;
   closingBalance: number | null;
@@ -36,6 +37,7 @@ export class MongoShiftRepository {
       tenantId: doc.tenantId,
       registerId: doc.registerId,
       cashierId: doc.cashierId,
+      cashierName: doc.cashierName ?? '',
       status: doc.status as 'open' | 'closed',
       openingBalance: doc.openingBalance,
       closingBalance: doc.closingBalance,
@@ -72,6 +74,7 @@ export class MongoShiftRepository {
       tenantId: data.tenantId,
       registerId: data.registerId,
       cashierId: data.cashierId,
+      cashierName: data.cashierName,
       status: data.status,
       openingBalance: data.openingBalance,
       closingBalance: data.closingBalance,

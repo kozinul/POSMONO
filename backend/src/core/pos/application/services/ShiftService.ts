@@ -6,6 +6,7 @@ export class ShiftService {
     private readonly shiftRepository: any,
     private readonly reportAggregation?: any,
     private readonly orderRepository?: any,
+    private readonly userRepository?: any,
   ) {}
 
   async open(input: { tenantId: string; registerId: string; cashierId: string; openingBalance: number }): Promise<Shift> {
@@ -14,10 +15,21 @@ export class ShiftService {
       throw new ValidationError('Cashier already has an open shift');
     }
 
+    let cashierName = '';
+    try {
+      const user = this.userRepository
+        ? await this.userRepository.findByIdAndTenant(input.cashierId, input.tenantId)
+        : null;
+      cashierName = user?.displayNameValue ?? '';
+    } catch {
+      // resolving name must never block opening a shift
+    }
+
     const shift = Shift.open({
       tenantId: input.tenantId,
       registerId: input.registerId,
       cashierId: input.cashierId,
+      cashierName,
       openingBalance: input.openingBalance,
     });
 

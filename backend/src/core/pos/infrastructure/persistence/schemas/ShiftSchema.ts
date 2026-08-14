@@ -37,6 +37,7 @@ export const ShiftSchema = new Schema(
     tenantId: { type: String, required: true, index: true },
     registerId: { type: String, required: true },
     cashierId: { type: String, required: true },
+    cashierName: { type: String, default: '' },
     status: { type: String, enum: ['open', 'closed'], default: 'open' },
     openingBalance: { type: Number, required: true },
     closingBalance: { type: Number, default: null },

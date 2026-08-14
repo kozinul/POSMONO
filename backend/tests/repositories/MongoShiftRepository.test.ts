@@ -12,7 +12,7 @@ let model: Model<any>;
 let repo: MongoShiftRepository;
 
 function createShift(tenantId: string, cashierId = 'cashier-1') {
-  return Shift.open({ tenantId, registerId: 'register-1', cashierId, openingBalance: 500000 });
+  return Shift.open({ tenantId, registerId: 'register-1', cashierId, cashierName: 'Kasir Test', openingBalance: 500000 });
 }
 
 beforeAll(async () => {

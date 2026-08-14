@@ -351,6 +351,31 @@ export default function ReportPage() {
                           </span>
                         </div>
                       )}
+                      {sales.salesByCategory && sales.salesByCategory.length > 0 && (
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-700 mb-2">Penjualan per Kategori</h3>
+                          <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200">
+                              <thead className="bg-gray-50">
+                                <tr>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kategori</th>
+                                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Qty</th>
+                                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Revenue</th>
+                                </tr>
+                              </thead>
+                              <tbody className="bg-white divide-y divide-gray-200">
+                                {sales.salesByCategory.map((cat, idx) => (
+                                  <tr key={cat.categoryId ?? `uncat-${idx}`} className="hover:bg-gray-50">
+                                    <td className="px-4 py-2 text-sm text-gray-900">{getCategoryName(cat.categoryId)}</td>
+                                    <td className="px-4 py-2 text-sm text-gray-500 text-right">{cat.totalItems}</td>
+                                    <td className="px-4 py-2 text-sm text-gray-900 text-right">{formatCurrency(cat.totalRevenue)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
                       <div>
                         <h3 className="text-sm font-medium text-gray-700 mb-2">Orders in Period</h3>
                         <div className="max-h-48 overflow-y-auto space-y-1">

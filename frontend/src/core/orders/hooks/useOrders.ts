@@ -97,6 +97,7 @@ interface SalesReport {
   totalRounding: number;
   totalItems: number;
   orders: Order[];
+  salesByCategory?: { categoryId: string | null; totalOrders: number; totalRevenue: number; totalItems: number }[];
 }
 
 interface FinanceCategory {

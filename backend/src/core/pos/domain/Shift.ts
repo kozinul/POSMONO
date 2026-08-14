@@ -31,6 +31,7 @@ export interface IShift {
   tenantId: string;
   registerId: string;
   cashierId: string;
+  cashierName: string;
   status: 'open' | 'closed';
   openingBalance: number;
   closingBalance: number | null;
@@ -57,6 +58,7 @@ export class Shift extends AggregateRoot<ShiftId> {
   private tenantId: string;
   private registerId: string;
   private cashierId: string;
+  private cashierName: string;
   private status: 'open' | 'closed';
   private openingBalance: number;
   private closingBalance: number | null;
@@ -87,6 +89,7 @@ export class Shift extends AggregateRoot<ShiftId> {
     this.tenantId = props.tenantId;
     this.registerId = props.registerId;
     this.cashierId = props.cashierId;
+    this.cashierName = props.cashierName ?? '';
     this.status = props.status;
     this.openingBalance = props.openingBalance;
     this.closingBalance = props.closingBalance;
@@ -255,6 +258,7 @@ export class Shift extends AggregateRoot<ShiftId> {
       tenantId: this.tenantId,
       registerId: this.registerId,
       cashierId: this.cashierId,
+      cashierName: this.cashierName,
       status: this.status,
       openingBalance: this.openingBalance,
       closingBalance: this.closingBalance,

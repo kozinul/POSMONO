@@ -37,7 +37,7 @@ describe('ShiftService', () => {
     });
 
     it('throws ValidationError if cashier already has open shift', async () => {
-      const existingShift = Shift.open({ tenantId: TENANT_ID, registerId: 'register-1', cashierId: 'cashier-1', openingBalance: 0 });
+      const existingShift = Shift.open({ tenantId: TENANT_ID, registerId: 'register-1', cashierId: 'cashier-1', cashierName: 'Kasir Test', openingBalance: 0 });
       repo.findOpenShift.mockResolvedValue(existingShift);
 
       await expect(
@@ -61,7 +61,7 @@ describe('ShiftService', () => {
 
   describe('close', () => {
     it('closes an open shift', async () => {
-      const shift = Shift.open({ tenantId: TENANT_ID, registerId: 'register-1', cashierId: 'cashier-1', openingBalance: 500000 });
+      const shift = Shift.open({ tenantId: TENANT_ID, registerId: 'register-1', cashierId: 'cashier-1', cashierName: 'Kasir Test', openingBalance: 500000 });
       repo.findById.mockResolvedValue(shift);
 
       const closed = await service.close(TENANT_ID, shift.id.toValue(), {
@@ -85,7 +85,7 @@ describe('ShiftService', () => {
     });
 
     it('throws ValidationError if shift belongs to different tenant', async () => {
-      const shift = Shift.open({ tenantId: TENANT_ID, registerId: 'register-1', cashierId: 'cashier-1', openingBalance: 500000 });
+      const shift = Shift.open({ tenantId: TENANT_ID, registerId: 'register-1', cashierId: 'cashier-1', cashierName: 'Kasir Test', openingBalance: 500000 });
       repo.findById.mockResolvedValue(shift);
 
       await expect(
@@ -94,7 +94,7 @@ describe('ShiftService', () => {
     });
 
     it('throws ValidationError if shift is already closed', async () => {
-      const shift = Shift.open({ tenantId: TENANT_ID, registerId: 'register-1', cashierId: 'cashier-1', openingBalance: 500000 });
+      const shift = Shift.open({ tenantId: TENANT_ID, registerId: 'register-1', cashierId: 'cashier-1', cashierName: 'Kasir Test', openingBalance: 500000 });
       shift.close(750000);
       repo.findById.mockResolvedValue(shift);
 
@@ -106,7 +106,7 @@ describe('ShiftService', () => {
 
   describe('getCurrent', () => {
     it('returns current open shift for cashier', async () => {
-      const shift = Shift.open({ tenantId: TENANT_ID, registerId: 'register-1', cashierId: 'cashier-1', openingBalance: 500000 });
+      const shift = Shift.open({ tenantId: TENANT_ID, registerId: 'register-1', cashierId: 'cashier-1', cashierName: 'Kasir Test', openingBalance: 500000 });
       repo.findOpenShift.mockResolvedValue(shift);
 
       const result = await service.getCurrent(TENANT_ID, 'cashier-1');

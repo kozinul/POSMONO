@@ -146,6 +146,18 @@ export class ReportExportService {
         },
         {
           columns: [
+            { label: 'Kategori', flex: 3, align: 'left' },
+            { label: 'Qty', flex: 1, align: 'center' },
+            { label: 'Pendapatan', flex: 2, align: 'right', money: true },
+          ],
+          rows: (data.salesByCategory ?? []).map((c: { categoryId: string | null; totalItems: number; totalRevenue: number }) => [
+            c.categoryId ?? 'Tanpa kategori',
+            c.totalItems,
+            c.totalRevenue,
+          ]),
+        },
+        {
+          columns: [
             { label: 'Produk', flex: 3, align: 'left' },
             { label: 'Qty', flex: 1, align: 'center' },
             { label: 'Pendapatan', flex: 2, align: 'right', money: true },

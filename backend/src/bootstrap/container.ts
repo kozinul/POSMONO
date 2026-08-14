@@ -595,6 +595,7 @@ export function buildContainer() {
         shiftRepository: container.resolve('shiftRepository'),
         reportAggregation: container.resolve('reportAggregation'),
         orderRepository: container.resolve('orderRepository'),
+        userRepository: container.resolve('userRepository'),
       }),
     }),
     shiftController: asClass(ShiftController, {

@@ -5,6 +5,7 @@ interface Shift {
   id: string;
   registerId: string;
   cashierId: string;
+  cashierName: string;
   status: 'open' | 'closed';
   openingBalance: number;
   closingBalance: number | null;

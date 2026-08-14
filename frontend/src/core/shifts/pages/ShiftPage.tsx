@@ -312,6 +312,7 @@ export default function ShiftPage() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kasir</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Opened</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Closed</th>
@@ -324,6 +325,7 @@ export default function ShiftPage() {
             <tbody className="divide-y divide-gray-200">
               {shifts.map((shift) => (
                 <tr key={shift.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 text-sm text-gray-900">{shift.cashierName || 'Kasir'}</td>
                   <td className="px-6 py-4">
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                       shift.status === 'open' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
