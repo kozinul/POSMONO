@@ -80,11 +80,15 @@ export class QrisGatewayService {
       }),
       'Gagal membuat invoice QRIS',
     );
-    if (!data.qris) throw new ValidationError('Gateway tidak mengembalikan payload QRIS');
+    const qrString = data.qris || data.qris_content;
+    if (!qrString) throw new ValidationError('Gateway tidak mengembalikan payload QRIS');
+    const qrImage = typeof data.qrImage === 'string'
+      ? data.qrImage
+      : (typeof data.qris_content === 'string' && data.qris_content.startsWith('data:image/') ? data.qris_content : null);
     return {
       referenceNumber,
-      qrString: data.qris,
-      qrImage: typeof data.qrImage === 'string' ? data.qrImage : null,
+      qrString,
+      qrImage,
       amount,
       expiresAt: data.expiredAt ?? null,
     };

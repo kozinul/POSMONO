@@ -780,7 +780,7 @@ export default function GeneralSettingsPage() {
                           <input
                             value={qrisGatewayBaseUrl}
                             onChange={(e) => { setQrisGatewayBaseUrl(e.target.value); setQrisTestResult(null); }}
-                            placeholder="http://localhost:5000"
+                            placeholder="http://host.docker.internal:3333"
                             className={`block w-full px-4 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
                               qrisGatewayBaseUrl.trim() ? 'border-gray-200' : 'border-red-300 bg-red-50/40'
                             }`}
