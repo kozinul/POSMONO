@@ -1,6 +1,7 @@
 # QRIS Gateway Integration — Status & Plan
 
-> Terakhir diperbarui: **2026-08-23** · Status: **COMMITTED** (`feat(qris)`) — backend, finalisasi pembayaran, frontend PaymentModal, Settings UI, simulator, semua test, dan docs (`API_REFERENCE.md`, `POS_CURRENT_FEATURES.md`) selesai. Sisa: E2E manual dengan simulator (butuh docker/Mongo).
+> Terakhir diperbarui: **2026-08-23** · Status: **COMMITTED** (`feat(qris)`) — backend, finalisasi pembayaran, frontend PaymentModal, Settings UI, semua test, dan docs (`API_REFERENCE.md`, `POS_CURRENT_FEATURES.md`) selesai. Simulator internal sudah dihapus — development memakai gateway eksternal di `http://host.docker.internal:3333` (§7).
+> ⚠️ **PENDING**: kontrak aktual endpoint cek status gateway (`checkpaid_qris.php` + `invid/trxvalue/trxdate`) belum diimplementasikan — lihat §10.
 > Dokumen ini adalah backup konteks jika sesi coding terputus — semua keputusan desain, kontrak API, dan daftar file tercantum di sini.
 
 ---
@@ -13,7 +14,7 @@ Integrasi pembayaran **QRIS dinamis** (QR berisi nominal) melalui *QRIS Gateway*
 2. Frontend menampilkan QR → customer scan & bayar
 3. Frontend polling status sampai `paid` → finalize pembayaran order (paymentBreakdown, shiftId, struk)
 
-Gateway dikonfigurasi **per tenant** (base URL, API key, merchant ID), sehingga satu deployment bisa multi-gateway/multi-merchant.
+| Gateway dikonfigurasi **per tenant** (base URL, API key, merchant ID), sehingga satu deployment bisa multi-gateway/multi-merchant. Gateway eksternal diakses via `http://host.docker.internal:3333` (container terpisah). |
 
 ---
 
@@ -24,7 +25,7 @@ Gateway dikonfigurasi **per tenant** (base URL, API key, merchant ID), sehingga 
 | Gateway dipanggil dari **backend** (`QrisGatewayService`), bukan browser | API key tidak boleh bocor ke client |
 | Config disimpan di `TenantConfig` (bukan collection terpisah) | Konsisten dengan pattern rounding/autoPrint; 4 field saja |
 | `referenceNumber` dibuat **lokal**: `QRIS-<12 hex uppercase>` | Idempotent, bisa ditelusuri di kedua sisi; dikirim sebagai `cliTrxNumber` |
-| Endpoint gateway tunggal `/restapi/qris/show_qris.php` dengan param `do=` | Mengikuti kontrak gateway target yang sudah ada (style PHP REST lama); simulator meniru persis |
+| Endpoint gateway tunggal `/restapi/qris/show_qris.php` dengan param `do=` | Mengikuti kontrak gateway eksternal yang sudah ada (style PHP REST lama) |
 | Error gateway dilempar sebagai `ValidationError` (HTTP 400) dengan pesan Indonesia | Konsisten dengan error handling lain; kasir langsung paham |
 | Timeout HTTP 10 detik (`AbortSignal.timeout`) | Gateway lambat jangan menggantung POS |
 | Route QRIS hanya `authenticate` (tanpa `authorize`) | Kasir harus bisa transaksi QRIS; sama seperti route payments lain |
@@ -64,7 +65,7 @@ Field baru di `config` tenant:
 
 ```
 qrisGatewayEnabled    : boolean, default false
-qrisGatewayBaseUrl    : string,  default 'http://localhost:5000'
+qrisGatewayBaseUrl    : string,  default 'http://host.docker.internal:3333'
 qrisGatewayApiKey     : string,  default ''
 qrisGatewayMerchantId : string,  default ''
 ```
@@ -96,9 +97,6 @@ Validasi (`shared/src/validation/schemas/tenant-schemas.ts`):
 ### Untracked
 | File | Isi |
 |---|---|
-| `tools/qris-simulator/server.mjs` | Mock gateway (lihat §7) |
-| `tools/qris-simulator/package.json` | Deps: `qrcode`, `yargs` (node_modules ter-install) |
-| `tools/qris-simulator/data/invoices.json` | Persist invoice simulator (runtime artifact) |
 | `backend/tests/services/PaymentService.qris.test.ts` | Unit test `confirmQrisPayment` (12 test, semua pass) |
 | `frontend/tests/unit/useQrisPayment.test.ts` | Unit test hook QRIS (6 test, semua pass) |
 | `backend/tests/services/QrisGatewayService.test.ts` | Unit test gateway service (19 test, semua pass) |
@@ -120,28 +118,18 @@ Lokasi: `backend/src/core/payment/application/services/QrisGatewayService.ts`
 
 ---
 
-## 7. QRIS Simulator (`tools/qris-simulator`)
+## 7. QRIS Gateway Eksternal (development)
 
-Mock gateway untuk development/testing — **meniru kontrak gateway asli 100%**.
+Gateway QRIS berjalan di container terpisah dan diakses backend via:
 
-```bash
-cd tools/qris-simulator && node server.mjs
-# default: PORT=5000, QRIS_API_KEY=12345678, QRIS_MERCHANT_ID=123456
-# cocok dengan default config tenant (http://localhost:5000)
+```
+http://host.docker.internal:3333/restapi/qris/show_qris.php
 ```
 
-Endpoint: `GET|POST /restapi/qris/show_qris.php` (CORS `*`, body JSON atau form-urlencoded)
-
-Aksi (`do=`): `create-invoice` · `check-status` · `pay` *(simulasi bayar)* · `void|cancel` · `list`
-
-Perilaku penting:
-- Generate **payload EMVCo TLV asli** (tag 00/01/26/52/53/54/58/59/60/62 + CRC16), tag 54 = nominal dinamis, tag 62.05 = referenceNumber → QR bisa discan app e-wallet (nilai sandbox)
-- Bisa pakai **static QRIS asli**: set env `QRIS_STATIC=<payload emv>` → simulator re-tag (01=12, 54=amount, 62.05=ref) + hitung ulang CRC
-- Expiry default 15 menit (`QRIS_EXPIRY_MINUTES`); `check-status` otomatis `expired`
-- `create-invoice` idempotent selama masih pending (return invoice lama)
-- Invoice persist ke `data/invoices.json` (bertahan antar restart)
-- `qrImage` = PNG dataURL (paket `qrcode`)
-- Auth: hanya cek `apikey`; `mID` divalidasi bila dikirim
+- `host.docker.internal` dipakai karena backend POSMono juga berjalan di Docker — `localhost` dari dalam container menunjuk ke container itu sendiri, bukan ke gateway
+- Endpoint tunggal: `GET|POST /restapi/qris/show_qris.php?do=...`
+- Aksi (`do=`): `create-invoice` · `check-status` · `pay` · `void|cancel` · `list` (kontrak lihat §2/§6)
+- Config tenant: `qrisGatewayBaseUrl=http://host.docker.internal:3333` + API Key & Merchant ID sesuai gateway
 
 ---
 
@@ -177,11 +165,11 @@ Perilaku penting:
 ### D. Test — ✅ SELESAI
 - ✅ `tests/services/PaymentService.qris.test.ts` (12 test) untuk `confirmQrisPayment`
 - ✅ `tests/services/QrisGatewayService.test.ts` (19 test): resolveConfig (repo kosong/disabled/config kurang/trailing slash), createInvoice (validasi amount/param gateway/fallback null/error message/payload QRIS kosong), checkStatus (ref wajib/normalisasi status/unknown), cancelInvoice (do=void/ref wajib), testConnection (probe create Rp 10.000 + void best-effort), failure jaringan (ECONNREFUSED/HTTP 500/TimeoutError) — semua mock `fetch` global via `vi.stubGlobal` + mock tenantRepository
-- ⬜ Test simulator manual checklist (opsional, dev-time): create → pay → status=paid; create → void; expiry
+- ⬜ Test gateway manual checklist (opsional, dev-time): create → pay → status=paid; create → void; expiry
 
 ### E. Rapikan & commit
 - ✅ Hapus diff kosmetik `container.ts` (sudah dibersihkan)
-- Commit backend + simulator sebagai satu commit feat(qris)
+- Commit backend sebagai satu commit feat(qris)
 - Update `API_REFERENCE.md` + `POS_CURRENT_FEATURES.md` setelah frontend jadi
 
 ---
@@ -191,6 +179,36 @@ Perilaku penting:
 - **Jangan percaya `shiftId` dari client** — finalisasi QRIS harus lewat `assertOpenShift` seperti metode lain (pattern sudah ada di `PaymentService`)
 - **Non-cash tidak dibulatkan** — amount yang dikirim ke gateway harus `roundedPayable ?? total` yang sudah dihitung pricing (untuk QRIS = nilai asli karena non-cash)
 - `AbortSignal.timeout` butuh Node ≥ 17.3 (repo aman)
-- Simulator menyimpan file JSON tiap mutasi — jangan commit `data/invoices.json` (pertimbangkan masuk `.gitignore` bersama `tools/qris-simulator/node_modules`)
+- **Gateway di container terpisah** — backend harus memakai `host.docker.internal:3333`, bukan `localhost`, bila keduanya berjalan di container Docker berbeda
 - `testConnection` meninggalkan invoice `TEST-*` di gateway jika gagal void — tidak fatal, tapi catat
-- Reference number maksimal 25 char di tag 62.05 simulator — format `QRIS-<12>` aman
+- Reference number maksimal 25 char di tag 62.05 gateway — format `QRIS-<12>` aman
+
+---
+
+## 10. Kontrak Gateway Aktual untuk Cek Status — ⚠️ PENDING FIX (dilaporkan 2026-08-23, BELUM dieksekusi)
+
+Kontrak asli endpoint cek status pembayaran dari gateway eksternal:
+
+```http
+GET http://localhost:3333/restapi/qris/checkpaid_qris.php?do=checkStatus&apikey=12345678&mID=123456&invid=<INVOICE_ID>&trxvalue=15000&trxdate=2026-08-23
+```
+
+(Backend POSMono tetap memanggil via `host.docker.internal:3333`, bukan `localhost`.)
+
+### Ketidaksesuaian dengan implementasi (`QrisGatewayService.checkStatus`, baris 97-114)
+
+| Aspek | Implementasi sekarang | Kontrak gateway |
+|---|---|---|
+| Path | `/restapi/qris/show_qris.php` | `/restapi/qris/checkpaid_qris.php` |
+| `do` | `check-status` | `checkStatus` |
+| Referensi invoice | `cliTrxNumber=QRIS-xxx` (ref lokal) | `invid=<INVOICE_ID>` (invoice ID dari gateway) |
+| `mID` | tidak dikirim di checkStatus | wajib |
+| `trxvalue` | tidak dikirim | wajib (nominal transaksi) |
+| `trxdate` | tidak dikirim | wajib (`YYYY-MM-DD`) |
+
+### Implikasi desain saat fix
+
+1. Karena param `invid` + `trxvalue` + `trxdate` bersifat verifikasi per-invoice, backend perlu **menyimpan mapping** `referenceNumber → { invid, amount, trxDate }` secara persisten (collection kecil, mis. `qris_invoices`) yang diisi saat `POST /qris/initiate` dan dibaca oleh `/qris/status/:ref` maupun `confirmQrisPayment`. Alternatif: jika create-invoice mengembalikan `invid` eksplisit di response, simpan field itu; kalau ternyata gateway menerima ref lokal sebagai `invid`, mapping tetap dibutuhkan untuk `trxvalue`/`trxdate`.
+2. `callGateway()` perlu menerima path endpoint per-aksi (tidak lagi hardcode `show_qris.php`).
+3. **Kontrak create-invoice & void/cancel juga belum dikonfirmasi** — kemungkinan besar beda param/endpoint juga. Minta/tanyakan contoh request-responsenya sebelum refactor supaya sekali jalan.
+4. File terdampak: `QrisGatewayService.ts` (+persistence baru bila perlu), `PaymentController.qrisStatus`, `container.ts` (wiring), test `QrisGatewayService.test.ts` (expect path `show_qris.php` di line 64 dst.), kemungkinan `PaymentService.qris.test.ts` (mock `checkStatus`).
