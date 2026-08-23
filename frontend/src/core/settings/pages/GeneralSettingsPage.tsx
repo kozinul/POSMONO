@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import Swal from 'sweetalert2';
 import { useTenant, useUpdateSettings, useUpdateProfile } from '../../../@shared/hooks/useTenant';
+import { api } from '../../../@shared/services/api';
 import { useTaxConfiguration, useUpdateTaxConfiguration, useAddTaxRule, useDeleteTaxRule, useAddCharge, useUpdateCharge, useDeleteCharge, useCalculateTax } from '../../../@shared/hooks/useTaxConfiguration';
 import type { IModifierConfig, IChargeConfig } from '../../../@shared/hooks/useTaxConfiguration';
 import { usePricingProfiles, useCreatePricingProfile, useUpdatePricingProfile, useDeletePricingProfile } from '../../../@shared/hooks/usePricingProfile';
@@ -65,6 +66,17 @@ const sections = [
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
         <path d="M15.75 9a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM12 21c4.5 0 7.5-2.4 7.5-6.75 0-1.875-1.08-3.135-2.465-4.072A8.25 8.25 0 0012 8.25c-2.32 0-4.5 1.5-4.5 3.6 0 1.656 1.08 3.6 2.51 4.1A4.72 4.72 0 0111.25 18h.75" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  {
+    id: 'qris',
+    label: 'QRIS Gateway',
+    keywords: 'qris gateway qr payment pembayaran dinamis api key merchant dinamis ewallet scan',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM16.5 6.75h.75v.75h-.75v-.75zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h.75v.75h-.75v-.75z" />
       </svg>
     ),
   },
@@ -139,6 +151,13 @@ export default function GeneralSettingsPage() {
   const [roundingDenomination, setRoundingDenomination] = useState(0);
   const [autoPrintReceipt, setAutoPrintReceipt] = useState(true);
   const [autoPrintKot, setAutoPrintKot] = useState(false);
+
+  const [qrisGatewayEnabled, setQrisGatewayEnabled] = useState(false);
+  const [qrisGatewayBaseUrl, setQrisGatewayBaseUrl] = useState('');
+  const [qrisGatewayApiKey, setQrisGatewayApiKey] = useState('');
+  const [qrisGatewayMerchantId, setQrisGatewayMerchantId] = useState('');
+  const [testingQris, setTestingQris] = useState(false);
+  const [qrisTestResult, setQrisTestResult] = useState<{ ok: boolean; message: string } | null>(null);
 
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -223,6 +242,10 @@ export default function GeneralSettingsPage() {
     setRoundingDenomination(tenant.config.roundingDenomination ?? 0);
     setAutoPrintReceipt(tenant.config.autoPrintReceipt ?? true);
     setAutoPrintKot(tenant.config.autoPrintKot ?? false);
+    setQrisGatewayEnabled(tenant.config.qrisGatewayEnabled ?? false);
+    setQrisGatewayBaseUrl(tenant.config.qrisGatewayBaseUrl || '');
+    setQrisGatewayApiKey(tenant.config.qrisGatewayApiKey || '');
+    setQrisGatewayMerchantId(tenant.config.qrisGatewayMerchantId || '');
   }, [tenant]);
 
   const filteredSections = useMemo(() => {
@@ -250,6 +273,9 @@ export default function GeneralSettingsPage() {
     e.target.value = '';
   };
 
+  const qrisComplete = !qrisGatewayEnabled
+    || (!!qrisGatewayBaseUrl.trim() && !!qrisGatewayApiKey.trim() && !!qrisGatewayMerchantId.trim());
+
   const handleSave = async () => {
     setSaving(true);
     setSaved(false);
@@ -266,6 +292,14 @@ export default function GeneralSettingsPage() {
           roundingDenomination,
           autoPrintReceipt,
           autoPrintKot,
+          ...(qrisComplete
+            ? {
+                qrisGatewayEnabled,
+                qrisGatewayBaseUrl: qrisGatewayBaseUrl.trim(),
+                qrisGatewayApiKey: qrisGatewayApiKey.trim(),
+                qrisGatewayMerchantId: qrisGatewayMerchantId.trim(),
+              }
+            : {}),
         }),
         updateTaxConfig.mutateAsync({ taxEnabled, pricingMode }),
       ];
@@ -312,6 +346,27 @@ export default function GeneralSettingsPage() {
       setTimeout(() => setSaved(false), 2000);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleTestQris = async () => {
+    setTestingQris(true);
+    setQrisTestResult(null);
+    try {
+      await updateSettings.mutateAsync({
+        qrisGatewayEnabled,
+        qrisGatewayBaseUrl: qrisGatewayBaseUrl.trim(),
+        qrisGatewayApiKey: qrisGatewayApiKey.trim(),
+        qrisGatewayMerchantId: qrisGatewayMerchantId.trim(),
+      });
+      const res = await api.post('/payments/qris/test-config');
+      const d = res.data?.data;
+      setQrisTestResult({ ok: !!d?.ok, message: d?.message || 'Koneksi ke QRIS Gateway berhasil.' });
+    } catch (err: any) {
+      const msg = err.response?.data?.error?.message || err.response?.data?.message || err.message || 'Gagal menghubungi QRIS Gateway.';
+      setQrisTestResult({ ok: false, message: msg });
+    } finally {
+      setTestingQris(false);
     }
   };
 
@@ -683,6 +738,106 @@ export default function GeneralSettingsPage() {
                               ? 'Total selalu dibulatkan ke atas (mis. Rp 1.240 → Rp 1.300)'
                               : 'Total selalu dibulatkan ke bawah (mis. Rp 1.240 → Rp 1.200)'}
                         </p>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {activeSection === 'qris' && (
+              <section className="bg-white rounded-2xl shadow-sm border border-gray-100">
+                <div className="px-6 py-5 border-b border-gray-100">
+                  <h2 className="text-lg font-bold text-gray-800">QRIS Gateway</h2>
+                  <p className="text-sm text-gray-400 mt-0.5">Pembayaran QRIS dinamis (QR berisi nominal) melalui gateway pihak ketiga</p>
+                </div>
+                <div className="px-6 py-5 space-y-5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-gray-800">Aktifkan QRIS Gateway</p>
+                      <p className="text-sm text-gray-400">Kasir dapat menerima pembayaran QRIS dengan QR unik per transaksi</p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={qrisGatewayEnabled}
+                        onChange={(e) => {
+                          setQrisGatewayEnabled(e.target.checked);
+                          setQrisTestResult(null);
+                        }}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600" />
+                    </label>
+                  </div>
+
+                  {qrisGatewayEnabled && (
+                    <>
+                      <div className="border-t border-gray-100" />
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-600 mb-1.5">Base URL</label>
+                          <input
+                            value={qrisGatewayBaseUrl}
+                            onChange={(e) => { setQrisGatewayBaseUrl(e.target.value); setQrisTestResult(null); }}
+                            placeholder="http://localhost:5000"
+                            className={`block w-full px-4 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                              qrisGatewayBaseUrl.trim() ? 'border-gray-200' : 'border-red-300 bg-red-50/40'
+                            }`}
+                          />
+                          <p className="text-xs text-gray-400 mt-1">Alamat REST gateway, tanpa garis miring di akhir</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-600 mb-1.5">API Key</label>
+                            <input
+                              type="password"
+                              value={qrisGatewayApiKey}
+                              onChange={(e) => { setQrisGatewayApiKey(e.target.value); setQrisTestResult(null); }}
+                              placeholder="••••••••"
+                              autoComplete="off"
+                              className={`block w-full px-4 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                                qrisGatewayApiKey.trim() ? 'border-gray-200' : 'border-red-300 bg-red-50/40'
+                              }`}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-600 mb-1.5">Merchant ID</label>
+                            <input
+                              value={qrisGatewayMerchantId}
+                              onChange={(e) => { setQrisGatewayMerchantId(e.target.value); setQrisTestResult(null); }}
+                              placeholder="123456"
+                              className={`block w-full px-4 py-2.5 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                                qrisGatewayMerchantId.trim() ? 'border-gray-200' : 'border-red-300 bg-red-50/40'
+                              }`}
+                            />
+                          </div>
+                        </div>
+
+                        {!qrisComplete && (
+                          <p className="text-xs font-medium text-red-500">
+                            Lengkapi Base URL, API Key, dan Merchant ID untuk mengaktifkan QRIS Gateway.
+                          </p>
+                        )}
+
+                        <div className="flex items-center gap-3 pt-1">
+                          <button
+                            onClick={handleTestQris}
+                            disabled={testingQris || !qrisComplete}
+                            className="px-5 py-2 rounded-lg font-semibold text-sm text-white blue-primary hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {testingQris ? 'Menguji...' : 'Uji Koneksi'}
+                          </button>
+                          <p className="text-xs text-gray-400">Konfigurasi disimpan sebelum pengujian (gateway dibuat & void invoice Rp 10.000)</p>
+                        </div>
+
+                        {qrisTestResult && (
+                          <div className={`rounded-lg p-3 border ${qrisTestResult.ok ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                            <p className={`text-sm font-medium ${qrisTestResult.ok ? 'text-green-700' : 'text-red-600'}`}>
+                              {qrisTestResult.ok ? '✓ ' : ''}{qrisTestResult.message}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </>
                   )}

@@ -67,6 +67,7 @@ import { RefundSchema } from '../core/payment/infrastructure/persistence/schemas
 import { MongoPaymentRepository } from '../core/payment/infrastructure/persistence/MongoPaymentRepository';
 import { MongoRefundRepository } from '../core/payment/infrastructure/persistence/MongoRefundRepository';
 import { PaymentService } from '../core/payment/application/services/PaymentService';
+import { QrisGatewayService } from '../core/payment/application/services/QrisGatewayService';
 import { PaymentController } from '../core/payment/interfaces/http/controllers/PaymentController';
 import { ReportService } from '../core/reporting/application/services/ReportService';
 import { ReportExportService } from '../core/reporting/application/services/ReportExportService';
@@ -631,12 +632,20 @@ export function buildContainer() {
         userRepository: container.resolve('userRepository'),
         shiftRepository: container.resolve('shiftRepository'),
         printService: container.resolve('printService'),
+        qrisGatewayService: container.resolve('qrisGatewayService'),
       }),
     }),
     paymentController: asClass(PaymentController, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
         paymentService: container.resolve('paymentService'),
+        qrisGatewayService: container.resolve('qrisGatewayService'),
+      }),
+    }),
+    qrisGatewayService: asClass(QrisGatewayService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        tenantRepository: container.resolve('tenantRepository'),
       }),
     }),
     paymentMethodRepository: asClass(MongoPaymentMethodRepository, {

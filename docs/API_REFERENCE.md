@@ -654,6 +654,33 @@ After a successful `pay-cash`, the backend automatically deducts stock per paid 
 
 Same deduction applies on `POST /api/payments/process` (first full payment only), `pay-open-bill`, and `split-bill` when the order transitions from unpaid → paid. On `POST /api/payments/:id/refund`, stock is restored only for single-payment orders.
 
+### QRIS Gateway (`/api/payments/qris/*`)
+
+Pembayaran **QRIS dinamis** (QR berisi nominal) melalui gateway pihak ketiga. Semua route hanya perlu `authenticate`. Gateway dikonfigurasi per tenant (Pengaturan → QRIS Gateway): `qrisGatewayEnabled`, `qrisGatewayBaseUrl`, `qrisGatewayApiKey`, `qrisGatewayMerchantId`.
+
+| Method | Path | Fungsi |
+|---|---|---|
+| POST | `/api/payments/qris/initiate` | Buat invoice + dapat QR (`{ amount }` integer > 0, rupiah) |
+| GET | `/api/payments/qris/status/:referenceNumber` | Cek status invoice → `{ status: pending\|paid\|expired\|cancelled\|unknown, paidAt, amount }` |
+| POST | `/api/payments/qris/confirm` | Finalisasi pembayaran (dipanggil frontend saat status `paid`) |
+| POST | `/api/payments/qris/test-config` | Uji koneksi (buat invoice Rp 10.000 lalu void) |
+| POST | `/api/payments/qris/:referenceNumber/cancel` | Batalkan invoice |
+
+**initiate response:** `{ referenceNumber: "QRIS-<12 hex>", qrString, qrImage (dataURL|null), amount, expiresAt }`
+
+**confirm body:**
+```json
+{
+  "referenceNumber": "QRIS-ABCDEF123456",
+  "amount": 27000,
+  "items": [{ "productId": "...", "quantity": 2, "unitPrice": 15000 }]
+}
+```
+
+`orderId` **atau** `items` wajib: `orderId` untuk open bill (finalisasi via jalur `processByOrderId`), `items` untuk penjualan baru langsung dari cart POS (jalur `payCash`). Field opsional lain: `discount`, `discountType`, `promoCode`, `cashierName`, `shiftId` (**tidak dipercaya** — server selalu resolve shift kasir sendiri). Response sama seperti `/process`: `{ payment, order, receipt }`.
+
+**Guard `confirmQrisPayment`:** gateway harus ter-wire → order milik tenant & belum dibayar (double-pay) → `referenceNumber` belum pernah dipakai → status gateway harus `paid` → nominal gateway harus sama dengan tagihan → shift wajib terbuka (`assertOpenShift`). Non-cash → pembulatan tunai dilewati; payment tercatat dengan `paymentBreakdown[0].code = referenceNumber` sehingga laporan shift/realtime ikut benar.
+
 ---
 
 ## Printers (`/api/printers`)

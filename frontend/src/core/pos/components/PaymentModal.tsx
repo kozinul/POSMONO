@@ -4,6 +4,7 @@ import { usePOSStore, type CartItem } from '../store/posStore';
 import { api } from '../../../@shared/services/api';
 import { useValidatePromoCode } from '../../../@shared/hooks/useDiscountConfiguration';
 import { useCalculatePricing } from '../../../@shared/hooks/usePricing';
+import { useQrisPayment, getApiErrorMessage, type QrisInvoice } from '../../../@shared/hooks/useQrisPayment';
 import { useActivePaymentMethods, type PaymentMethod } from '../../payment-methods/hooks/usePaymentMethods';
 import { formatIDR } from '../utils/money';
 import { tryClientAutoPrint } from '../../printing/utils/autoPrint';
@@ -36,6 +37,7 @@ export function PaymentModal() {
   const [payQuantities, setPayQuantities] = useState<Record<string, number>>({});
 
   const isCash = selectedMethod?.code === 'cash';
+  const isQris = selectedMethod?.code === 'qris';
   const paid = parseInt(amountPaid.replace(/\D/g, ''), 10) || 0;
 
   const payQty = (productId: string) => payQuantities[productId] ?? 0;
@@ -147,16 +149,143 @@ export function PaymentModal() {
     setAmountPaid(amount.toLocaleString('id-ID'));
   };
 
+  const portionIndex = splitNumber + 1;
+  const isSplitPortion = splitMode || !!splitBaseOrderNumber;
+  const splitBase = splitBaseOrderNumber ?? (splitMode && activeBillId ? activeBillNumber : undefined);
+
+  const applyPaymentResult = async (
+    result: { order: any; receipt: any },
+    opts: { paidAmount: number; changeAmount: number },
+  ) => {
+    const cashMethod = selectedMethod?.code === 'cash';
+    const orderData = result.order;
+    const receiptData = result.receipt;
+
+    const hasRemaining = splitMode
+      ? items.some((i) => !i.isFreeItem && payQty(i.productId) < i.quantity)
+      : false;
+
+    if (isSplitPortion) {
+      registerSplitPayment(splitBase ?? orderData.orderNumber);
+    }
+
+    if (splitMode) {
+      for (const item of items) {
+        const qty = item.isFreeItem ? item.quantity : payQty(item.productId);
+        if (qty <= 0) continue;
+        if (qty >= item.quantity) {
+          removeItems([item.productId]);
+        } else {
+          updateQuantity(item.productId, -qty);
+        }
+      }
+    } else {
+      removeItems(items.map((i) => i.productId));
+    }
+    queryClient.invalidateQueries({ queryKey: ['inventory'] });
+    queryClient.invalidateQueries({ queryKey: ['orders'] });
+    queryClient.invalidateQueries({ queryKey: ['daily-report'] });
+    queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+    queryClient.invalidateQueries({ queryKey: ['shifts'] });
+    queryClient.invalidateQueries({ queryKey: ['open-shift'] });
+    queryClient.invalidateQueries({ queryKey: ['shift-report'] });
+
+    const displayOrderNumber = isSplitPortion
+      ? `${splitBase ?? orderData.orderNumber}/${portionIndex}`
+      : orderData.orderNumber;
+
+    setReceipt({
+      orderNumber: isSplitPortion ? (splitBase ?? orderData.orderNumber) : orderData.orderNumber,
+      displayOrderNumber,
+      paid: cashMethod ? opts.paidAmount : rawTotal,
+      change: cashMethod ? opts.changeAmount : 0,
+      grandTotal: payable,
+      paidItems: splitMode ? selectedItems : items,
+      hasRemaining,
+      createdAt: orderData.createdAt,
+      cashierName: orderData.cashierName || '',
+      layout: receiptData?.layout ?? null,
+      thermal: receiptData?.thermal ?? null,
+      pdf: receiptData?.pdf ?? null,
+      templateName: receiptData?.templateName ?? null,
+      pricing: splitMode ? (portionPricing.data ?? null) : (pricing ?? null),
+    });
+    usePOSStore.getState().registerShiftPayment({ total: payable, method: selectedMethod?.code ?? '', isCash: cashMethod });
+
+    void tryClientAutoPrint(queryClient, 'receipt', receiptData?.thermal);
+
+    if (hasRemaining) {
+      if (activeBillId) {
+        await saveBill();
+      }
+    } else {
+      closeBillAfterPayment();
+    }
+  };
+
+  const qris = useQrisPayment(handleQrisPaid);
+
+  async function handleQrisPaid(inv: QrisInvoice) {
+    try {
+      const payload: Record<string, unknown> = {
+        referenceNumber: inv.referenceNumber,
+        amount: inv.amount,
+        items: (splitMode ? selectedItems : items).map((i) => ({
+          productId: i.productId,
+          productName: i.name,
+          categoryId: i.categoryId || '',
+          quantity: splitMode
+            ? (i.isFreeItem ? i.quantity : payQty(i.productId))
+            : i.quantity,
+          unitPrice: i.price,
+          pricingMode: i.pricingMode || undefined,
+          isFreeItem: i.isFreeItem || undefined,
+        })),
+        ...(usePOSStore.getState().openShiftId ? { shiftId: usePOSStore.getState().openShiftId } : {}),
+      };
+      if (!splitMode) {
+        payload.discount = manualDiscount;
+        payload.discountType = manualDiscountType;
+        payload.promoCode = promoCode || undefined;
+      }
+
+      const res = await api.post('/payments/qris/confirm', payload);
+      qris.reset();
+      await applyPaymentResult(res.data.data, { paidAmount: rawTotal, changeAmount: 0 });
+    } catch (err: any) {
+      qris.confirmFailed(getApiErrorMessage(err, 'Finalisasi pembayaran QRIS gagal.'));
+    }
+  }
+
+  const handleRetryQrisConfirm = () => {
+    const inv = qris.retryConfirm();
+    if (inv) void handleQrisPaid(inv);
+  };
+
+  const handleRegenerateQr = () => {
+    void qris.create(payable);
+  };
+
+  const handleCloseModal = () => {
+    if (['creating', 'awaiting', 'confirming'].includes(qris.phase)) {
+      void qris.cancel();
+    }
+    closePaymentModal();
+  };
+
   const handleSubmit = async () => {
     if (!canSubmit || !selectedMethod) return;
+
+    if (isQris) {
+      // QRIS dinamis: buat invoice dulu, finalisasi otomatis saat status paid
+      void qris.create(payable);
+      return;
+    }
+
     setPaymentState('processing');
     setPaymentMessage('');
 
     try {
-      const portionIndex = splitNumber + 1;
-      const isSplitPortion = splitMode || !!splitBaseOrderNumber;
-      const splitBase = splitBaseOrderNumber ?? (splitMode && activeBillId ? activeBillNumber : undefined);
-
       const payload: Record<string, unknown> = {
         items: (splitMode ? selectedItems : items).map((i) => ({
           productId: i.productId,
@@ -184,69 +313,7 @@ export function PaymentModal() {
 
       const res = await api.post('/payments/pay-cash', payload);
 
-      const orderData = res.data.data.order;
-      const receiptData = res.data.data.receipt;
-
-      const hasRemaining = splitMode
-        ? items.some((i) => !i.isFreeItem && payQty(i.productId) < i.quantity)
-        : false;
-
-      if (isSplitPortion) {
-        registerSplitPayment(splitBase ?? orderData.orderNumber);
-      }
-
-      if (splitMode) {
-        for (const item of items) {
-          const qty = item.isFreeItem ? item.quantity : payQty(item.productId);
-          if (qty <= 0) continue;
-          if (qty >= item.quantity) {
-            removeItems([item.productId]);
-          } else {
-            updateQuantity(item.productId, -qty);
-          }
-        }
-      } else {
-        removeItems(items.map((i) => i.productId));
-      }
-      queryClient.invalidateQueries({ queryKey: ['inventory'] });
-      queryClient.invalidateQueries({ queryKey: ['orders'] });
-      queryClient.invalidateQueries({ queryKey: ['daily-report'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
-      queryClient.invalidateQueries({ queryKey: ['shifts'] });
-      queryClient.invalidateQueries({ queryKey: ['open-shift'] });
-      queryClient.invalidateQueries({ queryKey: ['shift-report'] });
-
-      const displayOrderNumber = isSplitPortion
-        ? `${splitBase ?? orderData.orderNumber}/${portionIndex}`
-        : orderData.orderNumber;
-
-      setReceipt({
-        orderNumber: isSplitPortion ? (splitBase ?? orderData.orderNumber) : orderData.orderNumber,
-        displayOrderNumber,
-        paid: isCash ? paid : rawTotal,
-        change: isCash ? change : 0,
-        grandTotal: payable,
-        paidItems: splitMode ? selectedItems : items,
-        hasRemaining,
-        createdAt: orderData.createdAt,
-        cashierName: orderData.cashierName || '',
-        layout: receiptData?.layout ?? null,
-        thermal: receiptData?.thermal ?? null,
-        pdf: receiptData?.pdf ?? null,
-        templateName: receiptData?.templateName ?? null,
-        pricing: splitMode ? (portionPricing.data ?? null) : (pricing ?? null),
-      });
-      usePOSStore.getState().registerShiftPayment({ total: payable, method: selectedMethod.code, isCash });
-
-      void tryClientAutoPrint(queryClient, 'receipt', receiptData?.thermal);
-
-      if (hasRemaining) {
-        if (activeBillId) {
-          await saveBill();
-        }
-      } else {
-        closeBillAfterPayment();
-      }
+      await applyPaymentResult(res.data.data, { paidAmount: paid, changeAmount: change });
     } catch (err: any) {
       const msg = err.response?.data?.error?.message || err.response?.data?.message || err.message || 'Pembayaran gagal.';
       setPaymentState('error');
@@ -269,7 +336,7 @@ export function PaymentModal() {
               {splitMode ? `${selectedUnits}/${totalUnits} unit` : `${items.length} item`}
             </span>
           </div>
-          <button onClick={closePaymentModal} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500">
+          <button onClick={handleCloseModal} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M6 18L18 6M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
             </svg>
@@ -279,7 +346,9 @@ export function PaymentModal() {
         {/* Two Column Body */}
         <div className="flex-1 flex min-h-0">
           {/* Left: Items + Promo */}
-          <div className="flex-1 flex flex-col bg-white border-r border-gray-200 p-5">
+          <div className={`flex-1 flex flex-col bg-white border-r border-gray-200 p-5 transition-opacity ${
+            qris.phase !== 'idle' ? 'opacity-50 pointer-events-none' : ''
+          }`}>
             {/* Split Bill Toggle */}
             {totalUnits > 1 && (
               <div className="flex items-center justify-between mb-4 p-3 bg-amber-50 rounded-lg border border-amber-200">
@@ -449,8 +518,102 @@ export function PaymentModal() {
             )}
           </div>
 
-          {/* Right: Payment Methods */}
+          {/* Right: Payment Methods / QRIS Panel */}
           <div className="flex-1 flex flex-col bg-gray-50 p-5">
+            {qris.phase !== 'idle' ? (
+              <>
+                {qris.phase === 'creating' && (
+                  <div className="flex-1 flex flex-col items-center justify-center gap-3">
+                    <svg className="animate-spin w-10 h-10 text-blue-600" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                    </svg>
+                    <p className="text-sm font-semibold text-gray-600">Membuat kode QRIS…</p>
+                  </div>
+                )}
+
+                {(qris.phase === 'awaiting' || qris.phase === 'confirming') && (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center">
+                    <div className="relative">
+                      {qris.qrImage ? (
+                        <img src={qris.qrImage} alt="Kode QRIS" className="w-56 h-56 rounded-2xl bg-white shadow-lg p-2" />
+                      ) : (
+                        <div className="w-56 h-56 rounded-2xl bg-white shadow-lg flex items-center justify-center">
+                          <p className="text-xs text-gray-400 px-6">QR tidak dapat ditampilkan</p>
+                        </div>
+                      )}
+                      {qris.phase === 'confirming' && (
+                        <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/60">
+                          <svg className="w-16 h-16 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+                    <p className="mt-4 text-2xl font-extrabold text-gray-800">Rp {formatIDR(qris.invoice?.amount ?? payable)}</p>
+                    {qris.secondsLeft !== null && qris.secondsLeft > 0 && (
+                      <span className={`mt-1 inline-block rounded-full px-3 py-1 text-xs font-bold ${
+                        qris.secondsLeft < 60 ? 'bg-red-100 text-red-600' : 'bg-gray-200 text-gray-600'
+                      }`}>
+                        Berlaku {Math.floor(qris.secondsLeft / 60)}:{String(qris.secondsLeft % 60).padStart(2, '0')}
+                      </span>
+                    )}
+                    <p className="mt-3 max-w-[260px] text-sm text-gray-500">
+                      {qris.phase === 'confirming'
+                        ? 'Pembayaran diterima, menyimpan transaksi…'
+                        : 'Scan dengan aplikasi e-wallet / mobile banking lalu selesaikan pembayaran'}
+                    </p>
+                    {qris.phase === 'awaiting' && (
+                      <button
+                        onClick={() => void qris.cancel()}
+                        className="mt-4 px-6 py-2 text-sm font-semibold text-red-600 bg-white border border-red-200 rounded-lg hover:bg-red-50"
+                      >
+                        Batalkan QRIS
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {(qris.phase === 'expired' || qris.phase === 'cancelled') && (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center gap-3">
+                    <svg className="w-12 h-12 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <p className="text-sm font-semibold text-gray-700">
+                      {qris.phase === 'expired' ? 'Waktu pembayaran QRIS habis.' : 'QRIS dibatalkan.'}
+                    </p>
+                    <div className="flex gap-2">
+                      <button onClick={handleRegenerateQr} className="px-5 py-2.5 text-sm font-bold text-white blue-primary rounded-lg hover:opacity-90">
+                        Buat Ulang QR
+                      </button>
+                      <button onClick={() => void qris.cancel()} className="px-5 py-2.5 text-sm font-semibold text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-100">
+                        Kembali
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {qris.phase === 'error' && (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center gap-3">
+                    <svg className="w-12 h-12 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <p className="text-sm font-medium text-red-600 max-w-[280px]">{qris.error || 'Terjadi kesalahan.'}</p>
+                    <div className="flex gap-2">
+                      {qris.invoice && (
+                        <button onClick={handleRetryQrisConfirm} className="px-5 py-2.5 text-sm font-bold text-white blue-primary rounded-lg hover:opacity-90">
+                          Coba Lagi
+                        </button>
+                      )}
+                      <button onClick={() => void qris.cancel()} className="px-5 py-2.5 text-sm font-semibold text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-100">
+                        Kembali
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
             <h3 className="text-sm font-bold text-gray-700 mb-4">Metode Pembayaran</h3>
 
             <div className="grid grid-cols-2 gap-2">
@@ -518,7 +681,7 @@ export function PaymentModal() {
               </div>
             )}
 
-            {!isCash && selectedMethod && selectedMethod.requiresReference && (
+            {!isCash && !isQris && selectedMethod && selectedMethod.requiresReference && (
               <div className="mt-4">
                 <label className="block text-xs font-medium text-gray-500 mb-1.5">Nomor Referensi</label>
                 <input
@@ -559,6 +722,8 @@ export function PaymentModal() {
                     : `Bayar Rp ${formatIDR(payable)}`}
               </button>
             </div>
+              </>
+            )}
           </div>
         </div>
       </div>

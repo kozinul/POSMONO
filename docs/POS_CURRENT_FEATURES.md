@@ -1114,6 +1114,29 @@ export type CreateOrderInput = {
 
 ---
 
+## 22. Domain: QRIS Gateway (Pembayaran QRIS Dinamis)
+
+### Konfigurasi Tenant (`Pengaturan → QRIS Gateway`)
+- `qrisGatewayEnabled` (boolean), `qrisGatewayBaseUrl`, `qrisGatewayApiKey`, `qrisGatewayMerchantId`
+- Validasi: saat enabled, ketiga field wajib lengkap (refine shared schema); UI menyediakan tombol **Uji Koneksi** (auto-save → buat invoice Rp 10.000 lalu void)
+
+### API Endpoints
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/api/payments/qris/initiate` | ✅ | Buat invoice `{amount}` → `{referenceNumber "QRIS-<12 hex>", qrString, qrImage, amount, expiresAt}` |
+| GET | `/api/payments/qris/status/:ref` | ✅ | `{status: pending\|paid\|expired\|cancelled\|unknown, paidAt, amount}` |
+| POST | `/api/payments/qris/confirm` | ✅ | Finalisasi `{referenceNumber, amount, orderId?|items?, discount?...}` → `{payment, order, receipt}` |
+| POST | `/api/payments/qris/test-config` | ✅ | Uji koneksi gateway |
+| POST | `/api/payments/qris/:ref/cancel` | ✅ | Void invoice |
+
+### Features & Capabilities
+- **Gateway dipanggil dari backend** (`QrisGatewayService`) — API key tidak pernah bocor ke client; timeout 10s; error ramah berbahasa Indonesia
+- **Finalisasi aman** (`PaymentService.confirmQrisPayment`): guard no-gateway / order sudah dibayar / ref reuse / status harus `paid` + nominal cocok / shift server-side via `assertOpenShift`; delegasi ke jalur pembayaran existing (`processByOrderId` untuk open bill, `payCash` untuk sale baru) sehingga paymentBreakdown, event realtime, shift report, struk + auto-print semua konsisten; non-cash → pembulatan tunai dilewati
+- **POS UX** (`PaymentModal` + hook `useQrisPayment`): klik Bayar metode QRIS → invoice dibuat → panel QR menggantikan kolom kanan (QR image atau fallback render client via paket `qrcode`, nominal, countdown expiry merah <60s) → polling status 3s → paid → confirm otomatis → struk; expired/cancelled → "Buat Ulang QR"; confirm gagal → "Coba Lagi"; close modal membatalkan invoice di gateway
+- **Dev simulator**: `tools/qris-simulator/server.mjs` — mock gateway kontrak-identik (EMVCo TLV + CRC16, expiry 15m, persist JSON, env `QRIS_API_KEY`/`QRIS_MERCHANT_ID`/`QRIS_STATIC`)
+
+---
+
 ## Seed Data Default
 
 | Data | Isi |

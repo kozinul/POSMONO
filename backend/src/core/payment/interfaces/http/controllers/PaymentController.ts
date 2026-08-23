@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { BaseController } from '../../../../../@shared/interfaces/BaseController';
 import { PaymentService } from '../../../application/services/PaymentService';
+import { QrisGatewayService } from '../../../application/services/QrisGatewayService';
 import { ReceiptRenderResult } from '../../../../../core/template/application/services/ReceiptRenderService';
 import { z } from 'zod';
 import { ValidationError } from '../../../../../@shared/infrastructure/error/AppError';
@@ -68,8 +69,37 @@ const splitBillSchema = z.object({
   shiftId: z.string().optional().nullable(),
 });
 
+const qrisInitiateSchema = z.object({
+  amount: z.number().int('Nominal harus bilangan bulat').positive('Nominal harus lebih dari 0'),
+});
+
+const qrisConfirmSchema = z.object({
+  referenceNumber: z.string().min(1, 'Nomor referensi QRIS wajib diisi'),
+  amount: z.number().int('Nominal harus bilangan bulat').positive('Nominal harus lebih dari 0'),
+  orderId: z.string().optional(),
+  items: z.array(z.object({
+    productId: z.string().min(1),
+    productName: z.string().optional().default(''),
+    categoryId: z.string().optional().default(''),
+    quantity: z.number().int().positive(),
+    unitPrice: z.number().nonnegative(),
+    pricingMode: z.enum(['inclusive', 'exclusive']).optional().nullable(),
+    isFreeItem: z.boolean().optional(),
+  })).optional(),
+  discount: z.number().nonnegative().default(0),
+  discountType: z.enum(['percentage', 'nominal']).optional(),
+  promoCode: z.string().optional(),
+  cashierName: z.string().optional().default(''),
+  shiftId: z.string().optional().nullable(),
+}).refine((d) => d.orderId || (d.items && d.items.length > 0), {
+  message: 'orderId atau items wajib diisi',
+});
+
 export class PaymentController extends BaseController {
-  constructor(private readonly paymentService: PaymentService) {
+  constructor(
+    private readonly paymentService: PaymentService,
+    private readonly qrisGatewayService?: QrisGatewayService,
+  ) {
     super();
   }
 
@@ -195,5 +225,65 @@ export class PaymentController extends BaseController {
   async list(req: Request, res: Response): Promise<void> {
     const payments = await this.paymentService.list(req.tenantId);
     this.ok(res, payments.map((p) => p.serialize()));
+  }
+
+  private requireQrisGateway(): QrisGatewayService {
+    if (!this.qrisGatewayService) throw new ValidationError('Layanan QRIS Gateway tidak tersedia');
+    return this.qrisGatewayService;
+  }
+
+  async qrisInitiate(req: Request, res: Response): Promise<void> {
+    const parsed = qrisInitiateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
+    }
+    const result = await this.requireQrisGateway().createInvoice(req.tenantId, parsed.data.amount);
+    this.ok(res, result);
+  }
+
+  async qrisStatus(req: Request, res: Response): Promise<void> {
+    const result = await this.requireQrisGateway().checkStatus(req.tenantId, req.params.referenceNumber ?? '');
+    this.ok(res, result);
+  }
+
+  async qrisCancel(req: Request, res: Response): Promise<void> {
+    const result = await this.requireQrisGateway().cancelInvoice(req.tenantId, req.params.referenceNumber ?? '');
+    this.ok(res, result);
+  }
+
+  async qrisTestConfig(req: Request, res: Response): Promise<void> {
+    const result = await this.requireQrisGateway().testConnection(req.tenantId);
+    this.ok(res, result);
+  }
+
+  async qrisConfirm(req: Request, res: Response): Promise<void> {
+    const parsed = qrisConfirmSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
+    }
+
+    const result = await this.paymentService.confirmQrisPayment({
+      tenantId: req.tenantId,
+      cashierId: req.userId,
+      referenceNumber: parsed.data.referenceNumber,
+      amount: parsed.data.amount,
+      orderId: parsed.data.orderId,
+      items: parsed.data.items?.map((item) => ({
+        ...item,
+        pricingMode: item.pricingMode ?? undefined,
+      })),
+      discount: parsed.data.discount,
+      discountType: parsed.data.discountType,
+      promoCode: parsed.data.promoCode,
+      cashierName: parsed.data.cashierName,
+      shiftId: parsed.data.shiftId,
+    });
+
+    const orderData = result.order.serialize();
+    this.ok(res, {
+      payment: result.payment.serialize(),
+      order: orderData,
+      receipt: serializeReceipt(result.receipt),
+    });
   }
 }

@@ -86,6 +86,12 @@ export class MongoPaymentRepository {
     return this.toDomain(doc);
   }
 
+  async findByReferenceNumber(tenantId: string, referenceNumber: string): Promise<Payment | null> {
+    const doc = await this.model.findOne({ tenantId, referenceNumber }).exec();
+    if (!doc) return null;
+    return this.toDomain(doc);
+  }
+
   async findByTenant(tenantId: string): Promise<Payment[]> {
     const docs = await this.model.find({ tenantId }).sort({ createdAt: -1 }).exec();
     return docs.map((d: PaymentDoc) => this.toDomain(d));

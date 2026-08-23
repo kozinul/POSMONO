@@ -20,6 +20,7 @@ export class PaymentService {
     private readonly userRepository?: any,
     private readonly shiftRepository?: any,
     private readonly printService?: any,
+    private readonly qrisGatewayService?: any,
   ) {}
 
   private async assertOpenShift(tenantId: string, cashierId: string, providedShiftId?: string | null): Promise<string> {
@@ -354,6 +355,7 @@ export class PaymentService {
     provider?: string;
     qrCodeUrl?: string;
     paymentTransactionId?: string;
+    referenceNumber?: string;
     shiftId?: string | null;
   }): Promise<{ payment: Payment; order: Order; receipt: ReceiptRenderResult | null }> {
     const shiftId = await this.assertOpenShift(input.tenantId, input.cashierId, input.shiftId);
@@ -387,7 +389,7 @@ export class PaymentService {
       status: 'pending',
       method: input.method,
       shiftId,
-      referenceNumber: `${input.method.toUpperCase()}-${uuidv4().replace(/-/g, '').substring(0, 12).toUpperCase()}`,
+      referenceNumber: input.referenceNumber || `${input.method.toUpperCase()}-${uuidv4().replace(/-/g, '').substring(0, 12).toUpperCase()}`,
       splitBills: [],
       qrCodeUrl: input.qrCodeUrl ?? null,
       paymentTransactionId: input.paymentTransactionId ?? null,
@@ -436,6 +438,92 @@ export class PaymentService {
     void this.autoPrintReceipt(input.tenantId, receipt);
 
     return { payment, order, receipt };
+  }
+
+  async confirmQrisPayment(input: {
+    tenantId: string;
+    referenceNumber: string;
+    amount: number;
+    orderId?: string;
+    items?: Array<{ productId: string; productName?: string; categoryId?: string; quantity: number; unitPrice: number; pricingMode?: 'inclusive' | 'exclusive'; isFreeItem?: boolean }>;
+    discount?: number;
+    discountType?: 'percentage' | 'nominal';
+    promoCode?: string;
+    cashierId: string;
+    cashierName?: string;
+    shiftId?: string | null;
+  }): Promise<{ payment: Payment; order: Order; receipt: ReceiptRenderResult | null }> {
+    if (!this.qrisGatewayService) {
+      throw new ValidationError('Layanan QRIS Gateway tidak tersedia');
+    }
+    if (!input.referenceNumber) {
+      throw new ValidationError('Nomor referensi QRIS wajib diisi');
+    }
+
+    let order: Order | null = null;
+    if (input.orderId) {
+      order = await this.orderRepository.findById(input.orderId);
+      if (!order) throw new NotFoundError('Order not found');
+      const orderData = order.serialize();
+      if (orderData.tenantId !== input.tenantId) throw new NotFoundError('Order not found');
+      if (orderData.paymentStatus === 'completed') throw new ValidationError('Order is already paid');
+      const totalDue = orderData.total - orderData.paymentBreakdown.reduce((s: number, p: { amount: number }) => s + p.amount, 0);
+      if (input.amount < totalDue) {
+        throw new ValidationError(`Insufficient amount. Need ${totalDue}, got ${input.amount}`);
+      }
+    } else if (!input.items || input.items.length === 0) {
+      throw new ValidationError('orderId atau items wajib diisi untuk finalisasi QRIS');
+    }
+
+    if (typeof this.paymentRepository.findByReferenceNumber === 'function') {
+      const existing = await this.paymentRepository.findByReferenceNumber(input.tenantId, input.referenceNumber);
+      if (existing) {
+        throw new ValidationError('Pembayaran QRIS ini sudah dikonfirmasi sebelumnya');
+      }
+    }
+
+    const status = await this.qrisGatewayService.checkStatus(input.tenantId, input.referenceNumber);
+    if (status.status === 'expired') {
+      throw new ValidationError('Invoice QRIS sudah kedaluwarsa. Buat QR baru.');
+    }
+    if (status.status === 'cancelled') {
+      throw new ValidationError('Invoice QRIS sudah dibatalkan.');
+    }
+    if (status.status !== 'paid') {
+      throw new ValidationError(`QRIS belum dibayar (status: ${status.status}). Tunggu konfirmasi pembayaran.`);
+    }
+    if (status.amount != null && status.amount !== input.amount) {
+      throw new ValidationError(`Nominal bayar gateway (${status.amount}) tidak sesuai tagihan (${input.amount})`);
+    }
+
+    if (order) {
+      return this.processByOrderId({
+        tenantId: input.tenantId,
+        orderId: order.serialize().id,
+        amount: input.amount,
+        method: 'qris',
+        cashierId: input.cashierId,
+        cashierName: input.cashierName,
+        provider: 'qris-gateway',
+        paymentTransactionId: input.referenceNumber,
+        referenceNumber: input.referenceNumber,
+        shiftId: input.shiftId,
+      });
+    }
+
+    return this.payCash({
+      tenantId: input.tenantId,
+      cashierId: input.cashierId,
+      items: input.items!,
+      amountPaid: input.amount,
+      method: 'qris',
+      discount: input.discount,
+      discountType: input.discountType,
+      promoCode: input.promoCode,
+      referenceNumber: input.referenceNumber,
+      shiftId: input.shiftId,
+      cashierName: input.cashierName,
+    });
   }
 
   async refund(input: {

@@ -31,6 +31,10 @@ export const updateTenantConfigSchema = z.object({
   roundingEnabled: z.boolean().optional(),
   roundingMode: z.enum(['nearest', 'up', 'down']).optional(),
   roundingDenomination: z.union([z.literal(0), z.literal(100), z.literal(500), z.literal(1000)]).optional(),
+  qrisGatewayEnabled: z.boolean().optional(),
+  qrisGatewayBaseUrl: z.string().trim().url('Base URL tidak valid').or(z.literal('')).optional(),
+  qrisGatewayApiKey: z.string().trim().optional(),
+  qrisGatewayMerchantId: z.string().trim().optional(),
 }).refine(
   (cfg) => {
     if (cfg.roundingEnabled === true) {
@@ -39,6 +43,14 @@ export const updateTenantConfigSchema = z.object({
     return true;
   },
   { message: 'roundingMode dan roundingDenomination wajib saat roundingEnabled' },
+).refine(
+  (cfg) => {
+    if (cfg.qrisGatewayEnabled === true) {
+      return !!cfg.qrisGatewayBaseUrl && !!cfg.qrisGatewayApiKey && !!cfg.qrisGatewayMerchantId;
+    }
+    return true;
+  },
+  { message: 'Base URL, API Key, dan Merchant ID wajib diisi saat QRIS Gateway diaktifkan' },
 );
 
 export type CreateTenantInput = z.infer<typeof createTenantSchema>;

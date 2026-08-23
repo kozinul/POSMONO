@@ -21,6 +21,10 @@ export interface TenantConfig {
   roundingEnabled: boolean;
   roundingMode: 'nearest' | 'up' | 'down';
   roundingDenomination: number;
+  qrisGatewayEnabled?: boolean;
+  qrisGatewayBaseUrl?: string;
+  qrisGatewayApiKey?: string;
+  qrisGatewayMerchantId?: string;
 }
 
 export interface Tenant {

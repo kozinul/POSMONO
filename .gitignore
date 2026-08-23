@@ -13,3 +13,6 @@ uploads/
 .vscode/
 home/
 *.tsbuildinfo
+
+# QRIS simulator runtime artifacts
+tools/qris-simulator/data/
