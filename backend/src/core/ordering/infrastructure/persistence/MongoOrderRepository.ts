@@ -269,7 +269,7 @@ export class MongoOrderRepository {
 
     const pendingCount = await this.model.countDocuments({
       tenantId,
-      status: { $in: ['draft', 'confirmed'] },
+      status: 'held',
     });
 
     return {

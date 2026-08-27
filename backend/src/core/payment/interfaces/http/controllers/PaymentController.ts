@@ -5,6 +5,7 @@ import { QrisGatewayService } from '../../../application/services/QrisGatewaySer
 import { ReceiptRenderResult } from '../../../../../core/template/application/services/ReceiptRenderService';
 import { z } from 'zod';
 import { ValidationError } from '../../../../../@shared/infrastructure/error/AppError';
+import { logger } from '../../../../../@shared/infrastructure/logger/Logger';
 
 function serializeReceipt(receipt: ReceiptRenderResult | null | undefined): Record<string, unknown> | null {
   if (!receipt) return null;
@@ -237,22 +238,32 @@ export class PaymentController extends BaseController {
     if (!parsed.success) {
       throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
     }
+    logger.info({ tenantId: req.tenantId, amount: parsed.data.amount }, '[QRIS] POST /qris/initiate');
     const result = await this.requireQrisGateway().createInvoice(req.tenantId, parsed.data.amount);
+    logger.info({ tenantId: req.tenantId, referenceNumber: result.referenceNumber, qrImageProvided: result.qrImage !== null, qrStringLength: result.qrString.length }, '[QRIS] POST /qris/initiate — success');
     this.ok(res, result);
   }
 
   async qrisStatus(req: Request, res: Response): Promise<void> {
-    const result = await this.requireQrisGateway().checkStatus(req.tenantId, req.params.referenceNumber ?? '');
+    const ref = req.params.referenceNumber ?? '';
+    logger.info({ tenantId: req.tenantId, referenceNumber: ref }, '[QRIS] GET /qris/status/:ref');
+    const result = await this.requireQrisGateway().checkStatus(req.tenantId, ref);
+    logger.info({ tenantId: req.tenantId, referenceNumber: ref, status: result.status }, '[QRIS] GET /qris/status/:ref — result');
     this.ok(res, result);
   }
 
   async qrisCancel(req: Request, res: Response): Promise<void> {
-    const result = await this.requireQrisGateway().cancelInvoice(req.tenantId, req.params.referenceNumber ?? '');
+    const ref = req.params.referenceNumber ?? '';
+    logger.info({ tenantId: req.tenantId, referenceNumber: ref }, '[QRIS] POST /qris/:ref/cancel');
+    const result = await this.requireQrisGateway().cancelInvoice(req.tenantId, ref);
+    logger.info({ tenantId: req.tenantId, referenceNumber: ref }, '[QRIS] POST /qris/:ref/cancel — success');
     this.ok(res, result);
   }
 
   async qrisTestConfig(req: Request, res: Response): Promise<void> {
+    logger.info({ tenantId: req.tenantId }, '[QRIS] POST /qris/test-config');
     const result = await this.requireQrisGateway().testConnection(req.tenantId);
+    logger.info({ tenantId: req.tenantId, ok: result.ok }, '[QRIS] POST /qris/test-config — result');
     this.ok(res, result);
   }
 
@@ -262,6 +273,7 @@ export class PaymentController extends BaseController {
       throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
     }
 
+    logger.info({ tenantId: req.tenantId, referenceNumber: parsed.data.referenceNumber, amount: parsed.data.amount, orderId: parsed.data.orderId }, '[QRIS] POST /qris/confirm');
     const result = await this.paymentService.confirmQrisPayment({
       tenantId: req.tenantId,
       cashierId: req.userId,
@@ -280,6 +292,7 @@ export class PaymentController extends BaseController {
     });
 
     const orderData = result.order.serialize();
+    logger.info({ tenantId: req.tenantId, referenceNumber: parsed.data.referenceNumber, orderId: orderData.id, paymentId: result.payment.serialize().id }, '[QRIS] POST /qris/confirm — success');
     this.ok(res, {
       payment: result.payment.serialize(),
       order: orderData,

@@ -247,4 +247,33 @@ export class ReportService {
   async getRefundDetail(tenantId: string, refundId: string) {
     return this.reportAggregation.getRefundByIdAggregation(tenantId, refundId);
   }
+
+  async getTopProductsPerFamily(tenantId: string, days: number = 7, limitPerFamily: number = 5) {
+    const capped = Math.max(1, Math.min(days, 365));
+    const cappedLimit = Math.max(1, Math.min(limitPerFamily, 20));
+    const dateTo = new Date();
+    const dateFrom = new Date();
+    dateFrom.setDate(dateFrom.getDate() - (capped - 1));
+
+    const toStr = toDateString(dateTo);
+    const fromStr = toDateString(dateFrom);
+
+    const families = await this.reportAggregation.getTopProductsPerFamilyAggregation(
+      tenantId,
+      fromStr,
+      toStr,
+      cappedLimit,
+    );
+
+    return {
+      dateFrom: fromStr,
+      dateTo: toStr,
+      days: capped,
+      families,
+    };
+  }
+
+  async getActiveCashiers(tenantId: string) {
+    return this.reportAggregation.getActiveCashiersAggregation(tenantId);
+  }
 }

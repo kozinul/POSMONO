@@ -42,7 +42,7 @@ export const TenantSchema = new Schema(
       roundingMode: { type: String, enum: ['nearest', 'up', 'down'], default: 'nearest' },
       roundingDenomination: { type: Number, default: 0 },
       qrisGatewayEnabled: { type: Boolean, default: false },
-      qrisGatewayBaseUrl: { type: String, default: 'http://host.docker.internal:3333' },
+      qrisGatewayBaseUrl: { type: String, default: 'http://host.docker.internal:3334' },
       qrisGatewayApiKey: { type: String, default: '' },
       qrisGatewayMerchantId: { type: String, default: '' },
       autoPrintReceipt: { type: Boolean, default: true },

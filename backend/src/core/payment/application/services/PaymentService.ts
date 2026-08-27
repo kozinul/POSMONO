@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { NotFoundError, ValidationError } from '../../../../@shared/infrastructure/error/AppError';
+import { logger } from '../../../../@shared/infrastructure/logger/Logger';
 import { Payment, PaymentMethod, ISplitBill } from '../../domain/Payment';
 import { Refund } from '../../domain/Refund';
 import { Order, IOrderItem, IPromotionBreakdown, IDiscountBreakdown } from '../../../ordering/domain/Order';
@@ -453,22 +454,30 @@ export class PaymentService {
     cashierName?: string;
     shiftId?: string | null;
   }): Promise<{ payment: Payment; order: Order; receipt: ReceiptRenderResult | null }> {
+    const { referenceNumber, amount, orderId } = input;
+    logger.info({ referenceNumber, amount, orderId, cashierId: input.cashierId, shiftId: input.shiftId }, '[QRIS] confirmQrisPayment started');
+
     if (!this.qrisGatewayService) {
+      logger.error('[QRIS] confirm rejected — gateway service not wired');
       throw new ValidationError('Layanan QRIS Gateway tidak tersedia');
     }
-    if (!input.referenceNumber) {
+    if (!referenceNumber) {
       throw new ValidationError('Nomor referensi QRIS wajib diisi');
     }
 
     let order: Order | null = null;
-    if (input.orderId) {
-      order = await this.orderRepository.findById(input.orderId);
+    if (orderId) {
+      order = await this.orderRepository.findById(orderId);
       if (!order) throw new NotFoundError('Order not found');
       const orderData = order.serialize();
       if (orderData.tenantId !== input.tenantId) throw new NotFoundError('Order not found');
-      if (orderData.paymentStatus === 'completed') throw new ValidationError('Order is already paid');
+      if (orderData.paymentStatus === 'completed') {
+        logger.warn({ referenceNumber, orderId }, '[QRIS] confirm rejected — order already paid');
+        throw new ValidationError('Order is already paid');
+      }
       const totalDue = orderData.total - orderData.paymentBreakdown.reduce((s: number, p: { amount: number }) => s + p.amount, 0);
       if (input.amount < totalDue) {
+        logger.warn({ referenceNumber, orderId, amount: input.amount, totalDue }, '[QRIS] confirm rejected — insufficient amount');
         throw new ValidationError(`Insufficient amount. Need ${totalDue}, got ${input.amount}`);
       }
     } else if (!input.items || input.items.length === 0) {
@@ -476,27 +485,35 @@ export class PaymentService {
     }
 
     if (typeof this.paymentRepository.findByReferenceNumber === 'function') {
-      const existing = await this.paymentRepository.findByReferenceNumber(input.tenantId, input.referenceNumber);
+      const existing = await this.paymentRepository.findByReferenceNumber(input.tenantId, referenceNumber);
       if (existing) {
+        logger.warn({ referenceNumber, existingOrderId: existing.serialize?.()?.orderId }, '[QRIS] confirm rejected — reference already used');
         throw new ValidationError('Pembayaran QRIS ini sudah dikonfirmasi sebelumnya');
       }
     }
 
-    const status = await this.qrisGatewayService.checkStatus(input.tenantId, input.referenceNumber);
+    const status = await this.qrisGatewayService.checkStatus(input.tenantId, referenceNumber);
+    logger.info({ referenceNumber, gatewayStatus: status.status, gatewayAmount: status.amount, paidAt: status.paidAt }, '[QRIS] gateway status checked');
+
     if (status.status === 'expired') {
+      logger.warn({ referenceNumber }, '[QRIS] confirm rejected — invoice expired');
       throw new ValidationError('Invoice QRIS sudah kedaluwarsa. Buat QR baru.');
     }
     if (status.status === 'cancelled') {
+      logger.warn({ referenceNumber }, '[QRIS] confirm rejected — invoice cancelled');
       throw new ValidationError('Invoice QRIS sudah dibatalkan.');
     }
     if (status.status !== 'paid') {
+      logger.warn({ referenceNumber, status: status.status }, '[QRIS] confirm rejected — not yet paid');
       throw new ValidationError(`QRIS belum dibayar (status: ${status.status}). Tunggu konfirmasi pembayaran.`);
     }
     if (status.amount != null && status.amount !== input.amount) {
+      logger.warn({ referenceNumber, gatewayAmount: status.amount, expectedAmount: input.amount }, '[QRIS] confirm rejected — amount mismatch');
       throw new ValidationError(`Nominal bayar gateway (${status.amount}) tidak sesuai tagihan (${input.amount})`);
     }
 
     if (order) {
+      logger.info({ referenceNumber, orderId: order.serialize().id, path: 'processByOrderId' }, '[QRIS] finalizing existing order');
       return this.processByOrderId({
         tenantId: input.tenantId,
         orderId: order.serialize().id,
@@ -511,6 +528,7 @@ export class PaymentService {
       });
     }
 
+    logger.info({ referenceNumber, path: 'payCash', itemCount: input.items?.length }, '[QRIS] finalizing new sale via payCash');
     return this.payCash({
       tenantId: input.tenantId,
       cashierId: input.cashierId,

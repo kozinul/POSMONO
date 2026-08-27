@@ -142,6 +142,22 @@ export class ReportController extends BaseController {
     this.ok(res, result);
   }
 
+  async topProductsPerFamily(req: Request, res: Response): Promise<void> {
+    const days = req.query.days ? parseInt(req.query.days as string, 10) : 7;
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 5;
+    const result = await this.reportService.getTopProductsPerFamily(
+      req.tenantId,
+      Number.isFinite(days) ? days : 7,
+      Number.isFinite(limit) ? limit : 5,
+    );
+    this.ok(res, result);
+  }
+
+  async activeCashiers(req: Request, res: Response): Promise<void> {
+    const result = await this.reportService.getActiveCashiers(req.tenantId);
+    this.ok(res, result);
+  }
+
   async finance(req: Request, res: Response): Promise<void> {
     const { dateFrom, dateTo } = req.query;
     if (!dateFrom || !dateTo) {

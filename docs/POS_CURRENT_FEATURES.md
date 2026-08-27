@@ -1133,7 +1133,7 @@ export type CreateOrderInput = {
 - **Gateway dipanggil dari backend** (`QrisGatewayService`) — API key tidak pernah bocor ke client; timeout 10s; error ramah berbahasa Indonesia
 - **Finalisasi aman** (`PaymentService.confirmQrisPayment`): guard no-gateway / order sudah dibayar / ref reuse / status harus `paid` + nominal cocok / shift server-side via `assertOpenShift`; delegasi ke jalur pembayaran existing (`processByOrderId` untuk open bill, `payCash` untuk sale baru) sehingga paymentBreakdown, event realtime, shift report, struk + auto-print semua konsisten; non-cash → pembulatan tunai dilewati
 - **POS UX** (`PaymentModal` + hook `useQrisPayment`): klik Bayar metode QRIS → invoice dibuat → panel QR menggantikan kolom kanan (QR image atau fallback render client via paket `qrcode`, nominal, countdown expiry merah <60s) → polling status 3s → paid → confirm otomatis → struk; expired/cancelled → "Buat Ulang QR"; confirm gagal → "Coba Lagi"; close modal membatalkan invoice di gateway
-- **Gateway eksternal (dev)**: QRIS simulator berjalan di container terpisah, diakses backend via `http://host.docker.internal:3333/restapi/qris/show_qris.php` — simulator internal `tools/qris-simulator` sudah dihapus
+- **Gateway eksternal (dev)**: QRIS simulator berjalan di container terpisah, diakses backend via `http://host.docker.internal:3334/restapi/qris/show_qris.php` — simulator internal `tools/qris-simulator` sudah dihapus
 
 ---
 

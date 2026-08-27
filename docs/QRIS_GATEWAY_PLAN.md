@@ -1,6 +1,6 @@
 # QRIS Gateway Integration — Status & Plan
 
-> Terakhir diperbarui: **2026-08-23** · Status: **COMMITTED** (`feat(qris)`) — backend, finalisasi pembayaran, frontend PaymentModal, Settings UI, semua test, dan docs (`API_REFERENCE.md`, `POS_CURRENT_FEATURES.md`) selesai. Simulator internal sudah dihapus — development memakai gateway eksternal di `http://host.docker.internal:3333` (§7).
+> Terakhir diperbarui: **2026-08-23** · Status: **COMMITTED** (`feat(qris)`) — backend, finalisasi pembayaran, frontend PaymentModal, Settings UI, semua test, dan docs (`API_REFERENCE.md`, `POS_CURRENT_FEATURES.md`) selesai. Simulator internal sudah dihapus — development memakai gateway eksternal di `http://host.docker.internal:3334` (§7).
 > ⚠️ **PENDING**: kontrak aktual endpoint cek status gateway (`checkpaid_qris.php` + `invid/trxvalue/trxdate`) belum diimplementasikan — lihat §10.
 > Dokumen ini adalah backup konteks jika sesi coding terputus — semua keputusan desain, kontrak API, dan daftar file tercantum di sini.
 
@@ -14,7 +14,7 @@ Integrasi pembayaran **QRIS dinamis** (QR berisi nominal) melalui *QRIS Gateway*
 2. Frontend menampilkan QR → customer scan & bayar
 3. Frontend polling status sampai `paid` → finalize pembayaran order (paymentBreakdown, shiftId, struk)
 
-| Gateway dikonfigurasi **per tenant** (base URL, API key, merchant ID), sehingga satu deployment bisa multi-gateway/multi-merchant. Gateway eksternal diakses via `http://host.docker.internal:3333` (container terpisah). |
+| Gateway dikonfigurasi **per tenant** (base URL, API key, merchant ID), sehingga satu deployment bisa multi-gateway/multi-merchant. Gateway eksternal diakses via `http://host.docker.internal:3334` (container terpisah). |
 
 ---
 
@@ -65,7 +65,7 @@ Field baru di `config` tenant:
 
 ```
 qrisGatewayEnabled    : boolean, default false
-qrisGatewayBaseUrl    : string,  default 'http://host.docker.internal:3333'
+qrisGatewayBaseUrl    : string,  default 'http://host.docker.internal:3334'
 qrisGatewayApiKey     : string,  default ''
 qrisGatewayMerchantId : string,  default ''
 ```
@@ -123,13 +123,13 @@ Lokasi: `backend/src/core/payment/application/services/QrisGatewayService.ts`
 Gateway QRIS berjalan di container terpisah dan diakses backend via:
 
 ```
-http://host.docker.internal:3333/restapi/qris/show_qris.php
+http://host.docker.internal:3334/restapi/qris/show_qris.php
 ```
 
 - `host.docker.internal` dipakai karena backend POSMono juga berjalan di Docker — `localhost` dari dalam container menunjuk ke container itu sendiri, bukan ke gateway
 - Endpoint tunggal: `GET|POST /restapi/qris/show_qris.php?do=...`
 - Aksi (`do=`): `create-invoice` · `check-status` · `pay` · `void|cancel` · `list` (kontrak lihat §2/§6)
-- Config tenant: `qrisGatewayBaseUrl=http://host.docker.internal:3333` + API Key & Merchant ID sesuai gateway
+- Config tenant: `qrisGatewayBaseUrl=http://host.docker.internal:3334` + API Key & Merchant ID sesuai gateway
 
 ---
 
@@ -179,7 +179,7 @@ http://host.docker.internal:3333/restapi/qris/show_qris.php
 - **Jangan percaya `shiftId` dari client** — finalisasi QRIS harus lewat `assertOpenShift` seperti metode lain (pattern sudah ada di `PaymentService`)
 - **Non-cash tidak dibulatkan** — amount yang dikirim ke gateway harus `roundedPayable ?? total` yang sudah dihitung pricing (untuk QRIS = nilai asli karena non-cash)
 - `AbortSignal.timeout` butuh Node ≥ 17.3 (repo aman)
-- **Gateway di container terpisah** — backend harus memakai `host.docker.internal:3333`, bukan `localhost`, bila keduanya berjalan di container Docker berbeda
+- **Gateway di container terpisah** — backend harus memakai `host.docker.internal:3334`, bukan `localhost`, bila keduanya berjalan di container Docker berbeda
 - `testConnection` meninggalkan invoice `TEST-*` di gateway jika gagal void — tidak fatal, tapi catat
 - Reference number maksimal 25 char di tag 62.05 gateway — format `QRIS-<12>` aman
 
@@ -190,10 +190,10 @@ http://host.docker.internal:3333/restapi/qris/show_qris.php
 Kontrak asli endpoint cek status pembayaran dari gateway eksternal:
 
 ```http
-GET http://localhost:3333/restapi/qris/checkpaid_qris.php?do=checkStatus&apikey=12345678&mID=123456&invid=<INVOICE_ID>&trxvalue=15000&trxdate=2026-08-23
+GET http://localhost:3334/restapi/qris/checkpaid_qris.php?do=checkStatus&apikey=12345678&mID=123456&invid=<INVOICE_ID>&trxvalue=15000&trxdate=2026-08-23
 ```
 
-(Backend POSMono tetap memanggil via `host.docker.internal:3333`, bukan `localhost`.)
+(Backend POSMono tetap memanggil via `host.docker.internal:3334`, bukan `localhost`.)
 
 ### Ketidaksesuaian dengan implementasi (`QrisGatewayService.checkStatus`, baris 97-114)
 

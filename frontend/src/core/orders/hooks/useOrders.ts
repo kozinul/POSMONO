@@ -318,4 +318,64 @@ export function useBestSellers(days = 7) {
   });
 }
 
+export interface FamilyTopProduct {
+  productId: string;
+  name: string;
+  quantity: number;
+  revenue: number;
+}
+
+export interface FamilyTopProducts {
+  familyId: string;
+  familyName: string;
+  products: FamilyTopProduct[];
+}
+
+interface TopProductsPerFamilyResponse {
+  success: boolean;
+  data: {
+    dateFrom: string;
+    dateTo: string;
+    days: number;
+    families: FamilyTopProducts[];
+  };
+}
+
+export function useTopProductsPerFamily(days = 7, limit = 5) {
+  return useQuery({
+    queryKey: ['top-products-per-family', days, limit],
+    queryFn: async () => {
+      const res = await api.get<TopProductsPerFamilyResponse>(
+        `/reports/top-products-per-family?days=${days}&limit=${limit}`,
+      );
+      return res.data.data;
+    },
+    staleTime: 60_000,
+    refetchInterval: 60_000,
+  });
+}
+
+export interface ActiveCashier {
+  cashierId: string;
+  cashierName: string;
+  openedAt: string;
+  registerId: string;
+}
+
+interface ActiveCashiersResponse {
+  success: boolean;
+  data: ActiveCashier[];
+}
+
+export function useActiveCashiers() {
+  return useQuery({
+    queryKey: ['active-cashiers'],
+    queryFn: async () => {
+      const res = await api.get<ActiveCashiersResponse>('/reports/active-cashiers');
+      return res.data.data;
+    },
+    refetchInterval: 30_000,
+  });
+}
+
 export type { Order, OrderItem, IVoidedItem, IPaymentBreakdownEntry };

@@ -1,4 +1,4 @@
-import { useDashboardSummary } from '../../orders/hooks/useOrders';
+import { useDashboardSummary, useTopProductsPerFamily, useActiveCashiers } from '../../orders/hooks/useOrders';
 import { useTenant } from '../../../@shared/hooks/useTenant';
 import { Link } from 'react-router-dom';
 import { formatCurrency } from '../../../@shared/utils/format';
@@ -12,8 +12,13 @@ export default function DashboardPage() {
   const { data: tenant } = useTenant();
   const user = useAuthStore((s) => s.user);
   const canRefund = hasPermission(user, 'payments:write');
-  const { data: refundable } = useRefundable();
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().split('T')[0];
+  const { data: refundable } = useRefundable(yesterdayStr, yesterdayStr);
   const refundMutation = useRefundMutation();
+  const { data: familyProducts, isLoading: isLoadingFamilies } = useTopProductsPerFamily(7, 5);
+  const { data: activeCashiers, isLoading: isLoadingCashiers } = useActiveCashiers();
 
   const handleRefund = (p: RefundablePayment) => {
     void Swal.fire({
@@ -119,8 +124,8 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-sm font-medium text-gray-500">Pending Orders</h3>
-          <p className="mt-2 text-3xl font-bold text-yellow-600">
+          <h3 className="text-sm font-medium text-gray-500">Bill Ditahan</h3>
+          <p className="mt-2 text-3xl font-bold text-orange-600">
             {summary?.pendingOrders ?? 0}
           </p>
         </div>
@@ -132,15 +137,63 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {(familyProducts && familyProducts.families.length > 0 || activeCashiers) && (
+        <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {familyProducts && familyProducts.families.map((family) => (
+            <div key={family.familyId} className="bg-white rounded-lg shadow p-6">
+              <h3 className="text-sm font-bold text-gray-800 mb-3">{family.familyName}</h3>
+              {family.products.length > 0 ? (
+                <ol className="space-y-2">
+                  {family.products.map((p, i) => (
+                    <li key={p.productId} className="flex items-center justify-between text-sm">
+                      <span className="flex items-center gap-2 text-gray-700">
+                        <span className="text-xs font-bold text-gray-400 w-4">{i + 1}.</span>
+                        <span className="truncate">{p.name}</span>
+                      </span>
+                      <span className="text-xs font-semibold text-gray-500 ml-2 shrink-0">{p.quantity} pcs</span>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="text-sm text-gray-400">Belum ada data penjualan</p>
+              )}
+            </div>
+          ))}
+
+          {activeCashiers && (
+            <div className="bg-white rounded-lg shadow p-6">
+              <h3 className="text-sm font-bold text-gray-800 mb-3">Kasir Aktif</h3>
+              {activeCashiers.length > 0 ? (
+                <ol className="space-y-2">
+                  {activeCashiers.map((c) => (
+                    <li key={c.cashierId} className="flex items-center justify-between text-sm">
+                      <span className="flex items-center gap-2 text-gray-700">
+                        <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                        <span className="truncate">{c.cashierName}</span>
+                      </span>
+                      <span className="text-xs text-gray-400 ml-2 shrink-0">
+                        {new Date(c.openedAt).toLocaleString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="text-sm text-gray-400">Tidak ada kasir yang sedang bekerja</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {canRefund && refundable && refundable.length > 0 && (
         <div className="mt-8">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Refund Transaksi</h2>
+              <h2 className="text-lg font-semibold text-gray-900">Refund Transaksi (Kemarin)</h2>
               <p className="text-sm text-gray-500">Transaksi dari shift yang sudah ditutup. Void hanya untuk shift yang masih berjalan.</p>
             </div>
-            <Link to="/reports" className="text-sm text-primary-600 hover:text-primary-700">
-              Laporan Refund
+            <Link to="/refunds" className="text-sm text-primary-600 hover:text-primary-700">
+              Lihat Semua
             </Link>
           </div>
           <div className="bg-white rounded-lg shadow overflow-hidden">

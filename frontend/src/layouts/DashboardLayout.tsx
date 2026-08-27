@@ -8,6 +8,7 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard' },
   { name: 'POS', href: '/pos' },
   { name: 'Orders', href: '/orders' },
+  { name: 'Refunds', href: '/refunds' },
   { name: 'Products', href: '/products' },
   { name: 'Families', href: '/families' },
   { name: 'Categories', href: '/categories' },

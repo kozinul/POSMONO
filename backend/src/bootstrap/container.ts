@@ -68,6 +68,8 @@ import { MongoPaymentRepository } from '../core/payment/infrastructure/persisten
 import { MongoRefundRepository } from '../core/payment/infrastructure/persistence/MongoRefundRepository';
 import { PaymentService } from '../core/payment/application/services/PaymentService';
 import { QrisGatewayService } from '../core/payment/application/services/QrisGatewayService';
+import { QrisInvoiceSchema } from '../core/payment/infrastructure/persistence/schemas/QrisInvoiceSchema';
+import { MongoQrisInvoiceRepository } from '../core/payment/infrastructure/persistence/MongoQrisInvoiceRepository';
 import { PaymentController } from '../core/payment/interfaces/http/controllers/PaymentController';
 import { ReportService } from '../core/reporting/application/services/ReportService';
 import { ReportExportService } from '../core/reporting/application/services/ReportExportService';
@@ -148,6 +150,7 @@ export function buildContainer() {
   const ShiftModel = systemConnection.model('Shift', ShiftSchema);
   const PaymentModel = systemConnection.model('Payment', PaymentSchema);
   const RefundModel = systemConnection.model('Refund', RefundSchema);
+  const QrisInvoiceModel = systemConnection.model('QrisInvoice', QrisInvoiceSchema);
   const TaxConfigurationModel = systemConnection.model('TaxConfiguration', TaxConfigurationSchema);
   const PricingProfileModel = systemConnection.model('PricingProfile', PricingProfileSchema);
   const DiscountConfigurationModel = systemConnection.model('DiscountConfiguration', DiscountConfigurationSchema);
@@ -642,10 +645,17 @@ export function buildContainer() {
         qrisGatewayService: container.resolve('qrisGatewayService'),
       }),
     }),
+    qrisInvoiceRepository: asClass(MongoQrisInvoiceRepository, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        model: QrisInvoiceModel,
+      }),
+    }),
     qrisGatewayService: asClass(QrisGatewayService, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
         tenantRepository: container.resolve('tenantRepository'),
+        qrisInvoiceRepository: container.resolve('qrisInvoiceRepository'),
       }),
     }),
     paymentMethodRepository: asClass(MongoPaymentMethodRepository, {

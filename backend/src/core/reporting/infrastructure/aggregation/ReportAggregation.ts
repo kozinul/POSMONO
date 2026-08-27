@@ -788,4 +788,114 @@ export class ReportAggregation {
       cardLastFour: r.payment?.cardLastFour ?? null,
     };
   }
+
+  async getTopProductsPerFamilyAggregation(
+    tenantId: string,
+    dateFrom: string,
+    dateTo: string,
+    limitPerFamily: number = 5,
+  ) {
+    const startOfDay = new Date(dateFrom);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(dateTo);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const result = await this.orderModel.aggregate([
+      {
+        $match: {
+          tenantId,
+          createdAt: { $gte: startOfDay, $lte: endOfDay },
+          status: { $in: ['paid', 'completed'] },
+        },
+      },
+      { $unwind: '$items' },
+      {
+        $lookup: {
+          from: 'products',
+          localField: 'items.productId',
+          foreignField: '_id',
+          as: 'product',
+        },
+      },
+      { $unwind: { path: '$product', preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: 'categories',
+          localField: 'product.categoryId',
+          foreignField: '_id',
+          as: 'category',
+        },
+      },
+      { $unwind: { path: '$category', preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: 'families',
+          localField: 'category.familyId',
+          foreignField: '_id',
+          as: 'family',
+        },
+      },
+      { $unwind: { path: '$family', preserveNullAndEmptyArrays: true } },
+      {
+        $group: {
+          _id: {
+            familyId: { $ifNull: ['$family._id', 'unknown'] },
+            familyName: { $ifNull: ['$family.name', 'Lainnya'] },
+            productId: '$items.productId',
+            productName: '$items.productName',
+          },
+          quantity: { $sum: '$items.quantity' },
+          revenue: { $sum: { $multiply: ['$items.unitPrice', '$items.quantity'] } },
+        },
+      },
+      { $sort: { quantity: -1, revenue: -1 } },
+      {
+        $group: {
+          _id: { familyId: '$_id.familyId', familyName: '$_id.familyName' },
+          products: {
+            $push: {
+              productId: '$_id.productId',
+              name: '$_id.productName',
+              quantity: '$quantity',
+              revenue: '$revenue',
+            },
+          },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          familyId: '$_id.familyId',
+          familyName: '$_id.familyName',
+          products: { $slice: ['$products', limitPerFamily] },
+        },
+      },
+      { $sort: { familyName: 1 } },
+    ]);
+
+    return result;
+  }
+
+  async getActiveCashiersAggregation(tenantId: string) {
+    const result = await this.shiftModel.aggregate([
+      {
+        $match: {
+          tenantId,
+          status: 'open',
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          cashierId: '$cashierId',
+          cashierName: '$cashierName',
+          openedAt: '$openedAt',
+          registerId: '$registerId',
+        },
+      },
+      { $sort: { openedAt: -1 } },
+    ]);
+
+    return result;
+  }
 }

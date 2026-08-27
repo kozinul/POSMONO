@@ -9,6 +9,13 @@ function mockTenant(config: Record<string, unknown> | null) {
   };
 }
 
+function mockQrisInvoiceRepository(existing: Record<string, unknown> | null = null) {
+  return {
+    save: vi.fn(async () => undefined),
+    findByReferenceNumber: vi.fn(async () => existing),
+  };
+}
+
 function jsonRes(body: unknown, ok = true) {
   return { ok, status: ok ? 200 : 500, json: async () => body };
 }
@@ -85,7 +92,7 @@ describe('QrisGatewayService — createInvoice', () => {
 
     expect(result.referenceNumber).toMatch(/^QRIS-[A-F0-9]{12}$/);
     expect(result.qrString).toBe('emvco-payload');
-    expect(result.qrImage).toBe('data:image/png;base64,x');
+    expect(result.qrImage).toMatch(/^data:image\/png;base64,/);
     expect(result.amount).toBe(25000);
     expect(result.expiresAt).toBe('2026-08-23T10:00:00.000Z');
 
@@ -95,13 +102,14 @@ describe('QrisGatewayService — createInvoice', () => {
     expect(url.searchParams.get('mID')).toBe('123456');
     expect(url.searchParams.get('cliTrxNumber')).toBe(result.referenceNumber);
     expect(url.searchParams.get('cliTrxAmount')).toBe('25000');
+    expect(url.searchParams.get('useTip')).toBe('no');
   });
 
-  it('defaults qrImage to null and expiresAt to null when absent', async () => {
+  it('generates qrImage from qris payload when gateway omits it, and expiresAt defaults to null', async () => {
     fetchMock.mockResolvedValue(jsonRes({ status: 'success', data: { qris: 'p' } }));
     const svc = new QrisGatewayService(mockTenant(fullConfig) as any);
     const result = await svc.createInvoice('t1', 5000);
-    expect(result.qrImage).toBeNull();
+    expect(result.qrImage).toMatch(/^data:image\/png;base64,/);
     expect(result.expiresAt).toBeNull();
   });
 
@@ -116,6 +124,50 @@ describe('QrisGatewayService — createInvoice', () => {
     const svc = new QrisGatewayService(mockTenant(fullConfig) as any);
     await expect(svc.createInvoice('t1', 10000)).rejects.toThrow('tidak mengembalikan payload QRIS');
   });
+
+  it('persists invoice mapping when qrisInvoiceRepository is wired', async () => {
+    fetchMock.mockResolvedValue(jsonRes({
+      status: 'success',
+      data: { qris: 'payload', invid: 'GW-INV-001' },
+    }));
+    const repo = mockQrisInvoiceRepository();
+    const svc = new QrisGatewayService(mockTenant(fullConfig) as any, repo as any);
+
+    const result = await svc.createInvoice('t1', 15000);
+
+    expect(repo.save).toHaveBeenCalledTimes(1);
+    const saved = repo.save.mock.calls[0][0];
+    expect(saved.referenceNumber).toBe(result.referenceNumber);
+    expect(saved.invid).toBe('GW-INV-001');
+    expect(saved.amount).toBe(15000);
+    expect(saved.trxDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('extracts invid from various gateway response field names', async () => {
+    fetchMock.mockResolvedValue(jsonRes({
+      status: 'success',
+      data: { qris: 'payload', invoice_id: 'ALT-INV-999' },
+    }));
+    const repo = mockQrisInvoiceRepository();
+    const svc = new QrisGatewayService(mockTenant(fullConfig) as any, repo as any);
+
+    await svc.createInvoice('t1', 10000);
+
+    expect(repo.save.mock.calls[0][0].invid).toBe('ALT-INV-999');
+  });
+
+  it('persists null invid when gateway does not return one', async () => {
+    fetchMock.mockResolvedValue(jsonRes({
+      status: 'success',
+      data: { qris: 'payload' },
+    }));
+    const repo = mockQrisInvoiceRepository();
+    const svc = new QrisGatewayService(mockTenant(fullConfig) as any, repo as any);
+
+    await svc.createInvoice('t1', 10000);
+
+    expect(repo.save.mock.calls[0][0].invid).toBeNull();
+  });
 });
 
 describe('QrisGatewayService — checkStatus', () => {
@@ -125,22 +177,67 @@ describe('QrisGatewayService — checkStatus', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('normalizes known statuses and passes cliTrxNumber', async () => {
+  it('uses checkpaid_qris.php with invid/trxvalue/trxdate/mID when invoice record exists', async () => {
     fetchMock.mockResolvedValue(jsonRes({ status: 'success', data: { status: 'paid', paidAt: '2026-08-23T09:00:00.000Z', amount: 20000 } }));
-    const svc = new QrisGatewayService(mockTenant(fullConfig) as any);
+    const repo = mockQrisInvoiceRepository({
+      tenantId: 't1',
+      referenceNumber: 'QRIS-ABC',
+      invid: 'GW-INV-001',
+      amount: 20000,
+      trxDate: '2026-08-23',
+      createdAt: new Date(),
+    });
+    const svc = new QrisGatewayService(mockTenant(fullConfig) as any, repo as any);
 
     const result = await svc.checkStatus('t1', 'QRIS-ABC');
 
-    expect(lastCallUrl().searchParams.get('do')).toBe('check-status');
-    expect(lastCallUrl().searchParams.get('cliTrxNumber')).toBe('QRIS-ABC');
+    const url = lastCallUrl();
+    expect(url.pathname).toBe('/restapi/qris/checkpaid_qris.php');
+    expect(url.searchParams.get('do')).toBe('checkStatus');
+    expect(url.searchParams.get('apikey')).toBe('secret-key');
+    expect(url.searchParams.get('mID')).toBe('123456');
+    expect(url.searchParams.get('invid')).toBe('GW-INV-001');
+    expect(url.searchParams.get('trxvalue')).toBe('20000');
+    expect(url.searchParams.get('trxdate')).toBe('2026-08-23');
     expect(result.status).toBe('paid');
     expect(result.paidAt).toBe('2026-08-23T09:00:00.000Z');
     expect(result.amount).toBe(20000);
   });
 
+  it('returns unknown when no invoice record found (gateway requires invid)', async () => {
+    const repo = mockQrisInvoiceRepository(null);
+    const svc = new QrisGatewayService(mockTenant(fullConfig) as any, repo as any);
+
+    const result = await svc.checkStatus('t1', 'QRIS-LEGACY');
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.status).toBe('unknown');
+    expect(result.paidAt).toBeNull();
+    expect(result.amount).toBeNull();
+  });
+
+  it('returns unknown when no repository is wired', async () => {
+    const svc = new QrisGatewayService(mockTenant(fullConfig) as any);
+
+    const result = await svc.checkStatus('t1', 'QRIS-OLD');
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.status).toBe('unknown');
+    expect(result.paidAt).toBeNull();
+    expect(result.amount).toBeNull();
+  });
+
   it('maps unrecognized gateway statuses to unknown', async () => {
     fetchMock.mockResolvedValue(jsonRes({ status: 'success', data: { status: 'weird-state' } }));
-    const svc = new QrisGatewayService(mockTenant(fullConfig) as any);
+    const repo = mockQrisInvoiceRepository({
+      tenantId: 't1',
+      referenceNumber: 'QRIS-ABC',
+      invid: 'GW-INV-001',
+      amount: 20000,
+      trxDate: '2026-08-23',
+      createdAt: new Date(),
+    });
+    const svc = new QrisGatewayService(mockTenant(fullConfig) as any, repo as any);
     const result = await svc.checkStatus('t1', 'QRIS-ABC');
     expect(result.status).toBe('unknown');
     expect(result.amount).toBeNull();
@@ -180,6 +277,7 @@ describe('QrisGatewayService — testConnection', () => {
     expect(createUrl.searchParams.get('do')).toBe('create-invoice');
     expect(createUrl.searchParams.get('cliTrxAmount')).toBe('10000');
     expect(createUrl.searchParams.get('cliTrxNumber')).toMatch(/^TEST-/);
+    expect(createUrl.searchParams.get('useTip')).toBe('no');
     expect(voidUrl.searchParams.get('do')).toBe('void');
     expect(voidUrl.searchParams.get('cliTrxNumber')).toBe(createUrl.searchParams.get('cliTrxNumber'));
     expect(result.ok).toBe(true);
@@ -205,7 +303,7 @@ describe('QrisGatewayService — network failures', () => {
   it('wraps HTTP errors (non-2xx) into a friendly message with status code', async () => {
     fetchMock.mockResolvedValue(jsonRes({}, false));
     const svc = new QrisGatewayService(mockTenant(fullConfig) as any);
-    await expect(svc.checkStatus('t1', 'QRIS-X')).rejects.toThrow('HTTP 500');
+    await expect(svc.createInvoice('t1', 10000)).rejects.toThrow('HTTP 500');
   });
 
   it('reports timeout when the request aborts', async () => {

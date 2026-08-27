@@ -539,7 +539,7 @@ export function PaymentModal() {
                         <img src={qris.qrImage} alt="Kode QRIS" className="w-56 h-56 rounded-2xl bg-white shadow-lg p-2" />
                       ) : (
                         <div className="w-56 h-56 rounded-2xl bg-white shadow-lg flex items-center justify-center">
-                          <p className="text-xs text-gray-400 px-6">QR tidak dapat ditampilkan</p>
+                          <p className="text-xs text-red-400 px-6 text-center">{qris.qrError || 'QR tidak dapat ditampilkan'}</p>
                         </div>
                       )}
                       {qris.phase === 'confirming' && (
