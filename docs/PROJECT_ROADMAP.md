@@ -118,41 +118,51 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | Cart state management | `[x]` |
 | Barcode scanning | `[x]` |
 | Discount & promo engine | `[x]` |
+| Discount configuration (dynamic, di-sync ke POS via polling) | `[x]` |
 | Tax calculation engine | `[x]` |
 | DPP Nilai Lain (Indonesia PPN 12%) | `[x]` |
 | Compound tax (Charge + PPN) via Adjustment Pipeline | `[x]` |
 | Category-based & product-based tax | `[x]` |
 | Tax exemption rules | `[x]` |
-| Split bill | `[ ]` |
-| Hold / recall order | `[ ]` |
+| Split bill | `[x]` |
+| Hold / recall order (held bills, Daftar Bill) | `[x]` |
+| Cash rounding (pembulatan tunai per tenant) | `[x]` |
+| Void order / item + approval Manager PIN | `[x]` |
+| Close unpaid bill (`POST /orders/:id/close-bill`) | `[x]` |
 
-**Completion:** ~60%
+**Completion:** ~100%
 
 ---
 
-### PHASE E — Payment System `[ ]`
+### PHASE E — Payment System `[~]`
 
 | Task | Status |
 |------|--------|
 | Cash payment flow | `[x]` |
+| QRIS gateway (create invoice, confirm, cancel, status) | `[x]` |
 | Transfer confirmation (manual) | `[ ]` |
 | Payment reconciliation | `[ ]` |
 | Invoice generation | `[ ]` |
 
-**Completion:** ~25%
+**Completion:** ~50%
 
 ---
 
-### PHASE F — Reporting `[ ]`
+### PHASE F — Reporting `[~]`
 
 | Task | Status |
 |------|--------|
 | Daily sales report | `[x]` |
-| Product performance | `[ ]` |
+| Sales report (per produk / rentang tanggal) | `[x]` |
+| Finance report (DPP, SC, pajak, diskon, pembulatan) | `[x]` |
+| Product performance (best-sellers, "⭐ Favorit" di POS) | `[x]` |
+| Laporan kasir per-shift (transaksi + penerimaan) | `[x]` |
+| Penerimaan & penjualan per kasir | `[x]` |
+| Export PDF (struk) + XLSX (tabular) | `[x]` |
 | Inventory summary | `[ ]` |
 | Profit & loss simple | `[ ]` |
 
-**Completion:** ~25%
+**Completion:** ~75%
 
 ---
 
@@ -170,6 +180,8 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | Load testing | `[ ]` |
 
 **Completion:** ~85%
+
+> Status per 2026-08-28: backend services 237/237 pass · frontend 72/72 pass · tsc frontend & shared bersih · backend tsc punya 1 error pre-existing (`ApplyDiscountUseCase.ts` TS2741). E2E manual (docker + hardware printer) belum bisa dijalankan di development env.
 
 ---
 
@@ -292,6 +304,12 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | Receipt printing (thermal) | `[x]` |
 | KOT (Kitchen Order Ticket) printing | `[x]` |
 | Basic reporting (daily sales) | `[x]` |
+| Laporan kasir per-shift (Transaksi/Penerimaan) + export PDF/XLSX | `[x]` |
+| QRIS payment gateway | `[x]` |
+| Integrated hardware printer (WebUSB/Bluetooth/TCP + auto-print struk/KOT) | `[x]` |
+| Shift wajib dibuka + carried-over bills | `[x]` |
+| Void + approval Manager PIN + riwayat stok | `[x]` |
+| Pembulatan tunai (cash rounding per tenant) | `[x]` |
 | Shift management (open/close register) | `[x]` |
 | Dashboard (summary cards + recent orders) | `[x]` |
 | Settings page | `[x]` |
@@ -313,8 +331,9 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | `[ ]` Offline sync | Local-first with background sync when online |
 | `[x]` Bluetooth printer | ESC/POS over Bluetooth (WebBluetooth client-side) |
 | `[x]` Network printer (TCP ESC/POS) | Printer network langsung via server `net.Socket` |
+| `[x]` WebUSB printer | Direct client-side printing via WebUSB (bulk / interrupt endpoint) |
 | `[ ]` Barcode scanner | Hardware scanner integration |
-| `[ ]` Payment gateway | QRIS, GoPay, OVO, bank transfer |
+| `[x]` QRIS payment gateway | Gateway QRIS eksternal (`QrisGatewayService`) — GoPay/OVO/bank transfer belum |
 | `[ ]` Multi-currency | For tourism/hospitality |
 | `[ ]` AI automation | Auto-stock reorder, sales prediction |
 | `[ ]` Plugin runtime | 3rd-party plugin system |
@@ -338,9 +357,10 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | Infrastructure (Docker, networking) | `[x]` |
 | Transaction engine design | `[x]` |
 | Offline sync architecture | `[ ]` |
-| Printer architecture | `[x]` (Printer aggregate, ESC/POS, WebUSB/WebBluetooth, auto-print struk/KOT) |
+| Printer architecture | `[x]` (Printer aggregate, ESC/POS via TCP + WebUSB + WebBluetooth, auto-print struk/KOT) |
+| QRIS gateway architecture | `[x]` (`QrisGatewayService` + PaymentModal QR flow + Settings UI — lihat `docs/QRIS_GATEWAY_PLAN.md`) |
 | Plugin architecture | `[ ]` |
-| Deployment architecture | `[ ]` |
+| Deployment architecture | `[x]` (Dockerfile multi-stage + compose.prod.yml + CI; VPS/SSL/belum live) |
 
 ---
 
@@ -354,7 +374,7 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | **Possible Solutions** | 1) WebUSB for browser-based direct printing, 2) QZ Tray app for reliable thermal, 3) Network printer proxy via local server. |
 | **Priority** | Medium |
 | **Deadline** | Before MVP launch (Week 8) |
-| **Status** | Researching |
+| **Status** | **Resolved** — semua jalur diimplementasikan: WebUSB (bulk/interrupt), WebBluetooth (chunk 20-byte), TCP `net.Socket` via server, auto-print struk/KOT, settings printer UI |
 
 ### Blocker 2
 
@@ -374,7 +394,7 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | **Possible Solutions** | 1) GitHub Actions for build + deploy, 2) Docker Hub + watchtower on VPS. |
 | **Priority** | Low (needed before pilot) |
 | **Deadline** | Before Week 9 |
-| **Status** | Not started |
+| **Status** | In progress — Dockerfile multi-stage + compose.prod.yml + CI pipeline sudah ada; deployment ke VPS + SSL/belum |
 
 ---
 
@@ -501,5 +521,7 @@ Architecture changes, tech swaps, pricing — never decide the same day. Sleep o
 
 ---
 
-*Last updated: 2026-07-08*
+*Last updated: 2026-08-28*
 *Updated daily during development.*
+
+> **2026-08-28 — Sinkronisasi status dengan kode aktual.** Entri fase D/E/F, daftar fitur, blocker, dan arsitektur diperbarui agar sesuai implementasi nyata (split bill, hold/close-bill, QRIS gateway, printer terintegrasi, cash rounding, laporan per-kasir, export). Checklist lama ditandai `[x]` yang sebelumnya `[ ]` sudah tervalidasi di AGENTS.md. Estimasi kelengkapan MVP: ±80% (fungsional ±90–95%, selisihnya = deployment live + pilot tenant + E2E manual).
