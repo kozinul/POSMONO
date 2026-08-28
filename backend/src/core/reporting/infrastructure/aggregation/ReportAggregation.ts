@@ -373,7 +373,7 @@ export class ReportAggregation {
           totalTax: { $sum: { $ifNull: ['$tax', 0] } },
           totalServiceCharge: { $sum: { $ifNull: ['$serviceCharge', 0] } },
           totalDiscount: {
-            $sum: { $add: [{ $ifNull: ['$discount', 0] }, { $ifNull: ['$discountTotal', 0] }] },
+            $sum: { $max: [{ $ifNull: ['$discount', 0] }, { $ifNull: ['$discountTotal', 0] }] },
           },
           totalRounding: { $sum: { $ifNull: ['$roundingAdjustment', 0] } },
         },
