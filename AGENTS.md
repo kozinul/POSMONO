@@ -225,6 +225,14 @@ Modular SaaS POS Platform (Node.js/Express + React/Tailwind). Multi-tenant, mult
 - **Root cause**: `getFinanceAggregation` menjumlah `$add: [$discount, $discountTotal]`, padahal kedua field selalu diisi nilai identik (`payCash` PaymentService, `CreateOrderService`, `Order.recalculateTotals`). `$add` awalnya untuk order lama (pre-`discountTotal`, 2026-07-21) yang salah satu field null → `$ifNull`=0 → benar; tapi data baru keduanya sama → dobel
 - **Fix**: `$sum: { $max: [$discount, $discountTotal] }` di ReportAggregation.ts (generik untuk data lama & baru; diskon non-negative via zod)
 
+### OrderListPage: Detail (Item + Struk) & Print Ulang — 2026-08-28
+- Spek: di halaman Orders dashboard pengguna ingin melihat item yang di-order dan melakukan print ulang struk
+- **`OrderDetailModal.tsx`** (baru, `core/orders/components`): tampilan struk (`.receipt-print report-print`) berisi header order (no./status/kasir/waktu), daftar item (qty, total, penanda VOID + reason + modifiers), Subtotal/Diskon/SC/Pajak/Pembulatan/Total (`roundedPayable ?? total`), breakdown bayar + kembalian, dan "Rincian Void"; tombol footer `Tutup` / `Print Ulang` / `Print`
+- **Print Ulang** memakai jalur POS yang sama: `apiPrintReceipt({ orderId })` (`/print/receipt`, tanpa permission khusus) → jika `clientPrint && buffer && printer` → `printViaClient` (WebUSB/Bluetooth), jika `dispatched` → toast "Struk terkirim ke printer", error → toast; fallback `window.print()` struk modal. Catatan: `/print/receipt` butuh payment completed (throw `Payment not found for order` bila order belum dibayar)
+- **OrderListPage.tsx**: tombol **Detail** (selalu tampil, termasuk order non-voidable) membuka modal; tombol void (Void/Item/Bayar) tetap hanya untuk `isVoidable`; `ModalState` + tipe `'detail'`
+- **Type**: `Order.serviceCharge?` ditambahkan di `useOrders.ts` (backend mengirimnya, dipakai modal)
+- Tests: frontend 72/72 + tsc + vite build OK
+
 ### Pending Work (belum dieksekusi) — 2026-08-23
 - **Carried Bills UX** (tutup/buka shift): rencana lengkap di `docs/CARRIED_BILLS_SHIFT_PLAN.md` — endpoint `GET /shifts/carried-bills` + daftar bill di dialog Tutup Shift + banner di OpenShiftModal; keputusan user: info-only (tidak masuk Kas Diharapkan), daftar lengkap di dialog tutup, banner non-blocking di buka
 - **QRIS checkStatus contract fix**: gateway aktual pakai `/restapi/qris/checkpaid_qris.php?do=checkStatus&invid=&trxvalue=&trxdate=&mID=` — belum diimplementasikan; detail & implikasi (perlu mapping persisten invid/trxvalue/trxdate) di `docs/QRIS_GATEWAY_PLAN.md` §10
