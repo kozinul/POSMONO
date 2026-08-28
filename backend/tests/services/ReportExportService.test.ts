@@ -14,6 +14,7 @@ function createMockReportService() {
     getSalesPerProduct: vi.fn(),
     getCashierReceiptsReport: vi.fn(),
     getSalesPerCashierReport: vi.fn(),
+    getInventorySummary: vi.fn(),
   } as unknown as ReportService;
   return service;
 }
@@ -290,5 +291,123 @@ describe('ReportExportService', () => {
     expect(totalsRow.getCell(2).value).toBe(5);
     expect(totalsRow.getCell(4).value).toBe(400_000);
     expect(totalsRow.getCell(8).value).toBe(80_000);
+  });
+
+  it('generates inventory summary xlsx grouped per product with HPP/nilai/status', async () => {
+    vi.mocked(reportService.getInventorySummary).mockResolvedValue({
+      dateFrom: '2026-08-01',
+      dateTo: '2026-08-31',
+      generatedAt: new Date().toISOString(),
+      items: [
+        {
+          productId: 'p1',
+          warehouseId: 'wh-1',
+          warehouseName: 'Gudang Utama',
+          productName: 'Kopi Susu',
+          sku: 'KS-01',
+          categoryName: 'Minuman',
+          quantity: 20,
+          reservedQuantity: 4,
+          availableQuantity: 16,
+          minLevel: 5,
+          maxLevel: 100,
+          costPrice: 5000,
+          value: 100000,
+          lowStock: false,
+          movements: { in: 10, out: 5, adjustment: 0, void: 0, reserve: 0, release: 0 },
+        },
+      ],
+      totals: { totalItems: 20, totalReserved: 4, totalAvailable: 16, totalValue: 100000 },
+      lowStockCount: 0,
+    });
+
+    const file = await service.exportInventorySummary(TENANT_ID, '2026-08-01', '2026-08-31', 'xlsx');
+
+    expect(file.filename).toBe('laporan-ringkasan-stok-2026-08-31.xlsx');
+
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(file.buffer as any);
+    const ws = wb.getWorksheet('Laporan');
+    expect(ws.getCell('A1').value).toBe('Ringkasan Stok');
+    expect(ws.getCell('A2').value).toContain('Periode: 2026-08-01');
+
+    const headerRow = ws.getRow(4);
+    const headers: string[] = [];
+    for (let i = 1; i <= 9; i++) headers.push(headerRow.getCell(i).value as string);
+    expect(headers).toContain('Produk');
+    expect(headers).toContain('Gudang');
+    expect(headers).toContain('HPP');
+    expect(headers).toContain('Nilai');
+    expect(headers).toContain('Status');
+
+    const groupRow = ws.getRow(5);
+    expect(groupRow.getCell(1).value).toBe('Kopi Susu (KS-01) · Minuman');
+    expect(groupRow.getCell(3).value).toBe(20);
+    expect(groupRow.getCell(5).value).toBe(16);
+    expect(groupRow.getCell(8).value).toBe(100000);
+
+    const detailRow = ws.getRow(6);
+    expect(detailRow.getCell(1).value).toContain('Gudang Utama');
+    expect(detailRow.getCell(1).value).not.toContain('Kopi Susu');
+    expect(detailRow.getCell(2).value).toBe('');
+    expect(detailRow.getCell(3).value).toBe(20);
+    expect(detailRow.getCell(6).value).toBe(5);
+    expect(detailRow.getCell(7).value).toBe(5000);
+    expect(detailRow.getCell(8).value).toBe(100000);
+
+    const subtotalRow = ws.getRow(7);
+    expect(subtotalRow.getCell(1).value).toBe('Subtotal Kopi Susu');
+    expect(subtotalRow.getCell(3).value).toBe(20);
+
+    const totalsRow = ws.getRow(8);
+    expect(totalsRow.getCell(1).value).toBe('Total');
+    expect(totalsRow.getCell(3).value).toBe(20);
+    expect(totalsRow.getCell(8).value).toBe(100000);
+
+    expect(ws.getRow(6).outlineLevel).toBe(1);
+    expect(ws.getRow(5).outlineLevel).toBe(0);
+    expect(ws.getRow(7).outlineLevel).toBe(0);
+  });
+
+  it('marks low stock and applies low-stock subtitle in inventory summary export', async () => {
+    vi.mocked(reportService.getInventorySummary).mockResolvedValue({
+      dateFrom: '',
+      dateTo: '',
+      generatedAt: new Date().toISOString(),
+      items: [
+        {
+          productId: 'p1',
+          warehouseId: 'wh-1',
+          warehouseName: 'Gudang Utama',
+          productName: 'Teh Manis',
+          sku: 'TM-01',
+          categoryName: 'Minuman',
+          quantity: 3,
+          reservedQuantity: 0,
+          availableQuantity: 3,
+          minLevel: 5,
+          maxLevel: 100,
+          costPrice: 2000,
+          value: 6000,
+          lowStock: true,
+          movements: { in: 0, out: 0, adjustment: 0, void: 0, reserve: 0, release: 0 },
+        },
+      ],
+      totals: { totalItems: 3, totalReserved: 0, totalAvailable: 3, totalValue: 6000 },
+      lowStockCount: 1,
+    });
+
+    const file = await service.exportInventorySummary(TENANT_ID, undefined, undefined, 'pdf');
+
+    expect(file.filename).toBe('laporan-ringkasan-stok-now.pdf');
+    expect(file.buffer.subarray(0, 4).toString()).toBe('%PDF');
+
+    const xlsxFile = await service.exportInventorySummary(TENANT_ID, '2026-08-01', '2026-08-31', 'xlsx');
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(xlsxFile.buffer as any);
+    const ws = wb.getWorksheet('Laporan');
+    expect(ws.getCell('A2').value).toContain('1 produk menipis');
+    const detailRow = ws.getRow(6);
+    expect(detailRow.getCell(9).value).toBe('MENIPIS');
   });
 });

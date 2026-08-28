@@ -29,6 +29,8 @@ function createMockAggregation() {
     getFinanceAggregation: vi.fn(),
     getCashierReceiptsAggregation: vi.fn(),
     getSalesPerCashierAggregation: vi.fn(),
+    getInventorySummaryAggregation: vi.fn(),
+    getStockMovementTotalsAggregation: vi.fn(),
   };
 }
 
@@ -214,6 +216,84 @@ describe('ReportService', () => {
       expect(result.cashiers).toHaveLength(1);
       expect(result.cashiers[0].totalRevenue).toBe(400_000);
       expect(result.totals.totalOrders).toBe(5);
+    });
+  });
+
+  describe('getInventorySummary', () => {
+    it('merges stock snapshot with movement totals per product-warehouse', async () => {
+      aggregation.getInventorySummaryAggregation.mockResolvedValue([
+        {
+          productId: 'p1',
+          warehouseId: 'wh-1',
+          warehouseName: 'Gudang Utama',
+          productName: 'Kopi Susu',
+          sku: 'KS-01',
+          categoryName: 'Minuman',
+          quantity: 10,
+          reservedQuantity: 2,
+          availableQuantity: 8,
+          minLevel: 5,
+          maxLevel: 100,
+          costPrice: 5000,
+          value: 50000,
+          lowStock: false,
+        },
+      ]);
+      aggregation.getStockMovementTotalsAggregation.mockResolvedValue([
+        { productId: 'p1', warehouseId: 'wh-1', type: 'in', total: 8 },
+        { productId: 'p1', warehouseId: 'wh-1', type: 'out', total: 3 },
+      ]);
+
+      const result = await service.getInventorySummary(TENANT_ID, '2026-08-01', '2026-08-31');
+
+      expect(aggregation.getInventorySummaryAggregation).toHaveBeenCalledWith(TENANT_ID);
+      expect(aggregation.getStockMovementTotalsAggregation).toHaveBeenCalledWith(
+        TENANT_ID,
+        '2026-08-01',
+        '2026-08-31',
+      );
+      expect(result.dateFrom).toBe('2026-08-01');
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].movements).toEqual({
+        in: 8,
+        out: 3,
+        adjustment: 0,
+        void: 0,
+        reserve: 0,
+        release: 0,
+      });
+      expect(result.totals.totalItems).toBe(10);
+      expect(result.totals.totalValue).toBe(50000);
+      expect(result.lowStockCount).toBe(0);
+      expect(typeof result.generatedAt).toBe('string');
+    });
+
+    it('marks low stock items and computes value from costPrice', async () => {
+      aggregation.getInventorySummaryAggregation.mockResolvedValue([
+        {
+          productId: 'p1',
+          warehouseId: 'wh-1',
+          warehouseName: 'Gudang Utama',
+          productName: 'Teh Manis',
+          sku: 'TM-01',
+          categoryName: 'Minuman',
+          quantity: 3,
+          reservedQuantity: 0,
+          availableQuantity: 3,
+          minLevel: 5,
+          maxLevel: 100,
+          costPrice: 2000,
+          value: 6000,
+          lowStock: true,
+        },
+      ]);
+      aggregation.getStockMovementTotalsAggregation.mockResolvedValue([]);
+
+      const result = await service.getInventorySummary(TENANT_ID);
+
+      expect(result.items[0].lowStock).toBe(true);
+      expect(result.lowStockCount).toBe(1);
+      expect(result.totals.totalValue).toBe(6000);
     });
   });
 });

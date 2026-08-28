@@ -554,7 +554,7 @@ export class ReportExportService {
       for (const r of rows) {
         tableRows.push([
           `   ${r.warehouseName || r.warehouseId}`,
-          r.productName || '',
+          '',
           r.quantity,
           r.reservedQuantity,
           r.availableQuantity,

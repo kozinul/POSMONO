@@ -14,6 +14,7 @@ describe('Stock', () => {
       expect(data.reservedQuantity).toBe(0);
       expect(data.minLevel).toBe(5);
       expect(data.maxLevel).toBe(100);
+      expect(data.costPrice).toBe(0);
       expect(data.updatedAt).toBeInstanceOf(Date);
     });
   });
@@ -111,6 +112,40 @@ describe('Stock', () => {
     });
   });
 
+  describe('costPrice', () => {
+    it('computes moving average on positive adjust with unit cost', () => {
+      const stock = Stock.create(validStockInput);
+      stock.adjust(50, 'Restock', 10000);
+
+      expect(stock.serialize().quantity).toBe(100);
+      expect(stock.serialize().costPrice).toBe(5000);
+    });
+
+    it('keeps cost unchanged when unit cost equals current average', () => {
+      const stock = Stock.create({ ...validStockInput, costPrice: 5000 });
+      stock.adjust(50, 'Restock', 5000);
+
+      expect(stock.serialize().quantity).toBe(100);
+      expect(stock.serialize().costPrice).toBe(5000);
+    });
+
+    it('does not change cost on negative delta', () => {
+      const stock = Stock.create({ ...validStockInput, costPrice: 5000 });
+      stock.adjust(-10, 'Sold');
+
+      expect(stock.serialize().quantity).toBe(40);
+      expect(stock.serialize().costPrice).toBe(5000);
+    });
+
+    it('rounds cost to 2 decimal places', () => {
+      const stock = Stock.create({ ...validStockInput, costPrice: 3333 });
+      stock.adjust(1, 'Restock', 5000);
+      const expected = Math.round((50 * 3333 + 5000) / 51 * 100) / 100;
+
+      expect(stock.serialize().costPrice).toBe(expected);
+    });
+  });
+
   describe('serialize', () => {
     it('returns all stock properties', () => {
       const stock = Stock.create(validStockInput);
@@ -124,6 +159,7 @@ describe('Stock', () => {
       expect(data).toHaveProperty('reservedQuantity');
       expect(data).toHaveProperty('minLevel');
       expect(data).toHaveProperty('maxLevel');
+      expect(data).toHaveProperty('costPrice');
       expect(data).toHaveProperty('updatedAt');
     });
   });

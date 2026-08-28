@@ -15,7 +15,14 @@ describe('StockMovement', () => {
       expect(data.afterQuantity).toBe(50);
       expect(data.referenceType).toBe('purchase_order');
       expect(data.userId).toBe('user-1');
+      expect(data.unitCost).toBe(0);
       expect(data.createdAt).toBeInstanceOf(Date);
+    });
+
+    it('stores unitCost when provided', () => {
+      const movement = StockMovement.create({ ...validStockMovementInput, unitCost: 7500 });
+
+      expect(movement.serialize().unitCost).toBe(7500);
     });
   });
 
@@ -47,6 +54,7 @@ describe('StockMovement', () => {
       expect(data).toHaveProperty('referenceId');
       expect(data).toHaveProperty('notes');
       expect(data).toHaveProperty('userId');
+      expect(data).toHaveProperty('unitCost');
       expect(data).toHaveProperty('createdAt');
     });
   });

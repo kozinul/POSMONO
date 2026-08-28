@@ -138,6 +138,25 @@ describe('InventoryService', () => {
       expect(savedStock.serialize().warehouseId).toBe('wh-active');
     });
 
+    it('computes moving-average costPrice and records unitCost movement', async () => {
+      const existing = Stock.create({ tenantId: TENANT_ID, productId: 'p1', variantId: null, warehouseId: 'wh-1', quantity: 10, reservedQuantity: 0, minLevel: 5, maxLevel: 100, costPrice: 5000 });
+      stockRepo.findByProduct.mockResolvedValue(existing);
+      warehouseRepo.findActiveByTenant.mockResolvedValue([]);
+
+      const stock = await service.stockIn({
+        tenantId: TENANT_ID,
+        productId: 'p1',
+        quantity: 10,
+        costPrice: 10000,
+      });
+
+      expect(stock.serialize().quantity).toBe(20);
+      expect(stock.serialize().costPrice).toBe(7500);
+      const savedMovement = movementRepo.save.mock.calls[0][0] as StockMovement;
+      expect(savedMovement.serialize().unitCost).toBe(10000);
+      expect(savedMovement.serialize().type).toBe('in');
+    });
+
     it('publishes domain events', async () => {
       stockRepo.findByProduct.mockResolvedValue(null);
       warehouseRepo.findActiveByTenant.mockResolvedValue([]);
@@ -230,6 +249,24 @@ describe('InventoryService', () => {
       expect(stock.serialize().quantity).toBe(25);
       expect(stockRepo.save).toHaveBeenCalledTimes(1);
       expect(movementRepo.save).toHaveBeenCalledTimes(1);
+    });
+
+    it('updates costPrice with unit cost on positive delta', async () => {
+      const existing = Stock.create({ tenantId: TENANT_ID, productId: 'p1', variantId: null, warehouseId: 'wh-1', quantity: 10, reservedQuantity: 0, minLevel: 5, maxLevel: 100, costPrice: 5000 });
+      stockRepo.findByProduct.mockResolvedValue(existing);
+      warehouseRepo.findActiveByTenant.mockResolvedValue([]);
+
+      const stock = await service.adjust({
+        tenantId: TENANT_ID,
+        productId: 'p1',
+        delta: 10,
+        reason: 'opname',
+        costPrice: 7000,
+      });
+
+      expect(stock.serialize().costPrice).toBe(6000);
+      const savedMovement = movementRepo.save.mock.calls[0][0] as StockMovement;
+      expect(savedMovement.serialize().unitCost).toBe(7000);
     });
   });
 
