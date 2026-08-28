@@ -1,5 +1,5 @@
 import { UseCase } from '../../../../@shared/application/UseCase';
-import { ValidationError } from '../../../../@shared/infrastructure/error/AppError';
+import { NotFoundError, ValidationError } from '../../../../@shared/infrastructure/error/AppError';
 import {
   Order,
   IOrderItem,
@@ -836,6 +836,70 @@ export class RecallOrderService implements UseCase<RecallOrderInput, Order> {
           });
         } catch {
           // Stock release is best-effort; don't block recall
+        }
+      }
+    }
+
+    for (const event of order.domainEvents) {
+      this.eventBus.publish(event);
+    }
+
+    return order;
+  }
+}
+
+export interface CloseBillInput {
+  id: string;
+  tenantId: string;
+  reason?: string;
+}
+
+/**
+ * Menutup bill yang belum dibayar (status draft/confirmed/held/proses) menjadi
+ * `cancelled` tanpa gating void-approval (tidak ada transaksi uang yang terlibat).
+ *
+ * Idempotent: order yang sudah paid/cancelled/voided/refunded dikembalikan apa
+ * adanya sebagai no-op, sehingga aman untuk retry.
+ */
+export class CloseBillService implements UseCase<CloseBillInput, Order> {
+  constructor(
+    private readonly orderRepository: any,
+    private readonly eventBus: any,
+    private readonly inventoryService?: any,
+  ) {}
+
+  async execute(input: CloseBillInput): Promise<Order> {
+    const order = await this.orderRepository.findById(input.id);
+    if (!order) throw new NotFoundError('Order not found');
+
+    const data = order.serialize();
+    if (data.tenantId !== input.tenantId) throw new NotFoundError('Order not found');
+
+    if (
+      data.paymentStatus === 'completed' ||
+      ['cancelled', 'voided', 'refunded'].includes(data.status)
+    ) {
+      return order;
+    }
+
+    const itemsToRelease = data.items;
+
+    order.cancel(input.reason ?? 'Bill ditutup');
+
+    await this.orderRepository.save(order);
+
+    if (this.inventoryService) {
+      for (const item of itemsToRelease) {
+        if (item.isFreeItem || item.quantity <= 0) continue;
+        try {
+          await this.inventoryService.releaseStock({
+            tenantId: data.tenantId,
+            productId: item.productId,
+            quantity: item.quantity,
+            referenceId: data.id,
+          });
+        } catch {
+          // Stock release is best-effort; don't block the close
         }
       }
     }

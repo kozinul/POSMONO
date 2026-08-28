@@ -55,7 +55,7 @@ import { UserController } from '../core/identity/interfaces/http/controllers/Use
 import { PermissionController } from '../core/identity/interfaces/http/controllers/PermissionController';
 import { OrderSchema } from '../core/ordering/infrastructure/persistence/schemas/OrderSchema';
 import { MongoOrderRepository } from '../core/ordering/infrastructure/persistence/MongoOrderRepository';
-import { CreateOrderService, UpdateOrderService, ReplaceOrderItemsService, VoidOrderService, VoidItemService, PayOrderService, VoidPaymentService, ReopenOrderService, SplitItemService, RemoveItemService, UpdateItemQuantityService, VoidAndRollbackService, TopayService, RefundService, ApplyDiscountService, SetServiceChargeService, HoldOrderService, RecallOrderService } from '../core/ordering/application/services/OrderService';
+import { CreateOrderService, UpdateOrderService, ReplaceOrderItemsService, VoidOrderService, VoidItemService, PayOrderService, VoidPaymentService, ReopenOrderService, SplitItemService, RemoveItemService, UpdateItemQuantityService, VoidAndRollbackService, TopayService, RefundService, ApplyDiscountService, SetServiceChargeService, HoldOrderService, RecallOrderService, CloseBillService } from '../core/ordering/application/services/OrderService';
 import { VoidApprovalService } from '../core/ordering/application/services/VoidApprovalService';
 import { OrderController } from '../core/ordering/interfaces/http/controllers/OrderController';
 import { ShiftSchema } from '../core/pos/infrastructure/persistence/schemas/ShiftSchema';
@@ -563,6 +563,14 @@ export function buildContainer() {
         eventBus: container.resolve('eventBus'),
       }),
     }),
+    closeBillService: asClass(CloseBillService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        orderRepository: container.resolve('orderRepository'),
+        eventBus: container.resolve('eventBus'),
+        inventoryService: container.resolve('inventoryService'),
+      }),
+    }),
     orderController: asClass(OrderController, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
@@ -584,6 +592,7 @@ export function buildContainer() {
         setServiceChargeService: container.resolve('setServiceChargeService'),
         holdOrderService: container.resolve('holdOrderService'),
         recallOrderService: container.resolve('recallOrderService'),
+        closeBillService: container.resolve('closeBillService'),
         orderRepository: container.resolve('orderRepository'),
       }),
     }),

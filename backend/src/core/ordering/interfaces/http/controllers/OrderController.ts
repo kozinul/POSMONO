@@ -19,6 +19,7 @@ import {
   SetServiceChargeService,
   HoldOrderService,
   RecallOrderService,
+  CloseBillService,
 } from '../../../application/services/OrderService';
 import { MongoOrderRepository } from '../../../infrastructure/persistence/MongoOrderRepository';
 import { z } from 'zod';
@@ -85,6 +86,10 @@ const voidOrderSchema = z.object({
   reason: z.string().min(1, 'Reason is required'),
   voidedByName: z.string().min(1, 'Voided by name is required'),
   managerPin: z.string().regex(/^\d{4,6}$/, 'PIN must be 4-6 digits').optional(),
+});
+
+const closeBillSchema = z.object({
+  reason: z.string().optional(),
 });
 
 const voidItemSchema = z.object({
@@ -183,6 +188,7 @@ export class OrderController extends BaseController {
     private readonly setServiceChargeService: SetServiceChargeService,
     private readonly holdOrderService: HoldOrderService,
     private readonly recallOrderService: RecallOrderService,
+    private readonly closeBillService: CloseBillService,
     private readonly orderRepository: MongoOrderRepository,
   ) {
     super();
@@ -277,6 +283,19 @@ export class OrderController extends BaseController {
       voidedByName: parsed.data.voidedByName,
       reason: parsed.data.reason,
       managerPin: parsed.data.managerPin,
+    });
+
+    this.ok(res, order.serialize());
+  }
+
+  async closeBill(req: Request, res: Response): Promise<void> {
+    const parsed = closeBillSchema.safeParse(req.body);
+    if (!parsed.success) throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
+
+    const order = await this.closeBillService.execute({
+      id: req.params.id,
+      tenantId: req.tenantId,
+      reason: parsed.data.reason,
     });
 
     this.ok(res, order.serialize());

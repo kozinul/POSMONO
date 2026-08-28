@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { CreateOrderService, ReplaceOrderItemsService, HoldOrderService, VoidOrderService, VoidItemService, VoidAndRollbackService } from '../../src/core/ordering/application/services/OrderService';
+import { CreateOrderService, ReplaceOrderItemsService, HoldOrderService, VoidOrderService, VoidItemService, VoidAndRollbackService, CloseBillService } from '../../src/core/ordering/application/services/OrderService';
 import { validOrderInput, validPaymentBreakdown } from '../fixtures/ordering.fixtures';
 
 function createMockRepo() {
@@ -435,5 +435,135 @@ describe('VoidAndRollbackService', () => {
         quantity: 2,
       }),
     );
+  });
+});
+
+describe('CloseBillService', () => {
+  function createService() {
+    let saved: any = null;
+    const orderRepo = {
+      save: vi.fn((order: any) => {
+        saved = order;
+      }),
+      findById: vi.fn(() => saved),
+    };
+    const eventBus = { publish: vi.fn() };
+    const inventoryService = {
+      restockForVoid: vi.fn().mockResolvedValue(undefined),
+      releaseStock: vi.fn().mockResolvedValue(undefined),
+    };
+    return { orderRepo, eventBus, inventoryService };
+  }
+
+  it('cancels an unpaid held bill and releases the reserved stock', async () => {
+    const { orderRepo, eventBus, inventoryService } = createService();
+    const created = await new CreateOrderService(orderRepo, eventBus).execute(validOrderInput);
+    const held = await new HoldOrderService(orderRepo, eventBus, inventoryService).execute({ id: created.id.toValue() });
+    expect(held.serialize().status).toBe('held');
+
+    const closeService = new CloseBillService(orderRepo, eventBus, inventoryService);
+    const closed = await closeService.execute({
+      id: created.id.toValue(),
+      tenantId: 'tenant-test-1',
+      reason: 'Bill ditutup setelah pembayaran',
+    });
+
+    expect(closed.serialize().status).toBe('cancelled');
+    expect(closed.serialize().paymentStatus).toBe('pending');
+    expect(orderRepo.save).toHaveBeenCalledWith(closed);
+    expect(inventoryService.releaseStock).toHaveBeenCalledWith({
+      tenantId: 'tenant-test-1',
+      productId: 'product-1',
+      quantity: 2,
+      referenceId: created.id.toValue(),
+    });
+    expect(inventoryService.restockForVoid).not.toHaveBeenCalled();
+    const cancelledEvents = closed.domainEvents.filter((e) => e.eventName === 'ordering.order.cancelled');
+    expect(cancelledEvents).toHaveLength(1);
+  });
+
+  it('is a no-op for an already paid order', async () => {
+    const { orderRepo, eventBus, inventoryService } = createService();
+    const created = await new CreateOrderService(orderRepo, eventBus).execute(validOrderInput);
+    created.pay(validPaymentBreakdown, 'cashier-1', 'Kasir 1');
+    orderRepo.save.mockClear();
+    eventBus.publish.mockClear();
+
+    const closeService = new CloseBillService(orderRepo, eventBus, inventoryService);
+    const result = await closeService.execute({
+      id: created.id.toValue(),
+      tenantId: 'tenant-test-1',
+    });
+
+    expect(result.serialize().status).toBe('paid');
+    expect(orderRepo.save).not.toHaveBeenCalled();
+    expect(inventoryService.releaseStock).not.toHaveBeenCalled();
+    expect(eventBus.publish).not.toHaveBeenCalled();
+  });
+
+  it('is a no-op for an already cancelled order', async () => {
+    const { orderRepo, eventBus, inventoryService } = createService();
+    const created = await new CreateOrderService(orderRepo, eventBus).execute(validOrderInput);
+    created.cancel('sudah dibatalkan');
+    orderRepo.save.mockClear();
+    eventBus.publish.mockClear();
+
+    const closeService = new CloseBillService(orderRepo, eventBus, inventoryService);
+    const result = await closeService.execute({
+      id: created.id.toValue(),
+      tenantId: 'tenant-test-1',
+    });
+
+    expect(result.serialize().status).toBe('cancelled');
+    expect(orderRepo.save).not.toHaveBeenCalled();
+    expect(inventoryService.releaseStock).not.toHaveBeenCalled();
+    expect(eventBus.publish).not.toHaveBeenCalled();
+  });
+
+  it('skips free items when releasing stock', async () => {
+    const { orderRepo, eventBus, inventoryService } = createService();
+    const created = await new CreateOrderService(orderRepo, eventBus).execute({
+      ...validOrderInput,
+      items: [{ ...validOrderInput.items[0], isFreeItem: true }],
+    });
+
+    const closeService = new CloseBillService(orderRepo, eventBus, inventoryService);
+    await closeService.execute({
+      id: created.id.toValue(),
+      tenantId: 'tenant-test-1',
+    });
+
+    expect(inventoryService.releaseStock).not.toHaveBeenCalled();
+  });
+
+  it('does not fail when stock release throws (best-effort)', async () => {
+    const { orderRepo, eventBus, inventoryService } = createService();
+    inventoryService.releaseStock.mockRejectedValue(new Error('db down'));
+    const created = await new CreateOrderService(orderRepo, eventBus).execute(validOrderInput);
+
+    const closeService = new CloseBillService(orderRepo, eventBus, inventoryService);
+    await expect(
+      closeService.execute({ id: created.id.toValue(), tenantId: 'tenant-test-1' }),
+    ).resolves.toMatchObject({ status: 'cancelled' });
+  });
+
+  it('throws when the order is not found', async () => {
+    const { orderRepo, eventBus, inventoryService } = createService();
+    orderRepo.findById.mockReturnValue(null);
+
+    const closeService = new CloseBillService(orderRepo, eventBus, inventoryService);
+    await expect(
+      closeService.execute({ id: 'missing', tenantId: 'tenant-test-1' }),
+    ).rejects.toThrow('Order not found');
+  });
+
+  it('throws when the order belongs to another tenant', async () => {
+    const { orderRepo, eventBus, inventoryService } = createService();
+    const created = await new CreateOrderService(orderRepo, eventBus).execute(validOrderInput);
+
+    const closeService = new CloseBillService(orderRepo, eventBus, inventoryService);
+    await expect(
+      closeService.execute({ id: created.id.toValue(), tenantId: 'tenant-test-2' }),
+    ).rejects.toThrow('Order not found');
   });
 });

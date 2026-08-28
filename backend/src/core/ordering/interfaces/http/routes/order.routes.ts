@@ -12,6 +12,7 @@ export function createOrderRoutes(orderController: OrderController): Router {
   router.put('/:id', authenticate, asyncHandler(orderController.update.bind(orderController)));
   router.post('/:id/pay', authenticate, asyncHandler(orderController.pay.bind(orderController)));
   router.post('/:id/void', authenticate, asyncHandler(orderController.voidOrder.bind(orderController)));
+  router.post('/:id/close-bill', authenticate, asyncHandler(orderController.closeBill.bind(orderController)));
   router.post('/:id/void-item', authenticate, asyncHandler(orderController.voidItem.bind(orderController)));
   router.post('/:id/void-payment', authenticate, asyncHandler(orderController.voidPayment.bind(orderController)));
   router.post('/:id/void-rollback', authenticate, asyncHandler(orderController.voidAndRollback.bind(orderController)));

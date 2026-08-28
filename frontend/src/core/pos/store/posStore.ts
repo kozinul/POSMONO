@@ -656,10 +656,9 @@ export const usePOSStore = create<POSState>((set, get) => ({
     });
 
     if (!billId.startsWith('hold-')) {
-      const userName = useAuthStore.getState().user?.displayName || 'Kasir';
       api
-        .post(`/orders/${billId}/void`, { reason: 'Bill ditutup tanpa pembayaran', voidedByName: userName })
-        .catch(() => {});
+        .post(`/orders/${billId}/close-bill`, { reason: 'Bill ditutup tanpa pembayaran' })
+        .catch((err) => console.warn('[cancelActiveBill] gagal menutup bill', billId, err));
     }
   },
 
@@ -702,10 +701,11 @@ export const usePOSStore = create<POSState>((set, get) => ({
     }));
 
     if (!billId.startsWith('hold-')) {
-      const userName = useAuthStore.getState().user?.displayName || 'Kasir';
-      api
-        .post(`/orders/${billId}/void`, { reason: 'Bill ditutup setelah pembayaran', voidedByName: userName })
-        .catch(() => {});
+      try {
+        await api.post(`/orders/${billId}/close-bill`, { reason: 'Bill ditutup setelah pembayaran' });
+      } catch (err) {
+        console.warn('[closeBillAfterPayment] gagal menutup bill di server', billId, err);
+      }
     }
   },
 
@@ -714,6 +714,12 @@ export const usePOSStore = create<POSState>((set, get) => ({
       heldOrders: s.heldOrders.filter((o) => o.id !== orderId),
       dismissedHeldOrderIds: s.dismissedHeldOrderIds.includes(orderId) ? s.dismissedHeldOrderIds : [...s.dismissedHeldOrderIds, orderId],
     }));
+
+    if (!orderId.startsWith('hold-')) {
+      api
+        .post(`/orders/${orderId}/close-bill`, { reason: 'Bill dibuang dari Daftar Bill' })
+        .catch((err) => console.warn('[dismissHeldOrder] gagal menutup bill di server', orderId, err));
+    }
   },
 
   mergeHeldOrders: (orders) => {
