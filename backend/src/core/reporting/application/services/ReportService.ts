@@ -18,8 +18,8 @@ export class ReportService {
     private readonly reportAggregation: ReportAggregation,
   ) {}
 
-  async getDashboardSummary(tenantId: string) {
-    const summary = await this.orderRepository.getSummary(tenantId);
+  async getDashboardSummary(tenantId: string, cashierId?: string) {
+    const summary = await this.orderRepository.getSummary(tenantId, cashierId);
 
     const recentOrders = await this.orderRepository.findByTenant(tenantId, {
       limit: 5,

@@ -124,7 +124,7 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-sm font-medium text-gray-500">Bill Ditahan</h3>
+          <h3 className="text-sm font-medium text-gray-500">Open Bill</h3>
           <p className="mt-2 text-3xl font-bold text-orange-600">
             {summary?.pendingOrders ?? 0}
           </p>

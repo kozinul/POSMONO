@@ -22,7 +22,7 @@ export class ReportController extends BaseController {
   }
 
   async dashboard(req: Request, res: Response): Promise<void> {
-    const result = await this.reportService.getDashboardSummary(req.tenantId);
+    const result = await this.reportService.getDashboardSummary(req.tenantId, req.userId);
     this.ok(res, result);
   }
 

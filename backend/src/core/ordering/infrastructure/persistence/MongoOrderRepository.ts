@@ -235,7 +235,7 @@ export class MongoOrderRepository {
     };
   }
 
-  async getSummary(tenantId: string): Promise<{
+  async getSummary(tenantId: string, cashierId?: string): Promise<{
     todayRevenue: number;
     todayOrders: number;
     totalRounding: number;
@@ -267,10 +267,9 @@ export class MongoOrderRepository {
       },
     ]);
 
-    const pendingCount = await this.model.countDocuments({
-      tenantId,
-      status: 'held',
-    });
+    const pendingMatch: Record<string, unknown> = { tenantId, status: 'held' };
+    if (cashierId) pendingMatch.cashierId = cashierId;
+    const pendingCount = await this.model.countDocuments(pendingMatch);
 
     return {
       todayRevenue: todayAgg?.totalRevenue || 0,
