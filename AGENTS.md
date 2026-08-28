@@ -215,6 +215,16 @@ Modular SaaS POS Platform (Node.js/Express + React/Tailwind). Multi-tenant, mult
 - **Catatan**: bill stuck lama tak punya link ke order pembayarannya → dibersihkan via tombol × Daftar Bill (close-bill) atau otomatis saat dibayar lagi; `carriedOverBills` shift tertutup tetap snapshot
 - **Tests**: `OrderService.test.ts` +7 (`CloseBillService`: held→cancelled+release, paid no-op, cancelled no-op, free-item skip, release best-effort, not-found, tenant mismatch); backend services 237/237 pass; frontend 79/79 + tsc + vite build OK
 
+### Void Dead Code Cleanup — 2026-08-28
+- Menghapus jalur void cart/bill yang **tidak dipakai UI**: `voidItemOnBill` + `voidActiveBill` (posStore store action + interface) dan `handleVoidItem`/`submitVoidItem`/`voidTarget`/`paidItemIndex` (PosPage.tsx + modal voidTarget)
+- Void item/order aktif hanya lewat **Daftar Transaksi** (`viewTransaction` → `useVoidOrder`/`useVoidItem`); bill unpaid dibersihkan via `/close-bill`
+- Tests: `posStore.test.ts` −7 (test voidItemOnBill/voidActiveBill dihapus); frontend 72/72 pass; tsc + vite build OK
+
+### Finance Report Double-Count Diskon Fix — 2026-08-28
+- **Gejala**: Laporan Keuangan menampilkan Diskon 2× (misal diskon 5.000 → 10.000)
+- **Root cause**: `getFinanceAggregation` menjumlah `$add: [$discount, $discountTotal]`, padahal kedua field selalu diisi nilai identik (`payCash` PaymentService, `CreateOrderService`, `Order.recalculateTotals`). `$add` awalnya untuk order lama (pre-`discountTotal`, 2026-07-21) yang salah satu field null → `$ifNull`=0 → benar; tapi data baru keduanya sama → dobel
+- **Fix**: `$sum: { $max: [$discount, $discountTotal] }` di ReportAggregation.ts (generik untuk data lama & baru; diskon non-negative via zod)
+
 ### Pending Work (belum dieksekusi) — 2026-08-23
 - **Carried Bills UX** (tutup/buka shift): rencana lengkap di `docs/CARRIED_BILLS_SHIFT_PLAN.md` — endpoint `GET /shifts/carried-bills` + daftar bill di dialog Tutup Shift + banner di OpenShiftModal; keputusan user: info-only (tidak masuk Kas Diharapkan), daftar lengkap di dialog tutup, banner non-blocking di buka
 - **QRIS checkStatus contract fix**: gateway aktual pakai `/restapi/qris/checkpaid_qris.php?do=checkStatus&invid=&trxvalue=&trxdate=&mID=` — belum diimplementasikan; detail & implikasi (perlu mapping persisten invid/trxvalue/trxdate) di `docs/QRIS_GATEWAY_PLAN.md` §10
