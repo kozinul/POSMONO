@@ -756,6 +756,8 @@ export function buildContainer() {
         productModel: ProductModel,
         paymentModel: PaymentModel,
         refundModel: RefundModel,
+        stockModel: StockModel,
+        stockMovementModel: StockMovementModel,
       }),
     }),
     reportService: asClass(ReportService, {

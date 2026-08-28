@@ -491,6 +491,136 @@ export class ReportExportService {
     return this.build(doc, format, `penjualan-per-kasir-${dateFrom}-${dateTo}`);
   }
 
+  async exportInventorySummary(
+    tenantId: string,
+    dateFrom?: string,
+    dateTo?: string,
+    format: ReportExportFormat = 'pdf',
+  ): Promise<ReportFile> {
+    const data = await this.reportService.getInventorySummary(tenantId, dateFrom, dateTo);
+    const dateLabel = dateFrom && dateTo ? `Periode: ${dateFrom} s/d ${dateTo}` : 'Kondisi stok saat ini';
+
+    interface Item {
+      productId: string;
+      warehouseId: string;
+      warehouseName?: string;
+      productName?: string;
+      sku?: string;
+      categoryName?: string;
+      quantity: number;
+      reservedQuantity: number;
+      availableQuantity: number;
+      minLevel: number;
+      costPrice: number;
+      value: number;
+      lowStock: boolean;
+    }
+    const items = data.items as Item[];
+
+    const byProduct = new Map<string, Item[]>();
+    for (const it of items) {
+      const arr = byProduct.get(it.productId) ?? [];
+      arr.push(it);
+      byProduct.set(it.productId, arr);
+    }
+
+    const tableRows: (string | number)[][] = [];
+    const tableStyles: RowStyle[] = [];
+    let totalQty = 0;
+    let totalReserved = 0;
+    let totalAvailable = 0;
+    let totalValue = 0;
+
+    for (const [, rows] of byProduct) {
+      const first = rows[0];
+      const qtySum = rows.reduce((s, r) => s + r.quantity, 0);
+      const resSum = rows.reduce((s, r) => s + r.reservedQuantity, 0);
+      const availSum = rows.reduce((s, r) => s + r.availableQuantity, 0);
+      const valSum = rows.reduce((s, r) => s + r.value, 0);
+
+      tableRows.push([
+        `${first.productName || '(tanpa nama)'}${first.sku ? ` (${first.sku})` : ''}${first.categoryName ? ` · ${first.categoryName}` : ''}`,
+        '',
+        qtySum,
+        resSum,
+        availSum,
+        '',
+        '',
+        valSum,
+        '',
+      ]);
+      tableStyles.push('group');
+
+      for (const r of rows) {
+        tableRows.push([
+          `   ${r.warehouseName || r.warehouseId}`,
+          r.productName || '',
+          r.quantity,
+          r.reservedQuantity,
+          r.availableQuantity,
+          r.minLevel,
+          r.costPrice,
+          r.value,
+          r.lowStock ? 'MENIPIS' : '',
+        ]);
+        tableStyles.push('detail');
+      }
+
+      tableRows.push([
+        `Subtotal ${first.productName || '(tanpa nama)'}`,
+        '',
+        qtySum,
+        resSum,
+        availSum,
+        '',
+        '',
+        valSum,
+        '',
+      ]);
+      tableStyles.push('subtotal');
+
+      totalQty += qtySum;
+      totalReserved += resSum;
+      totalAvailable += availSum;
+      totalValue += valSum;
+    }
+
+    const doc: ReportDoc = {
+      title: 'Ringkasan Stok',
+      subtitle: `${dateLabel} · ${data.lowStockCount} produk menipis`,
+      tables: [
+        {
+          columns: [
+            { label: 'Produk', flex: 3, align: 'left' },
+            { label: 'Gudang', flex: 1.8, align: 'left' },
+            { label: 'Stok', flex: 1, align: 'center' },
+            { label: 'Reserved', flex: 1, align: 'center' },
+            { label: 'Tersedia', flex: 1, align: 'center' },
+            { label: 'Min', flex: 1, align: 'center' },
+            { label: 'HPP', flex: 1.5, align: 'right', money: true },
+            { label: 'Nilai', flex: 1.5, align: 'right', money: true },
+            { label: 'Status', flex: 1.2, align: 'left' },
+          ],
+          rows: tableRows,
+          rowStyles: tableStyles,
+          totals: [
+            'Total',
+            '',
+            totalQty,
+            totalReserved,
+            totalAvailable,
+            '',
+            '',
+            Math.round(totalValue * 100) / 100,
+            '',
+          ],
+        },
+      ],
+    };
+
+    return this.build(doc, format, `laporan-ringkasan-stok-${dateTo ?? 'now'}`);
+  }
+
   async exportRefunds(
     tenantId: string,
     dateFrom: string,

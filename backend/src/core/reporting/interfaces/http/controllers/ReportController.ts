@@ -172,6 +172,32 @@ export class ReportController extends BaseController {
     this.ok(res, result);
   }
 
+  async inventorySummary(req: Request, res: Response): Promise<void> {
+    const { dateFrom, dateTo } = req.query;
+    const result = await this.reportService.getInventorySummary(
+      req.tenantId,
+      dateFrom ? (dateFrom as string) : undefined,
+      dateTo ? (dateTo as string) : undefined,
+    );
+    this.ok(res, result);
+  }
+
+  async exportInventorySummary(req: Request, res: Response): Promise<void> {
+    const { dateFrom, dateTo, format } = req.query;
+    const f = this.resolveFormat(format);
+    if (!f) {
+      res.status(400).json({ success: false, message: 'format must be pdf or xlsx' });
+      return;
+    }
+    const file = await this.reportExportService.exportInventorySummary(
+      req.tenantId,
+      dateFrom ? (dateFrom as string) : undefined,
+      dateTo ? (dateTo as string) : undefined,
+      f,
+    );
+    this.sendFile(res, file);
+  }
+
   async exportDaily(req: Request, res: Response): Promise<void> {
     const { date, format } = req.query;
     if (!date) {

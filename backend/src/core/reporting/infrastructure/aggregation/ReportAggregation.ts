@@ -13,6 +13,8 @@ export class ReportAggregation {
     private readonly productModel: Model<any>,
     private readonly paymentModel: Model<any>,
     private readonly refundModel?: Model<any>,
+    private readonly stockModel?: Model<any>,
+    private readonly stockMovementModel?: Model<any>,
   ) {}
 
   async getDailySalesAggregation(tenantId: string, date: string) {
@@ -897,5 +899,117 @@ export class ReportAggregation {
     ]);
 
     return result;
+  }
+
+  async getInventorySummaryAggregation(tenantId: string) {
+    if (!this.stockModel) return [];
+
+    const rows = await this.stockModel.aggregate([
+      { $match: { tenantId } },
+      {
+        $lookup: {
+          from: 'products',
+          localField: 'productId',
+          foreignField: '_id',
+          as: 'product',
+        },
+      },
+      { $unwind: { path: '$product', preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: 'categories',
+          localField: 'product.categoryId',
+          foreignField: '_id',
+          as: 'category',
+        },
+      },
+      { $unwind: { path: '$category', preserveNullAndEmptyArrays: true } },
+      {
+        $lookup: {
+          from: 'warehouses',
+          localField: 'warehouseId',
+          foreignField: '_id',
+          as: 'warehouse',
+        },
+      },
+      { $unwind: { path: '$warehouse', preserveNullAndEmptyArrays: true } },
+      { $sort: { 'product.name': 1, warehouseId: 1 } },
+      {
+        $project: {
+          productId: 1,
+          warehouseId: 1,
+          warehouseName: { $ifNull: ['$warehouse.name', ''] },
+          productName: { $ifNull: ['$product.name', ''] },
+          sku: { $ifNull: ['$product.sku', ''] },
+          categoryName: { $ifNull: ['$category.name', ''] },
+          quantity: 1,
+          reservedQuantity: { $ifNull: ['$reservedQuantity', 0] },
+          minLevel: { $ifNull: ['$minLevel', 0] },
+          maxLevel: { $ifNull: ['$maxLevel', 0] },
+          costPrice: { $ifNull: ['$costPrice', 0] },
+        },
+      },
+    ]);
+
+    return rows.map((r: any) => {
+      const quantity = r.quantity ?? 0;
+      const reserved = r.reservedQuantity ?? 0;
+      return {
+        productId: String(r.productId),
+        warehouseId: String(r.warehouseId),
+        warehouseName: r.warehouseName ?? '',
+        productName: r.productName ?? '',
+        sku: r.sku ?? '',
+        categoryName: r.categoryName ?? '',
+        quantity,
+        reservedQuantity: reserved,
+        availableQuantity: quantity - reserved,
+        minLevel: r.minLevel ?? 0,
+        maxLevel: r.maxLevel ?? 0,
+        costPrice: r.costPrice ?? 0,
+        value: Math.round(quantity * (r.costPrice ?? 0) * 100) / 100,
+        lowStock: quantity <= (r.minLevel ?? 0),
+      };
+    });
+  }
+
+  async getStockMovementTotalsAggregation(
+    tenantId: string,
+    dateFrom?: string,
+    dateTo?: string,
+  ) {
+    if (!this.stockMovementModel) return [];
+
+    const match: any = { tenantId };
+    if (dateFrom || dateTo) {
+      match.createdAt = {};
+      if (dateFrom) {
+        const from = new Date(dateFrom);
+        from.setHours(0, 0, 0, 0);
+        match.createdAt.$gte = from;
+      }
+      if (dateTo) {
+        const to = new Date(dateTo);
+        to.setHours(23, 59, 59, 999);
+        match.createdAt.$lte = to;
+      }
+    }
+
+    const rows = await this.stockMovementModel.aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: { productId: '$productId', warehouseId: '$warehouseId', type: '$type' },
+          total: { $sum: '$quantity' },
+        },
+      },
+    ]);
+
+    return rows.map((r: any) => ({
+      productId: String(r._id.productId),
+      warehouseId: String(r._id.warehouseId),
+      type: r._id.type,
+      total: r.total,
+    }));
   }
 }

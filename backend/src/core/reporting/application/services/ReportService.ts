@@ -276,4 +276,56 @@ export class ReportService {
   async getActiveCashiers(tenantId: string) {
     return this.reportAggregation.getActiveCashiersAggregation(tenantId);
   }
+
+  async getInventorySummary(tenantId: string, dateFrom?: string, dateTo?: string) {
+    const [rows, movements] = await Promise.all([
+      this.reportAggregation.getInventorySummaryAggregation(tenantId),
+      this.reportAggregation.getStockMovementTotalsAggregation(tenantId, dateFrom, dateTo),
+    ]);
+
+    const movementMap = new Map<
+      string,
+      { in: number; out: number; adjustment: number; void: number; reserve: number; release: number }
+    >();
+    for (const m of movements) {
+      const key = `${m.productId}:${m.warehouseId}`;
+      const entry = movementMap.get(key) ?? { in: 0, out: 0, adjustment: 0, void: 0, reserve: 0, release: 0 };
+      if (m.type === 'in') entry.in += m.total;
+      else if (m.type === 'out') entry.out += m.total;
+      else if (m.type === 'adjustment') entry.adjustment += m.total;
+      else if (m.type === 'void') entry.void += m.total;
+      else if (m.type === 'reserve') entry.reserve += m.total;
+      else if (m.type === 'release') entry.release += m.total;
+      movementMap.set(key, entry);
+    }
+
+    const items = rows.map((r) => ({
+      ...r,
+      movements:
+        movementMap.get(`${r.productId}:${r.warehouseId}`) ??
+        { in: 0, out: 0, adjustment: 0, void: 0, reserve: 0, release: 0 },
+    }));
+
+    const totals = items.reduce(
+      (acc, i) => ({
+        totalItems: acc.totalItems + i.quantity,
+        totalReserved: acc.totalReserved + i.reservedQuantity,
+        totalAvailable: acc.totalAvailable + i.availableQuantity,
+        totalValue: acc.totalValue + i.value,
+      }),
+      { totalItems: 0, totalReserved: 0, totalAvailable: 0, totalValue: 0 },
+    );
+
+    return {
+      dateFrom: dateFrom ?? '',
+      dateTo: dateTo ?? '',
+      generatedAt: new Date().toISOString(),
+      items,
+      totals: {
+        ...totals,
+        totalValue: Math.round(totals.totalValue * 100) / 100,
+      },
+      lowStockCount: items.filter((i) => i.lowStock).length,
+    };
+  }
 }
