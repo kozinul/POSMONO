@@ -3,6 +3,7 @@ import { useOrders } from '../hooks/useOrders';
 import { VoidOrderModal } from '../components/VoidOrderModal';
 import { VoidItemModal } from '../components/VoidItemModal';
 import { VoidPayment } from '../components/VoidPayment';
+import { OrderDetailModal } from '../components/OrderDetailModal';
 import { formatCurrency } from '../../../@shared/utils/format';
 import type { Order } from '../hooks/useOrders';
 
@@ -20,6 +21,7 @@ const statusColors: Record<string, string> = {
 
 type ModalState =
   | { type: null }
+  | { type: 'detail'; order: Order }
   | { type: 'void-order'; order: Order }
   | { type: 'void-item'; order: Order }
   | { type: 'void-payment'; order: Order };
@@ -136,33 +138,42 @@ export default function OrderListPage() {
                         {new Date(order.createdAt).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </td>
                       <td className="px-6 py-4 text-right">
-                        {isVoidable && (
-                          <div className="flex items-center justify-end gap-1">
-                            <button
-                              onClick={() => setModal({ type: 'void-order', order })}
-                              className="px-2 py-1 text-[11px] font-medium text-red-700 bg-red-50 rounded hover:bg-red-100 transition-colors"
-                              title="Void entire order"
-                            >
-                              Void
-                            </button>
-                            <button
-                              onClick={() => setModal({ type: 'void-item', order })}
-                              className="px-2 py-1 text-[11px] font-medium text-orange-700 bg-orange-50 rounded hover:bg-orange-100 transition-colors"
-                              title="Void specific item"
-                            >
-                              Item
-                            </button>
-                            {hasPayment && (
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => setModal({ type: 'detail', order })}
+                            className="px-2 py-1 text-[11px] font-medium text-gray-700 bg-gray-50 rounded hover:bg-gray-100 transition-colors"
+                            title="Lihat item & struk"
+                          >
+                            Detail
+                          </button>
+                          {isVoidable && (
+                            <>
                               <button
-                                onClick={() => setModal({ type: 'void-payment', order })}
-                                className="px-2 py-1 text-[11px] font-medium text-yellow-700 bg-yellow-50 rounded hover:bg-yellow-100 transition-colors"
-                                title="Void payment"
+                                onClick={() => setModal({ type: 'void-order', order })}
+                                className="px-2 py-1 text-[11px] font-medium text-red-700 bg-red-50 rounded hover:bg-red-100 transition-colors"
+                                title="Void entire order"
                               >
-                                Bayar
+                                Void
                               </button>
-                            )}
-                          </div>
-                        )}
+                              <button
+                                onClick={() => setModal({ type: 'void-item', order })}
+                                className="px-2 py-1 text-[11px] font-medium text-orange-700 bg-orange-50 rounded hover:bg-orange-100 transition-colors"
+                                title="Void specific item"
+                              >
+                                Item
+                              </button>
+                              {hasPayment && (
+                                <button
+                                  onClick={() => setModal({ type: 'void-payment', order })}
+                                  className="px-2 py-1 text-[11px] font-medium text-yellow-700 bg-yellow-50 rounded hover:bg-yellow-100 transition-colors"
+                                  title="Void payment"
+                                >
+                                  Bayar
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -200,6 +211,9 @@ export default function OrderListPage() {
         )}
       </div>
 
+      {modal.type === 'detail' && (
+        <OrderDetailModal order={modal.order} onClose={() => setModal({ type: null })} />
+      )}
       {modal.type === 'void-order' && (
         <VoidOrderModal order={modal.order} onClose={() => setModal({ type: null })} />
       )}

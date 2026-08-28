@@ -41,6 +41,7 @@ interface Order {
   subtotal: number;
   discount: number;
   tax: number;
+  serviceCharge?: number;
   total: number;
   roundingAdjustment?: number;
   roundedPayable?: number;
