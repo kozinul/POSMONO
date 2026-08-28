@@ -249,8 +249,14 @@ Modular SaaS POS Platform (Node.js/Express + React/Tailwind). Multi-tenant, mult
 - **Frontend**: hook `useCarriedBills.ts` (queryKey `['carried-bills']`); `PosActionPanel.handleCloseShift` me-refetch via `queryClient.fetchQuery(['carried-bills'])` sebelum `Swal.fire` lalu menampilkan section "Bill Menggantung" (scrollable, per bill nomor+status+total, footer total, catatan "Tidak dihitung dalam Kas Diharapkan"); 0 bill → baris redup; `OpenShiftModal` banner amber "Ada N bill menggantung dari shift sebelumnya · Total Rp X" (sembunyi bila count 0 / fetch error — tidak memblokir buka shift)
 - **Tests**: `ShiftService.test.ts` +3 (intersect live, tanpa shift sebelumnya → 0, semua sudah dibayar → 0 tapi fromShift terisi); backend services/domain/src-core 789 pass; frontend 74/74; tsc backend/frontend bersih; vite build OK
 
+### QRIS checkStatus Contract Fix — 2026-08-28 (tandai selesai; commit `694b613b`)
+- Item pending lama ini ternyata **sudah diimplementasikan & ter-commit** sejak commit `694b613b` ("feat(dashboard): ... fix QRIS status check") — AGENTS.md tadi masih mencatatnya sebagai pending
+- **Kontrak asli gateway**: `GET /restapi/qris/checkpaid_qris.php?do=checkStatus&apikey&mID&invid=<INVOICE_ID>&trxvalue=<nominal>&trxdate=<YYYY-MM-DD>` — bukan tebakan awal `show_qris.php?do=check-status&cliTrxNumber`
+- **Mapping persisten**: collection `qris_invoices` (`QrisInvoice` domain + `QrisInvoiceSchema` unique `{tenantId, referenceNumber}` + `MongoQrisInvoiceRepository` upsert). `createInvoice` menyimpan `{tenantId, referenceNumber, invid (dari qris_invoiceid ?? invid ?? invoice_id ?? invoiceId), amount, trxDate}`; `checkStatus` membaca mapping lalu memanggil `checkpaid_qris.php` dengan `invid`/`trxvalue`/`trxdate`/`mID`, normalisasi status (paid/settlement/capture/00 dst.)
+- **Fallback**: record tanpa `invid` (invoice lawas / persist gagal) → `status:'unknown'` (bukan error). `callGateway(baseUrl, params, endpoint?)` — endpoint per-aksi
+- **Wiring**: `qrisInvoiceRepository` di `container.ts` → `qrisGatewayService` (systemConnection `QrisInvoiceModel`); test `QrisGatewayService.test.ts` assert path/param + fallback; `container.ts` resolve `qrisInvoiceRepository` di line ~657
+
 ### Pending Work (belum dieksekusi) — 2026-08-23
-- **QRIS checkStatus contract fix**: gateway aktual pakai `/restapi/qris/checkpaid_qris.php?do=checkStatus&invid=&trxvalue=&trxdate=&mID=` — belum diimplementasikan; detail & implikasi (perlu mapping persisten invid/trxvalue/trxdate) di `docs/QRIS_GATEWAY_PLAN.md` §10
 - **Ringkasan Stok works**: ⚠️ ringkasan langsung dari `ReportService.getInventorySummary` jumlah `/getStockMovementTotalsAggregation` (mode ranged) tidak mengurangi akumulasi historical — total `in/out` hanya untuk tanggal terpilih; total nilai = snapshot saat ini × costPrice saat ini (tidak historis
 
 ## Key Patterns

@@ -1,7 +1,7 @@
 # QRIS Gateway Integration — Status & Plan
 
-> Terakhir diperbarui: **2026-08-23** · Status: **COMMITTED** (`feat(qris)`) — backend, finalisasi pembayaran, frontend PaymentModal, Settings UI, semua test, dan docs (`API_REFERENCE.md`, `POS_CURRENT_FEATURES.md`) selesai. Simulator internal sudah dihapus — development memakai gateway eksternal di `http://host.docker.internal:3334` (§7).
-> ⚠️ **PENDING**: kontrak aktual endpoint cek status gateway (`checkpaid_qris.php` + `invid/trxvalue/trxdate`) belum diimplementasikan — lihat §10.
+> Terakhir diperbarui: **2026-08-28** · Status: **COMMITTED + FIXED** — backend, finalisasi pembayaran, frontend PaymentModal, Settings UI, semua test, dan docs (`API_REFERENCE.md`, `POS_CURRENT_FEATURES.md`) selesai. Simulator internal sudah dihapus — development memakai gateway eksternal di `http://host.docker.internal:3334` (§7).
+> ✅ **Kontrak cek status aktual sudah diimplementasikan** (commit `694b613b`): `checkpaid_qris.php?do=checkStatus&mID&invid&trxvalue&trxdate` + mapping persisten `qris_invoices` — lihat §10.
 > Dokumen ini adalah backup konteks jika sesi coding terputus — semua keputusan desain, kontrak API, dan daftar file tercantum di sini.
 
 ---
@@ -185,7 +185,7 @@ http://host.docker.internal:3334/restapi/qris/show_qris.php
 
 ---
 
-## 10. Kontrak Gateway Aktual untuk Cek Status — ⚠️ PENDING FIX (dilaporkan 2026-08-23, BELUM dieksekusi)
+## 10. Kontrak Gateway Aktual untuk Cek Status — ✅ SELESAI (commit `694b613b`)
 
 Kontrak asli endpoint cek status pembayaran dari gateway eksternal:
 
@@ -195,20 +195,19 @@ GET http://localhost:3334/restapi/qris/checkpaid_qris.php?do=checkStatus&apikey=
 
 (Backend POSMono tetap memanggil via `host.docker.internal:3334`, bukan `localhost`.)
 
-### Ketidaksesuaian dengan implementasi (`QrisGatewayService.checkStatus`, baris 97-114)
+### Implementasi final
 
-| Aspek | Implementasi sekarang | Kontrak gateway |
+| Aspek | Sebelum (ditebak) | Sesudah (fix) |
 |---|---|---|
 | Path | `/restapi/qris/show_qris.php` | `/restapi/qris/checkpaid_qris.php` |
 | `do` | `check-status` | `checkStatus` |
-| Referensi invoice | `cliTrxNumber=QRIS-xxx` (ref lokal) | `invid=<INVOICE_ID>` (invoice ID dari gateway) |
-| `mID` | tidak dikirim di checkStatus | wajib |
-| `trxvalue` | tidak dikirim | wajib (nominal transaksi) |
-| `trxdate` | tidak dikirim | wajib (`YYYY-MM-DD`) |
+| Referensi invoice | `cliTrxNumber=QRIS-xxx` (ref lokal) | `invid=<INVOICE_ID>` (dari gateway) |
+| `mID` | tidak dikirim | dikirim |
+| `trxvalue` | tidak dikirim | `amount` dari mapping |
+| `trxdate` | tidak dikirim | `YYYY-MM-DD` dari mapping |
 
-### Implikasi desain saat fix
-
-1. Karena param `invid` + `trxvalue` + `trxdate` bersifat verifikasi per-invoice, backend perlu **menyimpan mapping** `referenceNumber → { invid, amount, trxDate }` secara persisten (collection kecil, mis. `qris_invoices`) yang diisi saat `POST /qris/initiate` dan dibaca oleh `/qris/status/:ref` maupun `confirmQrisPayment`. Alternatif: jika create-invoice mengembalikan `invid` eksplisit di response, simpan field itu; kalau ternyata gateway menerima ref lokal sebagai `invid`, mapping tetap dibutuhkan untuk `trxvalue`/`trxdate`.
-2. `callGateway()` perlu menerima path endpoint per-aksi (tidak lagi hardcode `show_qris.php`).
-3. **Kontrak create-invoice & void/cancel juga belum dikonfirmasi** — kemungkinan besar beda param/endpoint juga. Minta/tanyakan contoh request-responsenya sebelum refactor supaya sekali jalan.
-4. File terdampak: `QrisGatewayService.ts` (+persistence baru bila perlu), `PaymentController.qrisStatus`, `container.ts` (wiring), test `QrisGatewayService.test.ts` (expect path `show_qris.php` di line 64 dst.), kemungkinan `PaymentService.qris.test.ts` (mock `checkStatus`).
+1. **Mapping persisten**: collection `qris_invoices` (`MongoQrisInvoiceRepository` + `QrisInvoiceSchema`, index unique `{tenantId, referenceNumber}`, upsert). Diisi saat `createInvoice` dari `data.qris_invoiceid ?? invid ?? invoice_id ?? invoiceId` + `amount` + `trxDate`; dibaca di `checkStatus`.
+2. **`callGateway(baseUrl, params, endpoint?)`** — endpoint kini param per-aksi (default `show_qris.php`, cek status pakai `checkpaid_qris.php`).
+3. **Fallback**: tanpa record/invid (invoice lawas atau persist gagal) → `status:'unknown'` (bukan error); polling lanjut menunggu.
+4. File terdampak: `QrisGatewayService.ts`, `MongoQrisInvoiceRepository.ts` (BARU), `QrisInvoice.ts` (BARU), `QrisInvoiceSchema.ts` (BARU), `container.ts` (wiring `qrisInvoiceRepository`), test `QrisGatewayService.test.ts` (assert path & param), `PaymentService.qris.test.ts`.
+5. Catatan: kontrak `create-invoice` & `void` masih `show_qris.php` (`do=create-invoice` / `do=void`, ref lokal `cliTrxNumber`) — pakai kontrak tersebut tanpa server gateway nyata; E2E manual dengan gateway eksternal belum dijalankan di env ini.
