@@ -558,6 +558,69 @@ Create a new order.
 
 **Response 201:** Full order object with generated `orderNumber`.
 
+### `POST /api/orders/:id/close-bill`
+
+Cancel an **unpaid** held bill (belum dibayar) — idempotent, tidak butuh PIN (bill unpaid tidak menyentuh uang). Dipakai POS dan halaman Orders untuk membersihkan bill yang nyangkut setelah dibayar/ganti shift. Melepas stok reserved (best-effort) dan mem-publish event `ordering.order.cancelled`.
+
+**Body:**
+```json
+{
+  "reason": "Bill tidak terbayar"
+}
+```
+`reason` opsional.
+
+**Behavior:**
+- Bill `status='held'` → `status='cancelled'` + release reserved stock.
+- Sudah dibayar / cancelled / voided / refunded → no-op (aman di-retry).
+- Tenant mismatch / tidak ditemukan → 404.
+
+### `POST /api/orders/:id/void`
+
+Void entire order. Approver harus punya `order:void` **atau** mengirim `managerPin` yang valid (`VoidApprovalService`).
+
+**Body:**
+```json
+{
+  "reason": "Kasir salah input",
+  "voidedByName": "Nama Kasir",
+  "managerPin": "123456"
+}
+```
+
+### `POST /api/orders/:id/void-item`
+
+Void satu item (opsional `quantity` untuk void parsial). Policy approval sama seperti void order.
+
+**Body:**
+```json
+{
+  "itemIndex": 0,
+  "quantity": 1,
+  "reason": "Salah menu",
+  "voidedByName": "Nama Kasir",
+  "managerPin": "123456"
+}
+```
+
+### `POST /api/orders/:id/void-payment`
+
+Void satu metode pembayaran pada order (kembali ke cart). Policy approval sama.
+
+**Body:**
+```json
+{
+  "paymentIndex": 0,
+  "reason": "Transaksi ganda",
+  "voidedByName": "Nama Kasir",
+  "managerPin": "123456"
+}
+```
+
+### `POST /api/orders/:id/apply-discount`
+
+Terapkan diskon ke order yang belum dibayar (draft/held). Body: `{ discountBreakdown: [{ id, name, type, amount, appliedTo }] }`.
+
 ---
 
 ## Shifts (`/api/shifts`)
@@ -966,6 +1029,11 @@ id, tenantId, email, displayName, roleId, isActive, lastLoginAt, createdAt, upda
 | 47 | GET | `/api/orders` | ✓ |
 | 48 | GET | `/api/orders/:id` | ✓ |
 | 49 | POST | `/api/orders` | ✓ |
+| 49b | POST | `/api/orders/:id/close-bill` | ✓ |
+| 49c | POST | `/api/orders/:id/void` | ✓ |
+| 49d | POST | `/api/orders/:id/void-item` | ✓ |
+| 49e | POST | `/api/orders/:id/void-payment` | ✓ |
+| 49f | POST | `/api/orders/:id/apply-discount` | ✓ |
 | 50 | GET | `/api/shifts` | ✓ |
 | 51 | GET | `/api/shifts/current` | ✓ |
 | 52 | POST | `/api/shifts/open` | ✓ |

@@ -633,9 +633,11 @@ families.view, families.edit
 | GET | `/api/orders` | ✅ | List orders (filter by date, outlet, status) |
 | GET | `/api/orders/report/daily` | ✅ admin | Daily sales report |
 | GET | `/api/orders/:id` | ✅ | Get order detail |
+| POST | `/api/orders/:id/close-bill` | ✅ | Cancel unpaid held bill (idempotent, tanpa PIN) |
 | POST | `/api/orders/:id/void` | ✅ | Void entire order |
 | POST | `/api/orders/:id/void-item` | ✅ | Void individual item |
 | POST | `/api/orders/:id/void-payment` | ✅ | Void payment (return to cart) |
+| POST | `/api/orders/:id/apply-discount` | ✅ | Apply discount ke order draft/held |
 | PUT | `/api/orders/:id/pay` | ✅ | Pay open bill |
 | PATCH | `/api/orders/:id/close-open` | ✅ | Close open bill |
 | POST | `/api/orders/:id/hold` | ✅ | Hold order (tahan pesanan) |
@@ -653,6 +655,8 @@ families.view, families.edit
 - **Void order**: batalkan seluruh transaksi (permission `order:void` → bypass; cashier wajib PIN manajer, sejak 2026-08-06)
 - **Void item**: batalkan item tertentu dalam transaksi (approval policy sama seperti void order)
 - **Void payment**: batalkan pembayaran, kembali ke cart (permission `payment:void` → bypass; cashier wajib PIN manajer)
+- **Close bill (selesai dibayar, 2026-08-28)**: bill belum dibayar ditutup via `POST /orders/:id/close-bill` (cancel, idempotent, tanpa PIN karena tidak menyentuh uang); menggantikan void fire-and-forget lama yang gagal diam-diam untuk kasir tanpa `order:void`.
+- **Order detail halaman Orders (2026-08-28)**: tombol **Detail** per baris pada `/orders` membuka `OrderDetailModal` (item + struk, penanda VOID + reason, breakdown pembayaran) dengan **Print Ulang** via jalur POS (`/print/receipt` → WebUSB/Bluetooth → server dispatch → `window.print()`).
 - **Open bill**: transaksi belum dibayar, bisa dilanjutkan nanti
 - **Customer name & table number**: field di atas cart, selalu terlihat
 - **Transaction types**: dine_in, takeaway, delivery, online
@@ -730,9 +734,10 @@ families.view, families.edit
 
 ### Business Logic
 - **Sales report**: total penjualan, jumlah transaksi, rata-rata per transaksi
-- **Finance report**: pendapatan bersih, pajak, service charge
+- **Finance report**: pendapatan bersih, pajak, service charge, **total diskon** ($max `discount`/`discountTotal` — sejak 2026-08-28 tidak lagi double-count)
 - **Cashier report**: per kasir, total transaksi, total penjualan
 - **Rounding di laporan**: daily/sales/finance/shift report mengembalikan `totalRounding` ($sum `roundingAdjustment`) — selisih pembulatan tunai; ditampilkan POS (`PosActionPanel`), `ReportPrintModal`, dan `ReportPage` bila ≠ 0
+- **Diskon laporan keuangan (fix 2026-08-28)**: `getFinanceAggregation` menghitung `totalDiscount` dengan `$sum: { $max: [discount, discountTotal] }`. Sebelumnya `$add` menjumlah kedua field yang nilainya identik → diskon tampil **2×** untuk order baru (hanya order lama pre-`discountTotal` yang kebetulan benar).
 
 ---
 

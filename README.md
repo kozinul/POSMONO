@@ -237,6 +237,18 @@ cd frontend && pnpm preview
 ### Backend — Void permission
 - Permission `order:void` / `payment:void` dapat diberikan ke role; cashier tanpa permission wajib memasukkan PIN manajer pada void (verifikasi supervisor).
 
+### Orders Dashboard — Detail Item & Print Ulang (v0.4.x)
+- **Halaman Orders (`/orders`)**: tombol **Detail** per baris membuka `OrderDetailModal` — tampilan struk berisi item yang di-order (qty, total, penanda VOID + alasan, modifiers), Subtotal/Diskon/SC/Pajak/Pembulatan/Total, rincian pembayaran & kembalian, serta "Rincian Void".
+- **Print Ulang**: memakai jalur print POS (`POST /api/print/receipt`) — WebUSB/Bluetooth client → server dispatch → fallback `window.print()`.
+- Tombol void (Void/Item/Bayar) tetap hanya untuk order `isVoidable`; tombol Detail tersedia untuk semua status.
+
+### Orders — Endpoint `close-bill` (2026-08-28)
+- `POST /api/orders/:id/close-bill` membatalkan bill **belum dibayar** (idempotent, tanpa PIN) — membersihkan bill nyangkut setelah dibayar/ganti shift. Void for-request lama (fire-and-forget tanpa `managerPin`) diganti jalur aman ini.
+- Dashboard "Open Bill" kini per-kasir (label "Open Bill").
+
+### Reporting — Fix Diskon Keuangan (2026-08-28)
+- Laporan Keuangan menampilkan **Diskon 2×** karena `getFinanceAggregation` menjumlah `$add: [$discount, $discountTotal]` (kedua field diisi identik). Diganti `$sum: { $max: [discount, discountTotal] }` — generik untuk order lama & baru.
+
 
 - [Arsitektur](docs/ARCHITECTURE.md)
 - [API Reference](docs/API_REFERENCE.md)
