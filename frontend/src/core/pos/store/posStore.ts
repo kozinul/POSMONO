@@ -2,7 +2,6 @@ import { create } from 'zustand';
 import type { IDiscountRule } from '../../../@shared/hooks/useDiscountConfiguration';
 import type { PricingResult } from '../../../@shared/hooks/usePricing';
 import { api } from '../../../@shared/services/api';
-import { useAuthStore } from '../../../@shared/hooks/useAuth';
 import { toast } from '../../../@shared/hooks/useToast';
 
 export interface CartItem {
@@ -155,9 +154,6 @@ interface POSState {
   removeItems: (productIds: string[]) => void;
   resetSplit: () => void;
   registerSplitPayment: (baseOrderNumber?: string) => void;
-
-  voidItemOnBill: (input: { productId: string; itemIndex: number; quantity?: number; reason: string; managerPin?: string }) => Promise<{ ok: boolean; error?: string }>;
-  voidActiveBill: (input: { reason: string; managerPin?: string }) => Promise<{ ok: boolean; error?: string }>;
 }
 
 let recalcTimer: ReturnType<typeof setTimeout> | null = null;
@@ -755,69 +751,4 @@ export const usePOSStore = create<POSState>((set, get) => ({
       splitNumber: s.splitNumber + 1,
       splitBaseOrderNumber: s.splitBaseOrderNumber ?? s.activeBillNumber ?? baseOrderNumber ?? null,
     })),
-
-  voidItemOnBill: async ({ productId, itemIndex, quantity, reason, managerPin }) => {
-    const state = usePOSStore.getState();
-    const billId = state.activeBillId;
-    if (!billId) return { ok: false, error: 'Tidak ada bill aktif' };
-
-    const userName = useAuthStore.getState().user?.displayName || 'Kasir';
-    try {
-      await api.post(`/orders/${billId}/void-item`, {
-        itemIndex,
-        quantity: quantity ?? undefined,
-        reason,
-        voidedByName: userName,
-        managerPin: managerPin ?? undefined,
-      });
-      const paidItem = state.items.find((i) => i.productId === productId && !i.isFreeItem);
-      if (quantity && paidItem && quantity < paidItem.quantity) {
-        set((s) => ({
-          items: s.items
-            .map((i) =>
-              i.productId === productId && !i.isFreeItem
-                ? { ...i, quantity: i.quantity - quantity }
-                : i,
-            )
-            .filter((i) => i.quantity > 0),
-        }));
-        scheduleRecalculation(get, set);
-      } else {
-        state.removeItems([productId]);
-      }
-      toast({ title: 'Item berhasil divoid', icon: 'success' });
-      return { ok: true };
-    } catch (err: any) {
-      const msg = err?.response?.data?.error?.message || 'Gagal memvoid item';
-      return { ok: false, error: msg };
-    }
-  },
-
-  voidActiveBill: async ({ reason, managerPin }) => {
-    const state = usePOSStore.getState();
-    const billId = state.activeBillId;
-    if (!billId) return { ok: false, error: 'Tidak ada bill aktif' };
-
-    const userName = useAuthStore.getState().user?.displayName || 'Kasir';
-    try {
-      await api.post(`/orders/${billId}/void`, {
-        reason,
-        voidedByName: userName,
-        managerPin: managerPin ?? undefined,
-      });
-
-      set((s) => ({
-        heldOrders: s.heldOrders.filter((o) => o.id !== billId),
-        dismissedHeldOrderIds: s.dismissedHeldOrderIds.includes(billId)
-          ? s.dismissedHeldOrderIds
-          : [...s.dismissedHeldOrderIds, billId],
-      }));
-      state.clearCart();
-      toast({ title: 'Bill berhasil divoid', icon: 'success' });
-      return { ok: true };
-    } catch (err: any) {
-      const msg = err?.response?.data?.error?.message || 'Gagal memvoid bill';
-      return { ok: false, error: msg };
-    }
-  },
 }));

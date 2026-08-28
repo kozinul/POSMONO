@@ -27,7 +27,6 @@ import { useBestSellers } from '../../orders/hooks/useOrders';
 import { printReceipt as apiPrintReceipt, printKot as apiPrintKot } from '../../printing/hooks/usePrinters';
 import { printViaClient } from '../../printing/utils/PrintClient';
 import type { Printer } from '@posmono/shared';
-import type { CartItem } from '../store/posStore';
 
 export default function PosPage() {
   const {
@@ -59,7 +58,6 @@ export default function PosPage() {
     mergeHeldOrders,
     refreshItemPrices,
     seedOpenShift,
-    voidItemOnBill,
   } = usePOSStore();
 
   const currentUser = useAuthStore((s) => s.user);
@@ -87,7 +85,6 @@ export default function PosPage() {
   const [selectedFamily, setSelectedFamily] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showFavorites, setShowFavorites] = useState(false);
-  const [voidTarget, setVoidTarget] = useState<{ item: CartItem; itemIndex: number } | null>(null);
   const [voidError, setVoidError] = useState<string | null>(null);
   const [voidPending, setVoidPending] = useState(false);
   const [viewTransaction, setViewTransaction] = useState<any>(null);
@@ -212,43 +209,6 @@ export default function PosPage() {
 
   const p = pricing;
   const itemCount = items.reduce((s, i) => s + i.quantity, 0);
-
-  const paidItemIndex = useMemo(() => {
-    const m: Record<string, number> = {};
-    let i = 0;
-    for (const item of items) {
-      if (item.isFreeItem) continue;
-      m[item.productId] = i++;
-    }
-    return m;
-  }, [items]);
-
-  const handleVoidItem = (item: CartItem) => {
-    const index = paidItemIndex[item.productId];
-    if (index === undefined) return;
-    setVoidError(null);
-    setVoidTarget({ item, itemIndex: index });
-  };
-
-  const submitVoidItem = async (reason: string, managerPin?: string, quantity?: number) => {
-    if (!voidTarget) return;
-    setVoidPending(true);
-    setVoidError(null);
-    const res = await voidItemOnBill({
-      productId: voidTarget.item.productId,
-      itemIndex: voidTarget.itemIndex,
-      quantity,
-      reason,
-      managerPin,
-    });
-    setVoidPending(false);
-    if (res.ok) {
-      setVoidTarget(null);
-      queryClient.invalidateQueries({ queryKey: ['orders'] });
-    } else {
-      setVoidError(res.error ?? 'Gagal memvoid item');
-    }
-  };
 
   const voidOrderMutate = useVoidOrder();
   const voidItemMutate = useVoidItem();
@@ -828,21 +788,8 @@ export default function PosPage() {
         }}
       />
 
-      {paymentModalOpen && <PaymentModal />}
+{paymentModalOpen && <PaymentModal />}
       {receipt && <ReceiptDisplay />}
-
-{voidTarget && (
-        <PosVoidModal
-          title="Void Item"
-          description={`Void "${voidTarget.item.name}" (Qty ${voidTarget.item.quantity}) dari bill ${activeBillNumber ?? ''}?`}
-          requiresPin={!canVoidSelf}
-          isPending={voidPending}
-          error={voidError}
-          availableQuantity={voidTarget.item.quantity}
-          onSubmit={submitVoidItem}
-          onClose={() => setVoidTarget(null)}
-        />
-      )}
 
       {voidOrderTarget && (
         <PosVoidModal
