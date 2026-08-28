@@ -14,6 +14,7 @@ export interface IStock {
   reservedQuantity: number;
   minLevel: number;
   maxLevel: number;
+  costPrice: number;
   updatedAt: Date;
 }
 
@@ -26,6 +27,7 @@ export class Stock extends AggregateRoot<StockId> {
   private reservedQuantity: number;
   private minLevel: number;
   private maxLevel: number;
+  private costPrice: number;
   private updatedAt: Date;
 
   private constructor(props: IStock) {
@@ -38,12 +40,14 @@ export class Stock extends AggregateRoot<StockId> {
     this.reservedQuantity = props.reservedQuantity;
     this.minLevel = props.minLevel;
     this.maxLevel = props.maxLevel;
+    this.costPrice = props.costPrice;
     this.updatedAt = props.updatedAt;
   }
 
-  static create(props: Omit<IStock, 'id' | 'updatedAt'>): Stock {
+  static create(props: Omit<IStock, 'id' | 'updatedAt' | 'costPrice'> & { costPrice?: number }): Stock {
     return new Stock({
       ...props,
+      costPrice: props.costPrice ?? 0,
       id: new StockId().toValue(),
       updatedAt: new Date(),
     });
@@ -66,8 +70,20 @@ export class Stock extends AggregateRoot<StockId> {
     this.updatedAt = new Date();
   }
 
-  adjust(delta: number, reason: string): void {
+  /**
+   * Applies a quantity delta. When delta > 0 and unitCost is provided, updates the
+   * weighted-average cost price: (oldQty*cost + delta*unitCost) / (oldQty + delta).
+   */
+  adjust(delta: number, reason: string, unitCost?: number): void {
+    const oldQuantity = this.quantity;
     this.quantity += delta;
+
+    if (delta > 0 && this.quantity > 0) {
+      const incomingCost = unitCost ?? this.costPrice;
+      const newCost = (oldQuantity * this.costPrice + delta * incomingCost) / this.quantity;
+      this.costPrice = Math.round(newCost * 100) / 100;
+    }
+
     this.updatedAt = new Date();
 
     this.addDomainEvent(
@@ -101,6 +117,10 @@ export class Stock extends AggregateRoot<StockId> {
     return this.quantity - this.reservedQuantity;
   }
 
+  get cost(): number {
+    return this.costPrice;
+  }
+
   serialize(): IStock {
     return {
       id: this._id.toValue(),
@@ -112,6 +132,7 @@ export class Stock extends AggregateRoot<StockId> {
       reservedQuantity: this.reservedQuantity,
       minLevel: this.minLevel,
       maxLevel: this.maxLevel,
+      costPrice: this.costPrice,
       updatedAt: this.updatedAt,
     };
   }

@@ -15,6 +15,7 @@ export const StockMovementSchema = new Schema(
     quantity: { type: Number, required: true },
     beforeQuantity: { type: Number, required: true },
     afterQuantity: { type: Number, required: true },
+    unitCost: { type: Number, default: 0 },
     referenceType: { type: String, default: '' },
     referenceId: { type: String, default: '' },
     notes: { type: String, default: '' },

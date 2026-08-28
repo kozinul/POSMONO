@@ -11,6 +11,7 @@ const stockInSchema = z.object({
   warehouseId: z.string().optional(),
   reason: z.string().optional(),
   referenceId: z.string().optional(),
+  costPrice: z.number().nonnegative().optional(),
 });
 
 const stockOutSchema = z.object({
@@ -28,6 +29,7 @@ const adjustSchema = z.object({
   reason: z.string().min(1),
   variantId: z.string().nullable().optional(),
   warehouseId: z.string().optional(),
+  costPrice: z.number().nonnegative().optional(),
 });
 
 const reserveSchema = z.object({
@@ -43,6 +45,7 @@ const importSchema = z.object({
     minLevel: z.number().optional(),
     maxLevel: z.number().optional(),
     warehouseId: z.string().optional(),
+    costPrice: z.number().nonnegative().optional(),
   })).min(1),
 });
 

@@ -13,6 +13,7 @@ export interface IStockMovement {
   quantity: number;
   beforeQuantity: number;
   afterQuantity: number;
+  unitCost: number;
   referenceType: string;
   referenceId: string;
   notes: string;
@@ -29,6 +30,7 @@ export class StockMovement extends Entity<StockMovementId> {
   private quantity: number;
   private beforeQuantity: number;
   private afterQuantity: number;
+  private unitCost: number;
   private referenceType: string;
   private referenceId: string;
   private notes: string;
@@ -45,6 +47,7 @@ export class StockMovement extends Entity<StockMovementId> {
     this.quantity = props.quantity;
     this.beforeQuantity = props.beforeQuantity;
     this.afterQuantity = props.afterQuantity;
+    this.unitCost = props.unitCost;
     this.referenceType = props.referenceType;
     this.referenceId = props.referenceId;
     this.notes = props.notes;
@@ -52,9 +55,10 @@ export class StockMovement extends Entity<StockMovementId> {
     this.createdAt = props.createdAt;
   }
 
-  static create(props: Omit<IStockMovement, 'id' | 'createdAt'>): StockMovement {
+  static create(props: Omit<IStockMovement, 'id' | 'createdAt' | 'unitCost'> & { unitCost?: number }): StockMovement {
     return new StockMovement({
       ...props,
+      unitCost: props.unitCost ?? 0,
       id: new StockMovementId().toValue(),
       createdAt: new Date(),
     });
@@ -75,6 +79,7 @@ export class StockMovement extends Entity<StockMovementId> {
       quantity: this.quantity,
       beforeQuantity: this.beforeQuantity,
       afterQuantity: this.afterQuantity,
+      unitCost: this.unitCost,
       referenceType: this.referenceType,
       referenceId: this.referenceId,
       notes: this.notes,

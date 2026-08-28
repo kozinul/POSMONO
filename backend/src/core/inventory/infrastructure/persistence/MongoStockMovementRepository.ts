@@ -12,6 +12,7 @@ interface StockMovementDoc extends Document<string> {
   quantity: number;
   beforeQuantity: number;
   afterQuantity: number;
+  unitCost: number;
   referenceType: string;
   referenceId: string;
   notes: string;
@@ -33,6 +34,7 @@ export class MongoStockMovementRepository implements StockMovementRepository {
       quantity: doc.quantity,
       beforeQuantity: doc.beforeQuantity,
       afterQuantity: doc.afterQuantity,
+      unitCost: doc.unitCost,
       referenceType: doc.referenceType,
       referenceId: doc.referenceId,
       notes: doc.notes,
@@ -53,6 +55,7 @@ export class MongoStockMovementRepository implements StockMovementRepository {
       quantity: data.quantity,
       beforeQuantity: data.beforeQuantity,
       afterQuantity: data.afterQuantity,
+      unitCost: data.unitCost,
       referenceType: data.referenceType,
       referenceId: data.referenceId,
       notes: data.notes,

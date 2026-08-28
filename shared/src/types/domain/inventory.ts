@@ -9,6 +9,7 @@ export interface Stock {
   availableQuantity: number;
   minLevel: number;
   maxLevel: number;
+  costPrice: number;
   updatedAt: Date;
 }
 
@@ -34,6 +35,7 @@ export interface StockMovement {
   quantity: number;
   beforeQuantity: number;
   afterQuantity: number;
+  unitCost: number;
   referenceType: string;
   referenceId: string;
   notes: string;

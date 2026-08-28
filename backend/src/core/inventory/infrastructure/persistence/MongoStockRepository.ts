@@ -12,6 +12,7 @@ interface StockDoc extends Document<string> {
   reservedQuantity: number;
   minLevel: number;
   maxLevel: number;
+  costPrice: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -30,6 +31,7 @@ export class MongoStockRepository implements StockRepository {
       reservedQuantity: doc.reservedQuantity,
       minLevel: doc.minLevel,
       maxLevel: doc.maxLevel,
+      costPrice: doc.costPrice,
       updatedAt: doc.updatedAt,
     } as IStock);
   }
@@ -46,6 +48,7 @@ export class MongoStockRepository implements StockRepository {
       reservedQuantity: data.reservedQuantity,
       minLevel: data.minLevel,
       maxLevel: data.maxLevel,
+      costPrice: data.costPrice,
     } as unknown as Partial<StockDoc>;
   }
 

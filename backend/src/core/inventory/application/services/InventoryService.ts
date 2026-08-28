@@ -53,6 +53,7 @@ export class InventoryService {
     referenceId?: string;
     userId?: string;
     referenceType?: string;
+    costPrice?: number;
   }): Promise<Stock> {
     if (input.quantity <= 0) {
       throw new ValidationError('Quantity must be positive');
@@ -75,7 +76,7 @@ export class InventoryService {
       });
     }
 
-    stock.adjust(input.quantity, input.reason || 'stock_in');
+    stock.adjust(input.quantity, input.reason || 'stock_in', input.costPrice);
     await this.stockRepository.save(stock);
 
     const movement = StockMovement.create({
@@ -87,6 +88,7 @@ export class InventoryService {
       quantity: input.quantity,
       beforeQuantity: beforeQty,
       afterQuantity: stock.serialize().quantity,
+      unitCost: input.costPrice ?? stock.cost,
       referenceType: input.referenceType || 'stock_in',
       referenceId: input.referenceId || '',
       notes: input.reason || 'Stock in',
@@ -138,6 +140,7 @@ export class InventoryService {
       quantity: input.quantity,
       beforeQuantity: beforeQty,
       afterQuantity: stock.serialize().quantity,
+      unitCost: stock.cost,
       referenceType: input.referenceType || 'stock_out',
       referenceId: input.referenceId || '',
       notes: input.reason || 'Stock out',
@@ -228,6 +231,7 @@ export class InventoryService {
       quantity: input.quantity,
       beforeQuantity: beforeQty,
       afterQuantity: stock.serialize().quantity,
+      unitCost: stock.cost,
       referenceType: 'void',
       referenceId: input.referenceId || '',
       notes: `Void ${input.orderNumber ? `#${input.orderNumber}` : 'transaksi'}${input.reason ? ` - ${input.reason}` : ''}`,
@@ -246,6 +250,7 @@ export class InventoryService {
     variantId?: string | null;
     warehouseId?: string;
     userId?: string;
+    costPrice?: number;
   }): Promise<Stock> {
     const resolvedWarehouseId = await this.resolveWarehouseId(input.tenantId, input.warehouseId);
     let stock = await this.stockRepository.findByProduct(input.tenantId, input.productId);
@@ -264,7 +269,7 @@ export class InventoryService {
       });
     }
 
-    stock.adjust(input.delta, input.reason);
+    stock.adjust(input.delta, input.reason, input.costPrice);
     await this.stockRepository.save(stock);
 
     const movement = StockMovement.create({
@@ -276,6 +281,7 @@ export class InventoryService {
       quantity: Math.abs(input.delta),
       beforeQuantity: beforeQty,
       afterQuantity: stock.serialize().quantity,
+      unitCost: input.delta > 0 ? (input.costPrice ?? stock.cost) : stock.cost,
       referenceType: 'adjustment',
       referenceId: '',
       notes: input.reason,
@@ -316,6 +322,7 @@ export class InventoryService {
       quantity: input.quantity,
       beforeQuantity: beforeQty,
       afterQuantity: stock.serialize().quantity,
+      unitCost: stock.cost,
       referenceType: 'reservation',
       referenceId: input.referenceId || '',
       notes: `Reserved ${input.quantity} units`,
@@ -351,6 +358,7 @@ export class InventoryService {
       quantity: input.quantity,
       beforeQuantity: beforeQty,
       afterQuantity: stock.serialize().quantity,
+      unitCost: stock.cost,
       referenceType: 'release',
       referenceId: input.referenceId || '',
       notes: `Released ${input.quantity} units`,
@@ -378,6 +386,7 @@ export class InventoryService {
     reservedQuantity: number;
     minLevel: number;
     maxLevel: number;
+    costPrice: number;
     warehouseId: string;
   }>> {
     const stocks = await this.stockRepository.findByTenant(tenantId);
@@ -391,6 +400,7 @@ export class InventoryService {
         reservedQuantity: data.reservedQuantity,
         minLevel: data.minLevel,
         maxLevel: data.maxLevel,
+        costPrice: data.costPrice,
         warehouseId: data.warehouseId,
       };
     });
@@ -402,6 +412,7 @@ export class InventoryService {
     minLevel?: number;
     maxLevel?: number;
     warehouseId?: string;
+    costPrice?: number;
   }>, userId?: string): Promise<{ imported: number; errors: string[] }> {
     const errors: string[] = [];
     let imported = 0;
@@ -415,6 +426,7 @@ export class InventoryService {
           reason: 'csv_import',
           warehouseId: item.warehouseId,
           userId,
+          costPrice: item.costPrice,
         });
         imported++;
       } catch (err: any) {

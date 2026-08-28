@@ -11,6 +11,7 @@ export const StockSchema = new Schema(
     reservedQuantity: { type: Number, default: 0 },
     minLevel: { type: Number, default: 5 },
     maxLevel: { type: Number, default: 100 },
+    costPrice: { type: Number, default: 0 },
   },
   {
     timestamps: true,
