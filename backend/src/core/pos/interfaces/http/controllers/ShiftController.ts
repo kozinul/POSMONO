@@ -97,4 +97,9 @@ export class ShiftController extends BaseController {
     const shift = await this.shiftService.updateSales(req.tenantId, req.params.id, parsed.data);
     this.ok(res, shift.serialize());
   }
+
+  async carriedBills(req: Request, res: Response): Promise<void> {
+    const result = await this.shiftService.getCarriedBillsForCashier(req.tenantId, req.userId);
+    this.ok(res, result);
+  }
 }

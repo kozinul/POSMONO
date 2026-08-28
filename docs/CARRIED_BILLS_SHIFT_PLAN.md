@@ -1,6 +1,6 @@
 # Carried Bills UX — Tutup & Buka Shift
 
-> Terakhir diperbarui: **2026-08-23** · Status: **PLANNED — BELUM DIEKSEKUSI**
+> Terakhir diperbarui: **2026-08-28** · Status: **DIEKSEKUSI — SELESAI** (backend `GET /shifts/carried-bills`, banner OpenShiftModal, daftar bill di dialog Tutup Shift)
 > Dokumen ini adalah backup konteks jika sesi coding terputus — semua keputusan desain dan detail implementasi tercantum di sini.
 
 ---

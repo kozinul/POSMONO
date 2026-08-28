@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useOpenShiftMutation } from '../../shifts/hooks/useShift';
+import { useCarriedBills } from '../../shifts/hooks/useCarriedBills';
 import { useAuthStore } from '../../../@shared/hooks/useAuth';
+import { formatIDR } from '../utils/money';
 
 interface OpenShiftModalProps {
   onClose?: () => void;
@@ -13,6 +15,10 @@ export function OpenShiftModal({ onClose, error, onRetry }: OpenShiftModalProps)
   const [balance, setBalance] = useState('0');
   const [submitError, setSubmitError] = useState<string | null>(null);
   const openMut = useOpenShiftMutation();
+  const { data: carriedBills } = useCarriedBills();
+
+  const carriedCount = carriedBills?.count ?? 0;
+  const carriedTotal = carriedBills?.totalAmount ?? 0;
 
   const handleSubmit = () => {
     if (openMut.isPending) return;
@@ -50,6 +56,16 @@ export function OpenShiftModal({ onClose, error, onRetry }: OpenShiftModalProps)
         Mulai transaksi dengan membuka shift terlebih dahulu. Keranjang &amp; bill yang belum
         dibayar akan tetap tersimpan.
       </p>
+      {carriedCount > 0 && (
+        <div className="mb-4 bg-amber-50 border border-amber-200 rounded-xl p-3">
+          <p className="text-sm font-medium text-amber-800">
+            Ada {carriedCount} bill menggantung dari shift sebelumnya.
+          </p>
+          <p className="text-xs text-amber-700 mt-0.5">
+            Total Rp {formatIDR(carriedTotal)} · buka lewat ☰ &gt; Daftar Bill.
+          </p>
+        </div>
+      )}
       <label className="block text-xs font-medium text-gray-500 mb-1">
         Saldo Buka Kasir (Rp)
       </label>

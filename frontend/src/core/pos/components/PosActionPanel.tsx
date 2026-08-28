@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { usePOSStore } from '../store/posStore';
 import { useOrders, useShiftReport } from '../../orders/hooks/useOrders';
+import { api } from '../../../@shared/services/api';
 import { useOpenShift,
   useOpenShiftMutation,
   useCloseShiftMutation,
 } from '../../shifts/hooks/useShift';
+import { useCarriedBills } from '../../shifts/hooks/useCarriedBills';
 import { useAuthStore, hasPermission } from '../../../@shared/hooks/useAuth';
 import { VOID_ORDER_PERMISSION } from '../../../@shared/utils/permissions';
 import { formatIDR } from '../utils/money';
@@ -12,6 +14,7 @@ import { toast } from '../../../@shared/hooks/useToast';
 import Swal from 'sweetalert2';
 import { ReportPrintModal } from './ReportPrintModal';
 import { OpenShiftModal } from './OpenShiftModal';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface PosActionPanelProps {
   open: boolean;
@@ -52,6 +55,8 @@ export function PosActionPanel(props: PosActionPanelProps) {
 
   const { data: openShift } = useOpenShift();
   const closeShiftMut = useCloseShiftMutation();
+  const queryClient = useQueryClient();
+  const { data: carriedBills } = useCarriedBills();
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -75,6 +80,38 @@ export function PosActionPanel(props: PosActionPanelProps) {
       openShift.expectedCash ??
       openShift.openingBalance + openShift.cashSales - openShift.totalCashPickups;
 
+    const carried = await queryClient.fetchQuery({
+      queryKey: ['carried-bills'],
+      queryFn: async () => {
+        const res = await api.get<{ success: boolean; data: any }>('/shifts/carried-bills');
+        return res.data.data;
+      },
+    }).catch(() => null);
+
+    const billsHtml = carried?.bills && carried.bills.length > 0
+      ? `
+          <div style="margin-top:10px;border-top:1px dashed #e5e7eb;padding-top:10px">
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+              <span style="color:#374151;font-weight:600">Bill Menggantung</span>
+              <span style="color:#6b7280;font-size:12px">${carried.bills.length} bill · Rp ${formatIDR(carried.totalAmount)}</span>
+            </div>
+            <div style="max-height:140px;overflow-y:auto;border:1px solid #fde68a;background:#fffbeb;border-radius:8px;padding:6px 10px;font-size:12px">
+              ${carried.bills.map((b: any) => `
+                <div style="display:flex;justify-content:space-between;line-height:1.8">
+                  <span style="color:#92400e">${b.orderNumber} <span style="color:#b45309;text-transform:capitalize">· ${b.status ?? 'held'}</span></span>
+                  <b style="color:#92400e">Rp ${formatIDR(b.total)}</b>
+                </div>
+              `).join('')}
+            </div>
+            <p style="color:#b45309;font-size:11px;margin-top:6px">Tidak dihitung dalam Kas Diharapkan — otomatis dibawa ke shift berikutnya.</p>
+          </div>`
+      : carried !== null
+        ? `
+          <div style="margin-top:10px;border-top:1px dashed #e5e7eb;padding-top:10px">
+            <p style="color:#9ca3af;font-size:12px;text-align:center">Tidak ada bill menggantung</p>
+          </div>`
+        : '';
+
     await Swal.fire({
       title: 'Tutup Shift',
       html: `
@@ -92,6 +129,7 @@ export function PosActionPanel(props: PosActionPanelProps) {
             <b>Rp ${formatIDR(openShift.nonCashSales ?? 0)}</b>
           </div>
         </div>
+        ${billsHtml}
       `,
       input: 'text',
       inputLabel: 'Saldo Tutup Kasir (Rp)',

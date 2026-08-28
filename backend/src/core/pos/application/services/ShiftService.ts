@@ -1,5 +1,5 @@
 import { NotFoundError, ValidationError } from '../../../../@shared/infrastructure/error/AppError';
-import { Shift, IPaymentBreakdownEntry } from '../../domain/Shift';
+import { Shift, ICarriedOverBill, IPaymentBreakdownEntry } from '../../domain/Shift';
 
 export class ShiftService {
   constructor(
@@ -124,5 +124,43 @@ export class ShiftService {
 
   async list(tenantId: string): Promise<Shift[]> {
     return this.shiftRepository.findByTenant(tenantId);
+  }
+
+  async getCarriedBillsForCashier(tenantId: string, cashierId: string) {
+    if (!this.shiftRepository || !this.orderRepository) {
+      return { count: 0, totalAmount: 0, bills: [], fromShift: null };
+    }
+
+    const previous = await this.shiftRepository.findLastClosedByCashierBefore(tenantId, cashierId, new Date());
+    if (!previous) {
+      return { count: 0, totalAmount: 0, bills: [], fromShift: null };
+    }
+
+    const previousData = previous.serialize();
+    const fromShift = { id: previousData.id, closedAt: previousData.closedAt };
+    const snapshot: ICarriedOverBill[] = previousData.carriedOverBills ?? [];
+    if (snapshot.length === 0) {
+      return { count: 0, totalAmount: 0, bills: [], fromShift };
+    }
+
+    const live = await this.orderRepository.findOpenBillsForCarryOver(tenantId, cashierId);
+    const liveIds = new Set(live.map((b: any) => b.orderId));
+
+    const bills = snapshot
+      .filter((b) => liveIds.has(b.orderId))
+      .map((b) => ({
+        orderId: b.orderId,
+        orderNumber: b.orderNumber,
+        total: b.total,
+        status: b.status,
+        createdAt: b.createdAt,
+      }));
+
+    return {
+      count: bills.length,
+      totalAmount: bills.reduce((sum, b) => sum + b.total, 0),
+      bills,
+      fromShift,
+    };
   }
 }
