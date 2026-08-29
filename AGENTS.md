@@ -268,6 +268,14 @@ Modular SaaS POS Platform (Node.js/Express + React/Tailwind). Multi-tenant, mult
 - **tsc backend bersih**: error pre-existing `ApplyDiscountUseCase.ts(25,7)` (kurang `freeItemValue: 0` di early-return `DiscountResult`) sudah diperbaiki; sekalian fix TS4053 `ReportAggregation.IPaymentBreakdownGroup` tidak bisa di-name → interface di-`export`
 - **Docs sync**: `docs/PROJECT_ROADMAP.md` (Phase F Inventory summary `[x]`, MVP checklist +Ringkasan Stok, status test terbaru) & `docs/BACKLOG.md` (Split bill, Hold/recall, QRIS → `[x]`) diperbarui agar sinkron dengan kode
 
+### Laporan Laba Rugi (Profit & Loss) — 2026-08-29
+- **Spek**: item roadmap Phase F terakhir — laporan Laba Rugi simple per periode memakai HPP dari pergerakan stok
+- **Backend**: `getCogsAggregation(tenantId, dateFrom, dateTo)` di `ReportAggregation.ts` — aggregate koleksi `stockmovements` type `'out'` dalam range `createdAt` → `{ totalCogs: $sum(qty × unitCost), totalUnits }` (guard `!stockMovementModel` → zeros); `ReportService.getProfitLoss` menggabungkan `getFinanceAggregation` + `getCogsAggregation` → `{dateFrom, dateTo, generatedAt, totalOrders, totalRevenue, totalCogs, cogsUnits, totalDiscount, totalTax, totalServiceCharge, totalRounding, grossProfit (revenue − cogs), netProfit (grossProfit − discount), grossMarginPct}`; `ReportController.profitLoss` + `exportProfitLoss`; routes `GET /reports/profit-loss` & `/reports/profit-loss/export` (`authorize('reports:read')`)
+- **Export** `ReportExportService.exportProfitLoss`: tabel Metrik/Nilai (Total Order, Pendapatan, HPP, Laba Kotor, Margin %, Diskon, Pajak, SC, Pembulatan opsional, Laba Bersih) + totals; `rowStyles` dinamis subtotal pada Laba Kotor & Laba Bersih; filename `laporan-laba-rugi-{dateFrom}-{dateTo}`
+- **Frontend**: hook `useProfitLossReport.ts` (queryKey `['profit-loss', dateFrom, dateTo]`); sidebar ReportPage entry "Laba Rugi" (icon bar-chart) + section dengan 5 summary card (Total Order, Pendapatan, HPP merah, Laba Kotor hijau, Margin %) + tabel rincian; `ReportType` di `useReportExport.ts` + `'profit-loss'`
+- **Semantik**: revenue & diskon/pajak/SC dari `orders` (finance), HPP = total `qty × unitCost` stock keluar periode (moving-average cost saat sale). `grossMarginPct` = Laba Kotor / Pendapatan
+- **Tests**: `ReportService.test.ts` +2 (getProfitLoss hitung & zeros), `ReportExportService.test.ts` +1 (PDF valid + XLSX cell A4/A5/A7/B7/B8/B14), `useProfitLossReport.test.tsx` +2; backend services pass · frontend 76/76 + tsc kedua sisi + vite build OK
+
 ## Key Patterns
 - `useQueryClient()` for cache invalidation after mutations
 - `useVoidOrder` for full order void; `useVoidItem` for per-item void

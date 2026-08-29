@@ -11,6 +11,7 @@ function createMockReportService() {
     getDailyReport: vi.fn(),
     getSalesReport: vi.fn(),
     getFinanceReport: vi.fn(),
+    getProfitLoss: vi.fn(),
     getSalesPerProduct: vi.fn(),
     getCashierReceiptsReport: vi.fn(),
     getSalesPerCashierReport: vi.fn(),
@@ -103,6 +104,44 @@ describe('ReportExportService', () => {
     expect(file.filename).toBe('laporan-keuangan-2026-08-01-2026-08-06.pdf');
     expect(file.buffer.subarray(0, 4).toString()).toBe('%PDF');
     expect(categoryRepo.findByTenant).toHaveBeenCalledWith(TENANT_ID);
+  });
+
+  it('generates profit loss export with HPP margin rows', async () => {
+    vi.mocked(reportService.getProfitLoss).mockResolvedValue({
+      dateFrom: '2026-08-01',
+      dateTo: '2026-08-06',
+      generatedAt: '2026-08-29T00:00:00.000Z',
+      totalOrders: 12,
+      totalRevenue: 1_200_000,
+      totalCogs: 720_000,
+      cogsUnits: 40,
+      totalDiscount: 50_000,
+      totalTax: 110_000,
+      totalServiceCharge: 90_000,
+      totalRounding: 0,
+      grossProfit: 480_000,
+      netProfit: 430_000,
+      grossMarginPct: 40,
+    });
+
+    const file = await service.exportProfitLoss(TENANT_ID, '2026-08-01', '2026-08-06', 'pdf');
+
+    expect(file.filename).toBe('laporan-laba-rugi-2026-08-01-2026-08-06.pdf');
+    expect(file.contentType).toBe('application/pdf');
+    expect(file.buffer.subarray(0, 4).toString()).toBe('%PDF');
+
+    const xlsx = await service.exportProfitLoss(TENANT_ID, '2026-08-01', '2026-08-06', 'xlsx');
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(xlsx.buffer as any);
+    const ws = wb.getWorksheet('Laporan');
+    expect(ws.getCell('A1').value).toBe('Laporan Laba Rugi');
+    expect(ws.getCell('A2').value).toContain('Periode: 2026-08-01');
+    expect(ws.getCell('A4').value).toBe('Metrik');
+    expect(ws.getCell('A5').value).toBe('Total Order');
+    expect(ws.getCell('A7').value).toBe('HPP (Harga Pokok Penjualan)');
+    expect(ws.getCell('B7').value).toBe(720_000);
+    expect(ws.getCell('B8').value).toBe(480_000);
+    expect(ws.getCell('B14').value).toBe(430_000);
   });
 
   it('generates sales per product xlsx with totals row and transaction details', async () => {

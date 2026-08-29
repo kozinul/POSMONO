@@ -31,6 +31,7 @@ function createMockAggregation() {
     getSalesPerCashierAggregation: vi.fn(),
     getInventorySummaryAggregation: vi.fn(),
     getStockMovementTotalsAggregation: vi.fn(),
+    getCogsAggregation: vi.fn(),
   };
 }
 
@@ -117,6 +118,67 @@ describe('ReportService', () => {
       expect(result.totalOrders).toBe(0);
       expect(result.totalRevenue).toBe(0);
       expect(result.categories).toEqual([]);
+    });
+  });
+
+  describe('getProfitLoss', () => {
+    it('computes gross profit, net profit and margin from finance + cogs', async () => {
+      aggregation.getFinanceAggregation.mockResolvedValue({
+        totalOrders: 12,
+        totalRevenue: 1_200_000,
+        netRevenue: 1_000_000,
+        totalTax: 110_000,
+        totalServiceCharge: 90_000,
+        totalDiscount: 50_000,
+        totalRounding: 0,
+        categories: [],
+      });
+      aggregation.getCogsAggregation.mockResolvedValue({
+        totalCogs: 720_000,
+        totalUnits: 40,
+      });
+
+      const result = await service.getProfitLoss(TENANT_ID, '2026-08-01', '2026-08-06');
+
+      expect(aggregation.getFinanceAggregation).toHaveBeenCalledWith(
+        TENANT_ID,
+        '2026-08-01',
+        '2026-08-06',
+      );
+      expect(aggregation.getCogsAggregation).toHaveBeenCalledWith(
+        TENANT_ID,
+        '2026-08-01',
+        '2026-08-06',
+      );
+      expect(result.totalOrders).toBe(12);
+      expect(result.totalRevenue).toBe(1_200_000);
+      expect(result.totalCogs).toBe(720_000);
+      expect(result.cogsUnits).toBe(40);
+      expect(result.grossProfit).toBe(480_000);
+      expect(result.grossMarginPct).toBe(40);
+      expect(result.netProfit).toBe(430_000);
+    });
+
+    it('returns zeros when there are no movements or sales', async () => {
+      aggregation.getFinanceAggregation.mockResolvedValue({
+        totalOrders: 0,
+        totalRevenue: 0,
+        netRevenue: 0,
+        totalTax: 0,
+        totalServiceCharge: 0,
+        totalDiscount: 0,
+        totalRounding: 0,
+        categories: [],
+      });
+      aggregation.getCogsAggregation.mockResolvedValue({ totalCogs: 0, totalUnits: 0 });
+
+      const result = await service.getProfitLoss(TENANT_ID, '2026-08-01', '2026-08-06');
+
+      expect(result.totalRevenue).toBe(0);
+      expect(result.totalCogs).toBe(0);
+      expect(result.grossProfit).toBe(0);
+      expect(result.netProfit).toBe(0);
+      expect(result.grossMarginPct).toBe(0);
     });
   });
 

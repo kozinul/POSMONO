@@ -234,6 +234,48 @@ export class ReportExportService {
     return this.build(doc, format, `laporan-keuangan-${dateFrom}-${dateTo}`);
   }
 
+  async exportProfitLoss(
+    tenantId: string,
+    dateFrom: string,
+    dateTo: string,
+    format: ReportExportFormat,
+  ): Promise<ReportFile> {
+    const data = await this.reportService.getProfitLoss(tenantId, dateFrom, dateTo);
+
+    const rows: (string | number)[][] = [
+      ['Total Order', data.totalOrders],
+      ['Total Pendapatan', data.totalRevenue],
+      ['HPP (Harga Pokok Penjualan)', data.totalCogs],
+      ['Laba Kotor', data.grossProfit],
+      [`Margin Kotor (${data.grossMarginPct}%)`, `${data.grossMarginPct}%`],
+      ['Diskon', data.totalDiscount],
+      ['Pajak (PPN)', data.totalTax],
+      ['Service Charge', data.totalServiceCharge],
+      ...(data.totalRounding
+        ? [[`Pembulatan (${data.totalRounding > 0 ? '+' : '-'})`, Math.abs(data.totalRounding)] as (string | number)[]]
+        : []),
+      ['Laba Bersih', data.netProfit],
+    ];
+
+    const doc: ReportDoc = {
+      title: 'Laporan Laba Rugi',
+      subtitle: `Periode: ${dateFrom} s/d ${dateTo} · HPP dari pergerakan stok keluar periode`,
+      tables: [
+        {
+          columns: [
+            { label: 'Metrik', flex: 2.4, align: 'left' },
+            { label: 'Nilai', flex: 1.6, align: 'right', money: true },
+          ],
+          rows,
+          rowStyles: [...rows.map((_, i) => (i === 3 || i === rows.length - 1 ? 'subtotal' : 'detail'))],
+          totals: ['Laba Bersih', data.netProfit],
+        },
+      ],
+    };
+
+    return this.build(doc, format, `laporan-laba-rugi-${dateFrom}-${dateTo}`);
+  }
+
   async exportSalesPerProduct(
     tenantId: string,
     dateFrom: string,

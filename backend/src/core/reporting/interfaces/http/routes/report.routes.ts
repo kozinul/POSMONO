@@ -20,6 +20,7 @@ export function createReportRoutes(reportController: ReportController): Router {
   router.get('/top-products-per-family', authenticate, asyncHandler(reportController.topProductsPerFamily.bind(reportController)));
   router.get('/active-cashiers', authenticate, asyncHandler(reportController.activeCashiers.bind(reportController)));
   router.get('/finance', authenticate, authorize('reports:read'), asyncHandler(reportController.finance.bind(reportController)));
+  router.get('/profit-loss', authenticate, authorize('reports:read'), asyncHandler(reportController.profitLoss.bind(reportController)));
   router.get('/inventory-summary', authenticate, authorize('reports:read'), asyncHandler(reportController.inventorySummary.bind(reportController)));
   router.get('/refunds', authenticate, authorize('reports:read'), asyncHandler(reportController.refunds.bind(reportController)));
   router.get('/refunds/:id/receipt.pdf', authenticate, authorize('reports:read'), asyncHandler(reportController.refundReceipt.bind(reportController)));
@@ -28,6 +29,7 @@ export function createReportRoutes(reportController: ReportController): Router {
   router.get('/daily/export', authenticate, authorize('reports:read'), asyncHandler(reportController.exportDaily.bind(reportController)));
   router.get('/sales/export', authenticate, authorize('reports:read'), asyncHandler(reportController.exportSales.bind(reportController)));
   router.get('/finance/export', authenticate, authorize('reports:read'), asyncHandler(reportController.exportFinance.bind(reportController)));
+  router.get('/profit-loss/export', authenticate, authorize('reports:read'), asyncHandler(reportController.exportProfitLoss.bind(reportController)));
   router.get('/inventory-summary/export', authenticate, authorize('reports:read'), asyncHandler(reportController.exportInventorySummary.bind(reportController)));
   router.get('/sales-per-product/export', authenticate, authorize('reports:read'), asyncHandler(reportController.exportSalesPerProduct.bind(reportController)));
   router.get('/cashier-receipts/export', authenticate, authorize('reports:read'), asyncHandler(reportController.exportCashierReceipts.bind(reportController)));

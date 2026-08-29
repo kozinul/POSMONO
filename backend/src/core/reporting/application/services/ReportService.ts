@@ -232,6 +232,36 @@ export class ReportService {
     };
   }
 
+  async getProfitLoss(tenantId: string, dateFrom: string, dateTo: string) {
+    const [finance, cogs] = await Promise.all([
+      this.reportAggregation.getFinanceAggregation(tenantId, dateFrom, dateTo),
+      this.reportAggregation.getCogsAggregation(tenantId, dateFrom, dateTo),
+    ]);
+
+    const totalRevenue = finance.totalRevenue;
+    const totalCogs = Math.round(cogs.totalCogs * 100) / 100;
+    const grossProfit = Math.round((totalRevenue - totalCogs) * 100) / 100;
+    const netProfit = Math.round((grossProfit - finance.totalDiscount) * 100) / 100;
+    const grossMarginPct = totalRevenue > 0 ? Math.round((grossProfit / totalRevenue) * 1000) / 10 : 0;
+
+    return {
+      dateFrom,
+      dateTo,
+      generatedAt: new Date().toISOString(),
+      totalOrders: finance.totalOrders,
+      totalRevenue,
+      totalCogs,
+      cogsUnits: cogs.totalUnits,
+      totalDiscount: finance.totalDiscount,
+      totalTax: finance.totalTax,
+      totalServiceCharge: finance.totalServiceCharge,
+      totalRounding: finance.totalRounding,
+      grossProfit,
+      netProfit,
+      grossMarginPct,
+    };
+  }
+
   async getRefundReport(tenantId: string, dateFrom: string, dateTo: string) {
     const rows = await this.reportAggregation.getRefundAggregation(tenantId, dateFrom, dateTo);
 

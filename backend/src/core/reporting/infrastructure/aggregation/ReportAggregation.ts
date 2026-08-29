@@ -1012,4 +1012,43 @@ export class ReportAggregation {
       total: r.total,
     }));
   }
+
+  async getCogsAggregation(tenantId: string, dateFrom: string, dateTo: string) {
+    if (!this.stockMovementModel) return { totalCogs: 0, totalUnits: 0 };
+
+    const startOfDay = new Date(dateFrom);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(dateTo);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const rows = await this.stockMovementModel.aggregate([
+      {
+        $match: {
+          tenantId,
+          type: 'out',
+          createdAt: { $gte: startOfDay, $lte: endOfDay },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalCogs: {
+            $sum: {
+              $multiply: [
+                { $ifNull: ['$quantity', 0] },
+                { $ifNull: ['$unitCost', 0] },
+              ],
+            },
+          },
+          totalUnits: { $sum: { $ifNull: ['$quantity', 0] } },
+        },
+      },
+    ]);
+
+    const row = rows[0] || ({} as any);
+    return {
+      totalCogs: Number(row.totalCogs ?? 0),
+      totalUnits: Number(row.totalUnits ?? 0),
+    };
+  }
 }

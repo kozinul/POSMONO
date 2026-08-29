@@ -3,6 +3,7 @@ import { useDailyReport, useSalesReport, useFinanceReport } from '../../orders/h
 import { useSalesPerProductReport } from '../hooks/useSalesPerProductReport';
 import { useCashierReceiptsReport } from '../hooks/useCashierReceiptsReport';
 import { useSalesPerCashierReport } from '../hooks/useSalesPerCashierReport';
+import { useProfitLossReport } from '../hooks/useProfitLossReport';
 import { useInventorySummaryReport } from '../hooks/useInventorySummaryReport';
 import { useRefundReport, refundReference, type RefundRow } from '../../payments/hooks/useRefund';
 import { RefundReceiptModal } from '../components/RefundReceiptModal';
@@ -39,6 +40,16 @@ const reports = [
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    ),
+  },
+  {
+    id: 'profit-loss',
+    label: 'Laba Rugi',
+    keywords: 'laba rugi profit loss profit hpp cogs margin untung modal',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
       </svg>
     ),
   },
@@ -158,6 +169,8 @@ export default function ReportPage() {
   const [dateTo, setDateTo] = useState(today);
   const [financeFrom, setFinanceFrom] = useState(today);
   const [financeTo, setFinanceTo] = useState(today);
+  const [plFrom, setPlFrom] = useState(today);
+  const [plTo, setPlTo] = useState(today);
   const [sppFrom, setSppFrom] = useState(today);
   const [sppTo, setSppTo] = useState(today);
   const [cashierReceiptsFrom, setCashierReceiptsFrom] = useState(today);
@@ -180,6 +193,7 @@ export default function ReportPage() {
     financeFrom || today,
     financeTo || today,
   );
+  const { data: pl, isLoading: plLoading } = useProfitLossReport(plFrom || today, plTo || today);
   const { data: spp, isLoading: sppLoading } = useSalesPerProductReport(
     sppFrom || today,
     sppTo || today,
@@ -580,6 +594,120 @@ export default function ReportPage() {
                           </table>
                         </div>
                       )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">Select a date range</p>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {activeReport === 'profit-loss' && (
+              <section className="bg-white rounded-2xl shadow-sm border border-gray-100">
+                <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-lg font-bold text-gray-800">Laporan Laba Rugi</h2>
+                    <p className="text-sm text-gray-400 mt-0.5">Pendapatan dikurangi HPP & biaya periode</p>
+                  </div>
+                  <ExportButtons
+                    type="profit-loss"
+                    params={{ dateFrom: plFrom || today, dateTo: plTo || today }}
+                    disabled={!pl}
+                  />
+                </div>
+                <div className="px-6 py-5 space-y-5">
+                  <div className="flex gap-4">
+                    <div>
+                      <label className={labelCls}>Dari</label>
+                      <input type="date" value={plFrom} onChange={(e) => setPlFrom(e.target.value)} className={inputCls} />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Sampai</label>
+                      <input type="date" value={plTo} onChange={(e) => setPlTo(e.target.value)} className={inputCls} />
+                    </div>
+                  </div>
+                  {plLoading ? (
+                    <Spinner />
+                  ) : pl ? (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        <div>
+                          <p className="text-xs text-gray-500">Total Order</p>
+                          <p className="text-xl font-bold text-gray-900">{pl.totalOrders}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500">Total Pendapatan</p>
+                          <p className="text-xl font-bold text-gray-900">{formatCurrency(pl.totalRevenue)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500">HPP (COGS)</p>
+                          <p className="text-xl font-bold text-red-600">{formatCurrency(pl.totalCogs)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500">Laba Kotor</p>
+                          <p className="text-xl font-bold text-emerald-600">{formatCurrency(pl.grossProfit)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500">Margin Kotor</p>
+                          <p className="text-xl font-bold text-gray-900">{pl.grossMarginPct}%</p>
+                        </div>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Metrik</th>
+                              <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Nilai</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            <tr className="hover:bg-gray-50">
+                              <td className="px-4 py-2 text-sm text-gray-900">Total Order</td>
+                              <td className="px-4 py-2 text-sm text-gray-900 text-right font-semibold">{pl.totalOrders}</td>
+                            </tr>
+                            <tr className="hover:bg-gray-50">
+                              <td className="px-4 py-2 text-sm text-gray-900">Total Pendapatan</td>
+                              <td className="px-4 py-2 text-sm text-gray-900 text-right">{formatCurrency(pl.totalRevenue)}</td>
+                            </tr>
+                            <tr className="hover:bg-gray-50">
+                              <td className="px-4 py-2 text-sm text-gray-900">HPP (Harga Pokok Penjualan) · {pl.cogsUnits} unit</td>
+                              <td className="px-4 py-2 text-sm text-red-600 text-right">{formatCurrency(pl.totalCogs)}</td>
+                            </tr>
+                            <tr className="bg-emerald-50/50 hover:bg-emerald-50">
+                              <td className="px-4 py-2 text-sm font-semibold text-gray-900">Laba Kotor</td>
+                              <td className="px-4 py-2 text-sm font-semibold text-emerald-700 text-right">{formatCurrency(pl.grossProfit)}</td>
+                            </tr>
+                            <tr className="hover:bg-gray-50">
+                              <td className="px-4 py-2 text-sm text-gray-900">Margin Kotor</td>
+                              <td className="px-4 py-2 text-sm text-gray-900 text-right">{pl.grossMarginPct}%</td>
+                            </tr>
+                            <tr className="hover:bg-gray-50">
+                              <td className="px-4 py-2 text-sm text-gray-900">Diskon</td>
+                              <td className="px-4 py-2 text-sm text-gray-900 text-right">-{formatCurrency(pl.totalDiscount)}</td>
+                            </tr>
+                            <tr className="hover:bg-gray-50">
+                              <td className="px-4 py-2 text-sm text-gray-900">Pajak (PPN)</td>
+                              <td className="px-4 py-2 text-sm text-gray-900 text-right">-{formatCurrency(pl.totalTax)}</td>
+                            </tr>
+                            <tr className="hover:bg-gray-50">
+                              <td className="px-4 py-2 text-sm text-gray-900">Service Charge</td>
+                              <td className="px-4 py-2 text-sm text-gray-900 text-right">-{formatCurrency(pl.totalServiceCharge)}</td>
+                            </tr>
+                            {pl.totalRounding != null && pl.totalRounding !== 0 && (
+                              <tr className="hover:bg-gray-50">
+                                <td className="px-4 py-2 text-sm text-gray-900">Pembulatan</td>
+                                <td className="px-4 py-2 text-sm text-gray-900 text-right">
+                                  {pl.totalRounding > 0 ? '+' : '-'}{formatCurrency(Math.abs(pl.totalRounding))}
+                                </td>
+                              </tr>
+                            )}
+                            <tr className="bg-emerald-50 hover:bg-emerald-50">
+                              <td className="px-4 py-2 text-sm font-bold text-gray-900">Laba Bersih</td>
+                              <td className="px-4 py-2 text-sm font-bold text-emerald-700 text-right">{formatCurrency(pl.netProfit)}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   ) : (
                     <p className="text-sm text-gray-500">Select a date range</p>

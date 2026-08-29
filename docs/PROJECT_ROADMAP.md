@@ -160,9 +160,9 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | Penerimaan & penjualan per kasir | `[x]` |
 | Export PDF (struk) + XLSX (tabular) | `[x]` |
 | Inventory summary (saldo awal + pergerakan + valuasi) | `[x]` |
-| Profit & loss simple | `[ ]` |
+| Profit & loss simple (HPP dari stock movement `out` × cost) | `[x]` |
 
-**Completion:** ~90%
+**Completion:** ~95%
 
 ---
 
@@ -181,7 +181,7 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 
 **Completion:** ~85%
 
-> Status per 2026-08-29: backend tsc bersih (error pre-existing `ApplyDiscountUseCase.ts` TS2741 sudah diperbaiki). Non-Mongo suite backend 825 pass (failure hanya repository/integration yang membutuhkan Mongo `localhost:27027`, pre-existing) · frontend 74/74 + tsc + vite build OK. E2E manual (docker + hardware printer + gateway QRIS eksternal) belum bisa dijalankan di development env.
+> Status per 2026-08-29: backend tsc bersih. Non-Mongo suite backend pass (failure hanya repository/integration yang membutuhkan Mongo `localhost:27027`, pre-existing) · frontend 76/76 + tsc + vite build OK. E2E manual (docker + hardware printer + gateway QRIS eksternal) belum bisa dijalankan di development env.
 
 ---
 
