@@ -513,6 +513,8 @@ export class ReportExportService {
       minLevel: number;
       costPrice: number;
       value: number;
+      openingQuantity: number;
+      openingValue: number;
       lowStock: boolean;
     }
     const items = data.items as Item[];
@@ -530,6 +532,8 @@ export class ReportExportService {
     let totalReserved = 0;
     let totalAvailable = 0;
     let totalValue = 0;
+    let totalOpeningQty = 0;
+    let totalOpeningValue = 0;
 
     for (const [, rows] of byProduct) {
       const first = rows[0];
@@ -537,15 +541,19 @@ export class ReportExportService {
       const resSum = rows.reduce((s, r) => s + r.reservedQuantity, 0);
       const availSum = rows.reduce((s, r) => s + r.availableQuantity, 0);
       const valSum = rows.reduce((s, r) => s + r.value, 0);
+      const openQtySum = rows.reduce((s, r) => s + r.openingQuantity, 0);
+      const openValSum = rows.reduce((s, r) => s + r.openingValue, 0);
 
       tableRows.push([
         `${first.productName || '(tanpa nama)'}${first.sku ? ` (${first.sku})` : ''}${first.categoryName ? ` · ${first.categoryName}` : ''}`,
         '',
+        openQtySum,
         qtySum,
         resSum,
         availSum,
         '',
         '',
+        openValSum,
         valSum,
         '',
       ]);
@@ -555,11 +563,13 @@ export class ReportExportService {
         tableRows.push([
           `   ${r.warehouseName || r.warehouseId}`,
           '',
+          r.openingQuantity,
           r.quantity,
           r.reservedQuantity,
           r.availableQuantity,
           r.minLevel,
           r.costPrice,
+          r.openingValue,
           r.value,
           r.lowStock ? 'MENIPIS' : '',
         ]);
@@ -569,11 +579,13 @@ export class ReportExportService {
       tableRows.push([
         `Subtotal ${first.productName || '(tanpa nama)'}`,
         '',
+        openQtySum,
         qtySum,
         resSum,
         availSum,
         '',
         '',
+        openValSum,
         valSum,
         '',
       ]);
@@ -583,6 +595,8 @@ export class ReportExportService {
       totalReserved += resSum;
       totalAvailable += availSum;
       totalValue += valSum;
+      totalOpeningQty += openQtySum;
+      totalOpeningValue += openValSum;
     }
 
     const doc: ReportDoc = {
@@ -593,11 +607,13 @@ export class ReportExportService {
           columns: [
             { label: 'Produk', flex: 3, align: 'left' },
             { label: 'Gudang', flex: 1.8, align: 'left' },
+            { label: 'Awal', flex: 1, align: 'center' },
             { label: 'Stok', flex: 1, align: 'center' },
             { label: 'Reserved', flex: 1, align: 'center' },
             { label: 'Tersedia', flex: 1, align: 'center' },
             { label: 'Min', flex: 1, align: 'center' },
             { label: 'HPP', flex: 1.5, align: 'right', money: true },
+            { label: 'Nilai Awal', flex: 1.5, align: 'right', money: true },
             { label: 'Nilai', flex: 1.5, align: 'right', money: true },
             { label: 'Status', flex: 1.2, align: 'left' },
           ],
@@ -606,11 +622,13 @@ export class ReportExportService {
           totals: [
             'Total',
             '',
+            Math.round(totalOpeningQty * 100) / 100,
             totalQty,
             totalReserved,
             totalAvailable,
             '',
             '',
+            Math.round(totalOpeningValue * 100) / 100,
             Math.round(totalValue * 100) / 100,
             '',
           ],

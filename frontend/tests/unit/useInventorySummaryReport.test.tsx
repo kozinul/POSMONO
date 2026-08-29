@@ -30,11 +30,22 @@ const summary = {
       maxLevel: 100,
       costPrice: 5000,
       value: 100000,
+      openingQuantity: 15,
+      openingReservedQuantity: 4,
+      openingAvailableQuantity: 11,
+      openingValue: 75000,
       lowStock: false,
       movements: { in: 10, out: 5, adjustment: 0, void: 0, reserve: 0, release: 0 },
     },
   ],
-  totals: { totalItems: 20, totalReserved: 4, totalAvailable: 16, totalValue: 100000 },
+  totals: {
+    totalItems: 20,
+    totalReserved: 4,
+    totalAvailable: 16,
+    totalValue: 100000,
+    totalOpeningItems: 15,
+    totalOpeningValue: 75000,
+  },
   lowStockCount: 0,
 };
 
@@ -66,7 +77,9 @@ describe('useInventorySummaryReport', () => {
       '/reports/inventory-summary?dateFrom=2026-08-01&dateTo=2026-08-31',
     );
     expect(result.current.data?.totals.totalValue).toBe(100000);
+    expect(result.current.data?.totals.totalOpeningValue).toBe(75000);
     expect(result.current.data?.items[0].costPrice).toBe(5000);
+    expect(result.current.data?.items[0].openingQuantity).toBe(15);
   });
 
   it('does not fetch when dates are empty', () => {

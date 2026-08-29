@@ -262,8 +262,14 @@ describe('ReportService', () => {
         reserve: 0,
         release: 0,
       });
+      expect(result.items[0].openingQuantity).toBe(5);
+      expect(result.items[0].openingReservedQuantity).toBe(2);
+      expect(result.items[0].openingAvailableQuantity).toBe(3);
+      expect(result.items[0].openingValue).toBe(25000);
       expect(result.totals.totalItems).toBe(10);
       expect(result.totals.totalValue).toBe(50000);
+      expect(result.totals.totalOpeningItems).toBe(5);
+      expect(result.totals.totalOpeningValue).toBe(25000);
       expect(result.lowStockCount).toBe(0);
       expect(typeof result.generatedAt).toBe('string');
     });
@@ -294,6 +300,44 @@ describe('ReportService', () => {
       expect(result.items[0].lowStock).toBe(true);
       expect(result.lowStockCount).toBe(1);
       expect(result.totals.totalValue).toBe(6000);
+      expect(result.items[0].openingQuantity).toBe(3);
+      expect(result.items[0].openingValue).toBe(6000);
+    });
+
+    it('computes opening reserved quantity from reserve/release movements', async () => {
+      aggregation.getInventorySummaryAggregation.mockResolvedValue([
+        {
+          productId: 'p1',
+          warehouseId: 'wh-1',
+          warehouseName: 'Gudang Utama',
+          productName: 'Es Teh',
+          sku: 'ET-01',
+          categoryName: 'Minuman',
+          quantity: 10,
+          reservedQuantity: 7,
+          availableQuantity: 3,
+          minLevel: 0,
+          maxLevel: 100,
+          costPrice: 1000,
+          value: 10000,
+          lowStock: false,
+        },
+      ]);
+      aggregation.getStockMovementTotalsAggregation.mockResolvedValue([
+        { productId: 'p1', warehouseId: 'wh-1', type: 'in', total: 4 },
+        { productId: 'p1', warehouseId: 'wh-1', type: 'out', total: 2 },
+        { productId: 'p1', warehouseId: 'wh-1', type: 'reserve', total: 3 },
+        { productId: 'p1', warehouseId: 'wh-1', type: 'release', total: 1 },
+      ]);
+
+      const result = await service.getInventorySummary(TENANT_ID, '2026-08-01', '2026-08-31');
+
+      expect(result.items[0].openingQuantity).toBe(8);
+      expect(result.items[0].openingReservedQuantity).toBe(5);
+      expect(result.items[0].openingAvailableQuantity).toBe(3);
+      expect(result.items[0].openingValue).toBe(8000);
+      expect(result.items[0].movements.reserve).toBe(3);
+      expect(result.items[0].movements.release).toBe(1);
     });
   });
 });

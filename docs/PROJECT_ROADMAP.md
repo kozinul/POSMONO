@@ -159,10 +159,10 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | Laporan kasir per-shift (transaksi + penerimaan) | `[x]` |
 | Penerimaan & penjualan per kasir | `[x]` |
 | Export PDF (struk) + XLSX (tabular) | `[x]` |
-| Inventory summary | `[ ]` |
+| Inventory summary (saldo awal + pergerakan + valuasi) | `[x]` |
 | Profit & loss simple | `[ ]` |
 
-**Completion:** ~75%
+**Completion:** ~90%
 
 ---
 
@@ -181,7 +181,7 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 
 **Completion:** ~85%
 
-> Status per 2026-08-28: backend services 237/237 pass · frontend 72/72 pass · tsc frontend & shared bersih · backend tsc punya 1 error pre-existing (`ApplyDiscountUseCase.ts` TS2741). E2E manual (docker + hardware printer) belum bisa dijalankan di development env.
+> Status per 2026-08-29: backend tsc bersih (error pre-existing `ApplyDiscountUseCase.ts` TS2741 sudah diperbaiki). Non-Mongo suite backend 825 pass (failure hanya repository/integration yang membutuhkan Mongo `localhost:27027`, pre-existing) · frontend 74/74 + tsc + vite build OK. E2E manual (docker + hardware printer + gateway QRIS eksternal) belum bisa dijalankan di development env.
 
 ---
 
@@ -305,6 +305,7 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | KOT (Kitchen Order Ticket) printing | `[x]` |
 | Basic reporting (daily sales) | `[x]` |
 | Laporan kasir per-shift (Transaksi/Penerimaan) + export PDF/XLSX | `[x]` |
+| Ringkasan Stok (saldo awal + pergerakan + valuasi HPP) | `[x]` |
 | QRIS payment gateway | `[x]` |
 | Integrated hardware printer (WebUSB/Bluetooth/TCP + auto-print struk/KOT) | `[x]` |
 | Shift wajib dibuka + carried-over bills | `[x]` |

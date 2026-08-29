@@ -1,6 +1,6 @@
 import { Model } from 'mongoose';
 
-interface IPaymentBreakdownGroup {
+export interface IPaymentBreakdownGroup {
   method: string;
   code: string;
   amount: number;

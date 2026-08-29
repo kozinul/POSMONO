@@ -15,6 +15,10 @@ export interface InventorySummaryItem {
   maxLevel: number;
   costPrice: number;
   value: number;
+  openingQuantity: number;
+  openingReservedQuantity: number;
+  openingAvailableQuantity: number;
+  openingValue: number;
   lowStock: boolean;
   movements: {
     in: number;
@@ -36,6 +40,8 @@ export interface InventorySummaryReport {
     totalReserved: number;
     totalAvailable: number;
     totalValue: number;
+    totalOpeningItems: number;
+    totalOpeningValue: number;
   };
   lowStockCount: number;
 }

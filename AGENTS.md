@@ -256,8 +256,17 @@ Modular SaaS POS Platform (Node.js/Express + React/Tailwind). Multi-tenant, mult
 - **Fallback**: record tanpa `invid` (invoice lawas / persist gagal) → `status:'unknown'` (bukan error). `callGateway(baseUrl, params, endpoint?)` — endpoint per-aksi
 - **Wiring**: `qrisInvoiceRepository` di `container.ts` → `qrisGatewayService` (systemConnection `QrisInvoiceModel`); test `QrisGatewayService.test.ts` assert path/param + fallback; `container.ts` resolve `qrisInvoiceRepository` di line ~657
 
-### Pending Work (belum dieksekusi) — 2026-08-23
-- **Ringkasan Stok works**: ⚠️ ringkasan langsung dari `ReportService.getInventorySummary` jumlah `/getStockMovementTotalsAggregation` (mode ranged) tidak mengurangi akumulasi historical — total `in/out` hanya untuk tanggal terpilih; total nilai = snapshot saat ini × costPrice saat ini (tidak historis
+### Ringkasan Stok: Saldo Awal Historis (Fix caveat lama) — 2026-08-29
+- **Caveat lama** (blok Pending Work 2026-08-23) sudah **diselesaikan**: Ringkasan Stok kini memuat **saldo awal** agar periode bisa reconcile
+- **Backend `ReportService.getInventorySummary`**: hitung per produk:gudang `openingQuantity` (= stok saat ini − `netQtyChange` periode, di mana `netQtyChange = in − out + adjustment + void`; `reserve`/`release` hanya mempengaruhi reserved), `openingReservedQuantity` (= `reserved − (reserve − release)`, clamp ≥ 0), `openingAvailableQuantity`, dan `openingValue` (= `openingQuantity × costPrice`, **estimasi** karena cost price moving-average). Totals bertambah `totalOpeningItems`/`totalOpeningValue`. Reconcile: `Awal + Masuk − Keluar + Adj + Void = Stok`
+- **Frontend** `ReportPage` tab Ringkasan Stok: kolom baru **Awal** (qty) dan **Nilai Awal** (estimasi) di baris grup/detail/footer; subtitle "saldo awal & pergerakan pada periode"
+- **Export** `ReportExportService.exportInventorySummary`: kolom `Awal` + `Nilai Awal` (PDF & XLSX), total baris ikut
+- **Catatan tersisa**: total `in/out` tetap untuk rentang tanggal terpilih (bukan akumulasi sepanjang masa) — itu memang semantik laporan periode; nilai total tetap "saat ini"; `openingValue` adalah estimasi (replay seluruh movement untuk valuasi historis presisi terlalu berat)
+- **Tests**: `ReportService.test.ts` +1 (opening quantity/reserved/value + totals), `ReportExportService.test.ts` update kolom Awal/Nilai Awal (posisi cell baru), `useInventorySummaryReport.test.tsx` assert opening fields; backend non-Mongo 825 pass · frontend 74/74 · tsc backend & frontend bersih · vite build OK
+
+### Lain-lain — 2026-08-29
+- **tsc backend bersih**: error pre-existing `ApplyDiscountUseCase.ts(25,7)` (kurang `freeItemValue: 0` di early-return `DiscountResult`) sudah diperbaiki; sekalian fix TS4053 `ReportAggregation.IPaymentBreakdownGroup` tidak bisa di-name → interface di-`export`
+- **Docs sync**: `docs/PROJECT_ROADMAP.md` (Phase F Inventory summary `[x]`, MVP checklist +Ringkasan Stok, status test terbaru) & `docs/BACKLOG.md` (Split bill, Hold/recall, QRIS → `[x]`) diperbarui agar sinkron dengan kode
 
 ## Key Patterns
 - `useQueryClient()` for cache invalidation after mutations

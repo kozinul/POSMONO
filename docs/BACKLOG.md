@@ -39,8 +39,8 @@
 - `[x]` Upload service (image)
 - `[x]` Payment method management (CRUD, presets, color picker)
 - `[x]` Discount & promo engine
-- `[ ]` Split bill
-- `[ ]` Hold / recall order
+- `[x]` Split bill
+- `[x]` Hold / recall order
 
 ---
 
@@ -80,7 +80,7 @@
 
 | Item | Priority | Notes |
 |------|----------|-------|
-| `[ ]` QRIS payment | 🟡 | Standard QR code payment in Indonesia |
+| `[x]` QRIS payment | 🟡 | Done (2026-08-23) — `QrisGatewayService` + PaymentModal QR flow |
 | `[ ]` GoPay / OVO integration | 🟡 | E-wallet integrations |
 | `[ ]` Bank transfer auto-confirmation | 🟡 | Webhook-based confirmation |
 | `[ ]` Invoice / billing portal | 🟡 | Customer-facing invoice portal |

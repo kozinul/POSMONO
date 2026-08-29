@@ -299,12 +299,24 @@ export class ReportService {
       movementMap.set(key, entry);
     }
 
-    const items = rows.map((r) => ({
-      ...r,
-      movements:
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+
+    const items = rows.map((r) => {
+      const movements =
         movementMap.get(`${r.productId}:${r.warehouseId}`) ??
-        { in: 0, out: 0, adjustment: 0, void: 0, reserve: 0, release: 0 },
-    }));
+        { in: 0, out: 0, adjustment: 0, void: 0, reserve: 0, release: 0 };
+      const netQtyChange = movements.in - movements.out + movements.adjustment + movements.void;
+      const openingQuantity = r.quantity - netQtyChange;
+      const openingReservedQuantity = Math.max(0, r.reservedQuantity - (movements.reserve - movements.release));
+      return {
+        ...r,
+        movements,
+        openingQuantity,
+        openingReservedQuantity,
+        openingAvailableQuantity: openingQuantity - openingReservedQuantity,
+        openingValue: round2(openingQuantity * r.costPrice),
+      };
+    });
 
     const totals = items.reduce(
       (acc, i) => ({
@@ -312,8 +324,10 @@ export class ReportService {
         totalReserved: acc.totalReserved + i.reservedQuantity,
         totalAvailable: acc.totalAvailable + i.availableQuantity,
         totalValue: acc.totalValue + i.value,
+        totalOpeningItems: acc.totalOpeningItems + i.openingQuantity,
+        totalOpeningValue: acc.totalOpeningValue + i.openingValue,
       }),
-      { totalItems: 0, totalReserved: 0, totalAvailable: 0, totalValue: 0 },
+      { totalItems: 0, totalReserved: 0, totalAvailable: 0, totalValue: 0, totalOpeningItems: 0, totalOpeningValue: 0 },
     );
 
     return {
@@ -323,7 +337,8 @@ export class ReportService {
       items,
       totals: {
         ...totals,
-        totalValue: Math.round(totals.totalValue * 100) / 100,
+        totalValue: round2(totals.totalValue),
+        totalOpeningValue: round2(totals.totalOpeningValue),
       },
       lowStockCount: items.filter((i) => i.lowStock).length,
     };

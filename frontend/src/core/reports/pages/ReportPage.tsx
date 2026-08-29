@@ -241,6 +241,8 @@ export default function ReportPage() {
         reserved: rows.reduce((s, r) => s + r.reservedQuantity, 0),
         available: rows.reduce((s, r) => s + r.availableQuantity, 0),
         value: rows.reduce((s, r) => s + r.value, 0),
+        openingQuantity: rows.reduce((s, r) => s + r.openingQuantity, 0),
+        openingValue: rows.reduce((s, r) => s + r.openingValue, 0),
         movements: rows.reduce(
           (s, r) => ({
             in: s.in + r.movements.in,
@@ -875,7 +877,7 @@ export default function ReportPage() {
                 <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between gap-4">
                   <div>
                     <h2 className="text-lg font-bold text-gray-800">Ringkasan Stok</h2>
-                    <p className="text-sm text-gray-400 mt-0.5">Kondisi stok saat ini (per gudang) + pergerakan pada periode</p>
+                    <p className="text-sm text-gray-400 mt-0.5">Kondisi stok saat ini (per gudang) + saldo awal &amp; pergerakan pada periode</p>
                   </div>
                   <ExportButtons
                     type="inventory-summary"
@@ -922,11 +924,13 @@ export default function ReportPage() {
                             <tr>
                               <th className="text-left px-4 py-3 font-medium text-gray-700">Produk</th>
                               <th className="text-left px-4 py-3 font-medium text-gray-700">Gudang</th>
+                              <th className="text-right px-4 py-3 font-medium text-gray-700">Awal</th>
                               <th className="text-right px-4 py-3 font-medium text-gray-700">Stok</th>
                               <th className="text-right px-4 py-3 font-medium text-gray-700">Reserved</th>
                               <th className="text-right px-4 py-3 font-medium text-gray-700">Tersedia</th>
                               <th className="text-right px-4 py-3 font-medium text-gray-700">Min</th>
                               <th className="text-right px-4 py-3 font-medium text-gray-700">HPP</th>
+                              <th className="text-right px-4 py-3 font-medium text-gray-700">Nilai Awal</th>
                               <th className="text-right px-4 py-3 font-medium text-gray-700">Nilai</th>
                               <th className="text-left px-4 py-3 font-medium text-gray-700">Status</th>
                             </tr>
@@ -941,11 +945,13 @@ export default function ReportPage() {
                                     {g.categoryName && <span className="text-gray-400 font-normal"> &middot; {g.categoryName}</span>}
                                   </td>
                                   <td className="px-4 py-3 text-gray-400" />
+                                  <td className="px-4 py-3 text-right text-gray-400">{g.openingQuantity}</td>
                                   <td className="px-4 py-3 text-right text-gray-700 font-medium">{g.quantity}</td>
                                   <td className="px-4 py-3 text-right text-gray-500">{g.reserved}</td>
                                   <td className="px-4 py-3 text-right text-gray-700 font-medium">{g.available}</td>
                                   <td className="px-4 py-3 text-right text-gray-400" />
                                   <td className="px-4 py-3 text-right text-gray-400" />
+                                  <td className="px-4 py-3 text-right text-gray-400">{formatCurrency(g.openingValue)}</td>
                                   <td className="px-4 py-3 text-right text-gray-900 font-bold">{formatCurrency(g.value)}</td>
                                   <td className="px-4 py-3 text-gray-400 text-xs">
                                     {(g.movements.in > 0 || g.movements.out > 0) && (
@@ -957,11 +963,13 @@ export default function ReportPage() {
                                   <tr key={`${r.productId}-${r.warehouseId}`} className="hover:bg-gray-50">
                                     <td />
                                     <td className="px-4 py-2 pl-10 text-gray-600">{r.warehouseName || r.warehouseId}</td>
+                                    <td className="px-4 py-2 text-right text-gray-500">{r.openingQuantity}</td>
                                     <td className="px-4 py-2 text-right text-gray-700">{r.quantity}</td>
                                     <td className="px-4 py-2 text-right text-gray-500">{r.reservedQuantity}</td>
                                     <td className="px-4 py-2 text-right text-gray-700">{r.availableQuantity}</td>
                                     <td className="px-4 py-2 text-right text-gray-500">{r.minLevel}</td>
                                     <td className="px-4 py-2 text-right text-gray-500">{formatCurrency(r.costPrice)}</td>
+                                    <td className="px-4 py-2 text-right text-gray-500">{formatCurrency(r.openingValue)}</td>
                                     <td className="px-4 py-2 text-right text-gray-700">{formatCurrency(r.value)}</td>
                                     <td className="px-4 py-2">
                                       {r.lowStock && (
@@ -977,11 +985,13 @@ export default function ReportPage() {
                             <tr>
                               <td className="px-4 py-3 text-gray-900">Total</td>
                               <td />
+                              <td className="px-4 py-3 text-right text-gray-900">{inventory.totals.totalOpeningItems}</td>
                               <td className="px-4 py-3 text-right text-gray-900">{inventory.totals.totalItems}</td>
                               <td className="px-4 py-3 text-right text-gray-900">{inventory.totals.totalReserved}</td>
                               <td className="px-4 py-3 text-right text-gray-900">{inventory.totals.totalAvailable}</td>
                               <td className="px-4 py-3 text-right text-gray-400" />
                               <td className="px-4 py-3 text-right text-gray-400" />
+                              <td className="px-4 py-3 text-right text-gray-900">{formatCurrency(inventory.totals.totalOpeningValue)}</td>
                               <td className="px-4 py-3 text-right text-gray-900">{formatCurrency(inventory.totals.totalValue)}</td>
                               <td />
                             </tr>
