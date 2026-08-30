@@ -599,6 +599,157 @@ export class ReportAggregation {
     return { cashiers, totals };
   }
 
+  async getPaymentReconciliationAggregation(tenantId: string, dateFrom: string, dateTo: string) {
+    const startOfDay = new Date(dateFrom);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(dateTo);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const [paymentsFacet] = await this.paymentModel.aggregate([
+      {
+        $match: {
+          tenantId,
+          status: 'completed',
+          paidAt: { $gte: startOfDay, $lte: endOfDay },
+        },
+      },
+      {
+        $lookup: {
+          from: 'orders',
+          localField: 'orderId',
+          foreignField: '_id',
+          as: 'order',
+        },
+      },
+      { $unwind: { path: '$order', preserveNullAndEmptyArrays: true } },
+      {
+        $match: {
+          $or: [
+            { 'order._id': { $exists: false } },
+            { 'order.status': { $in: ['paid', 'completed'] } },
+          ],
+        },
+      },
+      {
+        $group: {
+          _id: '$method',
+          total: { $sum: '$amount' },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const [ordersFacet] = await this.orderModel.aggregate([
+      {
+        $match: {
+          tenantId,
+          paidAt: { $gte: startOfDay, $lte: endOfDay },
+          status: { $in: ['paid', 'completed'] },
+        },
+      },
+      {
+        $unwind: { path: '$paymentBreakdown', preserveNullAndEmptyArrays: true },
+      },
+      {
+        $group: {
+          _id: '$paymentBreakdown.method',
+          total: { $sum: { $ifNull: ['$paymentBreakdown.amount', 0] } },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const [pendingFacet] = await this.paymentModel.aggregate([
+      {
+        $match: {
+          tenantId,
+          status: 'pending',
+          method: 'transfer',
+        },
+      },
+      {
+        $group: {
+          _id: '$method',
+          total: { $sum: '$amount' },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const paymentMap = new Map<string, { total: number; count: number }>();
+    for (const r of (paymentsFacet ?? []) as any[]) {
+      const method = r._id || 'unknown';
+      paymentMap.set(method, { total: Math.round(r.total ?? 0), count: r.count ?? 0 });
+    }
+    const orderMap = new Map<string, { total: number; count: number }>();
+    for (const r of (ordersFacet ?? []) as any[]) {
+      const method = r._id || 'unknown';
+      orderMap.set(method, { total: Math.round(r.total ?? 0), count: r.count ?? 0 });
+    }
+    const pendingTotal = Math.round((pendingFacet?.[0]?.total ?? 0) as number);
+    const pendingCount = (pendingFacet?.[0]?.count ?? 0) as number;
+
+    const methods = new Set<string>([...paymentMap.keys(), ...orderMap.keys()]);
+    const ordering = ['cash', 'qris', 'transfer', 'card', 'debit', 'credit', 'ewallet'];
+    const items = Array.from(methods)
+      .sort((a, b) => {
+        const ia = ordering.indexOf(a);
+        const ib = ordering.indexOf(b);
+        if (ia !== -1 && ib !== -1) return ia - ib;
+        if (ia !== -1) return -1;
+        if (ib !== -1) return 1;
+        return a.localeCompare(b);
+      })
+      .map((method) => {
+        const paymentTotal = paymentMap.get(method)?.total ?? 0;
+        const orderTotal = orderMap.get(method)?.total ?? 0;
+        const paymentCount = paymentMap.get(method)?.count ?? 0;
+        const orderCount = orderMap.get(method)?.count ?? 0;
+        const pending = method === 'transfer' ? pendingCount : 0;
+        const difference = paymentTotal - orderTotal;
+        return {
+          method,
+          paymentTotal,
+          paymentCount,
+          orderTotal,
+          orderCount,
+          pendingTotal: method === 'transfer' ? pendingTotal : 0,
+          pendingCount: pending,
+          difference,
+        };
+      });
+
+    const totals = items.reduce(
+      (acc, i) => {
+        acc.paymentTotal += i.paymentTotal;
+        acc.orderTotal += i.orderTotal;
+        acc.paymentCount += i.paymentCount;
+        acc.orderCount += i.orderCount;
+        acc.pendingTotal += i.pendingTotal;
+        acc.pendingCount += i.pendingCount;
+        acc.difference += i.difference;
+        return acc;
+      },
+      {
+        paymentTotal: 0,
+        orderTotal: 0,
+        paymentCount: 0,
+        orderCount: 0,
+        pendingTotal: 0,
+        pendingCount: 0,
+        difference: 0,
+      },
+    );
+
+    return {
+      items,
+      totals,
+      dateFrom,
+      dateTo,
+      generatedAt: new Date(),
+    };
+  }
+
   async getSalesPerCashierAggregation(tenantId: string, dateFrom: string, dateTo: string) {
     const startOfDay = new Date(dateFrom);
     startOfDay.setHours(0, 0, 0, 0);

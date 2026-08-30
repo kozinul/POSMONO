@@ -111,6 +111,10 @@ export class ReportService {
     return { dateFrom, dateTo, ...result };
   }
 
+  async getPaymentReconciliation(tenantId: string, dateFrom: string, dateTo: string) {
+    return this.reportAggregation.getPaymentReconciliationAggregation(tenantId, dateFrom, dateTo);
+  }
+
   async getShiftReport(tenantId: string, shiftId: string) {
     const shift = await this.shiftRepository.findById(shiftId);
     if (!shift || shift.serialize().tenantId !== tenantId) {

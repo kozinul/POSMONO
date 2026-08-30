@@ -533,6 +533,73 @@ export class ReportExportService {
     return this.build(doc, format, `penjualan-per-kasir-${dateFrom}-${dateTo}`);
   }
 
+  async exportPaymentReconciliation(
+    tenantId: string,
+    dateFrom: string,
+    dateTo: string,
+    format: ReportExportFormat,
+  ): Promise<ReportFile> {
+    const data = await this.reportService.getPaymentReconciliation(tenantId, dateFrom, dateTo);
+    const rows: (string | number)[][] = [];
+    const styles: RowStyle[] = [];
+    for (const item of data.items) {
+      rows.push([
+        paymentLabel(item.method),
+        item.paymentCount,
+        item.paymentTotal,
+        item.orderCount,
+        item.orderTotal,
+        item.difference,
+      ]);
+      styles.push(item.difference === 0 ? ('group' as const) : ('group' as const));
+    }
+
+    const tables: ReportTable[] = [
+      {
+        columns: [
+          { label: 'Metode', flex: 2, align: 'left' },
+          { label: '#', flex: 1, align: 'center' },
+          { label: 'Penerimaan (Rp)', flex: 2, align: 'right', money: true },
+          { label: '#', flex: 1, align: 'center' },
+          { label: 'Order (Rp)', flex: 2, align: 'right', money: true },
+          { label: 'Selisih', flex: 2, align: 'right', money: true },
+        ],
+        rows,
+        rowStyles: styles,
+        totals: [
+          'Total',
+          data.totals.paymentCount,
+          data.totals.paymentTotal,
+          data.totals.orderCount,
+          data.totals.orderTotal,
+          data.totals.difference,
+        ],
+      },
+    ];
+
+    if (data.totals.pendingCount > 0) {
+      tables.push({
+        columns: [
+          { label: 'Transfer Menunggu Konfirmasi', flex: 3, align: 'left' },
+          { label: 'Jumlah', flex: 1, align: 'center' },
+          { label: 'Total (Rp)', flex: 2, align: 'right', money: true },
+        ],
+        rows: [
+          ['transfer', data.totals.pendingCount, data.totals.pendingTotal],
+        ],
+        totals: ['Total', data.totals.pendingCount, data.totals.pendingTotal],
+      });
+    }
+
+    const doc: ReportDoc = {
+      title: 'Rekonsiliasi Pembayaran',
+      subtitle: `Periode: ${dateFrom} s/d ${dateTo}`,
+      tables,
+    };
+
+    return this.build(doc, format, `rekonsiliasi-pembayaran-${dateFrom}-${dateTo}`);
+  }
+
   async exportInventorySummary(
     tenantId: string,
     dateFrom?: string,

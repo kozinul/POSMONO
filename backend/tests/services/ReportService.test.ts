@@ -29,6 +29,7 @@ function createMockAggregation() {
     getFinanceAggregation: vi.fn(),
     getCashierReceiptsAggregation: vi.fn(),
     getSalesPerCashierAggregation: vi.fn(),
+    getPaymentReconciliationAggregation: vi.fn(),
     getInventorySummaryAggregation: vi.fn(),
     getStockMovementTotalsAggregation: vi.fn(),
     getCogsAggregation: vi.fn(),
@@ -278,6 +279,58 @@ describe('ReportService', () => {
       expect(result.cashiers).toHaveLength(1);
       expect(result.cashiers[0].totalRevenue).toBe(400_000);
       expect(result.totals.totalOrders).toBe(5);
+    });
+  });
+
+  describe('getPaymentReconciliation', () => {
+    it('returns reconciliation report from aggregation', async () => {
+      aggregation.getPaymentReconciliationAggregation.mockResolvedValue({
+        items: [
+          {
+            method: 'cash',
+            paymentTotal: 400_000,
+            paymentCount: 4,
+            orderTotal: 400_000,
+            orderCount: 4,
+            pendingTotal: 0,
+            pendingCount: 0,
+            difference: 0,
+          },
+          {
+            method: 'transfer',
+            paymentTotal: 100_000,
+            paymentCount: 1,
+            orderTotal: 100_000,
+            orderCount: 1,
+            pendingTotal: 100_000,
+            pendingCount: 1,
+            difference: 0,
+          },
+        ],
+        totals: {
+          paymentTotal: 500_000,
+          orderTotal: 500_000,
+          paymentCount: 5,
+          orderCount: 5,
+          pendingTotal: 100_000,
+          pendingCount: 1,
+          difference: 0,
+        },
+        dateFrom: '2026-08-01',
+        dateTo: '2026-08-06',
+        generatedAt: new Date(),
+      });
+
+      const result = await service.getPaymentReconciliation(TENANT_ID, '2026-08-01', '2026-08-06');
+
+      expect(aggregation.getPaymentReconciliationAggregation).toHaveBeenCalledWith(
+        TENANT_ID,
+        '2026-08-01',
+        '2026-08-06',
+      );
+      expect(result.items).toHaveLength(2);
+      expect(result.totals.paymentTotal).toBe(500_000);
+      expect(result.totals.pendingCount).toBe(1);
     });
   });
 
