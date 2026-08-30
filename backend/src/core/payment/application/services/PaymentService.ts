@@ -99,7 +99,7 @@ export class PaymentService {
     splitBaseOrderNumber?: string;
     shiftId?: string | null;
     cashierName?: string;
-  }): Promise<{ payment: Payment; order: any; receipt: ReceiptRenderResult | null }> {
+  }): Promise<{ payment: Payment; order: any; receipt: ReceiptRenderResult | null; pending?: boolean }> {
     const shiftId = await this.assertOpenShift(input.tenantId, input.cashierId, input.shiftId);
     const roundMoney = (value: number) => Math.round(value);
     const rawSubtotal = input.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
@@ -284,8 +284,6 @@ export class PaymentService {
       paidAt: null,
     });
 
-    payment.complete();
-
     const paymentBreakdownEntry = {
       method: paymentMethod,
       code: refNumber,
@@ -293,6 +291,17 @@ export class PaymentService {
       change: Math.max(0, input.amountPaid - roundedPayable),
       cardLastFour: input.cardLastFour || undefined,
     };
+
+    const isPendingTransfer = paymentMethod === 'transfer';
+
+    if (isPendingTransfer) {
+      await this.orderRepository.save(order);
+      await this.paymentRepository.save(payment);
+      return { payment, order, receipt: null, pending: true };
+    }
+
+    payment.complete();
+
     order.pay([paymentBreakdownEntry], input.cashierId, cashierName);
 
     await this.orderRepository.save(order);
@@ -311,7 +320,7 @@ export class PaymentService {
 
     void this.autoPrintReceipt(input.tenantId, receipt);
 
-    return { payment, order, receipt };
+    return { payment, order, receipt, pending: false };
   }
 
   private async autoPrintReceipt(tenantId: string, receipt: ReceiptRenderResult | null): Promise<void> {
@@ -358,7 +367,7 @@ export class PaymentService {
     paymentTransactionId?: string;
     referenceNumber?: string;
     shiftId?: string | null;
-  }): Promise<{ payment: Payment; order: Order; receipt: ReceiptRenderResult | null }> {
+  }): Promise<{ payment: Payment; order: Order; receipt: ReceiptRenderResult | null; pending?: boolean }> {
     const shiftId = await this.assertOpenShift(input.tenantId, input.cashierId, input.shiftId);
     const order = await this.orderRepository.findById(input.orderId);
     if (!order) throw new NotFoundError('Order not found');
@@ -400,6 +409,14 @@ export class PaymentService {
       paidAt: null,
     });
 
+    const isPendingTransfer = input.method === 'transfer';
+
+    if (isPendingTransfer) {
+      await this.orderRepository.save(order);
+      await this.paymentRepository.save(payment);
+      return { payment, order, receipt: null, pending: true };
+    }
+
     payment.complete();
 
     const breakdownEntry = {
@@ -438,7 +455,145 @@ export class PaymentService {
 
     void this.autoPrintReceipt(input.tenantId, receipt);
 
+    return { payment, order, receipt, pending: false };
+  }
+
+  async listPendingTransfers(tenantId: string) {
+    const payments = await this.paymentRepository.findPending(tenantId);
+    const result: Array<{ payment: any; order: any }> = [];
+    for (const p of payments) {
+      const paymentData = p.serialize();
+      let orderInfo = null;
+      const order = await this.orderRepository.findById(paymentData.orderId);
+      if (order && order.serialize().tenantId === tenantId) {
+        const o = order.serialize();
+        orderInfo = {
+          id: o.id,
+          orderNumber: o.orderNumber,
+          status: o.status,
+          total: o.total,
+          roundedPayable: o.roundedPayable || o.total,
+          cashierName: o.cashierName || '',
+        };
+      }
+      result.push({ payment: paymentData, order: orderInfo });
+    }
+    return result;
+  }
+
+  async confirmTransferPayment(input: {
+    tenantId: string;
+    paymentId: string;
+    cashierId: string;
+    cashierName?: string;
+  }): Promise<{ payment: Payment; order: Order; receipt: ReceiptRenderResult | null }> {
+    const payment = await this.paymentRepository.findById(input.paymentId);
+    if (!payment) throw new NotFoundError('Payment not found');
+    const paymentData = payment.serialize();
+    if (paymentData.tenantId !== input.tenantId) throw new NotFoundError('Payment not found');
+    if (paymentData.status !== 'pending') {
+      throw new ValidationError('Pembayaran sudah dikonfirmasi atau dibatalkan');
+    }
+
+    const order = await this.orderRepository.findById(paymentData.orderId);
+    if (!order) throw new NotFoundError('Order not found');
+    const orderData = order.serialize();
+    if (orderData.tenantId !== input.tenantId) throw new NotFoundError('Order not found');
+    if (orderData.paymentStatus === 'completed') {
+      throw new ValidationError('Order is already paid');
+    }
+
+    payment.complete();
+
+    const wasUnpaid = orderData.paymentBreakdown.length === 0;
+    const cashierName = await this.resolveCashierName(input.cashierId, input.tenantId, input.cashierName);
+    const breakdownEntry = {
+      method: paymentData.method,
+      code: paymentData.referenceNumber,
+      amount: paymentData.amount,
+      change: 0,
+      cardLastFour: paymentData.cardLastFour ?? undefined,
+    };
+    order.pay(
+      wasUnpaid ? [breakdownEntry] : [...orderData.paymentBreakdown, breakdownEntry],
+      input.cashierId,
+      cashierName,
+    );
+
+    await this.orderRepository.save(order);
+    await this.paymentRepository.save(payment);
+
+    if (wasUnpaid) {
+      await this.applyStockDeductions(order, input.tenantId, input.cashierId);
+    }
+
+    for (const event of order.domainEvents) {
+      this.eventBus.publish(event);
+    }
+    for (const event of payment.domainEvents) {
+      this.eventBus.publish(event);
+    }
+
+    const receipt = await this.renderReceipt(order, payment);
+    void this.autoPrintReceipt(input.tenantId, receipt);
+
     return { payment, order, receipt };
+  }
+
+  async cancelTransferPayment(input: {
+    tenantId: string;
+    paymentId: string;
+    reason?: string;
+  }): Promise<{ payment: Payment; order: Order | null; orderCancelled: boolean }> {
+    const payment = await this.paymentRepository.findById(input.paymentId);
+    if (!payment) throw new NotFoundError('Payment not found');
+    const paymentData = payment.serialize();
+    if (paymentData.tenantId !== input.tenantId) throw new NotFoundError('Payment not found');
+    if (paymentData.status !== 'pending') {
+      throw new ValidationError('Pembayaran sudah dikonfirmasi atau dibatalkan');
+    }
+
+    payment.fail(input.reason || 'Dibatalkan oleh kasir');
+
+    const order = await this.orderRepository.findById(paymentData.orderId);
+    let orderCancelled = false;
+    if (order && order.serialize().tenantId === input.tenantId) {
+      const ordData = order.serialize();
+      if (ordData.paymentStatus !== 'completed' && !['paid', 'refunded'].includes(ordData.status) && ordData.status !== 'cancelled') {
+        order.cancel(input.reason || 'Transfer dibatalkan');
+        if (this.inventoryService) {
+          for (const item of ordData.items) {
+            if (item.isFreeItem) continue;
+            try {
+              await this.inventoryService.releaseStock({
+                tenantId: input.tenantId,
+                productId: item.productId,
+                quantity: item.quantity,
+                referenceId: ordData.id,
+                userId: input.tenantId,
+              });
+            } catch {
+              // best-effort
+            }
+          }
+        }
+        await this.orderRepository.save(order);
+        orderCancelled = true;
+      }
+    }
+
+    await this.paymentRepository.save(payment);
+
+    for (const event of payment.domainEvents) {
+      this.eventBus.publish(event);
+    }
+    if (orderCancelled) {
+      for (const event of order!.domainEvents) {
+        this.eventBus.publish(event);
+      }
+    }
+
+    return { payment, order: order ?? null, orderCancelled };
   }
 
   async confirmQrisPayment(input: {

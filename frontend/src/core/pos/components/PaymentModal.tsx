@@ -38,7 +38,14 @@ export function PaymentModal() {
 
   const isCash = selectedMethod?.code === 'cash';
   const isQris = selectedMethod?.code === 'qris';
+  const isTransfer = selectedMethod?.code === 'transfer';
   const paid = parseInt(amountPaid.replace(/\D/g, ''), 10) || 0;
+
+  const [transferPending, setTransferPending] = useState<null | {
+    orderNumber: string;
+    referenceNumber: string;
+    amount: number;
+  }>(null);
 
   const payQty = (productId: string) => payQuantities[productId] ?? 0;
 
@@ -125,6 +132,7 @@ export function PaymentModal() {
 
   const canSubmit = selectedMethod !== null
     && (isCash ? paid >= payable && payable > 0 : true)
+    && (isTransfer ? referenceNumber.trim().length > 0 : true)
     && (splitMode ? selectedTotal > 0 && !portionPending : items.length > 0)
     && paymentState !== 'processing';
 
@@ -312,6 +320,29 @@ export function PaymentModal() {
       }
 
       const res = await api.post('/payments/pay-cash', payload);
+
+      if (res.data.data?.pending) {
+        removeItems(items.map((i) => i.productId));
+        queryClient.invalidateQueries({ queryKey: ['inventory'] });
+        queryClient.invalidateQueries({ queryKey: ['orders'] });
+        queryClient.invalidateQueries({ queryKey: ['daily-report'] });
+        queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+        queryClient.invalidateQueries({ queryKey: ['shifts'] });
+        queryClient.invalidateQueries({ queryKey: ['open-shift'] });
+        queryClient.invalidateQueries({ queryKey: ['shift-report'] });
+        if (activeBillId) {
+          await saveBill();
+        } else {
+          closeBillAfterPayment();
+        }
+        setPaymentState('idle');
+        setTransferPending({
+          orderNumber: res.data.data.order?.orderNumber ?? '',
+          referenceNumber: referenceNumber.trim(),
+          amount: payable,
+        });
+        return;
+      }
 
       await applyPaymentResult(res.data.data, { paidAmount: paid, changeAmount: change });
     } catch (err: any) {
@@ -611,6 +642,41 @@ export function PaymentModal() {
                     </div>
                   </div>
                 )}
+              </>
+            ) : transferPending ? (
+              <>
+                <div className="flex-1 flex flex-col items-center justify-center text-center gap-3">
+                  <div className="w-14 h-14 rounded-full bg-amber-100 flex items-center justify-center">
+                    <svg className="w-8 h-8 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <p className="text-xl font-extrabold text-gray-800">Menunggu Konfirmasi</p>
+                  <p className="max-w-[280px] text-sm text-gray-500">
+                    Pembayaran transfer {transferPending.referenceNumber} akan diproses setelah dana
+                    masuk dikonfirmasi. Cek Daftar Transaksi → Menunggu Konfirmasi.
+                  </p>
+                  <div className="w-full max-w-[280px] bg-white rounded-xl border border-gray-200 p-4 space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Order</span>
+                      <span className="font-bold text-gray-800">{transferPending.orderNumber}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Referensi</span>
+                      <span className="font-mono text-gray-800">{transferPending.referenceNumber}</span>
+                    </div>
+                    <div className="flex justify-between border-t border-gray-100 pt-2">
+                      <span className="text-gray-500">Total</span>
+                      <span className="font-extrabold text-gray-900">Rp {formatIDR(transferPending.amount)}</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={closePaymentModal}
+                    className="px-6 py-2.5 text-sm font-bold text-white blue-primary rounded-lg hover:opacity-90"
+                  >
+                    Tutup
+                  </button>
+                </div>
               </>
             ) : (
               <>

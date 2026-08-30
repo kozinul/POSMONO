@@ -9,6 +9,9 @@ export function createPaymentRoutes(paymentController: PaymentController): Route
 
   router.get('/', authenticate, asyncHandler(paymentController.list.bind(paymentController)));
   router.get('/refundable', authenticate, authorize('payments:read'), asyncHandler(paymentController.listRefundable.bind(paymentController)));
+  router.get('/pending', authenticate, asyncHandler(paymentController.listPendingTransfers.bind(paymentController)));
+  router.post('/:paymentId/confirm', authenticate, asyncHandler(paymentController.confirmTransfer.bind(paymentController)));
+  router.post('/:paymentId/cancel', authenticate, authorize('payments:write'), asyncHandler(paymentController.cancelTransfer.bind(paymentController)));
   router.post('/qris/initiate', authenticate, asyncHandler(paymentController.qrisInitiate.bind(paymentController)));
   router.post('/qris/confirm', authenticate, asyncHandler(paymentController.qrisConfirm.bind(paymentController)));
   router.get('/qris/status/:referenceNumber', authenticate, asyncHandler(paymentController.qrisStatus.bind(paymentController)));

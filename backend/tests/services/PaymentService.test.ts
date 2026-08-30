@@ -357,4 +357,180 @@ describe('PaymentService', () => {
       expect(result).toHaveLength(1);
     });
   });
+
+  describe('Transfer Confirmation', () => {
+    const transferInput = {
+      tenantId: TENANT_ID,
+      cashierId: 'cashier-1',
+      items: [{ productId: 'p1', quantity: 2, unitPrice: 25000 }],
+      amountPaid: 55500,
+      method: 'transfer' as const,
+      referenceNumber: 'TRF-123456',
+    };
+
+    function createPendingPayment(): Payment {
+      return Payment.hydrate({
+        id: 'pay-transfer-1',
+        tenantId: TENANT_ID,
+        orderId: 'order-1',
+        amount: 55500,
+        status: 'pending',
+        method: 'transfer',
+        shiftId: null,
+        referenceNumber: 'TRF-123456',
+        splitBills: [],
+        qrCodeUrl: null,
+        paymentTransactionId: null,
+        provider: null,
+        cardLastFour: null,
+        metadata: {},
+        paidAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as never);
+    }
+
+    function createUnpaidOrder(): Order {
+      return Order.hydrate({
+        id: 'order-1',
+        tenantId: TENANT_ID,
+        orderNumber: 'ORD-001',
+        status: 'confirmed',
+        items: [{ productId: 'p1', quantity: 2, unitPrice: 25000, totalPrice: 50000, modifiers: [], isFreeItem: false }],
+        subtotal: 50000,
+        discount: 0,
+        discountTotal: 0,
+        dppTotal: 50000,
+        tax: 5500,
+        taxDetails: [],
+        total: 55500,
+        roundingAdjustment: 0,
+        roundedPayable: 55500,
+        roundingMethod: 'nearest',
+        roundingDenomination: 0,
+        serviceCharge: 0,
+        serviceChargeRate: 0,
+        paymentStatus: 'pending',
+        paymentBreakdown: [],
+        promotions: [],
+        discountBreakdown: [],
+        customerId: null,
+        customerName: null,
+        cashierId: 'cashier-1',
+        cashierName: 'Kasir',
+        tableNumber: null,
+        transactionType: 'dine-in',
+        notes: '',
+        source: 'pos',
+        voidedItems: [],
+        voidApprovals: [],
+        voidedAt: null,
+        voidedBy: null,
+        voidedByName: null,
+        voidReason: null,
+        metadata: {},
+        createdAt: new Date(),
+        paidAt: null,
+        updatedAt: new Date(),
+      } as never);
+    }
+
+    it('payCash with transfer creates pending payment and leaves order unpaid', async () => {
+      const result = await service.payCash(transferInput);
+
+      expect(result.pending).toBe(true);
+      expect(result.receipt).toBeNull();
+      expect(result.payment.serialize().status).toBe('pending');
+      const orderData = result.order.serialize();
+      expect(orderData.paymentStatus).toBe('pending');
+      expect(orderData.status).toBe('confirmed');
+      expect(orderData.paymentBreakdown).toHaveLength(0);
+      expect(paymentRepo.save).toHaveBeenCalled();
+      expect(orderRepo.save).toHaveBeenCalled();
+    });
+
+    it('confirmTransferPayment completes payment and pays linked order', async () => {
+      paymentRepo.findById.mockResolvedValue(createPendingPayment());
+      orderRepo.findById.mockResolvedValue(createUnpaidOrder());
+
+      const result = await service.confirmTransferPayment({
+        tenantId: TENANT_ID,
+        paymentId: 'pay-transfer-1',
+        cashierId: 'cashier-1',
+        cashierName: 'Kasir',
+      });
+
+      expect(result.payment.serialize().status).toBe('completed');
+      expect(result.payment.serialize().paidAt).toBeTruthy();
+      const orderData = result.order.serialize();
+      expect(orderData.paymentStatus).toBe('completed');
+      expect(orderData.status).toBe('paid');
+      expect(orderData.paymentBreakdown).toMatchObject([{ method: 'transfer', amount: 55500 }]);
+      expect(paymentRepo.save).toHaveBeenCalled();
+      expect(orderRepo.save).toHaveBeenCalled();
+    });
+
+    it('rejects confirming a non-pending payment', async () => {
+      const payment = createPendingPayment();
+      paymentRepo.findById.mockResolvedValue(payment);
+      orderRepo.findById.mockResolvedValue(createUnpaidOrder());
+
+      await service.confirmTransferPayment({
+        tenantId: TENANT_ID,
+        paymentId: 'pay-transfer-1',
+        cashierId: 'cashier-1',
+      });
+
+      await expect(
+        service.confirmTransferPayment({
+          tenantId: TENANT_ID,
+          paymentId: 'pay-transfer-1',
+          cashierId: 'cashier-1',
+        }),
+      ).rejects.toThrow('sudah dikonfirmasi');
+    });
+
+    it('cancelTransferPayment fails pending payment and cancels unpaid order', async () => {
+      paymentRepo.findById.mockResolvedValue(createPendingPayment());
+      orderRepo.findById.mockResolvedValue(createUnpaidOrder());
+      const inventoryRepo = { releaseStock: vi.fn().mockResolvedValue(undefined) };
+      const svc = new PaymentService(
+        paymentRepo,
+        orderRepo,
+        null as never,
+        null as never,
+        taxService as never,
+        null as never,
+        eventBus,
+        undefined,
+        inventoryRepo,
+      );
+
+      const result = await svc.cancelTransferPayment({
+        tenantId: TENANT_ID,
+        paymentId: 'pay-transfer-1',
+        reason: 'Belum ada dana masuk',
+      });
+
+      expect(result.payment.serialize().status).toBe('failed');
+      expect(result.orderCancelled).toBe(true);
+      expect(result.order?.serialize().status).toBe('cancelled');
+      expect(inventoryRepo.releaseStock).toHaveBeenCalled();
+      expect(paymentRepo.save).toHaveBeenCalled();
+      expect(orderRepo.save).toHaveBeenCalled();
+    });
+
+    it('listPendingTransfers joins order info', async () => {
+      paymentRepo.findPending = vi.fn().mockResolvedValue([createPendingPayment()]);
+      orderRepo.findById.mockImplementation(async (id: string) =>
+        id === 'order-1' ? createUnpaidOrder() : null,
+      );
+
+      const result = await service.listPendingTransfers(TENANT_ID);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].payment.status).toBe('pending');
+      expect(result[0].order.orderNumber).toBe('ORD-001');
+    });
+  });
 });

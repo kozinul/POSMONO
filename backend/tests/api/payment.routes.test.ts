@@ -3,6 +3,7 @@ import request from 'supertest';
 import express from 'express';
 import { authenticate } from '../../src/@shared/interfaces/middleware/authenticate';
 import { errorHandler } from '../../src/@shared/interfaces/middleware/errorHandler';
+import { createPaymentRoutes } from '../../src/core/payment/interfaces/http/routes/payment.routes';
 import { generateTestToken } from '../helpers/auth';
 
 function createTestApp() {
@@ -125,6 +126,66 @@ describe('Payment Routes', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.data).toBeInstanceOf(Array);
+    });
+  });
+
+  describe('Transfer RBAC (real payment.routes)', () => {
+    const noopController = async (_req: any, res: any) => res.json({ success: true, data: {} });
+
+    const realApp = express();
+    realApp.use(express.json());
+    realApp.use('/api/payments', createPaymentRoutes({
+      list: noopController,
+      listRefundable: noopController,
+      listPendingTransfers: async (_req: any, res: any) => res.json({ success: true, data: [] }),
+      confirmTransfer: async (_req: any, res: any) => res.json({ success: true, data: { payment: { id: 'p1' } } }),
+      cancelTransfer: async (_req: any, res: any) => res.json({ success: true, data: { payment: { id: 'p1' }, orderCancelled: true } }),
+      qrisInitiate: noopController,
+      qrisConfirm: noopController,
+      qrisStatus: noopController,
+      qrisTestConfig: noopController,
+      qrisCancel: noopController,
+      getByOrder: noopController,
+      payCash: noopController,
+      processPayment: noopController,
+      refund: noopController,
+      splitBill: noopController,
+    } as never));
+    realApp.use(errorHandler);
+
+    const readOnlyToken = generateTestToken({ sub: 'cashier-1', role: 'cashier', permissions: ['payments:read'] });
+    const writeToken = generateTestToken({ sub: 'manager-1', role: 'manager', permissions: ['payments:read', 'payments:write'] });
+
+    it('GET /pending is open to payments:read (cashier can list at POS)', async () => {
+      const res = await request(realApp)
+        .get('/api/payments/pending')
+        .set('Authorization', `Bearer ${readOnlyToken}`);
+      expect(res.status).toBe(200);
+    });
+
+    it('POST /:id/confirm is open to payments:read (cashier confirms incoming transfer)', async () => {
+      const res = await request(realApp)
+        .post('/api/payments/pay-1/confirm')
+        .set('Authorization', `Bearer ${readOnlyToken}`)
+        .send({});
+      expect(res.status).toBe(200);
+    });
+
+    it('POST /:id/cancel is blocked for payments:read-only', async () => {
+      const res = await request(realApp)
+        .post('/api/payments/pay-1/cancel')
+        .set('Authorization', `Bearer ${readOnlyToken}`)
+        .send({ reason: 'test' });
+      expect(res.status).toBe(403);
+    });
+
+    it('POST /:id/cancel is allowed with payments:write', async () => {
+      const res = await request(realApp)
+        .post('/api/payments/pay-1/cancel')
+        .set('Authorization', `Bearer ${writeToken}`)
+        .send({ reason: 'test' });
+      expect(res.status).toBe(200);
+      expect(res.body.data.orderCancelled).toBe(true);
     });
   });
 });

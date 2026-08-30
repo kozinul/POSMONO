@@ -4,7 +4,7 @@ const SplitBillSchema = new Schema(
   {
     portion: { type: Number, required: true },
     amount: { type: Number, required: true },
-    method: { type: String, enum: ['cash', 'qris', 'transfer', 'card'], required: true },
+    method: { type: String, enum: ['cash', 'qris', 'transfer', 'card', 'debit', 'credit', 'ewallet'], required: true },
     referenceNumber: { type: String, default: '' },
   },
   { _id: false },
@@ -40,7 +40,7 @@ export const PaymentSchema = new Schema(
     },
     method: {
       type: String,
-      enum: ['cash', 'qris', 'transfer', 'card'],
+      enum: ['cash', 'qris', 'transfer', 'card', 'debit', 'credit', 'ewallet'],
       required: true,
     },
     shiftId: { type: String, default: null, index: true },

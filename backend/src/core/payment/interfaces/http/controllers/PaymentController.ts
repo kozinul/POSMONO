@@ -217,6 +217,46 @@ export class PaymentController extends BaseController {
     });
   }
 
+  async listPendingTransfers(req: Request, res: Response): Promise<void> {
+    const result = await this.paymentService.listPendingTransfers(req.tenantId);
+    this.ok(res, result);
+  }
+
+  async confirmTransfer(req: Request, res: Response): Promise<void> {
+    const parsed = z.object({ cashierName: z.string().optional().default('') }).safeParse(req.body ?? {});
+    if (!parsed.success) throw new ValidationError('Invalid input');
+
+    const result = await this.paymentService.confirmTransferPayment({
+      tenantId: req.tenantId,
+      paymentId: req.params.paymentId,
+      cashierId: req.userId,
+      cashierName: parsed.data.cashierName,
+    });
+
+    this.ok(res, {
+      payment: result.payment.serialize(),
+      order: result.order.serialize(),
+      receipt: serializeReceipt(result.receipt),
+    });
+  }
+
+  async cancelTransfer(req: Request, res: Response): Promise<void> {
+    const parsed = z.object({ reason: z.string().optional().default('') }).safeParse(req.body ?? {});
+    if (!parsed.success) throw new ValidationError('Invalid input');
+
+    const result = await this.paymentService.cancelTransferPayment({
+      tenantId: req.tenantId,
+      paymentId: req.params.paymentId,
+      reason: parsed.data.reason,
+    });
+
+    this.ok(res, {
+      payment: result.payment.serialize(),
+      order: result.order ? result.order.serialize() : null,
+      orderCancelled: result.orderCancelled,
+    });
+  }
+
   async getByOrder(req: Request, res: Response): Promise<void> {
     const payment = await this.paymentService.getByOrder(req.tenantId, req.params.orderId);
     if (!payment) throw new ValidationError('Payment not found');

@@ -47,6 +47,9 @@ export function PosActionPanel(props: PosActionPanelProps) {
   const [billSearch, setBillSearch] = useState('');
   const [reportModal, setReportModal] = useState<null | 'transactions' | 'receipt'>(null);
   const [openShiftModalOpen, setOpenShiftModalOpen] = useState(false);
+  const [pendingTransferOpen, setPendingTransferOpen] = useState(false);
+  const [pendingTransfers, setPendingTransfers] = useState<any[]>([]);
+  const [pendingLoading, setPendingLoading] = useState(false);
 
   const { heldOrders, tapBill, dismissHeldOrder } = usePOSStore();
 
@@ -172,6 +175,68 @@ export function PosActionPanel(props: PosActionPanelProps) {
     }
   };
 
+  const loadPendingTransfers = async () => {
+    setPendingLoading(true);
+    try {
+      const res = await api.get<{ success: boolean; data: any[] }>('/payments/pending');
+      setPendingTransfers(res.data.data ?? []);
+    } catch (err) {
+      setPendingTransfers([]);
+    } finally {
+      setPendingLoading(false);
+    }
+  };
+
+  const invalidateAfterPayment = () => {
+    queryClient.invalidateQueries({ queryKey: ['orders'] });
+    queryClient.invalidateQueries({ queryKey: ['daily-report'] });
+    queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
+    queryClient.invalidateQueries({ queryKey: ['shifts'] });
+    queryClient.invalidateQueries({ queryKey: ['open-shift'] });
+    queryClient.invalidateQueries({ queryKey: ['shift-report'] });
+    queryClient.invalidateQueries({ queryKey: ['payment-reconciliation'] });
+  };
+
+  const handleConfirmTransfer = async (payment: any) => {
+    try {
+      await api.post(`/payments/${payment.id}/confirm`, {
+        cashierName: currentUser?.displayName || '',
+      });
+      await loadPendingTransfers();
+      invalidateAfterPayment();
+      toast({ title: `Transfer ${payment.referenceNumber || ''} dikonfirmasi`, icon: 'success' });
+    } catch (err: any) {
+      const msg = err.response?.data?.error?.message || err.message || 'Gagal konfirmasi transfer.';
+      toast({ title: msg, icon: 'error' });
+      loadPendingTransfers();
+    }
+  };
+
+  const handleCancelTransfer = async (payment: any) => {
+    const { value, isConfirmed } = await Swal.fire({
+      title: `Batal Transfer ${payment.referenceNumber || ''}`,
+      text: 'Pembayaran akan ditandai gagal dan order dibatalkan.',
+      input: 'text',
+      inputPlaceholder: 'Alasan pembatalan (opsional)',
+      showCancelButton: true,
+      confirmButtonText: 'Batalkan Transfer',
+      cancelButtonText: 'Kembali',
+      confirmButtonColor: '#dc2626',
+      inputValidator: (v: string) => undefined,
+    });
+    if (!isConfirmed) return;
+    try {
+      await api.post(`/payments/${payment.id}/cancel`, { reason: value || 'Dibatalkan kasir' });
+      await loadPendingTransfers();
+      invalidateAfterPayment();
+      toast({ title: `Transfer ${payment.referenceNumber || ''} dibatalkan`, icon: 'success' });
+    } catch (err: any) {
+      const msg = err.response?.data?.error?.message || err.message || 'Gagal membatalkan transfer.';
+      toast({ title: msg, icon: 'error' });
+      loadPendingTransfers();
+    }
+  };
+
   const shiftSales = shiftReport?.sales;
   const shiftOrders = shiftReport?.orders ?? [];
   const inheritedCarriedBills = shiftReport?.inheritedCarriedBills ?? [];
@@ -237,6 +302,20 @@ export function PosActionPanel(props: PosActionPanelProps) {
                 className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg"
               >
                 Daftar Transaksi
+              </button>
+              <button
+                onClick={() => {
+                  setPendingTransferOpen(true);
+                  loadPendingTransfers();
+                }}
+                className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg flex items-center justify-between"
+              >
+                <span>Menunggu Konfirmasi</span>
+                {pendingTransfers.length > 0 && (
+                  <span className="bg-amber-100 text-amber-800 text-xs font-semibold px-2 py-0.5 rounded-full">
+                    {pendingTransfers.length}
+                  </span>
+                )}
               </button>
             </div>
 
@@ -417,6 +496,89 @@ export function PosActionPanel(props: PosActionPanelProps) {
                 className="px-4 py-2 text-sm text-gray-600 hover:text-gray-700"
               >
                 Batal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Menunggu Konfirmasi modal */}
+      {pendingTransferOpen && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/30 flex items-center justify-center p-4"
+          onClick={() => setPendingTransferOpen(false)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-lg w-full max-w-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-gray-800">Menunggu Konfirmasi</h3>
+                <p className="text-sm text-gray-400 mt-0.5">Transfer yang belum dikonfirmasi.</p>
+              </div>
+              <button
+                onClick={() => setPendingTransferOpen(false)}
+                className="text-gray-400 hover:text-gray-600 text-lg leading-none"
+                aria-label="Tutup"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-4">
+              <button
+                onClick={loadPendingTransfers}
+                disabled={pendingLoading}
+                className="w-full mb-3 px-3 py-2 text-sm font-semibold text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 disabled:opacity-50"
+              >
+                {pendingLoading ? 'Memuat...' : 'Muat Ulang'}
+              </button>
+              <div className="max-h-60 overflow-y-auto divide-y divide-gray-100">
+                {pendingTransfers.length === 0 ? (
+                  <p className="text-center text-sm text-gray-400 py-4">
+                    Tidak ada transfer menunggu konfirmasi.
+                  </p>
+                ) : (
+                  pendingTransfers.map((pt: any) => (
+                    <div key={pt.payment.id} className="py-3">
+                      <div className="flex items-center justify-between">
+                        <span className="flex flex-col items-start">
+                          <span className="text-gray-800 font-medium">
+                            {pt.order?.orderNumber ?? '—'}
+                          </span>
+                          <span className="mt-0.5 text-xs text-gray-500 font-mono">
+                            {pt.payment.referenceNumber || pt.payment.id}
+                          </span>
+                        </span>
+                        <span className="text-gray-900 font-medium">
+                          Rp {formatIDR(pt.payment.amount ?? 0)}
+                        </span>
+                      </div>
+                      <div className="mt-2 flex gap-2">
+                        <button
+                          onClick={() => handleConfirmTransfer(pt.payment)}
+                          className="flex-1 px-3 py-1.5 text-xs font-semibold text-white bg-green-600 rounded-lg hover:bg-green-700"
+                        >
+                          Konfirmasi
+                        </button>
+                        <button
+                          onClick={() => handleCancelTransfer(pt.payment)}
+                          className="flex-1 px-3 py-1.5 text-xs font-semibold text-red-600 bg-white border border-red-200 rounded-lg hover:bg-red-50"
+                        >
+                          Batal
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+            <div className="p-4 border-t border-gray-200 flex justify-end">
+              <button
+                onClick={() => setPendingTransferOpen(false)}
+                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-700"
+              >
+                Tutup
               </button>
             </div>
           </div>

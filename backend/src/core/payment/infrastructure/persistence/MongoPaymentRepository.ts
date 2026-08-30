@@ -97,6 +97,11 @@ export class MongoPaymentRepository {
     return docs.map((d: PaymentDoc) => this.toDomain(d));
   }
 
+  async findPending(tenantId: string): Promise<Payment[]> {
+    const docs = await this.model.find({ tenantId, status: 'pending' }).sort({ createdAt: -1 }).exec();
+    return docs.map((d: PaymentDoc) => this.toDomain(d));
+  }
+
   async findByOrderId(tenantId: string, orderId: string): Promise<Payment[]> {
     const docs = await this.model.find({ tenantId, orderId }).sort({ createdAt: -1 }).exec();
     return docs.map((d: PaymentDoc) => this.toDomain(d));
