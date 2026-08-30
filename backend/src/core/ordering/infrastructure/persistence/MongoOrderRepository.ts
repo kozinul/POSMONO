@@ -39,6 +39,7 @@ interface OrderDoc extends Document<string> {
   voidedByName: string | null;
   voidReason: string | null;
   metadata: Record<string, unknown>;
+  invoiceNumber?: string | null;
   paidAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -52,6 +53,7 @@ export class MongoOrderRepository {
       id: doc._id,
       tenantId: doc.tenantId,
       orderNumber: doc.orderNumber,
+      invoiceNumber: doc.invoiceNumber ?? null,
       status: doc.status as IOrder['status'],
       items: doc.items,
       subtotal: doc.subtotal,
@@ -97,6 +99,7 @@ export class MongoOrderRepository {
       _id: data.id,
       tenantId: data.tenantId,
       orderNumber: data.orderNumber,
+      invoiceNumber: data.invoiceNumber,
       status: data.status,
       items: data.items,
       subtotal: data.subtotal,

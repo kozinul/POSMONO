@@ -117,6 +117,7 @@ import { MongoTemplateRepository } from '../core/template/infrastructure/persist
 import { TemplateService } from '../core/template/application/services/TemplateService';
 import { RenderService } from '../core/template/application/services/RenderService';
 import { ReceiptRenderService } from '../core/template/application/services/ReceiptRenderService';
+import { InvoiceRenderService } from '../core/template/application/services/InvoiceRenderService';
 import { TemplateController } from '../core/template/interfaces/http/controllers/TemplateController';
 import { DatabaseService } from '../core/database/application/services/DatabaseService';
 import { DatabaseController } from '../core/database/interfaces/http/controllers/DatabaseController';
@@ -594,6 +595,9 @@ export function buildContainer() {
         recallOrderService: container.resolve('recallOrderService'),
         closeBillService: container.resolve('closeBillService'),
         orderRepository: container.resolve('orderRepository'),
+        paymentRepository: container.resolve('paymentRepository'),
+        tenantRepository: container.resolve('tenantRepository'),
+        invoiceRenderService: container.resolve('invoiceRenderService'),
       }),
     }),
     shiftRepository: asClass(MongoShiftRepository, {
@@ -868,6 +872,12 @@ export function buildContainer() {
       }),
     }),
     receiptRenderService: asClass(ReceiptRenderService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        templateService: container.resolve('templateService'),
+      }),
+    }),
+    invoiceRenderService: asClass(InvoiceRenderService, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
         templateService: container.resolve('templateService'),

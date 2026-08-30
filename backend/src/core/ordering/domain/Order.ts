@@ -82,6 +82,7 @@ export interface IOrder {
   id: string;
   tenantId: string;
   orderNumber: string;
+  invoiceNumber: string | null;
   status: OrderStatus;
   items: IOrderItem[];
   subtotal: number;
@@ -124,6 +125,7 @@ export interface IOrder {
 export class Order extends AggregateRoot<OrderId> {
   private tenantId: string;
   private orderNumber: string;
+  private invoiceNumber: string | null;
   private status: OrderStatus;
   private items: IOrderItem[];
   private subtotal: number;
@@ -166,6 +168,7 @@ export class Order extends AggregateRoot<OrderId> {
     super(new OrderId(props.id));
     this.tenantId = props.tenantId;
     this.orderNumber = props.orderNumber;
+    this.invoiceNumber = props.invoiceNumber ?? null;
     this.status = props.status;
     this.items = [...props.items];
     this.subtotal = props.subtotal;
@@ -205,7 +208,7 @@ export class Order extends AggregateRoot<OrderId> {
     this.updatedAt = props.updatedAt;
   }
 
-  static create(props: Omit<IOrder, 'id' | 'orderNumber' | 'status' | 'paymentStatus' | 'createdAt' | 'updatedAt' | 'paidAt' | 'voidedAt' | 'voidedBy' | 'voidedByName' | 'voidReason'>): Order {
+  static create(props: Omit<IOrder, 'id' | 'orderNumber' | 'invoiceNumber' | 'status' | 'paymentStatus' | 'createdAt' | 'updatedAt' | 'paidAt' | 'voidedAt' | 'voidedBy' | 'voidedByName' | 'voidReason'>): Order {
     const now = new Date();
     const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
     const seq = String(Math.floor(Math.random() * 9999) + 1).padStart(4, '0');
@@ -215,6 +218,7 @@ export class Order extends AggregateRoot<OrderId> {
       ...props,
       id: new OrderId().toValue(),
       orderNumber,
+      invoiceNumber: null,
       status: 'draft',
       paymentStatus: 'pending',
       taxDetails: props.taxDetails ?? [],
@@ -276,10 +280,17 @@ export class Order extends AggregateRoot<OrderId> {
   }
 
   markPaid(): void {
+    this.ensureInvoiceNumber();
     this.paymentStatus = 'completed';
     this.status = 'paid';
     this.paidAt = new Date();
     this.updatedAt = new Date();
+  }
+
+  private ensureInvoiceNumber(): void {
+    if (!this.invoiceNumber) {
+      this.invoiceNumber = `INV-${this.orderNumber.replace(/^ORD-/, '')}`;
+    }
   }
 
   markPaymentFailed(): void {
@@ -478,6 +489,7 @@ export class Order extends AggregateRoot<OrderId> {
       throw new Error('Order is already paid');
     }
 
+    this.ensureInvoiceNumber();
     this.paymentBreakdown = [...paymentBreakdown];
     this.paymentStatus = 'completed';
     this.status = 'paid';
@@ -881,6 +893,7 @@ export class Order extends AggregateRoot<OrderId> {
       id: this._id.toValue(),
       tenantId: this.tenantId,
       orderNumber: this.orderNumber,
+      invoiceNumber: this.invoiceNumber,
       status: this.status,
       items: [...this.items],
       subtotal: this.subtotal,

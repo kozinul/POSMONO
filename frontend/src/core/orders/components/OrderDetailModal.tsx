@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { toast } from '../../../@shared/hooks/useToast';
+import { api } from '../../../@shared/services/api';
 import { formatIDR } from '../../pos/utils/money';
 import { paymentMethodLabel } from '../../pos/utils/paymentLabels';
 import { printReceipt as apiPrintReceipt } from '../../printing/hooks/usePrinters';
@@ -35,10 +36,39 @@ interface OrderDetailModalProps {
 export function OrderDetailModal({ order, onClose }: OrderDetailModalProps) {
   const printRef = useRef<HTMLDivElement>(null);
   const [reprinting, setReprinting] = useState(false);
+  const [invoicing, setInvoicing] = useState(false);
 
   const badge = statusLabel(order.status);
 
   const handlePrint = () => window.print();
+
+  const handleInvoice = async () => {
+    if (invoicing) return;
+    setInvoicing(true);
+    try {
+      const res = await api.get<{
+        success: boolean;
+        data: { pdf: string; invoiceNumber: string; templateName?: string | null };
+      }>(`/orders/${order.id}/invoice`);
+      const { pdf, invoiceNumber } = res.data.data;
+      const binary = atob(pdf);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+      const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+      const win = window.open(url, '_blank');
+      if (!win) {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${invoiceNumber}.pdf`;
+        a.click();
+      }
+      toast({ title: `Invoice ${invoiceNumber} dibuat`, icon: 'success' });
+    } catch {
+      toast({ title: 'Gagal membuat invoice. Pastikan template invoice (A4) tersedia.', icon: 'error' });
+    } finally {
+      setInvoicing(false);
+    }
+  };
 
   const handleReprint = async () => {
     if (reprinting) return;
@@ -203,6 +233,13 @@ export function OrderDetailModal({ order, onClose }: OrderDetailModalProps) {
             className="flex-1 py-2 rounded-xl font-bold border-2 border-primary-600 text-primary-600 hover:bg-primary-50 disabled:opacity-50"
           >
             {reprinting ? 'Mencetak...' : 'Print Ulang'}
+          </button>
+          <button
+            onClick={handleInvoice}
+            disabled={invoicing}
+            className="flex-1 py-2 rounded-xl font-bold border-2 border-amber-600 text-amber-600 hover:bg-amber-50 disabled:opacity-50"
+          >
+            {invoicing ? 'Membuat...' : 'Invoice A4'}
           </button>
           <button
             onClick={handlePrint}

@@ -101,6 +101,7 @@ export const OrderSchema = new Schema(
     _id: { type: String },
     tenantId: { type: String, required: true, index: true },
     orderNumber: { type: String, required: true },
+    invoiceNumber: { type: String, default: null },
     status: {
       type: String,
       enum: ['draft', 'confirmed', 'paid', 'preparing', 'completed', 'cancelled', 'refunded', 'voided', 'partially-voided', 'held'],

@@ -22,6 +22,9 @@ import {
   CloseBillService,
 } from '../../../application/services/OrderService';
 import { MongoOrderRepository } from '../../../infrastructure/persistence/MongoOrderRepository';
+import { MongoPaymentRepository } from '../../../../payment/infrastructure/persistence/MongoPaymentRepository';
+import { MongoTenantRepository } from '../../../../tenant/infrastructure/persistence/MongoTenantRepository';
+import { InvoiceRenderService } from '../../../../template/application/services/InvoiceRenderService';
 import { z } from 'zod';
 import { ValidationError } from '../../../../../@shared/infrastructure/error/AppError';
 
@@ -190,6 +193,9 @@ export class OrderController extends BaseController {
     private readonly recallOrderService: RecallOrderService,
     private readonly closeBillService: CloseBillService,
     private readonly orderRepository: MongoOrderRepository,
+    private readonly paymentRepository: MongoPaymentRepository,
+    private readonly tenantRepository: MongoTenantRepository,
+    private readonly invoiceRenderService: InvoiceRenderService,
   ) {
     super();
   }
@@ -270,6 +276,38 @@ export class OrderController extends BaseController {
       throw new ValidationError('Order not found');
     }
     this.ok(res, order.serialize());
+  }
+
+  async invoice(req: Request, res: Response): Promise<void> {
+    const order = await this.orderRepository.findById(req.params.id);
+    if (!order || order.serialize().tenantId !== req.tenantId) {
+      throw new ValidationError('Order not found');
+    }
+
+    const tenant = await this.tenantRepository.findById(req.tenantId);
+    if (!tenant) throw new ValidationError('Tenant not found');
+
+    const orderData = order.serialize();
+    const payments = await this.paymentRepository.findByOrderId(req.tenantId, orderData.id);
+    const payment = payments.find((p) => p.serialize().status === 'completed') ?? payments[0] ?? null;
+
+    const result = await this.invoiceRenderService.render({
+      tenantId: req.tenantId,
+      order: orderData,
+      payment: payment ? payment.serialize() : null,
+      tenant: tenant.serialize(),
+    });
+
+    const invoiceNumber = orderData.invoiceNumber || `INV-${orderData.orderNumber.replace(/^ORD-/, '')}`;
+
+    this.ok(res, {
+      pdf: result.pdf.toString('base64'),
+      layout: result.layout,
+      templateId: result.templateId,
+      templateName: result.templateName,
+      paper: result.paper,
+      invoiceNumber,
+    });
   }
 
   async voidOrder(req: Request, res: Response): Promise<void> {
