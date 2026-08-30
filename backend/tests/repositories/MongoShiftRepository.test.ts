@@ -50,13 +50,13 @@ describe('MongoShiftRepository', () => {
       const shift = createShift(TENANT_A);
       await repo.save(shift);
 
-      shift.close(750000, 745000);
+      shift.close(750000);
       await repo.save(shift);
 
       const found = await repo.findById(shift.id.toValue());
       expect(found!.serialize().status).toBe('closed');
-      expect(found!.serialize().expectedTotal).toBe(750000);
-      expect(found!.serialize().actualTotal).toBe(745000);
+      expect(found!.serialize().expectedTotal).toBe(500000);
+      expect(found!.serialize().actualTotal).toBe(750000);
     });
   });
 

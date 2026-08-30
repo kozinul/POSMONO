@@ -6,9 +6,9 @@
     "dev": "ts-node-dev --respawn --transpile-only src/dev.ts",
     "build": "tsc",
     "start": "node dist/bootstrap/app.js",
-    "test": "pnpm test:db:up && vitest run; pnpm test:db:down",
-    "test:watch": "pnpm test:db:up && vitest; pnpm test:db:down",
-    "test:coverage": "pnpm test:db:up && vitest run --coverage; pnpm test:db:down",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "test:db:up": "docker compose -f docker-compose.test.yml up -d --wait",
     "test:db:down": "docker compose -f docker-compose.test.yml down -v",
     "lint": "eslint src/",
@@ -16,6 +16,8 @@
     "backfill:cashier": "ts-node src/scripts/backfillCashierName.ts",
     "backfill:payment": "ts-node src/scripts/backfillPaymentBreakdown.ts",
     "backfill:cost": "ts-node src/scripts/backfillStockCost.ts",
+    "loadtest": "k6 run loadtest/scenarios/money-loop.js",
+    "loadtest-sweep": "k6 run -e VUS=10 -e DURATION=60s loadtest/scenarios/money-loop.js && k6 run -e VUS=25 -e DURATION=60s loadtest/scenarios/money-loop.js && k6 run -e VUS=50 -e DURATION=60s loadtest/scenarios/money-loop.js",
     "clean": "rm -rf dist"
   },
   "dependencies": {

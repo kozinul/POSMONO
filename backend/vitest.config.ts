@@ -8,6 +8,13 @@ export default defineConfig({
     include: ['src/**/*.test.ts', 'tests/**/*.test.ts'],
     setupFiles: ['tests/helpers/setup.ts'],
     testTimeout: 30000,
+    pool: 'forks',
+    poolOptions: {
+      forks: {
+        maxForks: 1,
+        minForks: 1,
+      },
+    },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],

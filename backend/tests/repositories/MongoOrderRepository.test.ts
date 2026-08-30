@@ -161,6 +161,7 @@ describe('MongoOrderRepository', () => {
       await repo.save(paid);
       await new Promise((r) => setTimeout(r, 5));
       const draft = createOrder(TENANT_A, { metadata: { type: 'draft' } });
+      draft.hold();
       await repo.save(draft);
 
       const summary = await repo.getSummary(TENANT_A);
