@@ -276,6 +276,31 @@ Modular SaaS POS Platform (Node.js/Express + React/Tailwind). Multi-tenant, mult
 - **Semantik**: revenue & diskon/pajak/SC dari `orders` (finance), HPP = total `qty × unitCost` stock keluar periode (moving-average cost saat sale). `grossMarginPct` = Laba Kotor / Pendapatan
 - **Tests**: `ReportService.test.ts` +2 (getProfitLoss hitung & zeros), `ReportExportService.test.ts` +1 (PDF valid + XLSX cell A4/A5/A7/B7/B8/B14), `useProfitLossReport.test.tsx` +2; backend services pass · frontend 76/76 + tsc kedua sisi + vite build OK
 
+### Invoice A4 Generation (Phase E rampung) — 2026-08-30
+- **Spek**: Phase E item terakhir — user melihat detail order di dashboard ingin generate invoice formal A4 per order
+- **Backend** `GET /orders/:id/invoice` (route `order.routes.ts` + `OrderController.invoice`): resolve order (tenant-check) + tenant + payment (prefer `status:'completed'`, fallback first/`null`) → `InvoiceRenderService.render` (sebelumnya **orphan/dead code** — DI di `container.ts:600` tapi tak pernah dipanggil; kini di-inject juga ke konstruktor `OrderController` bersama `paymentRepository` + `tenantRepository` yang sudah lama di-injector) → `{ pdf(base64), layout, templateId, templateName, paper, invoiceNumber }` (invoiceNumber = `order.invoiceNumber || 'INV-' + orderNumber.replace(/^ORD-/,'')`)
+- **Template**: pakai default template `documentType:'invoice'` ("Standard Invoice A4", seeded di seed.ts/dev.ts, `getDefault` fallback ke first-by-tenant) — bisa diedit di Template Designer
+- **Frontend** `OrderDetailModal.tsx`: tombol **"Invoice A4"** → `api.get('/orders/:id/invoice')` → `atob` → `Uint8Array` → `Blob(application/pdf)` → `window.open(URL.createObjectURL(url))`, fallback `<a download>` bila popup diblokir; error toast bila template invoice tak ada
+- **Tests**: `InvoiceRenderService.test.ts` +9 (store/customer/order mapping, subtotal=total−discount, grandTotal=roundedPayable||total, items+isFreeItem, invoiceNumber fallback, payment firstPayment, tanpa payment → payments:[], split suffix `/N`); backend tsc bersih · frontend tsc + vite build OK · frontend 76/76
+
+### Transfer RBAC Fix — 2026-08-30
+- **Gap**: `POST /payments/:paymentId/cancel` (batalkan transfer) sebelumnya `authenticate`-only — kasir bisa membatalkan order + release stok tanpa otorisasi (uang KELUAR/destruktif, paralel `refund` yang sudah `payments:write`)
+- **Fix**: route `cancel` kini `authenticate` + `authorize('payments:write')` di `payment.routes.ts`
+- **Sengaja DIBIARKAN open** (kasir wajib di POS): `GET /payments/pending` (lihat daftar) dan `POST /:paymentId/confirm` (konfirmasi transfer masuk = uang MASUK, paralel `pay-cash`/`process`/`split` yang juga `authenticate`-only). Menjaga `confirm` open lebih aman daripada menambah `payments:write` ke role Cashier (yang juga membuka `refund`)
+- **Frontend** `PosActionPanel.handleCancelTransfer` sudah catch error → kasir kena 403 cuma dapat toast (tidak crash)
+- **Tests**: `payment.routes.test.ts` +4 (real `createPaymentRoutes` + stub controller: pending/confirm open utk `payments:read`-only; cancel → 403; cancel → 200 dgn `payments:write`); backend 10/10 di file itu + tsc bersih
+
+### Phase G Rampung — Suite Tanpa Docker + E2E Critical Paths (2026-08-30)
+- **Mongo tests jalan tanpa Docker**: `tests/helpers/db.ts` di-rewrite — `setupTestDb()` pakai `MONGO_URI` env bila ada, else **`mongodb-memory-server`** dengan binary mongod 7.3.4 arm64 dari cache `~/.cache/mongodb-binaries` (`resolveSystemBinary()`: env `MONGO_SYSTEM_BINARY` → newest `mongod-*`); `{ binary: { version:'7.3.4', systemBinary } }`; tanpa cache default download 403 utk aarch64-debian12. `--wiredTigerCacheSizeGB`/`ephemeralForTest` crash mongod 7.3.4 → instance arg default. `teardownTestDb()` stop server
+- **Determinisme memory**: `vitest.config.ts` `pool:'forks'` + `poolOptions.forks { maxForks:1, minForks:1 }` (banyak mongod paralel thrash RAM box 3.9GB; maxForks=2 → `MongoUserRepository` flaky). 2× full run hijau 950/950 (78 files) ~24s
+- **Harness integration di-rewrite ke wiring terkini** (`tests/helpers/integration.ts`): `buildIntegrationApp({ enforceShift?: boolean, permissions?: string[] })` — PaymentService 14 arg (paymentRepo, orderRepo, null, tenantRepo, taxService, null, eventBus, null, inventoryService, userRepo, shiftRepoForEnforcement, null, null), OrderController 24 arg (19 service + orderRepo/paymentRepo/tenantRepo/invoiceRenderService), ShiftService(shiftRepo, undefined, orderRepo, userRepo), ProductService, InventoryService; `buildTaxServiceMock()` replikasi VAT 12% excl (base=taxable×11/12, `charges:[]`, `serviceCharge:0`); context expose repos/models/services/token/tenantId. HARUS ikut middleware `authorize`: `POST /products`→`products:write`, stock-in/low-stock→`inventory:write`
+- **Debug skenario tarik-menarik yang ketemu**: PaymentService ctor yang membesar sejak harness lama bikin `taxService` nyasar ke slot `tenantRepository` → 500 `taxResult.charges.reduce`; `OrderController` voidItem kena `undefined.execute` (arg service geser). `tests/integration/tenant-isolation.test.ts` di-rewrite ke harness (11/11); `MongoOrderRepository.test.ts` fix stale (`draft.hold()` dulu agar `status:'held'` → pendingOrders=1); `MongoShiftRepository.test.ts` fix stale (`shift.close(750000)`; expectedTotal=openingBalance=500000)
+- **E2E critical paths** (`tests/e2e/critical-path-flows.test.ts`, 5 skenario, HTTP penuh + Mongo penuh): (1) money loop — open shift → product+stock-in → pay-cash → assert subtotal/total/paymentBreakdown/change/shiftId → stok decrement → **`GET /orders/:id/invoice`** (seed tenant + default invoice template via `templateModel.create`; invoiceNumber `INV-…`, PDF base64) → close shift; (2) enforce shift — pay-cash tanpa shift → 400 "Buka shift…"; (3) carried-over bill — hold → close shift (snapshot `carriedOverBills`) → shift baru → `/shifts/carried-bills` count 1 → bayar sebagai sale baru → `/orders/:id/close-bill` → count 0 → stok reconcile (3 held, 3 paid dari 20 → 17); (4) void paid → stok restore; (5) isolasi tenant over HTTP (`generateTestToken({tenant:'other-tenant'})`: order/produk/stok → 400/404, `current` shift null, list order kosong). NB: `ShiftService.close` tanpa reportAggregation → cashSales tetap 0 → expectedCash = openingBalance (production wiring aggregasi)
+- **k6 load artifact** (`backend/loadtest/`): `scenarios/money-loop.js` (constant-arrival-rate pay-cash loop, threshold p95<300ms p99<750ms fail<1%, setup login+open shift, SharedArray product IDs, handleSummary); `README.md` + scripts `pnpm loadtest` & `pnpm loadtest-sweep` (10/25/50 VUs) di package.json — butuh backend running (`--env BASE_URL=… EMAIL=… PASSWORD=… PRODUCT_ID=… VUS=…`)
+- **package.json backend**: `test`/`test:watch`/`test:coverage` kini `vitest` langsung (wrapper docker compose dihapus); `test:db:up/down` tetap ada utk CI
+- **Docs sync**: `docs/TEST_PROGRESS.md` (950 backend/78 files, tabel per-layer + infra No-Docker), `docs/TESTING_STRATEGY.md` (+Layer 6 E2E, Layer 7 Load; db.ts sample aktual; debt table; commands/config), `docs/PROJECT_ROADMAP.md` Phase G `[x]` ~100% + log 2026-08-30
+- **Tes terakhir**: backend 950/950 (78 files) 2× hijau, tsc backend bersih; frontend 76/76 + tsc + vite build OK (sebelumnya)
+
 ## Key Patterns
 - `useQueryClient()` for cache invalidation after mutations
 - `useVoidOrder` for full order void; `useVoidItem` for per-item void
@@ -283,5 +308,7 @@ Modular SaaS POS Platform (Node.js/Express + React/Tailwind). Multi-tenant, mult
 - `today = new Date().toISOString().split('T')[0]` — UTC date string used for daily queries
 
 ## Testing
-- Type check: `cd frontend && npx tsc --noEmit`
+- Backend tests: `cd backend && pnpm test` (vitest, full suite runs without Docker via mongodb-memory-server)
+- Type check: `cd frontend && npx tsc --noEmit`; backend: `cd backend && npx tsc --noEmit`
 - No ESLint config found; rely on TypeScript checks
+- Load test (needs running backend): `cd backend && pnpm loadtest --env BASE_URL=… --env EMAIL=… --env PASSWORD=… --env PRODUCT_ID=… --env VUS=…`

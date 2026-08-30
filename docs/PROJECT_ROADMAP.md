@@ -140,11 +140,16 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 |------|--------|
 | Cash payment flow | `[x]` |
 | QRIS gateway (create invoice, confirm, cancel, status) | `[x]` |
-| Transfer confirmation (manual) | `[ ]` |
-| Payment reconciliation | `[ ]` |
-| Invoice generation | `[ ]` |
+| Transfer confirmation (manual) | `[x]` |
+| Payment reconciliation | `[x]` |
+| Invoice generation | `[x]` |
 
-**Completion:** ~50%
+**Completion:** ~100%
+
+> Sync 2026-08-30: status roadmap sebelum ini basi — transfer confirmation & payment reconciliation sebenarnya sudah ada di kode:
+> - **Transfer confirmation**: `PaymentService.listPendingTransfers/confirmTransferPayment/cancelTransferPayment` + routes `GET /payments/pending`, `POST /payments/:paymentId/confirm|cancel` + UI "Konfirmasi Transfer" di `PosActionPanel.tsx`. RBAC: `confirm` tetap `authenticate`-only (kasir wajib konfirmasi transfer masuk di POS — uang MASUK, paralel `pay-cash`), SUDAH diproteksi `authorize('payments:write')` untuk `cancel` (membatalkan order + release stok — uang KELUAR/destruktif, paralel `refund`). Kasir tanpa `payments:write` → 403 + toast di UI.
+> - **Payment reconciliation**: laporan `GET /reports/payment-reconciliation` (`ReportService.getPaymentReconciliation`) — bandingkan `payments` completed vs `orders.paymentBreakdown` per metode + total transfer pending, `difference` per metode; frontend tab "Payment Reconciliation" di `ReportPage.tsx` + export PDF/XLSX. Ini rekonsiliasi report-level (bukan auto-reconcile bank statement/feed).
+> - **Invoice generation `[x]`**: endpoint baru `GET /orders/:id/invoice` (`OrderController.invoice` + route) — resolve order+tenant+payment server-side, panggil `InvoiceRenderService.render` (sebelumnya orphan/dead code, template A4 "Standard Invoice"), kembalikan `{ pdf(base64), layout, templateId, templateName, paper, invoiceNumber }`. Frontend: tombol **"Invoice A4"** di `OrderDetailModal.tsx` → dekode base64 → blob PDF → buka tab baru (fallback download bila popup diblokir). Template invoice bisa diedit di Template Designer (documentType `invoice`).
 
 ---
 
@@ -166,7 +171,7 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 
 ---
 
-### PHASE G — Testing & QA `[~]`
+### PHASE G — Testing & QA `[x]`
 
 | Task | Status |
 |------|--------|
@@ -176,12 +181,12 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | API tests (Supertest) | `[x]` |
 | Integration tests | `[x]` |
 | Frontend smoke tests | `[x]` |
-| E2E tests (critical paths) | `[ ]` |
-| Load testing | `[ ]` |
+| E2E tests (critical paths) | `[x]` |
+| Load testing (k6 artifact) | `[x]` |
 
-**Completion:** ~85%
+**Completion:** ~100%
 
-> Status per 2026-08-29: backend tsc bersih. Non-Mongo suite backend pass (failure hanya repository/integration yang membutuhkan Mongo `localhost:27027`, pre-existing) · frontend 76/76 + tsc + vite build OK. E2E manual (docker + hardware printer + gateway QRIS eksternal) belum bisa dijalankan di development env.
+> Status per 2026-08-30: **backend 950/950 (78 files)** — suite jalan **penuh tanpa Docker** via `mongodb-memory-server` (mongod arm64 7.3.4) • harness integration di-rewrite ke wiring service terkini • **E2E** `tests/e2e/critical-path-flows.test.ts` (5 skenario: money loop shift→sale→invoice→close, enforce shift, carried-over bill, void restore stok, isolasi tenant over HTTP) • k6 artifact `backend/loadtest/` + script `pnpm loadtest`/`loadtest-sweep` (butuh backend running) • `npx tsc --noEmit` backend & frontend bersih • yang tersisa hanya drill k6 di instance deployed & browser E2E (baru setelah UI stabil).
 
 ---
 
@@ -197,7 +202,7 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | Monitoring (logs, errors) | `[ ]` |
 | Backup strategy | `[ ]` |
 
-**Completion:** ~30%
+**Completion:** ~30% (menunggu akses VPS dari user)
 
 ---
 
@@ -445,6 +450,25 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 
 ---
 
+### DATE: 2026-08-30
+
+**Today I worked on:**
+
+- Sinkronisasi status Phase E dengan kode aktual: transfer confirmation (manual) & payment reconciliation ditandai `[x]`; invoice generation `[~]` (template A4 + `InvoiceRenderService` + QRIS invoice ada, UI invoice formal per order belum).
+
+**Problems found:**
+
+- Status roadmap Phase E (@~50%) basi — fitur transfer confirmation & reconciliation sebenarnya sudah terimplementasi (& ter-commit). Endpoint transfer `/payments/:id/cancel` masih `authenticate`-only tanpa `payments:write` — gap RBAC (kasir bisa batalkan order + release stok tanpa otorisasi).
+
+**Next task:**
+
+- ✅ Gap RBAC ditutup: `POST /payments/:id/cancel` kini `authorize('payments:write')` (via `createPaymentRoutes` + security middleware); `confirm` & `GET /pending` sengaja tetap open utk kasir.
+- ✅ Invoice generation selesai: `GET /orders/:id/invoice` (`OrderController.invoice` + `InvoiceRenderService` yang tadinya dead code) + tombol "Invoice A4" di `OrderDetailModal` (PDF base64 → blob → tab baru). Phase E kini 100%.
+- ✅ **Phase G selesai**: suite backend kini jalan penuh tanpa Docker → `mongodb-memory-server` (mongod arm64 7.3.4, cache `~/.cache/mongodb-binaries`) di `tests/helpers/db.ts`; `vitest.config.ts` `pool:'forks' maxForks:1` (RAM box); harness `tests/helpers/integration.ts` di-rewrite ke wiring service terkini (PaymentService 14 arg, OrderController 24 arg, tax mock VAT 12%); 2 test stale di bootstrap difix; **E2E** `tests/e2e/critical-path-flows.test.ts` (5 skenario) + k6 artifact `backend/loadtest/`; hasil **950/950 backend (78 files)**, frontend 76/76, tsc dua sisi bersih.
+- Lanjut berikutnya: drill k6 di instance deployed (butuh backend live) + browser E2E (Playwright) saat UI stabil, lalu Phase H (butuh akses VPS dari user).
+
+---
+
 ## SECTION 9 — TECHNICAL DEBT TRACKER
 
 | Debt | Priority | Created | Notes |
@@ -522,7 +546,7 @@ Architecture changes, tech swaps, pricing — never decide the same day. Sleep o
 
 ---
 
-*Last updated: 2026-08-28*
+*Last updated: 2026-08-30*
 *Updated daily during development.*
 
 > **2026-08-28 — Sinkronisasi status dengan kode aktual.** Entri fase D/E/F, daftar fitur, blocker, dan arsitektur diperbarui agar sesuai implementasi nyata (split bill, hold/close-bill, QRIS gateway, printer terintegrasi, cash rounding, laporan per-kasir, export). Checklist lama ditandai `[x]` yang sebelumnya `[ ]` sudah tervalidasi di AGENTS.md. Estimasi kelengkapan MVP: ±80% (fungsional ±90–95%, selisihnya = deployment live + pilot tenant + E2E manual).

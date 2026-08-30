@@ -3,8 +3,8 @@
 > **Project:** POSMono — Modular Business Operating System
 > **Stack:** Node.js · Express · MongoDB · Docker · Redis
 > **Architecture:** Multi-tenant · Modular Monolith · DDD · Repository Pattern · Event Driven
-> **Testing Stack:** Vitest · Supertest · Bruno
-> **Status:** Active Development — MVP Phase
+> **Testing Stack:** Vitest · Supertest · mongodb-memory-server · k6
+> **Status:** Active Development — MVP Phase (2026-08-30: 950 backend + 76 frontend passing, no-Docker backend suite)
 
 ---
 
@@ -34,8 +34,8 @@
 **Business logic must be tested first.**
 Domain entities and application services contain the rules that make money. If they break, the business breaks. These are tested before anything else.
 
-**Frontend testing is postponed.**
-The frontend is a presentation layer. Business rules live on the backend. During MVP, manual visual verification is sufficient for UI. Automated frontend tests begin after 10 paying customers.
+**Frontend testing is utility-level.**
+The frontend is a presentation layer; business rules live on the backend. Backend tests are the priority, but critical frontend logic (POS cart store, tax calculator, void modals, QRIS payment hook, report hooks) is covered by Vitest — **76 tests** today.
 
 **Automated testing is preferred over manual.**
 Manual testing does not scale. Every critical flow must have an automated test that can run in CI in under 60 seconds.
@@ -58,6 +58,15 @@ A failing test suite is a blocker. Fix regressions immediately. Never stack new 
 
 ```
 ┌─────────────────────────────────────────────┐
+│           LAYER 7: LOAD / PERFORMANCE        │
+│  k6 — concurrent POS traffic, p99 latency     │
+│  Critical flows under realistic RPS           │
+├─────────────────────────────────────────────┤
+│           LAYER 6: E2E CRITICAL PATHS        │
+│  Full HTTP → services → MongoDB → HTTP        │
+│  Money loop, shift/carried-bills, void,       │
+│  invoice render, tenant isolation on HTTP     │
+├─────────────────────────────────────────────┤
 │            LAYER 5: INTEGRATION              │
 │  Full request → database → response flow     │
 │  Module communication                        │
@@ -150,7 +159,7 @@ Tests HTTP endpoints using Supertest. Full Express app with real middleware, but
 
 ### Layer 5 — Integration Testing
 
-Tests complete request flows from HTTP to database and back. Real database, real services, real middleware. Mock only external services (Midtrans, email, etc.).
+Tests complete request flows from HTTP to database and back. Real database, real services, real middleware. Mock only external services (Midtrans, QRIS gateway, email, etc.).
 
 **What to test:**
 - Full flow: create product → add stock → create order → pay → verify
@@ -159,6 +168,21 @@ Tests complete request flows from HTTP to database and back. Real database, real
 
 **What NOT to test:**
 - External payment provider callbacks (test with contract tests separately)
+
+### Layer 6 — E2E Critical Paths
+
+Same medium as Layer 5 but composed as **business scenarios** (not unit/flow fragments): drives the full real Express app + real MongoDB through HTTP for the transactions that must never break.
+
+**What to test (see `tests/e2e/critical-path-flows.test.ts`, 5 scenarios):**
+- **Money loop**: open shift → pay cash order → assert totals/rounding/`paymentBreakdown` → stock decremented → `GET /orders/:id/invoice` (PDF + `INV-…`) → close shift with expected-cash formula
+- **Shift enforcement**: POS sale without open shift → 400
+- **Carried-over bill**: hold → close shift (snapshot `carriedOverBills`) → reopen next shift → `/shifts/carried-bills` lists it → pay as new sale → `/orders/:id/close-bill` → carried count 0 → stock reconciled
+- **Void restores stock**: paid order void → quantity returns
+- **Tenant isolation over HTTP**: cross-tenant order/product/stock reads rejected
+
+### Layer 7 — Load / Performance Testing
+
+k6 scenarios against a running deployed backend (`backend/loadtest/`). Smoke → soak → capacity thresholds (p95 < 300ms on pay-cash, zero 5xx). See `backend/loadtest/README.md`.
 
 ---
 
@@ -582,34 +606,33 @@ describe('POST /api/payments/pay-cash', () => {
 
 ### Infrastructure
 
-Use `mongodb-memory-server` for repository and integration tests. This downloads and runs a real MongoDB binary in-memory. It is fast, isolated, and requires no external infrastructure.
+Use `mongodb-memory-server` for repository, integration, and E2E tests. It runs a real MongoDB binary in-memory — fast, isolated, and **requires no external infrastructure (no Docker)**.
+
+Since 2026-08-30 the backend suite is fully self-contained:
 
 ```typescript
-// tests/helpers/db.ts
-import { MongoMemoryServer } from 'mongodb-memory-server';
-import mongoose from 'mongoose';
+// tests/helpers/db.ts (actual implementation — simplified)
+// 1. An external MONGO_URI wins if set (e.g. CI Mongo service).
+// 2. Otherwise start mongodb-memory-server, preferring a locally cached
+//    mongod binary: MONGO_SYSTEM_BINARY env, else newest
+//    ~/.cache/mongodb-binaries/mongod-* (arm64 build checked in: 7.3.4).
+// 3. resolveSystemBinary() avoids the default download, which 403s for
+//    aarch64/debian12 builds. Memory mongod must use DEFAULT instance
+//    args (wiredTigerCache/ephemeralForTest flags crash mongod 7.3.4).
 
-let mongod: MongoMemoryServer;
-
-export async function setupTestDb(): Promise<string> {
-  mongod = await MongoMemoryServer.create();
-  const uri = mongod.getUri();
+export async function setupTestDb(): Promise<TestDbInfo> {
+  const uri = process.env.MONGO_URI ?? await startMemoryServer();
   await mongoose.connect(uri);
-  return uri;
+  return { uri, useMemoryServer: !process.env.MONGO_URI };
 }
 
 export async function teardownTestDb(): Promise<void> {
   await mongoose.disconnect();
-  if (mongod) await mongod.stop();
-}
-
-export async function clearCollections(): Promise<void> {
-  const collections = mongoose.connection.collections;
-  for (const key in collections) {
-    await collections[key].deleteMany({});
-  }
+  await stopMemoryServer();
 }
 ```
+
+> CI gotcha: on machines without a cached binary, arm64 memory-server falls back to a download that currently 403s for `aarch64-debian12` — set `MONGO_SYSTEM_BINARY` (or reuse the existing CI Mongo service via `MONGO_URI`).
 
 ### Rules
 
@@ -869,13 +892,12 @@ The following are intentionally not tested during MVP. This is a conscious decis
 
 | Area | Reason | When to Add |
 |------|--------|-------------|
-| Frontend components | Business logic is on backend; UI changes frequently | After 10 paying customers |
-| Frontend state management (Zustand) | Trivial store; changes often | When POS page has complex state |
-| E2E (Playwright) | High maintenance cost; slow in CI | After 5 paying customers |
+| Browser E2E (Playwright/Cypress) | High maintenance cost; backend E2E already covers the money-critical paths | Before public launch |
+| Frontend visual components | Business logic is on backend; UI changes frequently | When UI stabilizes; utility-level tests (76) exist today |
 | Visual regression | No design system yet | Before public launch |
-| Performance / load testing | 0 users; single-process server | After 20 concurrent users |
+| Load testing on live infra | Supertest covers correctness; k6 scenarios are written (`backend/loadtest/`) | When backend is deployed; drill `pnpm loadtest` |
 | Security scanning (OWASP) | Manual review is sufficient for MVP | Before first customer deployment |
-| External provider integration (Midtrans) | Test manually via sandbox | Before Midtrans integration |
+| External provider integration (Midtrans) | QRIS gateway is contracted via `QrisGatewayService` tests; payment providers still manual | Before Midtrans integration |
 | Offline behavior | MVP is always online | When offline requirement emerges |
 | Mobile responsiveness | MVP targets desktop browser | When mobile usage detected |
 | Accessibility (a11y) | MVP targets cashier who can read | When accessibility requirement exists |
@@ -1003,29 +1025,35 @@ A failing test suite is a blocker. Fix the regression first, then add the featur
 ### Commands
 
 ```bash
-# Run all tests
-pnpm --filter backend test
+# Run all backend tests (vitest, in-memory MongoDB — no Docker needed)
+cd backend && pnpm test
 
 # Run tests in watch mode
-pnpm --filter backend test --watch
+cd backend && pnpm test:watch
 
 # Run tests with coverage
-pnpm --filter backend test -- --coverage
+cd backend && pnpm test:coverage
 
 # Run a single test file
-pnpm --filter backend test -- src/core/ordering/domain/__tests__/Order.test.ts
+cd backend && npx vitest run src/core/ordering/domain/__tests__/Order.test.ts
 
 # Run tests matching a pattern
-pnpm --filter backend test -- -t "pay cash"
+cd backend && npx vitest run -t "pay cash"
+
+# Type-checks (both packages are clean)
+cd backend && npx tsc --noEmit
+cd frontend && npx tsc --noEmit
+
+# Frontend tests
+cd frontend && pnpm test
+
+# Load test against a running backend (see backend/loadtest/README.md)
+cd backend && pnpm loadtest
 ```
 
-### Vitest Configuration
+### Vitest Configuration (backend/vitest.config.ts)
 
 ```typescript
-// backend/vitest.config.ts
-import { defineConfig } from 'vitest/config';
-import path from 'path';
-
 export default defineConfig({
   test: {
     globals: true,
@@ -1033,6 +1061,9 @@ export default defineConfig({
     include: ['src/**/*.test.ts', 'tests/**/*.test.ts'],
     setupFiles: ['tests/helpers/setup.ts'],
     testTimeout: 10000,
+    // Deterministic on RAM-constrained/CI boxes:
+    pool: 'forks',
+    poolOptions: { forks: { maxForks: 1, minForks: 1 } },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
@@ -1046,9 +1077,9 @@ export default defineConfig({
     },
   },
   resolve: {
-    alias: {
-      '@shared': path.resolve(__dirname, '../shared/src'),
-    },
+    alias: { '@shared': path.resolve(__dirname, '../shared/src') },
   },
 });
 ```
+
+> `maxForks: 1` keeps many parallel mongod processes from thrashing memory. Raise it on larger CI runners (watch `MongoUserRepository` flakiness, the first victim of RAM pressure).
