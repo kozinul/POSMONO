@@ -10,6 +10,7 @@ export interface IUser {
   passwordHash: string;
   displayName: string;
   roleId: string;
+  outletIds: string[];
   isActive: boolean;
   lastLoginAt: Date | null;
   pin: string | null;
@@ -24,6 +25,7 @@ export class User extends AggregateRoot<UserId> {
   private passwordHash: string;
   private displayName: string;
   private roleId: string;
+  private outletIds: string[];
   private isActive: boolean;
   private lastLoginAt: Date | null;
   private pin: string | null;
@@ -38,6 +40,7 @@ export class User extends AggregateRoot<UserId> {
     this.passwordHash = props.passwordHash;
     this.displayName = props.displayName;
     this.roleId = props.roleId;
+    this.outletIds = [...(props.outletIds ?? [])];
     this.isActive = props.isActive;
     this.lastLoginAt = props.lastLoginAt;
     this.pin = props.pin ?? null;
@@ -87,6 +90,7 @@ export class User extends AggregateRoot<UserId> {
       passwordHash: this.passwordHash,
       displayName: this.displayName,
       roleId: this.roleId,
+      outletIds: [...this.outletIds],
       isActive: this.isActive,
       lastLoginAt: this.lastLoginAt,
       pin: this.pin,
@@ -110,6 +114,10 @@ export class User extends AggregateRoot<UserId> {
 
   get roleIdValue(): string {
     return this.roleId;
+  }
+
+  get outletIdsValue(): string[] {
+    return [...this.outletIds];
   }
 
   get pinValue(): string | null {

@@ -16,6 +16,7 @@ export interface Tenant {
   databaseName: string;
   config: TenantConfig;
   billingEmail: string;
+  hubId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

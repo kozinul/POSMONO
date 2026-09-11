@@ -27,6 +27,8 @@ export * from './validation/schemas/tax-schemas';
 export * from './validation/schemas/printer-schemas';
 export * from './types/domain/tax';
 export * from './types/domain/printer';
+export * from './types/domain/hub';
+export * from './types/domain/outlet';
 export * from './utils/money';
 export * from './utils/date';
 export * from './utils/string';

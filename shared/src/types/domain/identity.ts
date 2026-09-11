@@ -4,6 +4,7 @@ export interface User {
   email: string;
   displayName: string;
   roleId: string;
+  outletIds: string[];
   isActive: boolean;
   lastLoginAt: Date | null;
   preferences: Record<string, unknown>;

@@ -81,6 +81,7 @@ export interface IDiscountBreakdown {
 export interface IOrder {
   id: string;
   tenantId: string;
+  outletId?: string | null;
   orderNumber: string;
   invoiceNumber: string | null;
   status: OrderStatus;
@@ -124,6 +125,7 @@ export interface IOrder {
 
 export class Order extends AggregateRoot<OrderId> {
   private tenantId: string;
+  private outletId: string | null;
   private orderNumber: string;
   private invoiceNumber: string | null;
   private status: OrderStatus;
@@ -167,6 +169,7 @@ export class Order extends AggregateRoot<OrderId> {
   private constructor(props: IOrder) {
     super(new OrderId(props.id));
     this.tenantId = props.tenantId;
+    this.outletId = props.outletId ?? null;
     this.orderNumber = props.orderNumber;
     this.invoiceNumber = props.invoiceNumber ?? null;
     this.status = props.status;
@@ -892,6 +895,7 @@ export class Order extends AggregateRoot<OrderId> {
     return {
       id: this._id.toValue(),
       tenantId: this.tenantId,
+      outletId: this.outletId,
       orderNumber: this.orderNumber,
       invoiceNumber: this.invoiceNumber,
       status: this.status,

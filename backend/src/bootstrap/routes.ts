@@ -28,6 +28,8 @@ import { createPricingRouter } from '../core/pricing/api/pricing.routes';
 import { createTemplateRoutes } from '../core/template/interfaces/http/routes/template.routes';
 import { createDatabaseRoutes } from '../core/database/interfaces/http/routes/database.routes';
 import { createPrinterRoutes, createPrintRoutes } from '../core/printing/interfaces/http/routes/printer.routes';
+import { createHubRoutes } from '../core/hub/interfaces/http/routes/hub.routes';
+import { createOutletRoutes } from '../core/outlet/interfaces/http/routes/outlet.routes';
 
 export function registerRoutes(app: Express, container: DIContainer): void {
   app.get('/health', (_req, res) => {
@@ -119,4 +121,10 @@ export function registerRoutes(app: Express, container: DIContainer): void {
   const printerController = container.resolve('printerController');
   app.use('/api/printers', createPrinterRoutes(printerController));
   app.use('/api/print', createPrintRoutes(printerController));
+
+  const hubController = container.resolve('hubController');
+  app.use('/api/hubs', createHubRoutes(hubController));
+
+  const outletController = container.resolve('outletController');
+  app.use('/api/outlets', createOutletRoutes(outletController));
 }

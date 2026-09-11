@@ -17,6 +17,11 @@ export class EventBus {
     this.emitter.emit(event.eventName, event);
   }
 
+  async publishAsync(event: DomainEvent): Promise<void> {
+    const listeners = this.emitter.listeners(event.eventName) as ((e: DomainEvent) => unknown)[];
+    await Promise.all(listeners.map((l) => Promise.resolve(l(event))));
+  }
+
   subscribe(eventName: string, handler: EventHandler): void {
     this.emitter.on(eventName, handler);
   }

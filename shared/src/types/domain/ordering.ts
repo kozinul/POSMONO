@@ -6,6 +6,7 @@ export type OrderSource = 'pos' | 'waiter' | 'online';
 export interface Order {
   id: string;
   tenantId: string;
+  outletId?: string | null;
   orderNumber: string;
   status: OrderStatus;
   items: OrderItem[];

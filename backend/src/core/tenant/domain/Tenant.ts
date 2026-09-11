@@ -19,6 +19,7 @@ export interface ITenant {
   databaseName: string;
   config: TenantConfig;
   billingEmail: string;
+  hubId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -62,6 +63,7 @@ export class Tenant extends AggregateRoot<TenantId> {
   private databaseName: string;
   private config: TenantConfig;
   private billingEmail: string;
+  private hubId: string | null;
   private createdAt: Date;
   private updatedAt: Date;
 
@@ -81,17 +83,19 @@ export class Tenant extends AggregateRoot<TenantId> {
     this.databaseName = props.databaseName;
     this.config = { ...props.config };
     this.billingEmail = props.billingEmail;
+    this.hubId = props.hubId ?? null;
     this.createdAt = props.createdAt;
     this.updatedAt = props.updatedAt;
   }
 
-  static create(props: Omit<ITenant, 'id' | 'createdAt' | 'updatedAt' | 'businessCategory' | 'address' | 'phone'>): Tenant {
+  static create(props: Omit<ITenant, 'id' | 'createdAt' | 'updatedAt' | 'businessCategory' | 'address' | 'phone' | 'hubId'>): Tenant {
     const tenant = new Tenant({
       ...props,
       id: new TenantId().toValue(),
       businessCategory: '',
       address: '',
       phone: '',
+      hubId: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -135,9 +139,20 @@ export class Tenant extends AggregateRoot<TenantId> {
       databaseName: this.databaseName,
       config: { ...this.config },
       billingEmail: this.billingEmail,
+      hubId: this.hubId,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
     };
+  }
+
+  assignHub(hubId: string): void {
+    this.hubId = hubId;
+    this.updatedAt = new Date();
+  }
+
+  unassignHub(): void {
+    this.hubId = null;
+    this.updatedAt = new Date();
   }
 
   updateProfile(data: { name?: string; businessCategory?: string; address?: string; phone?: string }): void {

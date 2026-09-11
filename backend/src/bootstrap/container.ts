@@ -119,6 +119,7 @@ import { RenderService } from '../core/template/application/services/RenderServi
 import { ReceiptRenderService } from '../core/template/application/services/ReceiptRenderService';
 import { InvoiceRenderService } from '../core/template/application/services/InvoiceRenderService';
 import { TemplateController } from '../core/template/interfaces/http/controllers/TemplateController';
+import { OnboardingService } from '../core/platform/application/services/OnboardingService';
 import { DatabaseService } from '../core/database/application/services/DatabaseService';
 import { DatabaseController } from '../core/database/interfaces/http/controllers/DatabaseController';
 import { PrinterSchema } from '../core/printing/infrastructure/persistence/schemas/PrinterSchema';
@@ -128,6 +129,14 @@ import { PrintService } from '../core/printing/application/services/PrintService
 import { DocumentPrintService } from '../core/printing/application/services/DocumentPrintService';
 import { PrinterController } from '../core/printing/interfaces/http/controllers/PrinterController';
 import { KotRenderService } from '../core/template/application/services/KotRenderService';
+import { HubSchema } from '../core/hub/infrastructure/persistence/schemas/HubSchema';
+import { MongoHubRepository } from '../core/hub/infrastructure/persistence/MongoHubRepository';
+import { HubService } from '../core/hub/application/services/HubService';
+import { HubController } from '../core/hub/interfaces/http/controllers/HubController';
+import { OutletSchema } from '../core/outlet/infrastructure/persistence/schemas/OutletSchema';
+import { MongoOutletRepository } from '../core/outlet/infrastructure/persistence/MongoOutletRepository';
+import { OutletService } from '../core/outlet/application/services/OutletService';
+import { OutletController } from '../core/outlet/interfaces/http/controllers/OutletController';
 
 export type DIContainer = ReturnType<typeof buildContainer>;
 
@@ -168,6 +177,9 @@ export function buildContainer() {
   const TemplateVersionModel = systemConnection.model('TemplateVersion', TemplateVersionSchema);
   const PrinterModel = systemConnection.model('Printer', PrinterSchema);
   PrinterModel.syncIndexes().catch(() => {});
+  const HubModel = systemConnection.model('Hub', HubSchema);
+  const OutletModel = systemConnection.model('Outlet', OutletSchema);
+  OutletModel.syncIndexes().catch(() => {});
 
   const eventBus = new EventBus();
 
@@ -204,6 +216,8 @@ export function buildContainer() {
     templateModel: asValue(TemplateModel),
     templateVersionModel: asValue(TemplateVersionModel),
     printerModel: asValue(PrinterModel),
+    hubModel: asValue(HubModel),
+    outletModel: asValue(OutletModel),
     userRepository: asClass(MongoUserRepository, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
@@ -232,6 +246,18 @@ export function buildContainer() {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
         tenantRepository: container.resolve('tenantRepository'),
+        eventBus: container.resolve('eventBus'),
+      }),
+    }),
+    onboardingService: asClass(OnboardingService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        tenantRepository: container.resolve('tenantRepository'),
+        roleRepository: container.resolve('roleRepository'),
+        userRepository: container.resolve('userRepository'),
+        paymentMethodRepository: container.resolve('paymentMethodRepository'),
+        warehouseService: container.resolve('warehouseService'),
+        templateService: container.resolve('templateService'),
       }),
     }),
     roleRepository: asClass(MongoRoleRepository, {
@@ -251,6 +277,7 @@ export function buildContainer() {
       injector: () => ({
         userRepository: container.resolve('userRepository'),
         passwordService: container.resolve('passwordService'),
+        roleRepository: container.resolve('roleRepository'),
       }),
     }),
   });
@@ -950,6 +977,44 @@ export function buildContainer() {
         tenantRepository: container.resolve('tenantRepository'),
         receiptRenderService: container.resolve('receiptRenderService'),
         kotRenderService: container.resolve('kotRenderService'),
+      }),
+    }),
+    hubRepository: asClass(MongoHubRepository, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        model: HubModel,
+      }),
+    }),
+    hubService: asClass(HubService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        hubRepository: container.resolve('hubRepository'),
+        tenantRepository: container.resolve('tenantRepository'),
+      }),
+    }),
+    hubController: asClass(HubController, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        hubService: container.resolve('hubService'),
+      }),
+    }),
+    outletRepository: asClass(MongoOutletRepository, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        model: OutletModel,
+      }),
+    }),
+    outletService: asClass(OutletService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        outletRepository: container.resolve('outletRepository'),
+        warehouseRepository: container.resolve('warehouseRepository'),
+      }),
+    }),
+    outletController: asClass(OutletController, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        outletService: container.resolve('outletService'),
       }),
     }),
   });

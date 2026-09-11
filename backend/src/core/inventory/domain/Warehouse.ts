@@ -5,6 +5,7 @@ import { DomainEvent } from '../../../@shared/domain/DomainEvent';
 export interface IWarehouse {
   id: string;
   tenantId: string;
+  outletId?: string | null;
   name: string;
   address: string;
   isActive: boolean;
@@ -14,6 +15,7 @@ export interface IWarehouse {
 
 export class Warehouse extends AggregateRoot<WarehouseId> {
   private tenantId: string;
+  private outletId: string | null;
   private name: string;
   private address: string;
   private isActive: boolean;
@@ -23,6 +25,7 @@ export class Warehouse extends AggregateRoot<WarehouseId> {
   private constructor(props: IWarehouse) {
     super(new WarehouseId(props.id));
     this.tenantId = props.tenantId;
+    this.outletId = props.outletId ?? null;
     this.name = props.name;
     this.address = props.address;
     this.isActive = props.isActive;
@@ -30,10 +33,10 @@ export class Warehouse extends AggregateRoot<WarehouseId> {
     this.updatedAt = props.updatedAt;
   }
 
-  static create(props: Omit<IWarehouse, 'id' | 'createdAt' | 'updatedAt'>): Warehouse {
+  static create(props: Omit<IWarehouse, 'id' | 'createdAt' | 'updatedAt'>, id?: string): Warehouse {
     const warehouse = new Warehouse({
       ...props,
-      id: new WarehouseId().toValue(),
+      id: id ?? new WarehouseId().toValue(),
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -58,10 +61,11 @@ export class Warehouse extends AggregateRoot<WarehouseId> {
     return new Warehouse(props);
   }
 
-  update(data: Partial<Pick<IWarehouse, 'name' | 'address' | 'isActive'>>): void {
+  update(data: Partial<Pick<IWarehouse, 'name' | 'address' | 'isActive' | 'outletId'>>): void {
     if (data.name !== undefined) this.name = data.name;
     if (data.address !== undefined) this.address = data.address;
     if (data.isActive !== undefined) this.isActive = data.isActive;
+    if (data.outletId !== undefined) this.outletId = data.outletId ?? null;
     this.updatedAt = new Date();
   }
 
@@ -69,6 +73,7 @@ export class Warehouse extends AggregateRoot<WarehouseId> {
     return {
       id: this._id.toValue(),
       tenantId: this.tenantId,
+      outletId: this.outletId,
       name: this.name,
       address: this.address,
       isActive: this.isActive,

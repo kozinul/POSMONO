@@ -9,6 +9,11 @@ export const createTenantSchema = z.object({
     currency: z.string().default('IDR'),
     locale: z.string().default('id'),
   }).optional().default({}),
+  owner: z.object({
+    email: z.string().email('Owner email tidak valid').optional(),
+    password: z.string().min(6, 'Owner password minimal 6 karakter').optional(),
+    displayName: z.string().min(1).optional(),
+  }).optional(),
 });
 
 export const updateTenantConfigSchema = z.object({

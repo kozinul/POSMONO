@@ -3,10 +3,42 @@ import { UserId } from '../../../../@shared/domain/Identifier';
 import { User } from '../../domain/User';
 import { PasswordService } from '../../domain/services/PasswordService';
 
+/**
+ * Outlet policy per role name (case-insensitive):
+ * - owner / admin  → `[]` (all outlets of the tenant)
+ * - cashier        → exactly 1 outlet
+ * - any other role (manager, supervisor, custom) → at least 1 outlet
+ */
+export type OutletPolicy = 'all' | 'single' | 'multi';
+
+export function outletPolicyForRole(roleName: string | null | undefined): OutletPolicy {
+  const n = (roleName ?? '').toLowerCase().trim();
+  if (n === 'owner' || n === 'admin') return 'all';
+  if (n === 'cashier') return 'single';
+  return 'multi';
+}
+
+export function validateOutletIds(outletIds: string[], policy: OutletPolicy): void {
+  const ids = Array.from(new Set(outletIds ?? []));
+  if (policy === 'all') {
+    if (ids.length > 0) {
+      throw new ValidationError('Role owner/admin mencakup semua outlet — outletIds harus kosong');
+    }
+    return;
+  }
+  if (policy === 'single' && ids.length !== 1) {
+    throw new ValidationError('Role kasir harus tepat memiliki 1 outlet');
+  }
+  if (policy === 'multi' && ids.length === 0) {
+    throw new ValidationError('Role ini harus memiliki minimal 1 outlet');
+  }
+}
+
 export class UserService {
   constructor(
     private readonly userRepository: any,
     private readonly passwordService: PasswordService,
+    private readonly roleRepository?: any,
   ) {}
 
   async list(tenantId: string): Promise<User[]> {
@@ -23,7 +55,7 @@ export class UserService {
 
   async create(
     tenantId: string,
-    data: { email: string; displayName: string; roleId: string; password: string; pin?: string | null; isActive?: boolean },
+    data: { email: string; displayName: string; roleId: string; password: string; pin?: string | null; isActive?: boolean; outletIds?: string[] },
   ): Promise<User> {
     if (!data.password || data.password.length < 6) {
       throw new ValidationError('Password must be at least 6 characters');
@@ -33,12 +65,16 @@ export class UserService {
       throw new ValidationError('User with this email already exists');
     }
 
+    const outletIds = Array.from(new Set(data.outletIds ?? []));
+    await this.assertOutletPolicy(data.roleId, outletIds);
+
     const user = User.create({
       tenantId,
       email: data.email,
       passwordHash: await this.passwordService.hash(data.password),
       displayName: data.displayName,
       roleId: data.roleId,
+      outletIds,
       isActive: data.isActive ?? true,
       lastLoginAt: null,
       pin: data.pin ? await this.passwordService.hash(data.pin) : null,
@@ -54,14 +90,22 @@ export class UserService {
     await this.userRepository.delete(new UserId(id));
   }
 
-  async update(tenantId: string, id: string, data: { displayName?: string; roleId?: string; password?: string; pin?: string | null; isActive?: boolean }): Promise<User> {
+  async update(tenantId: string, id: string, data: { displayName?: string; roleId?: string; password?: string; pin?: string | null; isActive?: boolean; outletIds?: string[] }): Promise<User> {
     const user = await this.getById(tenantId, id);
 
     const serialized = user.serialize();
+    const nextRoleId = data.roleId ?? serialized.roleId;
+    const nextOutletIds = data.outletIds !== undefined
+      ? Array.from(new Set(data.outletIds))
+      : serialized.outletIds;
+
+    await this.assertOutletPolicy(nextRoleId, nextOutletIds);
+
     const updated = User.hydrate({
       ...serialized,
       displayName: data.displayName ?? serialized.displayName,
-      roleId: data.roleId ?? serialized.roleId,
+      roleId: nextRoleId,
+      outletIds: nextOutletIds,
       isActive: data.isActive ?? serialized.isActive,
       passwordHash: data.password
         ? await this.passwordService.hash(data.password)
@@ -75,6 +119,16 @@ export class UserService {
 
     await this.userRepository.save(updated);
     return updated;
+  }
+
+  private async assertOutletPolicy(roleId: string, outletIds: string[]): Promise<void> {
+    if (!this.roleRepository) return;
+
+    const role = await this.roleRepository.findById(roleId);
+    if (!role) return;
+
+    const policy = outletPolicyForRole(role.serialize()?.name);
+    validateOutletIds(outletIds, policy);
   }
 
   async deactivate(tenantId: string, id: string): Promise<User> {

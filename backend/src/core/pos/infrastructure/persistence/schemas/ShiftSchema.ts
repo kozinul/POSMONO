@@ -35,6 +35,7 @@ export const ShiftSchema = new Schema(
   {
     _id: { type: String },
     tenantId: { type: String, required: true, index: true },
+    outletId: { type: String, default: null, index: true },
     registerId: { type: String, required: true },
     cashierId: { type: String, required: true },
     cashierName: { type: String, default: '' },
@@ -65,11 +66,12 @@ export const ShiftSchema = new Schema(
 
 ShiftSchema.index({ tenantId: 1, status: 1 });
 ShiftSchema.index({ tenantId: 1, cashierId: 1, status: 1 });
+ShiftSchema.index({ tenantId: 1, outletId: 1, status: 1 });
 ShiftSchema.index(
-  { tenantId: 1, cashierId: 1 },
+  { tenantId: 1, cashierId: 1, outletId: 1 },
   {
     unique: true,
     partialFilterExpression: { status: 'open' },
-    name: 'one_open_shift_per_cashier',
+    name: 'one_open_shift_per_cashier_per_outlet',
   },
 );

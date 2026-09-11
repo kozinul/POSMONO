@@ -41,6 +41,7 @@ export class AuthController extends BaseController {
         role: result.user.roleIdValue,
         roleName: result.roleName,
         permissions: result.permissions,
+        outletIds: result.outletIds,
       },
     });
   }
@@ -90,7 +91,7 @@ export class AuthController extends BaseController {
       throw new ValidationError('User not found');
     }
 
-    const { user, roleName, permissions } = result;
+    const { user, roleName, permissions, outletIds } = result;
 
     this.ok(res, {
       id: user.id.toValue(),
@@ -99,6 +100,7 @@ export class AuthController extends BaseController {
       role: user.roleIdValue,
       roleName,
       permissions,
+      outletIds,
       isActive: user.isActiveUser(),
       lastLoginAt: user.serialize().lastLoginAt,
     });

@@ -6,6 +6,7 @@ export interface User {
   email: string;
   displayName: string;
   roleId: string;
+  outletIds: string[];
   isActive: boolean;
   lastLoginAt: string | null;
   createdAt: string;
@@ -20,6 +21,18 @@ export interface Role {
   createdAt: string;
 }
 
+export interface Outlet {
+  id: string;
+  tenantId: string;
+  name: string;
+  address: string | null;
+  phone: string | null;
+  warehouseId: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface CreateUserInput {
   email: string;
   displayName: string;
@@ -27,6 +40,7 @@ export interface CreateUserInput {
   password: string;
   pin?: string | null;
   isActive?: boolean;
+  outletIds?: string[];
 }
 
 export interface UpdateUserInput {
@@ -34,6 +48,7 @@ export interface UpdateUserInput {
   roleId?: string;
   password?: string;
   pin?: string | null;
+  outletIds?: string[];
 }
 
 export function useUsers() {
@@ -51,6 +66,16 @@ export function useRoles() {
     queryKey: ['roles'],
     queryFn: async () => {
       const res = await api.get<{ success: boolean; data: Role[] }>('/roles');
+      return res.data.data;
+    },
+  });
+}
+
+export function useOutlets() {
+  return useQuery({
+    queryKey: ['outlets'],
+    queryFn: async () => {
+      const res = await api.get<{ success: boolean; data: Outlet[] }>('/outlets');
       return res.data.data;
     },
   });

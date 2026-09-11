@@ -16,6 +16,7 @@ export interface Stock {
 export interface Warehouse {
   id: string;
   tenantId: string;
+  outletId?: string | null;
   name: string;
   address: string;
   isActive: boolean;

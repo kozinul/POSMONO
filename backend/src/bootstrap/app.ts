@@ -2,6 +2,7 @@ import http from 'http';
 import { createServer } from './server';
 import { buildContainer } from './container';
 import { registerEventHandlers } from './eventBus';
+import { provisionDefaults } from './provisioning';
 import { initSocketServer } from './socket';
 import { logger } from '../@shared/infrastructure/logger/Logger';
 import { env } from '../@shared/config/env';
@@ -14,6 +15,8 @@ async function main() {
   const eventBus = container.resolve('eventBus');
 
   registerEventHandlers(eventBus, container);
+
+  await provisionDefaults(container);
 
   const app = createServer(container);
   const httpServer = http.createServer(app);

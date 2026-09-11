@@ -10,6 +10,7 @@ interface UserDoc extends Document<string> {
   passwordHash: string;
   displayName: string;
   roleId: string;
+  outletIds: string[];
   isActive: boolean;
   lastLoginAt: Date | null;
   pin: string | null;
@@ -34,6 +35,7 @@ export class MongoUserRepository extends MongoRepository<User, UserId, UserDoc> 
       passwordHash: doc.passwordHash,
       displayName: doc.displayName,
       roleId: doc.roleId,
+      outletIds: doc.outletIds ?? [],
       isActive: doc.isActive,
       lastLoginAt: doc.lastLoginAt,
       pin: doc.pin ?? null,
@@ -52,6 +54,7 @@ export class MongoUserRepository extends MongoRepository<User, UserId, UserDoc> 
       passwordHash: data.passwordHash,
       displayName: data.displayName,
       roleId: data.roleId,
+      outletIds: data.outletIds ?? [],
       isActive: data.isActive,
       lastLoginAt: data.lastLoginAt,
       pin: data.pin ?? null,

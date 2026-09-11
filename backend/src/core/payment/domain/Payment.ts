@@ -28,6 +28,7 @@ export interface IRefund {
 export interface IPayment {
   id: string;
   tenantId: string;
+  outletId?: string | null;
   orderId: string;
   amount: number;
   status: PaymentStatus;
@@ -47,6 +48,7 @@ export interface IPayment {
 
 export class Payment extends AggregateRoot<PaymentId> {
   private tenantId: string;
+  private outletId: string | null;
   private orderId: string;
   private amount: number;
   private status: PaymentStatus;
@@ -66,6 +68,7 @@ export class Payment extends AggregateRoot<PaymentId> {
   private constructor(props: IPayment) {
     super(new PaymentId(props.id));
     this.tenantId = props.tenantId;
+    this.outletId = props.outletId ?? null;
     this.orderId = props.orderId;
     this.amount = props.amount;
     this.status = props.status;
@@ -183,6 +186,7 @@ export class Payment extends AggregateRoot<PaymentId> {
     return {
       id: this._id.toValue(),
       tenantId: this.tenantId,
+      outletId: this.outletId,
       orderId: this.orderId,
       amount: this.amount,
       status: this.status,

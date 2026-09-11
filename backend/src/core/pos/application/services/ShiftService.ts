@@ -9,8 +9,8 @@ export class ShiftService {
     private readonly userRepository?: any,
   ) {}
 
-  async open(input: { tenantId: string; registerId: string; cashierId: string; openingBalance: number }): Promise<Shift> {
-    const existing = await this.shiftRepository.findOpenShift(input.tenantId, input.cashierId);
+  async open(input: { tenantId: string; outletId?: string | null; registerId: string; cashierId: string; openingBalance: number }): Promise<Shift> {
+    const existing = await this.shiftRepository.findOpenShift(input.tenantId, input.cashierId, input.outletId ?? null);
     if (existing) {
       throw new ValidationError('Cashier already has an open shift');
     }
@@ -27,6 +27,7 @@ export class ShiftService {
 
     const shift = Shift.open({
       tenantId: input.tenantId,
+      outletId: input.outletId ?? null,
       registerId: input.registerId,
       cashierId: input.cashierId,
       cashierName,

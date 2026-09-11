@@ -9,6 +9,7 @@ import { CategorySchema } from './core/catalog/infrastructure/persistence/schema
 import { StockSchema } from './core/inventory/infrastructure/persistence/schemas/StockSchema';
 import { PaymentMethodSchema } from './core/payment/infrastructure/persistence/schemas/PaymentMethodSchema';
 import { TemplateSchema } from './core/template/infrastructure/persistence/schemas/TemplateSchema';
+import { DEFAULT_ROLES, DEFAULT_TEMPLATES, DEFAULT_PAYMENT_METHODS, DEFAULT_PLATFORM_ROLE, PLATFORM_TENANT_ID } from './core/platform/defaults';
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27018';
 const SYSTEM_DB = 'posmono_system';
@@ -56,62 +57,26 @@ async function seed() {
   const managerRoleId = id('rol');
 
   console.log('Seeding roles...');
-  await Role.create([
-    {
-      _id: adminRoleId,
+  await Role.create(
+    DEFAULT_ROLES.map((r) => ({
+      _id: r.name === 'Owner' ? adminRoleId : r.name === 'Manager' ? managerRoleId : cashierRoleId,
       tenantId,
-      name: 'Owner',
-      description: 'Full access to all features',
-      permissions: [
-        'users:read', 'users:write', 'users:delete',
-        'roles:read', 'roles:write',
-        'products:read', 'products:write', 'products:delete',
-        'orders:read', 'orders:write', 'orders:cancel',
-        'order:void', 'payment:void',
-        'payments:read', 'payments:write',
-        'inventory:read', 'inventory:write', 'inventory:adjust',
-        'reports:read',
-        'customers:read', 'customers:write',
-        'settings:read', 'settings:write',
-        'shifts:read', 'shifts:write',
-        'printers:read', 'printers:write',
-      ],
-      isSystem: true,
-    },
-    {
-      _id: managerRoleId,
-      tenantId,
-      name: 'Manager',
-      description: 'Daily operations management',
-      permissions: [
-        'products:read', 'products:write',
-        'orders:read', 'orders:write', 'orders:cancel',
-        'order:void', 'payment:void',
-        'payments:read', 'payments:write',
-        'inventory:read', 'inventory:write',
-        'reports:read',
-        'customers:read', 'customers:write',
-        'settings:read',
-        'shifts:read', 'shifts:write',
-        'printers:read', 'printers:write',
-      ],
-      isSystem: true,
-    },
-    {
-      _id: cashierRoleId,
-      tenantId,
-      name: 'Cashier',
-      description: 'Can process POS transactions',
-      permissions: [
-        'products:read',
-        'orders:read', 'orders:write',
-        'payments:read',
-        'customers:read', 'customers:write',
-        'shifts:read', 'shifts:write',
-      ],
-      isSystem: true,
-    },
-  ]);
+      name: r.name,
+      description: r.description,
+      permissions: r.permissions,
+      isSystem: r.isSystem,
+    })),
+  );
+
+  const platformRoleId = id('rol');
+  await Role.create({
+    _id: platformRoleId,
+    tenantId: PLATFORM_TENANT_ID,
+    name: DEFAULT_PLATFORM_ROLE.name,
+    description: DEFAULT_PLATFORM_ROLE.description,
+    permissions: DEFAULT_PLATFORM_ROLE.permissions,
+    isSystem: true,
+  });
 
   const passwordHash = await bcrypt.hash('admin123', 12);
   const managerPinHash = await bcrypt.hash('1234', 12);
@@ -153,6 +118,17 @@ async function seed() {
       lastLoginAt: null,
       preferences: {},
     },
+    {
+      _id: id('usr'),
+      tenantId: PLATFORM_TENANT_ID,
+      email: 'platform@demo.com',
+      passwordHash,
+      displayName: 'Platform Super Admin',
+      roleId: platformRoleId,
+      isActive: true,
+      lastLoginAt: null,
+      preferences: {},
+    },
   ]);
 
   console.log('Seeding categories...');
@@ -179,86 +155,21 @@ async function seed() {
   ]);
 
   console.log('Seeding payment methods...');
-  await PaymentMethodModel.create([
-    {
+  await PaymentMethodModel.create(
+    DEFAULT_PAYMENT_METHODS.map((m) => ({
       _id: id('pmt'),
       tenantId,
-      name: 'Tunai',
-      code: 'cash',
-      description: 'Pembayaran tunai',
-      icon: '💵',
-      color: '#4CAF50',
-      sortOrder: 1,
+      name: m.name,
+      code: m.code,
+      description: m.description,
+      icon: m.icon,
+      color: m.color,
+      sortOrder: m.sortOrder,
       isActive: true,
-      requiresReference: false,
-      config: {},
-    },
-    {
-      _id: id('pmt'),
-      tenantId,
-      name: 'QRIS',
-      code: 'qris',
-      description: 'QRIS / Scan QR',
-      icon: '📱',
-      color: '#2196F3',
-      sortOrder: 2,
-      isActive: true,
-      requiresReference: true,
-      config: {},
-    },
-    {
-      _id: id('pmt'),
-      tenantId,
-      name: 'Kartu Debit',
-      code: 'debit',
-      description: 'Kartu debit Visa/Mastercard',
-      icon: '💳',
-      color: '#FF9800',
-      sortOrder: 3,
-      isActive: true,
-      requiresReference: true,
-      config: {},
-    },
-    {
-      _id: id('pmt'),
-      tenantId,
-      name: 'Kartu Kredit',
-      code: 'credit',
-      description: 'Kartu kredit Visa/Mastercard',
-      icon: '💎',
-      color: '#9C27B0',
-      sortOrder: 4,
-      isActive: true,
-      requiresReference: true,
-      config: {},
-    },
-    {
-      _id: id('pmt'),
-      tenantId,
-      name: 'Transfer Bank',
-      code: 'transfer',
-      description: 'Transfer BCA / Mandiri / BRI / BNI',
-      icon: '🏦',
-      color: '#607D8B',
-      sortOrder: 5,
-      isActive: true,
-      requiresReference: true,
-      config: {},
-    },
-    {
-      _id: id('pmt'),
-      tenantId,
-      name: 'E-Wallet',
-      code: 'ewallet',
-      description: 'GoPay / OVO / Dana / ShopeePay',
-      icon: '📲',
-      color: '#00BCD4',
-      sortOrder: 6,
-      isActive: true,
-      requiresReference: true,
-      config: {},
-    },
-  ]);
+      requiresReference: m.requiresReference,
+      config: m.config,
+    })),
+  );
 
   console.log('Seeding stock...');
   const stockEntries = products.map((p) => ({
@@ -275,165 +186,27 @@ async function seed() {
   await Stock.create(stockEntries);
 
   console.log('Seeding templates...');
-  const receiptSections = [
-    { id: 'sec-header', type: 'header', enabled: true, order: 1, nodes: [
-      { id: 'r1', type: 'image', field: 'store.logo', maxHeight: 12, style: { font: { align: 'center' } }, visibility: { operator: 'AND', rules: [{ field: 'store.logo', operator: 'exists' }] } },
-      { id: 'r2', type: 'field', field: 'store.name', style: { font: { size: 14, weight: 'bold', align: 'center' } } },
-      { id: 'r3', type: 'text', text: 'Pesanan {{ order.documentNumber }}', style: { font: { align: 'center' } } },
-      { id: 'r4', type: 'text', text: '{{ order.date }} {{ order.time }}', style: { font: { align: 'center' } } },
-      { id: 'r4b', type: 'text', text: 'Kasir: {{ order.cashier }}', style: { font: { align: 'center' } } },
-      { id: 'r5', type: 'divider', style: {} },
-    ]},
-    { id: 'sec-items', type: 'items', enabled: true, order: 2, nodes: [
-      { id: 'r6', type: 'repeater', dataSource: 'items', template: [
-        { id: 'r7', type: 'text', text: '{{ item.qty }}x {{ item.name }} ... Rp {{ item.totalPrice | number(0) }}', style: { font: { size: 10 } } },
-      ]},
-    ]},
-    { id: 'sec-promo', type: 'summary', enabled: true, order: 3, nodes: [
-      { id: 'r8', type: 'repeater', dataSource: 'promotions', template: [
-        { id: 'r9', type: 'text', text: '{{ item.name }} ({{ item.code }})', style: { font: { size: 10 } } },
-      ], visibility: { operator: 'AND', rules: [{ field: 'summary.orderDiscount', operator: 'greater_than', value: 0 }] } },
-      { id: 'r10', type: 'text', text: 'Total Diskon  -Rp {{ summary.orderDiscount | number(0) }}', style: { font: { size: 10 } }, visibility: { operator: 'AND', rules: [{ field: 'summary.orderDiscount', operator: 'greater_than', value: 0 }] } },
-    ]},
-    { id: 'sec-summary', type: 'summary', enabled: true, order: 4, nodes: [
-      { id: 'r11', type: 'divider', style: {} },
-      { id: 'r12', type: 'text', text: 'Subtotal  Rp {{ summary.subtotal | number(0) }}', style: {} },
-      { id: 'r13', type: 'text', text: 'Service Charge  Rp {{ summary.serviceCharge | number(0) }}', style: {}, visibility: { operator: 'AND', rules: [{ field: 'summary.serviceCharge', operator: 'greater_than', value: 0 }] } },
-      { id: 'r14', type: 'text', text: 'Tax  Rp {{ summary.tax | number(0) }}', style: {}, visibility: { operator: 'AND', rules: [{ field: 'summary.tax', operator: 'greater_than', value: 0 }] } },
-      { id: 'r15', type: 'text', text: 'Pembulatan  Rp {{ summary.rounding | number(0) }}', style: {}, visibility: { operator: 'AND', rules: [{ field: 'summary.rounding', operator: 'not_equals', value: 0 }] } },
-      { id: 'r16', type: 'divider', style: {} },
-      { id: 'r17', type: 'text', text: 'TOTAL  Rp {{ summary.grandTotal | number(0) }}', style: { font: { size: 12, weight: 'bold' } } },
-      { id: 'r18', type: 'text', text: 'Tunai  Rp {{ payments.0.paidAmount | number(0) }}', style: {} },
-      { id: 'r19', type: 'text', text: 'Kembalian  Rp {{ payments.0.change | number(0) }}', style: {} },
-    ]},
-    { id: 'sec-footer', type: 'footer', enabled: true, order: 5, nodes: [
-      { id: 'r20', type: 'divider', style: {} },
-      { id: 'r21', type: 'text', text: 'Terima kasih telah berbelanja', style: { font: { align: 'center' } } },
-    ]},
-  ];
-
-  const kotSections = [
-    { id: 'sec-header', type: 'header', enabled: true, order: 1, nodes: [
-      { id: 'n1', type: 'field', field: 'store.name', style: { font: { size: 14, weight: 'bold', align: 'center' } } },
-      { id: 'n2', type: 'divider', style: {} },
-    ]},
-    { id: 'sec-order', type: 'order_info', enabled: true, order: 2, nodes: [
-      { id: 'n3', type: 'text', text: 'KOT #{{ order.referenceNumber }}', style: { font: { size: 12, weight: 'bold' } } },
-      { id: 'n4', type: 'field', field: 'order.table', label: 'Table', style: {} },
-    ]},
-    { id: 'sec-items', type: 'items', enabled: true, order: 3, nodes: [
-      { id: 'n5', type: 'repeater', dataSource: 'items', template: [
-        { id: 'n6', type: 'text', text: '{{ item.qty }}x {{ item.name }}', style: { font: { size: 10 } } },
-      ]},
-    ]},
-    { id: 'sec-footer', type: 'footer', enabled: true, order: 4, nodes: [
-      { id: 'n7', type: 'divider', style: {} },
-      { id: 'n8', type: 'text', text: '{{ order.date }} {{ order.time }}', style: { font: { align: 'center' } } },
-    ]},
-  ];
-
-  const invoiceSections = [
-    { id: 'sec-header', type: 'header', enabled: true, order: 1, nodes: [
-      { id: 'n1', type: 'field', field: 'store.name', style: { font: { size: 18, weight: 'bold', align: 'center' } } },
-      { id: 'n2', type: 'field', field: 'store.address', style: { font: { align: 'center' } } },
-      { id: 'n3', type: 'field', field: 'store.phone', style: { font: { align: 'center' } } },
-      { id: 'n4', type: 'divider', style: {} },
-    ]},
-    { id: 'sec-invoice', type: 'order_info', enabled: true, order: 2, nodes: [
-      { id: 'n5', type: 'field', field: 'order.documentNumber', label: 'Invoice', style: { font: { size: 12, weight: 'bold' } } },
-      { id: 'n6', type: 'text', text: 'Date: {{ order.date }}', style: {} },
-      { id: 'n7', type: 'field', field: 'customer.name', label: 'Customer', style: {} },
-    ]},
-    { id: 'sec-items', type: 'items', enabled: true, order: 3, nodes: [
-      { id: 'n8', type: 'table', dataSource: 'items', columns: [
-        { field: 'name', header: 'Item', align: 'left' },
-        { field: 'qty', header: 'Qty', align: 'right' },
-        { field: 'unitPrice', header: 'Price', align: 'right', format: 'number(0)' },
-        { field: 'totalPrice', header: 'Total', align: 'right', format: 'number(0)' },
-      ]},
-    ]},
-    { id: 'sec-summary', type: 'summary', enabled: true, order: 4, nodes: [
-      { id: 'n9', type: 'field', field: 'summary.subtotal', label: 'Subtotal', format: 'number(0)', style: {} },
-      { id: 'n10', type: 'field', field: 'summary.tax', label: 'Tax', format: 'number(0)', style: {} },
-      { id: 'n11', type: 'divider', style: {} },
-      { id: 'n12', type: 'field', field: 'summary.grandTotal', label: 'Grand Total', format: 'number(0)', style: { font: { size: 14, weight: 'bold' } } },
-    ]},
-    { id: 'sec-footer', type: 'footer', enabled: true, order: 5, nodes: [
-      { id: 'n13', type: 'divider', style: {} },
-      { id: 'n14', type: 'text', text: 'Thank you for your business!', style: { font: { align: 'center' } } },
-    ]},
-  ];
-
-  await Template.create([
-    {
+  await Template.create(
+    DEFAULT_TEMPLATES.map((t) => ({
       _id: id('tpl'),
       tenantId,
-      name: 'Struk Kasir Default',
-      description: 'Struk kasir default (mirror tampilan print receipt POS)',
+      name: t.name,
+      description: t.description,
       schemaVersion: 1,
-      documentType: 'receipt',
-      paper: { type: 'thermal80', width: 80, height: 'auto', margin: { top: 2, right: 3, bottom: 2, left: 3 } },
-      sections: receiptSections,
+      documentType: t.documentType,
+      paper: t.paper,
+      sections: t.sections ?? [],
       metadata: { createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), version: 1, createdBy: 'system' },
       isActive: true,
-      isDefault: true,
-    },
-    {
-      _id: id('tpl'),
-      tenantId,
-      name: 'Standard Receipt 58mm',
-      description: 'Standard thermal receipt for 58mm paper (2-inch)',
-      schemaVersion: 1,
-      documentType: 'receipt',
-      paper: { type: 'thermal58', width: 58, height: 'auto', margin: { top: 2, right: 3, bottom: 2, left: 3 } },
-      sections: [],
-      metadata: { createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), version: 1, createdBy: 'system' },
-      isActive: true,
-      isDefault: false,
-    },
-    {
-      _id: id('tpl'),
-      tenantId,
-      name: 'Standard Receipt 80mm',
-      description: 'Standard thermal receipt for 80mm paper (3-inch)',
-      schemaVersion: 1,
-      documentType: 'receipt',
-      paper: { type: 'thermal80', width: 80, height: 'auto', margin: { top: 2, right: 3, bottom: 2, left: 3 } },
-      sections: [],
-      metadata: { createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), version: 1, createdBy: 'system' },
-      isActive: true,
-      isDefault: false,
-    },
-    {
-      _id: id('tpl'),
-      tenantId,
-      name: 'Standard KOT 80mm',
-      description: 'Kitchen Order Ticket for 80mm thermal paper',
-      schemaVersion: 1,
-      documentType: 'kot',
-      paper: { type: 'thermal80', width: 80, height: 'auto', margin: { top: 2, right: 3, bottom: 2, left: 3 } },
-      sections: kotSections,
-      metadata: { createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), version: 1, createdBy: 'system' },
-      isActive: true,
-    },
-    {
-      _id: id('tpl'),
-      tenantId,
-      name: 'Standard Invoice A4',
-      description: 'Standard A4 invoice with line items table',
-      schemaVersion: 1,
-      documentType: 'invoice',
-      paper: { type: 'a4-portrait', width: 210, height: 297, margin: { top: 15, right: 15, bottom: 15, left: 15 } },
-      sections: invoiceSections,
-      metadata: { createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), version: 1, createdBy: 'system' },
-      isActive: true,
-    },
-  ]);
+      isDefault: t.isDefault ?? false,
+    })),
+  );
 
   console.log('\n✅ Seed complete!');
   console.log(`   Tenant: toko-abc (${tenantId})`);
   console.log(`   Owner: admin@demo.com / admin123`);
   console.log(`   Cashier: cashier@demo.com / admin123`);
+  console.log(`   Platform: platform@demo.com / admin123 (X-Tenant-Id: ${PLATFORM_TENANT_ID})`);
   console.log(`   Categories: ${categories.length}`);
   console.log(`   Products: ${products.length}`);
   console.log(`   Payment Methods: 6`);

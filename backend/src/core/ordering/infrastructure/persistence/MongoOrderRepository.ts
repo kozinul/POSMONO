@@ -5,6 +5,7 @@ import { Order, IOrder } from '../../domain/Order';
 interface OrderDoc extends Document<string> {
   _id: string;
   tenantId: string;
+  outletId?: string | null;
   orderNumber: string;
   status: string;
   items: any[];
@@ -52,6 +53,7 @@ export class MongoOrderRepository {
     return Order.hydrate({
       id: doc._id,
       tenantId: doc.tenantId,
+      outletId: doc.outletId ?? null,
       orderNumber: doc.orderNumber,
       invoiceNumber: doc.invoiceNumber ?? null,
       status: doc.status as IOrder['status'],
@@ -98,6 +100,7 @@ export class MongoOrderRepository {
     return {
       _id: data.id,
       tenantId: data.tenantId,
+      outletId: data.outletId ?? null,
       orderNumber: data.orderNumber,
       invoiceNumber: data.invoiceNumber,
       status: data.status,
@@ -152,10 +155,13 @@ export class MongoOrderRepository {
     return this.toDomain(doc);
   }
 
-  async findByTenant(tenantId: string, filter?: { status?: string | string[]; dateFrom?: string; dateTo?: string; page?: number; limit?: number }): Promise<{ orders: Order[]; total: number }> {
+  async findByTenant(tenantId: string, filter?: { status?: string | string[]; dateFrom?: string; dateTo?: string; outletId?: string | null; page?: number; limit?: number }): Promise<{ orders: Order[]; total: number }> {
     const query: any = { tenantId };
     if (filter?.status) {
       query.status = Array.isArray(filter.status) ? { $in: filter.status } : filter.status;
+    }
+    if (filter?.outletId !== undefined && filter?.outletId !== null) {
+      query.outletId = filter.outletId;
     }
     if (filter?.dateFrom || filter?.dateTo) {
       query.createdAt = {};
@@ -186,7 +192,7 @@ export class MongoOrderRepository {
     };
   }
 
-  async getDailySales(tenantId: string, date: string): Promise<{
+  async getDailySales(tenantId: string, date: string, outletId?: string | null): Promise<{
     totalOrders: number;
     totalRevenue: number;
     totalItems: number;
@@ -202,6 +208,7 @@ export class MongoOrderRepository {
       tenantId,
       createdAt: { $gte: startOfDay, $lte: endOfDay },
       status: { $in: ['paid', 'completed'] },
+      ...(outletId ? { outletId } : {}),
     };
 
     const [aggregation] = await this.model.aggregate([

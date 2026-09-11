@@ -32,6 +32,7 @@ async function resolveCashierName(
 
 interface CreateOrderInput {
   tenantId: string;
+  outletId?: string | null;
   items: IOrderItem[];
   customerId: string | null;
   customerName: string | null;
@@ -252,12 +253,15 @@ export class CreateOrderService implements UseCase<CreateOrderInput, Order> {
   ) {}
 
   async execute(input: CreateOrderInput): Promise<Order> {
+    let shiftOutletId: string | null = null;
     if (input.source === 'pos' && this.shiftRepository) {
       const shift = await this.shiftRepository.findOpenShift(input.tenantId, input.cashierId);
       if (!shift) {
         throw new ValidationError('Buka shift terlebih dahulu sebelum bertransaksi');
       }
+      shiftOutletId = shift.serialize().outletId ?? null;
     }
+    const outletId = input.outletId ?? shiftOutletId ?? null;
     const subtotal = input.items.reduce((sum, item) => sum + item.totalPrice, 0);
     const tax = input.items.reduce((sum, item) => sum + (item.tax?.amount || 0), 0);
     const discount = 0;
@@ -268,6 +272,7 @@ export class CreateOrderService implements UseCase<CreateOrderInput, Order> {
 
     const order = Order.create({
       tenantId: input.tenantId,
+      outletId,
       items: input.items,
       subtotal,
       discount,

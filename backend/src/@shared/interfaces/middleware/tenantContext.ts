@@ -8,6 +8,8 @@ declare global {
       userRole: string;
       userRoleName: string;
       userPermissions: string[];
+      outletIds: string[];
+      outletId: string | null;
       user?: { tenantId: string };
     }
   }

@@ -49,6 +49,7 @@ export const TenantSchema = new Schema(
       autoPrintKot: { type: Boolean, default: false },
     },
     billingEmail: { type: String, required: true },
+    hubId: { type: String, default: null, index: true },
   },
   {
     timestamps: true,

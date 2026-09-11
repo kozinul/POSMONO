@@ -29,6 +29,7 @@ export interface IPaymentBreakdownEntry {
 export interface IShift {
   id: string;
   tenantId: string;
+  outletId?: string | null;
   registerId: string;
   cashierId: string;
   cashierName: string;
@@ -56,6 +57,7 @@ export interface IShift {
 
 export class Shift extends AggregateRoot<ShiftId> {
   private tenantId: string;
+  private outletId: string | null;
   private registerId: string;
   private cashierId: string;
   private cashierName: string;
@@ -87,6 +89,7 @@ export class Shift extends AggregateRoot<ShiftId> {
   private constructor(props: IShift) {
     super(new ShiftId(props.id));
     this.tenantId = props.tenantId;
+    this.outletId = props.outletId ?? null;
     this.registerId = props.registerId;
     this.cashierId = props.cashierId;
     this.cashierName = props.cashierName ?? '';
@@ -256,6 +259,7 @@ export class Shift extends AggregateRoot<ShiftId> {
     return {
       id: this._id.toValue(),
       tenantId: this.tenantId,
+      outletId: this.outletId,
       registerId: this.registerId,
       cashierId: this.cashierId,
       cashierName: this.cashierName,

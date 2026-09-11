@@ -28,15 +28,20 @@ const roles = [
   { id: 'r-cashier', name: 'Cashier', description: '', permissions: ['orders:read'], isSystem: true, createdAt: '' },
 ];
 
+const outlets = [
+  { id: 'o1', tenantId: 't', name: 'Outlet Utama', address: null, phone: null, warehouseId: 'w1', isActive: true, createdAt: '', updatedAt: '' },
+];
+
 const users = [
-  { id: 'u1', email: 'manager@demo.com', displayName: 'Manager Toko', roleId: 'r-manager', isActive: true, lastLoginAt: null, createdAt: '' },
-  { id: 'u2', email: 'cashier@demo.com', displayName: 'Kasir Demo', roleId: 'r-cashier', isActive: false, lastLoginAt: null, createdAt: '' },
+  { id: 'u1', email: 'manager@demo.com', displayName: 'Manager Toko', roleId: 'r-manager', outletIds: ['o1'], isActive: true, lastLoginAt: null, createdAt: '' },
+  { id: 'u2', email: 'cashier@demo.com', displayName: 'Kasir Demo', roleId: 'r-cashier', outletIds: ['o1'], isActive: false, lastLoginAt: null, createdAt: '' },
 ];
 
 function mockApi() {
   vi.mocked(api.get).mockImplementation((url: string) => {
     if (url === '/users') return Promise.resolve({ data: { success: true, data: users } });
     if (url === '/roles') return Promise.resolve({ data: { success: true, data: roles } });
+    if (url === '/outlets') return Promise.resolve({ data: { success: true, data: outlets } });
     return Promise.resolve({ data: { success: true, data: [] } });
   });
   vi.mocked(api.put).mockResolvedValue({ data: { success: true, data: {} } });
@@ -92,7 +97,7 @@ describe('UserListPage', () => {
     expect(await screen.findByText('Edit User')).toBeInTheDocument();
     expect(screen.queryByPlaceholderText('4-6 digit')).not.toBeInTheDocument();
 
-    await user.selectOptions(screen.getByRole('combobox'), 'r-manager');
+    await user.selectOptions(screen.getByLabelText('Role'), 'r-manager');
 
     expect(await screen.findByPlaceholderText('4-6 digit')).toBeInTheDocument();
   });
@@ -132,6 +137,7 @@ describe('UserListPage', () => {
         displayName: 'Manager Toko',
         roleId: 'r-manager',
         pin: '123456',
+        outletIds: ['o1'],
       });
     });
   });
@@ -147,7 +153,8 @@ describe('UserListPage', () => {
     await user.click(await screen.findByRole('button', { name: /Tambah User/i }));
     await user.type(await screen.findByLabelText('Email'), 'kasir2@demo.com');
     await user.type(screen.getByLabelText('Nama Tampilan'), 'Kasir Dua');
-    await user.selectOptions(screen.getByRole('combobox'), 'r-cashier');
+    await user.selectOptions(screen.getByLabelText('Role'), 'r-cashier');
+    await user.selectOptions(screen.getByLabelText('Outlet'), 'o1');
     await user.type(screen.getByLabelText('Password'), 'secret123');
     await user.click(screen.getByRole('button', { name: /Simpan/i }));
 
@@ -158,6 +165,7 @@ describe('UserListPage', () => {
         roleId: 'r-cashier',
         password: 'secret123',
         pin: undefined,
+        outletIds: ['o1'],
       });
     });
   });

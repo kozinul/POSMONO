@@ -20,7 +20,8 @@ export class TenantController extends BaseController {
       slug: parsed.data.slug,
       ownerId: req.userId,
       businessType: parsed.data.businessType,
-      billingEmail: '',
+      billingEmail: parsed.data.owner?.email ?? '',
+      owner: parsed.data.owner,
     });
 
     this.created(res, {

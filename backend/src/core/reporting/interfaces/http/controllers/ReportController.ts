@@ -32,7 +32,7 @@ export class ReportController extends BaseController {
       res.status(400).json({ success: false, message: 'date query parameter is required' });
       return;
     }
-    const result = await this.reportService.getDailyReport(req.tenantId, date as string);
+    const result = await this.reportService.getDailyReport(req.tenantId, date as string, req.query.outletId as string | undefined);
     this.ok(res, result);
   }
 
@@ -46,6 +46,7 @@ export class ReportController extends BaseController {
       req.tenantId,
       dateFrom as string,
       dateTo as string,
+      req.query.outletId as string | undefined,
     );
     this.ok(res, result);
   }
@@ -108,7 +109,7 @@ export class ReportController extends BaseController {
       res.status(400).json({ success: false, message: 'shiftId query parameter is required' });
       return;
     }
-    const result = await this.reportService.getShiftReport(req.tenantId, shiftId as string);
+    const result = await this.reportService.getShiftReport(req.tenantId, shiftId as string, req.query.outletId as string | undefined);
     this.ok(res, result);
   }
 
@@ -182,6 +183,7 @@ export class ReportController extends BaseController {
       req.tenantId,
       dateFrom as string,
       dateTo as string,
+      req.query.outletId as string | undefined,
     );
     this.ok(res, result);
   }

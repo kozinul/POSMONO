@@ -1,7 +1,9 @@
 # PLAN — Optional Business Group (Hub) Architecture
 
-> Dokumen rencana (belum diimplementasikan). Dibuat 2026-08-13.
+> Dokumen rencana implementasi. Dibuat 2026-08-13.
 > Merevisi arah multi-outlet dari `docs/ROLE_ACCESS_PLAN.md` §3.5–3.6: Hub kini **di atas Tenant**, bukan anak Tenant.
+>
+> **Status: Fase 1–6 SELESAI & TERVERIFIKASI 2026-08-30** — shared types + permission, modul Hub, modul Outlet, scope transaksi (outletId di Order/Payment/Shift/Warehouse/Reports), provisioning boot (default outlet+warehouse + backfill), seed role platform, User `outletIds` + JWT + middleware `resolveOutlet` + validasi per-role + UI Users. Backend tsc bersih (964/964 tests), frontend tsc bersih + 76/76, shared dist dibangun ulang.
 
 ---
 
@@ -131,41 +133,46 @@ Dibutuhkan untuk user lintas-tenant (Group Admin) dan Hub Consolidated Report. *
 ## 5. Fase Implementasi
 
 ### Fase 1 — Shared & permission
-- [ ] `shared/src/constants/permissions.ts`: `outlet:manage` (tenant), `hub:manage` (platform)
-- [ ] `shared/src/types/domain/tenant.ts`: `Tenant.hubId: string | null`
-- [ ] `backend/src/core/tenant/domain/Tenant.ts` + `TenantSchema.ts`: field `hubId` (default `null`, index)
+- [x] `shared/src/constants/permissions.ts`: `outlet:manage` (tenant), `hub:manage` (platform)
+- [x] `shared/src/types/domain/tenant.ts`: `Tenant.hubId: string | null`
+- [x] `backend/src/core/tenant/domain/Tenant.ts` + `TenantSchema.ts`: field `hubId` (default `null`, index)
+  - Tambahan: `Tenant.assignHub(hubId)` / `unassignHub()`, `MongoTenantRepository.findByHubId()`
 
 ### Fase 2 — Modul Hub (backend, baru) `backend/src/core/hub/`
-- [ ] `domain/Hub.ts` (id, name, description, isActive — **tanpa tenantId**), `HubSchema.ts`, `MongoHubRepository.ts`
-- [ ] `application/services/HubService.ts`: CRUD + `assignTenant(tenantId, hubId)`/`unassignTenant` (via TenantRepository), `listTenants(hubId)`, `findByTenant`
-- [ ] `interfaces/.../HubController.ts` + `hub.routes.ts`: `GET/POST/PUT/DELETE /api/hubs`, `POST/DELETE /api/hubs/:hubId/tenants/:tenantId` — guarded `hub:manage` (platform)
-- [ ] `TenantService` + `tenant.routes.ts`: `PATCH /api/tenants/:id { hubId }` (platform) — set/clear hubId
-- [ ] Register DI di `container.ts` + mount di `routes.ts`
+- [x] `domain/Hub.ts` (id, name, description, isActive — **tanpa tenantId**), `HubSchema.ts`, `MongoHubRepository.ts` (index unik `{name}`)
+- [x] `application/services/HubService.ts`: CRUD + `assignTenant`/`unassignTenant` (via TenantRepository), `listTenants` (via `findByHubId`), guard delete saat masih ada tenant
+- [x] `interfaces/.../HubController.ts` + `hub.routes.ts`: `GET/POST/PUT/DELETE /api/hubs`, `POST/DELETE /api/hubs/:hubId/tenants/:tenantId`, `GET /api/hubs/:hubId/tenants` — guarded `hub:manage` (platform)
+- [~] `TenantService` + `tenant.routes.ts`: `PATCH /api/tenants/:id { hubId }` (platform) — **di-skip (redundan)**: set/clear hubId sudah dilayani `POST/DELETE /api/hubs/:hubId/tenants/:tenantId`
+- [x] Register DI di `container.ts` (model `Hub` → `hubRepository`/`hubService`/`hubController` singleton) + mount `/api/hubs` di `routes.ts`
 
 ### Fase 3 — Modul Outlet (backend, baru) `backend/src/core/outlet/`
-- [ ] `domain/Outlet.ts` (id, tenantId, name, address, phone, warehouseId, isActive), `OutletSchema.ts` (index `{tenantId, name}` unique), `MongoOutletRepository.ts`
-- [ ] `OutletService.ts`: CRUD + `ensureDefaultOutlet(tenantId)`, `listScoped(tenantId, outletIds)`, `getByWarehouse(warehouseId)`
-- [ ] `OutletController.ts` + `outlet.routes.ts`: `GET /api/outlets` (scoped) semua role terautentikasi; mutasi `outlet:manage`
-- [ ] DI + mount route
+- [x] `domain/Outlet.ts` (id, tenantId, name, address, phone, warehouseId, isActive), `OutletSchema.ts` (index `{tenantId, name}` unique), `MongoOutletRepository.ts`
+- [~] `OutletService.ts`: CRUD + `ensureDefault(tenantId)` + `getByWarehouse(warehouseId)`; `listScoped(tenantId, outletIds)` belum dibuat (dipakai nanti Fase 6)
+- [x] `OutletController.ts` + `outlet.routes.ts`: `GET /api/outlets`/`/:id` (scoped) semua role terautentikasi; mutasi `POST/PUT/DELETE` `outlet:manage`
+- [x] DI (model `Outlet` → repo/service/controller; inject `warehouseRepository`) + mount `/api/outlets` di `routes.ts`
 
 ### Fase 4 — Scope transaksi
-- [ ] **Order** (`Order.ts`, `OrderSchema.ts`, `MongoOrderRepository`): `outletId`; stamp di `CreateOrderService.execute` (context outlet aktif; `source='pos'` wajib shift+outlet)
-- [ ] **Payment** (`Payment.ts`, `PaymentSchema`): `outletId`; stamp di `payCash`/`processByOrderId`/`splitBill`
-- [ ] **Shift** (`Shift.ts`, `ShiftSchema`): `outletId`; stamp di `ShiftService.open`; index → `{tenantId, cashierId, outletId, status}`
-- [ ] **Warehouse** (`Warehouse.ts`, `WarehouseSchema`): `outletId` (1:1); `resolveWarehouseId()` → warehouse outlet aktif
-- [ ] **Reports** (`ReportAggregation.ts`, `ReportService.ts`): param `outletId` (filter/group) untuk getDailySales/getShiftSales/getFinance; tenant consolidated = jumlah `outlets` tanpa Hub
+- [x] **Order** (`Order.ts`, `OrderSchema.ts`, `MongoOrderRepository`): `outletId` (default `null`, index + `{tenantId, outletId, createdAt}`); stamp di `Order.create` + `CreateOrderService.execute` (prioritas: `input.outletId` → outlet shift terbuka → `null`; `source='pos'` wajib shift)
+- [x] **Payment** (`Payment.ts`, `PaymentSchema`): `outletId` (default `null`, index); `assertOpenShift` kini return `{shiftId, outletId}`; stamp di `payCash`/`processByOrderId` (fallback `order.outletId`)/`splitBill`
+- [x] **Shift** (`Shift.ts`, `ShiftSchema`): `outletId` (default `null`, index); `ShiftService.open` terima `outletId` (skema zod `POST /shifts/open` + field opsional); index partial unique **diganti nama** `one_open_shift_per_cashier_per_outlet` (key `{tenantId, cashierId, outletId}`, `syncIndexes()` di boot migrasi otomatis); `findOpenShift(tenantId, cashierId, outletId?)`
+- [x] **Warehouse** (`Warehouse.ts`, `WarehouseSchema`): `outletId` (default `null`, index); repo baru `findActiveByOutlet(tenantId, outletId)` (+ interface); `InventoryService.resolveWarehouseId(tenantId, warehouseId?, outletId?)` → warehouse outlet aktif → fallback warehouse pertama → `'utama'`; `stockIn`/`adjust` terima `outletId` opsional
+- [x] **Reports** (`ReportAggregation.ts`, `ReportService.ts`): param opsional `outletId` (filter) untuk `getDailySalesAggregation`/`getShiftSalesAggregation`/`getFinanceAggregation` + `MongoOrderRepository.getDailySales`/`findByTenant`; `getDailyReport`/`getSalesReport`/`getShiftReport`/`getFinanceReport` terima `outletId`; controller baca `?outletId=` dari query. **Catatan**: "tenant consolidated = jumlah outlets tanpa Hub" belum via backend khusus — peta outlet per tenant tersedia di `GET /api/outlets` (di-provider Fase 7/8)
+- **Status**: verifikasi 2026-08-30 — shared build + backend tsc + frontend tsc bersih; backend 950/950 tests (test `ReportService` di-update ke argumen baru `outletId`)
 
 ### Fase 5 — Backfill & boot
-- [ ] `ensureDefaultOutlet(tenantId)` saat boot: buat **Outlet Utama** + **Warehouse Utama** bila belum ada
-- [ ] Backfill: order/payment/shift lama tanpa `outletId` → Outlet Utama
-- [ ] Seed role platform (super-admin) dengan `hub:manage` + kredensial login platform
+- [x] `ensureDefaultOutlet(tenantId)` saat boot: **Outlet Utama** + **Warehouse Utama** (id `'utama'` — literal legacy/konsisten dengan stock lama) dibuat bila belum ada, lalu di-link 1:1 (`Outlet.warehouseId` ↔ `Warehouse.outletId`); idempotent; `'utama'` milik tenant lain tidak di-reuse
+- [x] Backfill boot-time (`bootstrap/provisioning.ts` → `provisionDefaults(container)`, dipanggil di `app.ts` & `dev.ts`): untuk tiap tenant, order/payment/shift dengan `outletId null`/missing → di-set ke Outlet Utama (`updateMany`, best-effort via try/catch log); `MongoTenantRepository.findAll()` ditambahkan
+- [x] Seed role platform (**Platform Super Admin**, tenantId `'platform'`) dengan `hub:manage` + `outlet:manage` + `platform.*`; kredensial `platform@demo.com`/`admin123` (login pakai header `X-Tenant-Id: platform`); di-seed di `seed.ts` & `dev.ts` (idempotent sync)
+- **Status**: verifikasi 2026-08-30 — backend tsc bersih; 956/956 tests (+4 `OutletService.ensureDefault`, +2 `provisionDefaults` integrasi); frontend tsc bersih
 
 ### Fase 6 — User & auth
-- [ ] `User.ts` + `UserSchema`: `outletIds: string[]`; validasi (cashier = 1, manager/supervisor ≥ 1, owner/admin = `[]` = semua outlet tenant)
-- [ ] `AuthService`/`TokenService`: `login`/`me` + JWT (access & refresh) menyertakan `outletIds`
-- [ ] `authenticate.ts`: isi `req.outletIds` dari JWT + deklarasi `Express.Request`
-- [ ] Middleware `resolveOutlet` + helper `scopeOutletIds(req)`: validasi `X-Outlet-Id` ∈ `req.outletIds`
-- [ ] `UserController`/halaman Users: update `outletIds`
+- [x] `User.ts` + `UserSchema` + `MongoUserRepository` + shared `identity.ts`: `outletIds: string[]` (default `[]`, di-persist & serialisasi di semua jalur)
+- [x] `AuthService`/`TokenService`/`AuthController`: `login`/`me` + JWT (access & refresh) menyertakan `outletIds` (payload `TokenPayload.outletIds`)
+- [x] `authenticate.ts`: isi `req.outletIds` dari JWT (`payload.outletIds ?? []`) + deklarasi `Express.Request.outletIds`/`outletId`
+- [x] Middleware `resolveOutlet` (`src/@shared/interfaces/middleware/resolveOutlet.ts`) + helper `scopeOutletIds(req)`: validasi `X-Outlet-Id` ∈ `req.outletIds`; `[]` = semua outlet tenant; `requireOutlet` untuk endpoint yang wajib outlet
+- [x] `UserService` (inject `roleRepository` via `container.ts`): create/update terima `outletIds`, validasi per role via `outletPolicyForRole`/`validateOutletIds` (cashier=1, manager/supervisor≥1, owner/admin=`[]`); `UserController` zod `createSchema`/`updateSchema` + serialisasi `outletIds` (list/getById/create/update); `AuthService.register`/`OnboardingService` menciptakan owner dengan `outletIds: []`
+- [x] Halaman Users: kolom Outlet (nama outlet / "Semua outlet"), form assign outlet per-role (owner/admin = info "semua", kasir = single-select, lain = multi-checkbox dari `GET /outlets`), validasi client
+- **Status**: verifikasi 2026-08-30 — backend 964/964 tests (+8 `UserService` outlet policy), frontend 76/76, tsc backend & frontend bersih, shared dist dibangun ulang. `resolveOutlet`/`scopeOutletIds` belum di-mount ke route transaksi (di-wire Fase 7).
 
 ### Fase 7 — Frontend
 - [ ] `useAuth.ts`: `AuthUser` + `outletIds` + `activeOutletId` (persist `localStorage.activeOutletId`)

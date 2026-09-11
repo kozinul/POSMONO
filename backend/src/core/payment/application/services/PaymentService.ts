@@ -24,13 +24,14 @@ export class PaymentService {
     private readonly qrisGatewayService?: any,
   ) {}
 
-  private async assertOpenShift(tenantId: string, cashierId: string, providedShiftId?: string | null): Promise<string> {
-    if (!this.shiftRepository) return providedShiftId ?? '';
+  private async assertOpenShift(tenantId: string, cashierId: string, providedShiftId?: string | null): Promise<{ shiftId: string; outletId: string | null }> {
+    if (!this.shiftRepository) return { shiftId: providedShiftId ?? '', outletId: null };
     const shift = await this.shiftRepository.findOpenShift(tenantId, cashierId);
     if (!shift) {
       throw new ValidationError('Buka shift terlebih dahulu sebelum bertransaksi');
     }
-    return shift.serialize().id;
+    const shiftData = shift.serialize();
+    return { shiftId: shiftData.id, outletId: shiftData.outletId ?? null };
   }
 
   private async resolveCashierName(cashierId: string, tenantId: string, fallback?: string): Promise<string> {
@@ -98,9 +99,11 @@ export class PaymentService {
     splitIndex?: number;
     splitBaseOrderNumber?: string;
     shiftId?: string | null;
+    outletId?: string | null;
     cashierName?: string;
   }): Promise<{ payment: Payment; order: any; receipt: ReceiptRenderResult | null; pending?: boolean }> {
-    const shiftId = await this.assertOpenShift(input.tenantId, input.cashierId, input.shiftId);
+    const { shiftId, outletId: shiftOutletId } = await this.assertOpenShift(input.tenantId, input.cashierId, input.shiftId);
+    const outletId = input.outletId ?? shiftOutletId ?? null;
     const roundMoney = (value: number) => Math.round(value);
     const rawSubtotal = input.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
     const manualDiscountInput = input.discount ?? 0;
@@ -212,6 +215,7 @@ export class PaymentService {
 
     const order = Order.create({
       tenantId: input.tenantId,
+      outletId,
       items: orderItems,
       subtotal,
       discount,
@@ -260,6 +264,7 @@ export class PaymentService {
 
     const payment = Payment.create({
       tenantId: input.tenantId,
+      outletId,
       orderId: order.serialize().id,
       amount: input.amountPaid,
       status: 'pending',
@@ -367,14 +372,17 @@ export class PaymentService {
     paymentTransactionId?: string;
     referenceNumber?: string;
     shiftId?: string | null;
+    outletId?: string | null;
   }): Promise<{ payment: Payment; order: Order; receipt: ReceiptRenderResult | null; pending?: boolean }> {
-    const shiftId = await this.assertOpenShift(input.tenantId, input.cashierId, input.shiftId);
+    const { shiftId, outletId: shiftOutletId } = await this.assertOpenShift(input.tenantId, input.cashierId, input.shiftId);
     const order = await this.orderRepository.findById(input.orderId);
     if (!order) throw new NotFoundError('Order not found');
 
     const orderData = order.serialize();
     if (orderData.tenantId !== input.tenantId) throw new NotFoundError('Order not found');
     if (orderData.paymentStatus === 'completed') throw new ValidationError('Order is already paid');
+
+    const outletId = input.outletId ?? orderData.outletId ?? shiftOutletId ?? null;
 
     const wasUnpaid = orderData.paymentBreakdown.length === 0;
 
@@ -394,6 +402,7 @@ export class PaymentService {
 
     const payment = Payment.create({
       tenantId: input.tenantId,
+      outletId,
       orderId: input.orderId,
       amount: input.amount,
       status: 'pending',
@@ -801,17 +810,20 @@ export class PaymentService {
 
   async splitBill(input: {
     tenantId: string;
+    outletId?: string | null;
     orderId: string;
     splitBills: ISplitBill[];
     cashierId: string;
     shiftId?: string | null;
   }): Promise<{ payments: Payment[]; order: Order; receipts: (ReceiptRenderResult | null)[] }> {
-    const shiftId = await this.assertOpenShift(input.tenantId, input.cashierId, input.shiftId);
+    const { shiftId, outletId: shiftOutletId } = await this.assertOpenShift(input.tenantId, input.cashierId, input.shiftId);
     const order = await this.orderRepository.findById(input.orderId);
     if (!order) throw new NotFoundError('Order not found');
 
     const orderData = order.serialize();
     if (orderData.tenantId !== input.tenantId) throw new NotFoundError('Order not found');
+
+    const outletId = input.outletId ?? orderData.outletId ?? shiftOutletId ?? null;
 
     const wasUnpaid = orderData.paymentBreakdown.length === 0;
 
@@ -830,6 +842,7 @@ export class PaymentService {
       const bill = input.splitBills[i];
       const payment = Payment.create({
         tenantId: input.tenantId,
+        outletId,
         orderId: input.orderId,
         amount: bill.amount,
         status: 'pending',

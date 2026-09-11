@@ -79,6 +79,7 @@ describe('ReportService', () => {
         TENANT_ID,
         '2026-08-01',
         '2026-08-06',
+        undefined,
       );
       expect(result).toEqual({
         dateFrom: '2026-08-01',

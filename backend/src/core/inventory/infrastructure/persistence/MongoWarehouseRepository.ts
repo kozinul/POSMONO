@@ -5,6 +5,7 @@ import { WarehouseRepository } from '../../domain/WarehouseRepository';
 interface WarehouseDoc extends Document<string> {
   _id: string;
   tenantId: string;
+  outletId?: string | null;
   name: string;
   address: string;
   isActive: boolean;
@@ -19,6 +20,7 @@ export class MongoWarehouseRepository implements WarehouseRepository {
     return Warehouse.hydrate({
       id: doc._id,
       tenantId: doc.tenantId,
+      outletId: doc.outletId ?? null,
       name: doc.name,
       address: doc.address,
       isActive: doc.isActive,
@@ -32,6 +34,7 @@ export class MongoWarehouseRepository implements WarehouseRepository {
     return {
       _id: data.id,
       tenantId: data.tenantId,
+      outletId: data.outletId ?? null,
       name: data.name,
       address: data.address,
       isActive: data.isActive,
@@ -61,6 +64,17 @@ export class MongoWarehouseRepository implements WarehouseRepository {
   async findActiveByTenant(tenantId: string): Promise<Warehouse[]> {
     const docs = await this.model.find({ tenantId, isActive: true }).sort({ name: 1 }).exec();
     return docs.map((d: WarehouseDoc) => this.toDomain(d));
+  }
+
+  async findActiveByOutlet(tenantId: string, outletId: string): Promise<Warehouse[]> {
+    const docs = await this.model.find({ tenantId, outletId, isActive: true }).sort({ name: 1 }).exec();
+    return docs.map((d: WarehouseDoc) => this.toDomain(d));
+  }
+
+  async findByName(tenantId: string, name: string): Promise<Warehouse | null> {
+    const doc = await this.model.findOne({ tenantId, name }).exec();
+    if (!doc) return null;
+    return this.toDomain(doc);
   }
 
   async delete(id: string): Promise<boolean> {

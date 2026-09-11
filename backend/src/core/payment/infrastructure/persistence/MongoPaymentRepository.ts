@@ -4,6 +4,7 @@ import { Payment, IPayment } from '../../domain/Payment';
 interface PaymentDoc extends Document<string> {
   _id: string;
   tenantId: string;
+  outletId?: string | null;
   orderId: string;
   amount: number;
   status: string;
@@ -27,6 +28,7 @@ export class MongoPaymentRepository {
     return Payment.hydrate({
       id: doc._id,
       tenantId: doc.tenantId,
+      outletId: doc.outletId ?? null,
       orderId: doc.orderId,
       amount: doc.amount,
       status: doc.status as IPayment['status'],
@@ -49,6 +51,7 @@ export class MongoPaymentRepository {
     return {
       _id: data.id,
       tenantId: data.tenantId,
+      outletId: data.outletId ?? null,
       orderId: data.orderId,
       amount: data.amount,
       status: data.status,

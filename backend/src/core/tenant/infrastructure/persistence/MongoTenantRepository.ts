@@ -15,6 +15,7 @@ interface TenantDoc extends Document<string> {
   databaseName: string;
   config: { timezone: string; currency: string; locale: string };
   billingEmail: string;
+  hubId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -36,6 +37,7 @@ export class MongoTenantRepository {
       databaseName: doc.databaseName,
       config: doc.config,
       billingEmail: doc.billingEmail,
+      hubId: doc.hubId ?? null,
       createdAt: doc.createdAt,
       updatedAt: doc.updatedAt,
     } as ITenant);
@@ -56,6 +58,7 @@ export class MongoTenantRepository {
       databaseName: data.databaseName,
       config: data.config,
       billingEmail: data.billingEmail,
+      hubId: data.hubId,
     } as unknown as Partial<TenantDoc>;
   }
 
@@ -74,6 +77,11 @@ export class MongoTenantRepository {
     return this.toDomain(doc);
   }
 
+  async findAll(): Promise<Tenant[]> {
+    const docs = await this.model.find({}).sort({ name: 1 }).exec();
+    return docs.map((doc: TenantDoc) => this.toDomain(doc));
+  }
+
   async findBySlug(slug: string): Promise<Tenant | null> {
     const doc = await this.model.findOne({ slug }).exec();
     if (!doc) return null;
@@ -84,5 +92,10 @@ export class MongoTenantRepository {
     const doc = await this.model.findOne({ domain }).exec();
     if (!doc) return null;
     return this.toDomain(doc);
+  }
+
+  async findByHubId(hubId: string): Promise<Tenant[]> {
+    const docs = await this.model.find({ hubId }).exec();
+    return docs.map((doc: TenantDoc) => this.toDomain(doc));
   }
 }

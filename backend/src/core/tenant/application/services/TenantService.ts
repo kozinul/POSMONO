@@ -1,5 +1,6 @@
 import { ConflictError, NotFoundError } from '../../../../@shared/infrastructure/error/AppError';
 import { Tenant, ITenant, TenantConfig } from '../../domain/Tenant';
+import { DomainEvent } from '../../../../@shared/domain/DomainEvent';
 
 interface CreateTenantInput {
   name: string;
@@ -7,10 +8,26 @@ interface CreateTenantInput {
   ownerId: string;
   businessType: string;
   billingEmail: string;
+  owner?: {
+    email?: string;
+    password?: string;
+    displayName?: string;
+  };
+}
+
+interface TenantServiceDeps {
+  tenantRepository: any;
+  eventBus?: {
+    publishAsync?: (event: DomainEvent) => Promise<void>;
+    publish?: (event: DomainEvent) => void;
+  };
 }
 
 export class TenantService {
-  constructor(private readonly tenantRepository: any) {}
+  constructor(
+    private readonly tenantRepository: any,
+    private readonly eventBus?: TenantServiceDeps['eventBus'],
+  ) {}
 
   async create(input: CreateTenantInput): Promise<Tenant> {
     const existing = await this.tenantRepository.findBySlug(input.slug);
@@ -45,7 +62,28 @@ export class TenantService {
       billingEmail: input.billingEmail,
     });
 
+    const event = new DomainEvent({
+      eventName: 'platform.tenant.created',
+      aggregateId: tenant.id.toValue(),
+      aggregateType: 'Tenant',
+      tenantId: tenant.id.toValue(),
+      payload: {
+        tenantId: tenant.id.toValue(),
+        ownerId: input.ownerId,
+        owner: input.owner ?? null,
+        plan: tenant.serialize().plan,
+        businessType: tenant.serialize().businessType,
+      },
+    });
+
     await this.tenantRepository.save(tenant);
+
+    if (this.eventBus?.publishAsync) {
+      await this.eventBus.publishAsync(event);
+    } else if (this.eventBus?.publish) {
+      this.eventBus.publish(event);
+    }
+
     return tenant;
   }
 

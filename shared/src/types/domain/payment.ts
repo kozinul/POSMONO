@@ -5,6 +5,7 @@ export type TransactionType = 'sale' | 'refund' | 'fee';
 export interface Payment {
   id: string;
   tenantId: string;
+  outletId?: string | null;
   orderId: string;
   amount: number;
   status: PaymentStatus;

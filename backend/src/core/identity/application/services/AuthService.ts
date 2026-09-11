@@ -15,6 +15,7 @@ interface LoginOutput {
   user: User;
   roleName: string | null;
   permissions: string[];
+  outletIds: string[];
   accessToken: string;
   refreshToken: string;
 }
@@ -56,6 +57,7 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
       role: user.roleIdValue,
       roleName: roleName ?? undefined,
       permissions,
+      outletIds: user.outletIdsValue,
     });
 
     await this.sessionService.create({
@@ -72,9 +74,10 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
       role: user.roleIdValue,
       roleName: roleName ?? undefined,
       permissions,
+      outletIds: user.outletIdsValue,
     });
 
-    return { user, roleName, permissions, accessToken, refreshToken };
+    return { user, roleName, permissions, outletIds: user.outletIdsValue, accessToken, refreshToken };
   }
 
   private async resolveRole(roleId: string) {
@@ -107,6 +110,7 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
       role: payload.role,
       roleName: payload.roleName,
       permissions: payload.permissions,
+      outletIds: payload.outletIds,
     });
 
     await this.sessionService.create({
@@ -121,6 +125,7 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
       role: payload.role,
       roleName: payload.roleName,
       permissions: payload.permissions,
+      outletIds: payload.outletIds,
     });
 
     return { accessToken, refreshToken: newRefreshToken };
@@ -149,6 +154,7 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
       passwordHash,
       displayName: input.displayName,
       roleId: input.roleId,
+      outletIds: [],
       isActive: true,
       lastLoginAt: null,
       pin: null,
@@ -162,7 +168,7 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
   async getCurrentUser(
     userId: string,
     tenantId: string,
-  ): Promise<{ user: User; roleName: string | null; permissions: string[] } | null> {
+  ): Promise<{ user: User; roleName: string | null; permissions: string[]; outletIds: string[] } | null> {
     const user = await this.userRepository.findByIdAndTenant(userId, tenantId);
     if (!user) return null;
 
@@ -170,6 +176,6 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
     const roleName = role?.serialize().name ?? null;
     const permissions = role?.serialize().permissions ?? [];
 
-    return { user, roleName, permissions };
+    return { user, roleName, permissions, outletIds: user.outletIdsValue };
   }
 }

@@ -7,9 +7,10 @@ export class WarehouseService {
     private readonly warehouseRepository: WarehouseRepository,
   ) {}
 
-  async create(input: { tenantId: string; name: string; address?: string }): Promise<Warehouse> {
+  async create(input: { tenantId: string; name: string; address?: string; outletId?: string | null }): Promise<Warehouse> {
     const warehouse = Warehouse.create({
       tenantId: input.tenantId,
+      outletId: input.outletId ?? null,
       name: input.name,
       address: input.address || '',
       isActive: true,

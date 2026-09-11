@@ -31,6 +31,7 @@ export const PaymentSchema = new Schema(
   {
     _id: { type: String },
     tenantId: { type: String, required: true, index: true },
+    outletId: { type: String, default: null, index: true },
     orderId: { type: String, required: true },
     amount: { type: Number, required: true },
     status: {
@@ -62,3 +63,4 @@ export const PaymentSchema = new Schema(
 
 PaymentSchema.index({ tenantId: 1, orderId: 1 }, { unique: true });
 PaymentSchema.index({ tenantId: 1, status: 1, createdAt: -1 });
+PaymentSchema.index({ tenantId: 1, outletId: 1, status: 1, createdAt: -1 });

@@ -4,6 +4,31 @@ import type { DomainEvent } from '../@shared/domain/DomainEvent';
 import { getIO } from './socket';
 import type { DIContainer } from './container';
 
+async function onTenantCreatedProvision(event: DomainEvent, container: DIContainer): Promise<void> {
+  try {
+    const payload = event.payload as {
+      tenantId: string;
+      ownerId?: string;
+      owner?: { email?: string; password?: string; displayName?: string } | null;
+    };
+    const onboardingService = container.resolve('onboardingService');
+    const passwordService = container.resolve('passwordService');
+
+    let owner;
+    if (payload?.owner?.email && payload.owner.password) {
+      owner = {
+        email: payload.owner.email,
+        displayName: payload.owner.displayName || payload.owner.email.split('@')[0],
+        passwordHash: await passwordService.hash(payload.owner.password),
+      };
+    }
+
+    await onboardingService.provision(payload.tenantId, owner);
+  } catch {
+    // provisioning must never break the tenant-creation request
+  }
+}
+
 async function onOrderCreated(event: DomainEvent): Promise<void> {
   getIO()?.to(event.tenantId).emit('domain-event', event);
 }
@@ -94,4 +119,5 @@ export function registerEventHandlers(eventBus: EventBus, container: DIContainer
   eventBus.subscribe(DOMAIN_EVENTS.TAX_CONFIG_UPDATED, onTaxConfigUpdated);
   eventBus.subscribe('inventory.stock.adjusted', onStockAdjusted);
   eventBus.subscribe('inventory.stock.low_alert', onStockLowAlert);
+  eventBus.subscribe('platform.tenant.created', (event) => onTenantCreatedProvision(event, container));
 }

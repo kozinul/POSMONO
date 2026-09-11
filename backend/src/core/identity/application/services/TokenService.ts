@@ -8,6 +8,7 @@ export interface TokenPayload {
   role: string;
   roleName?: string;
   permissions?: string[];
+  outletIds?: string[];
   jti?: string;
   type?: 'access' | 'refresh';
 }

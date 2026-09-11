@@ -17,11 +17,13 @@ export class ReportAggregation {
     private readonly stockMovementModel?: Model<any>,
   ) {}
 
-  async getDailySalesAggregation(tenantId: string, date: string) {
+  async getDailySalesAggregation(tenantId: string, date: string, outletId?: string | null) {
     const startOfDay = new Date(date);
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(date);
     endOfDay.setHours(23, 59, 59, 999);
+
+    const outletMatch = outletId ? { outletId } : {};
 
     const result = await this.orderModel.aggregate([
       {
@@ -29,6 +31,7 @@ export class ReportAggregation {
           tenantId,
           createdAt: { $gte: startOfDay, $lte: endOfDay },
           status: { $in: ['paid', 'completed'] },
+          ...outletMatch,
         },
       },
       {
@@ -96,6 +99,7 @@ export class ReportAggregation {
     fromAt: Date;
     toAt: Date;
     shiftId?: string | null;
+    outletId?: string | null;
   }): Promise<{
     totalSales: number;
     cashSales: number;
@@ -103,10 +107,11 @@ export class ReportAggregation {
     totalTransactions: number;
     paymentBreakdown: IPaymentBreakdownGroup[];
   }> {
-    const { tenantId, fromAt, toAt, shiftId } = params;
+    const { tenantId, fromAt, toAt, shiftId, outletId } = params;
 
     const timeMatch = { paidAt: { $gte: fromAt, $lte: toAt } };
     const shiftMatch = shiftId ? { shiftId } : {};
+    const outletMatch = outletId ? { outletId } : {};
     const rows = await this.paymentModel.aggregate([
       {
         $match: {
@@ -114,6 +119,7 @@ export class ReportAggregation {
           status: 'completed',
           ...timeMatch,
           ...shiftMatch,
+          ...outletMatch,
         },
       },
       {
@@ -343,7 +349,7 @@ export class ReportAggregation {
     }));
   }
 
-  async getFinanceAggregation(tenantId: string, dateFrom: string, dateTo: string) {
+  async getFinanceAggregation(tenantId: string, dateFrom: string, dateTo: string, outletId?: string | null) {
     const startOfDay = new Date(dateFrom);
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(dateTo);
@@ -353,6 +359,7 @@ export class ReportAggregation {
       tenantId,
       createdAt: { $gte: startOfDay, $lte: endOfDay },
       status: { $in: ['paid', 'completed'] },
+      ...(outletId ? { outletId } : {}),
     };
 
     const [totals] = await this.orderModel.aggregate([

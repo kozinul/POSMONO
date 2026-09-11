@@ -7,6 +7,7 @@ import { ValidationError } from '../../../../../@shared/infrastructure/error/App
 const openSchema = z.object({
   registerId: z.string().min(1).optional().default('register-default'),
   openingBalance: z.number().nonnegative().default(0),
+  outletId: z.string().nullable().optional(),
 });
 
 const closeSchema = z.object({

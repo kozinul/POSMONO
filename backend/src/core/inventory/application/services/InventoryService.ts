@@ -20,8 +20,12 @@ export class InventoryService {
     }
   }
 
-  private async resolveWarehouseId(tenantId: string, warehouseId?: string): Promise<string> {
+  private async resolveWarehouseId(tenantId: string, warehouseId?: string, outletId?: string): Promise<string> {
     if (warehouseId) return warehouseId;
+    if (outletId) {
+      const outletWarehouses = await this.warehouseRepository.findActiveByOutlet(tenantId, outletId);
+      if (outletWarehouses.length > 0) return outletWarehouses[0].id.toValue();
+    }
     const warehouses = await this.warehouseRepository.findActiveByTenant(tenantId);
     if (warehouses.length > 0) return warehouses[0].id.toValue();
     return 'utama';
@@ -49,6 +53,7 @@ export class InventoryService {
     quantity: number;
     variantId?: string | null;
     warehouseId?: string;
+    outletId?: string;
     reason?: string;
     referenceId?: string;
     userId?: string;
@@ -59,7 +64,7 @@ export class InventoryService {
       throw new ValidationError('Quantity must be positive');
     }
 
-    const resolvedWarehouseId = await this.resolveWarehouseId(input.tenantId, input.warehouseId);
+    const resolvedWarehouseId = await this.resolveWarehouseId(input.tenantId, input.warehouseId, input.outletId);
     let stock = await this.stockRepository.findByProduct(input.tenantId, input.productId);
     const beforeQty = stock ? stock.serialize().quantity : 0;
 
@@ -249,10 +254,11 @@ export class InventoryService {
     reason: string;
     variantId?: string | null;
     warehouseId?: string;
+    outletId?: string;
     userId?: string;
     costPrice?: number;
   }): Promise<Stock> {
-    const resolvedWarehouseId = await this.resolveWarehouseId(input.tenantId, input.warehouseId);
+    const resolvedWarehouseId = await this.resolveWarehouseId(input.tenantId, input.warehouseId, input.outletId);
     let stock = await this.stockRepository.findByProduct(input.tenantId, input.productId);
     const beforeQty = stock ? stock.serialize().quantity : 0;
 

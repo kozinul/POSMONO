@@ -35,8 +35,8 @@ export class ReportService {
     };
   }
 
-  async getDailyReport(tenantId: string, date: string) {
-    const sales = await this.orderRepository.getDailySales(tenantId, date);
+  async getDailyReport(tenantId: string, date: string, outletId?: string | null) {
+    const sales = await this.orderRepository.getDailySales(tenantId, date, outletId);
     const shifts = await this.shiftRepository.findByDate(tenantId, date);
 
     const topProducts = await this.reportAggregation.getTopProductsAggregation(tenantId, date, 10);
@@ -54,11 +54,12 @@ export class ReportService {
     };
   }
 
-  async getSalesReport(tenantId: string, dateFrom: string, dateTo: string) {
+  async getSalesReport(tenantId: string, dateFrom: string, dateTo: string, outletId?: string | null) {
     const orders = await this.orderRepository.findByTenant(tenantId, {
       dateFrom,
       dateTo,
       status: ['paid', 'completed'],
+      outletId,
     });
 
     const totalRevenue = orders.orders.reduce(
@@ -115,19 +116,21 @@ export class ReportService {
     return this.reportAggregation.getPaymentReconciliationAggregation(tenantId, dateFrom, dateTo);
   }
 
-  async getShiftReport(tenantId: string, shiftId: string) {
+  async getShiftReport(tenantId: string, shiftId: string, outletId?: string | null) {
     const shift = await this.shiftRepository.findById(shiftId);
     if (!shift || shift.serialize().tenantId !== tenantId) {
       throw new NotFoundError('Shift', shiftId);
     }
 
     const shiftData = shift.serialize();
+    const effectiveOutletId = outletId ?? shiftData.outletId ?? null;
 
     const sales = await this.reportAggregation.getShiftSalesAggregation({
       tenantId,
       fromAt: shiftData.openedAt,
       toAt: shiftData.closedAt ?? new Date(),
       shiftId,
+      outletId: effectiveOutletId,
     });
 
     const orders = await this.reportAggregation.getShiftOrdersAggregation(tenantId, shiftId);
@@ -219,8 +222,8 @@ export class ReportService {
     };
   }
 
-  async getFinanceReport(tenantId: string, dateFrom: string, dateTo: string) {
-    const finance = await this.reportAggregation.getFinanceAggregation(tenantId, dateFrom, dateTo);
+  async getFinanceReport(tenantId: string, dateFrom: string, dateTo: string, outletId?: string | null) {
+    const finance = await this.reportAggregation.getFinanceAggregation(tenantId, dateFrom, dateTo, outletId);
 
     return {
       dateFrom,

@@ -4,6 +4,7 @@ import { Shift, IShift, ICashPickup, ICarriedOverBill, IPaymentBreakdownEntry } 
 interface ShiftDoc extends Document<string> {
   _id: string;
   tenantId: string;
+  outletId?: string | null;
   registerId: string;
   cashierId: string;
   cashierName: string;
@@ -35,6 +36,7 @@ export class MongoShiftRepository {
     return Shift.hydrate({
       id: doc._id,
       tenantId: doc.tenantId,
+      outletId: doc.outletId ?? null,
       registerId: doc.registerId,
       cashierId: doc.cashierId,
       cashierName: doc.cashierName ?? '',
@@ -72,6 +74,7 @@ export class MongoShiftRepository {
     return {
       _id: data.id,
       tenantId: data.tenantId,
+      outletId: data.outletId ?? null,
       registerId: data.registerId,
       cashierId: data.cashierId,
       cashierName: data.cashierName,
@@ -110,8 +113,10 @@ export class MongoShiftRepository {
     return this.toDomain(doc);
   }
 
-  async findOpenShift(tenantId: string, cashierId: string): Promise<Shift | null> {
-    const doc = await this.model.findOne({ tenantId, cashierId, status: 'open' }).exec();
+  async findOpenShift(tenantId: string, cashierId: string, outletId?: string | null): Promise<Shift | null> {
+    const query: any = { tenantId, cashierId, status: 'open' };
+    if (outletId !== undefined) query.outletId = outletId ?? null;
+    const doc = await this.model.findOne(query).exec();
     if (!doc) return null;
     return this.toDomain(doc);
   }

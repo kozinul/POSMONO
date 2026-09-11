@@ -83,6 +83,10 @@ export const PERMISSIONS = {
   RESTAURANT_SPLIT_BILL_PROCESS: 'restaurant.split_bill.process',
   RESTAURANT_PRINTER_MANAGE: 'restaurant.printer.manage',
 
+  // Outlet & Hub
+  OUTLET_MANAGE: 'outlet:manage',
+  HUB_MANAGE: 'hub:manage',
+
   // Hospitality
   HOSPITALITY_PROPERTIES_READ: 'hospitality.properties.read',
   HOSPITALITY_PROPERTIES_MANAGE: 'hospitality.properties.manage',

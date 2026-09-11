@@ -6,18 +6,29 @@ import { useSweetAlert } from '../../../@shared/hooks/useSweetAlert';
 import {
   useUsers,
   useRoles,
+  useOutlets,
   useCreateUser,
   useUpdateUser,
   useDeleteUser,
   useToggleUserActive,
   type User,
   type Role,
+  type Outlet,
 } from '../hooks/useUsers';
 
 const VOID_PERMISSIONS = [VOID_ORDER_PERMISSION, VOID_PAYMENT_PERMISSION];
+const ALL_OUTLETS_ROLES = ['owner', 'admin'];
 
 function roleAllowsVoid(role?: Role): boolean {
   return !!role && role.permissions.some((p) => VOID_PERMISSIONS.includes(p));
+}
+
+function roleIsAllOutlets(role?: Role): boolean {
+  return !!role && ALL_OUTLETS_ROLES.includes(role.name.toLowerCase().trim());
+}
+
+function roleIsSingleOutlet(role?: Role): boolean {
+  return !!role && role.name.toLowerCase().trim() === 'cashier';
 }
 
 function formatDate(iso: string | null): string {
@@ -43,11 +54,15 @@ export default function UserListPage() {
     pin: '',
     pinConfirm: '',
     clearPin: false,
+    outletIds: [] as string[],
   });
   const [formError, setFormError] = useState('');
 
   const { data: users = [], isLoading } = useUsers();
   const { data: roles = [] } = useRoles();
+  const { data: outlets = [] } = useOutlets();
+
+  const activeOutlets = outlets.filter((o) => o.isActive);
 
   const createMutation = useCreateUser();
   const updateMutation = useUpdateUser();
@@ -58,6 +73,16 @@ export default function UserListPage() {
   const selectedRole = roles.find((r) => r.id === formData.roleId);
   const showPinField = roleAllowsVoid(selectedRole);
 
+  const outletBehavior =
+    roleIsAllOutlets(selectedRole) ? 'all'
+    : roleIsSingleOutlet(selectedRole) ? 'single'
+    : selectedRole ? 'multi'
+    : 'none';
+
+  const setSelectedOutlets = (ids: string[]) => {
+    setFormData((f) => ({ ...f, outletIds: ids }));
+  };
+
   const resetForm = () => {
     setFormData({
       email: '',
@@ -67,6 +92,7 @@ export default function UserListPage() {
       pin: '',
       pinConfirm: '',
       clearPin: false,
+      outletIds: [],
     });
   };
 
@@ -87,6 +113,7 @@ export default function UserListPage() {
       pin: '',
       pinConfirm: '',
       clearPin: false,
+      outletIds: [...(user.outletIds ?? [])],
     });
     setFormError('');
     setShowModal(true);
@@ -99,6 +126,11 @@ export default function UserListPage() {
   };
 
   const getRoleName = (roleId: string) => roles.find((r) => r.id === roleId)?.name || '-';
+
+  const getOutletNames = (outletIds: string[]) => {
+    if (!outletIds || outletIds.length === 0) return 'Semua outlet';
+    return outletIds.map((id) => outlets.find((o) => o.id === id)?.name || id).join(', ');
+  };
 
   const handleSubmit = () => {
     setFormError('');
@@ -119,6 +151,19 @@ export default function UserListPage() {
     if (isCreate && formData.password.length < 6) {
       setFormError('Password minimal 6 karakter');
       return;
+    }
+
+    let outgoingOutletIds: string[] = [];
+    if (outletBehavior === 'all') {
+      outgoingOutletIds = [];
+    } else if (outletBehavior === 'single' && formData.outletIds.length !== 1) {
+      setFormError('Role kasir harus tepat memiliki 1 outlet');
+      return;
+    } else if (outletBehavior === 'multi' && formData.outletIds.length === 0) {
+      setFormError('Pilih minimal 1 outlet untuk role ini');
+      return;
+    } else {
+      outgoingOutletIds = formData.outletIds;
     }
 
     let pin: string | null | undefined;
@@ -146,6 +191,7 @@ export default function UserListPage() {
           roleId: formData.roleId,
           password: formData.password,
           pin,
+          outletIds: outletBehavior === 'none' ? undefined : outgoingOutletIds,
         },
         {
           onSuccess: () => {
@@ -164,6 +210,7 @@ export default function UserListPage() {
     const payload: Record<string, unknown> = {
       displayName: formData.displayName.trim(),
       roleId: formData.roleId,
+      outletIds: outletBehavior === 'none' ? undefined : outgoingOutletIds,
     };
     if (formData.password) {
       payload.password = formData.password;
@@ -241,6 +288,7 @@ export default function UserListPage() {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nama</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Outlet</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Terakhir Login</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
@@ -249,11 +297,11 @@ export default function UserListPage() {
           <tbody className="bg-white divide-y divide-gray-200">
             {isLoading ? (
               <tr>
-                <td colSpan={6} className="px-6 py-12 text-center text-gray-500">Memuat data...</td>
+                <td colSpan={7} className="px-6 py-12 text-center text-gray-500">Memuat data...</td>
               </tr>
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-6 py-12 text-center text-gray-500">Tidak ada user</td>
+                <td colSpan={7} className="px-6 py-12 text-center text-gray-500">Tidak ada user</td>
               </tr>
             ) : (
               users.map((user) => (
@@ -261,6 +309,11 @@ export default function UserListPage() {
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{user.displayName}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.email}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{getRoleName(user.roleId)}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <span className="inline-block max-w-[160px] truncate align-bottom" title={getOutletNames(user.outletIds)}>
+                      {getOutletNames(user.outletIds)}
+                    </span>
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 py-1 text-xs font-medium rounded-full ${user.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                       {user.isActive ? 'Aktif' : 'Nonaktif'}
@@ -311,9 +364,10 @@ export default function UserListPage() {
                 <label htmlFor="user-role" className="block text-sm font-medium text-gray-700 mb-1">Role</label>
                 <select
                   id="user-role"
+                  aria-label="Role"
                   value={formData.roleId}
                   onChange={(e) => {
-                    setFormData({ ...formData, roleId: e.target.value, pin: '', pinConfirm: '', clearPin: false });
+                    setFormData({ ...formData, roleId: e.target.value, outletIds: [], pin: '', pinConfirm: '', clearPin: false });
                   }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                 >
@@ -322,6 +376,59 @@ export default function UserListPage() {
                     <option key={role.id} value={role.id}>{role.name}</option>
                   ))}
                 </select>
+              </div>
+
+              <div className="border-t border-gray-200 pt-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Outlet</label>
+                {outletBehavior === 'all' ? (
+                  <p className="text-xs text-gray-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+                    Role <span className="font-semibold">{selectedRole?.name}</span> mencakup <b>semua outlet</b> tenant ini.
+                  </p>
+                ) : outletBehavior === 'single' ? (
+                  <div>
+                    <select
+                      aria-label="Outlet"
+                      value={formData.outletIds[0] ?? ''}
+                      onChange={(e) => setSelectedOutlets(e.target.value ? [e.target.value] : [])}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">-- Pilih Outlet --</option>
+                      {activeOutlets.map((outlet) => (
+                        <option key={outlet.id} value={outlet.id}>{outlet.name}</option>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-xs text-gray-500">Kasir hanya bertransaksi di satu outlet.</p>
+                  </div>
+                ) : outletBehavior === 'multi' ? (
+                  <div>
+                    <div className="space-y-2 border border-gray-300 rounded-lg p-3 max-h-40 overflow-y-auto">
+                      {activeOutlets.length === 0 && <p className="text-xs text-gray-500">Belum ada outlet aktif.</p>}
+                      {activeOutlets.map((outlet) => {
+                        const checked = formData.outletIds.includes(outlet.id);
+                        return (
+                          <label key={outlet.id} className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) =>
+                                setSelectedOutlets(
+                                  e.target.checked
+                                    ? [...formData.outletIds, outlet.id]
+                                    : formData.outletIds.filter((id) => id !== outlet.id),
+                                )
+                              }
+                              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                            />
+                            <span className="text-sm text-gray-700">{outlet.name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">Pilih 1 atau lebih outlet yang boleh diakses.</p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-500">Pilih role terlebih dahulu untuk mengatur outlet.</p>
+                )}
               </div>
               <div>
                 <label htmlFor="user-password" className="block text-sm font-medium text-gray-700 mb-1">

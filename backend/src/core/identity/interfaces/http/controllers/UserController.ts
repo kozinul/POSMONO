@@ -11,6 +11,7 @@ const createSchema = z.object({
   password: z.string().min(6),
   pin: z.string().regex(/^\d{4,6}$/, 'PIN must be 4-6 digits').nullable().optional(),
   isActive: z.boolean().optional(),
+  outletIds: z.array(z.string().min(1)).optional(),
 });
 
 const updateSchema = z.object({
@@ -19,6 +20,7 @@ const updateSchema = z.object({
   password: z.string().min(6).optional(),
   pin: z.string().regex(/^\d{4,6}$/, 'PIN must be 4-6 digits').nullable().optional(),
   isActive: z.boolean().optional(),
+  outletIds: z.array(z.string().min(1)).optional(),
 });
 
 export class UserController extends BaseController {
@@ -35,6 +37,7 @@ export class UserController extends BaseController {
         email: s.email,
         displayName: s.displayName,
         roleId: s.roleId,
+        outletIds: s.outletIds,
         isActive: s.isActive,
         lastLoginAt: s.lastLoginAt,
         createdAt: s.createdAt,
@@ -50,6 +53,7 @@ export class UserController extends BaseController {
       email: s.email,
       displayName: s.displayName,
       roleId: s.roleId,
+      outletIds: s.outletIds,
       isActive: s.isActive,
       lastLoginAt: s.lastLoginAt,
       createdAt: s.createdAt,
@@ -67,6 +71,7 @@ export class UserController extends BaseController {
       email: s.email,
       displayName: s.displayName,
       roleId: s.roleId,
+      outletIds: s.outletIds,
       isActive: s.isActive,
     });
   }
@@ -87,6 +92,7 @@ export class UserController extends BaseController {
       email: s.email,
       displayName: s.displayName,
       roleId: s.roleId,
+      outletIds: s.outletIds,
       isActive: s.isActive,
     });
   }

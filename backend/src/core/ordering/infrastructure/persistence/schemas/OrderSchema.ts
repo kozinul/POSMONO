@@ -100,6 +100,7 @@ export const OrderSchema = new Schema(
   {
     _id: { type: String },
     tenantId: { type: String, required: true, index: true },
+    outletId: { type: String, default: null, index: true },
     orderNumber: { type: String, required: true },
     invoiceNumber: { type: String, default: null },
     status: {
@@ -164,4 +165,5 @@ export const OrderSchema = new Schema(
 OrderSchema.index({ tenantId: 1, orderNumber: 1 }, { unique: true });
 OrderSchema.index({ tenantId: 1, status: 1, createdAt: -1 });
 OrderSchema.index({ tenantId: 1, customerId: 1, createdAt: -1 });
+OrderSchema.index({ tenantId: 1, outletId: 1, createdAt: -1 });
 OrderSchema.index({ tenantId: 1, createdAt: -1 });

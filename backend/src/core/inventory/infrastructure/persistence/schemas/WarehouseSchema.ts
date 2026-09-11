@@ -4,6 +4,7 @@ export const WarehouseSchema = new Schema(
   {
     _id: { type: String },
     tenantId: { type: String, required: true, index: true },
+    outletId: { type: String, default: null, index: true },
     name: { type: String, required: true },
     address: { type: String, default: '' },
     isActive: { type: Boolean, default: true },

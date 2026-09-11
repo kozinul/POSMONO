@@ -8,6 +8,7 @@ export const UserSchema = new Schema(
     passwordHash: { type: String, required: true },
     displayName: { type: String, required: true },
     roleId: { type: String, required: true },
+    outletIds: { type: [String], default: [] },
     isActive: { type: Boolean, default: true },
     lastLoginAt: { type: Date, default: null },
     pin: { type: String, default: null },
