@@ -137,6 +137,7 @@ import { OutletSchema } from '../core/outlet/infrastructure/persistence/schemas/
 import { MongoOutletRepository } from '../core/outlet/infrastructure/persistence/MongoOutletRepository';
 import { OutletService } from '../core/outlet/application/services/OutletService';
 import { OutletController } from '../core/outlet/interfaces/http/controllers/OutletController';
+import { PlatformController } from '../core/platform/interfaces/http/controllers/PlatformController';
 
 export type DIContainer = ReturnType<typeof buildContainer>;
 
@@ -317,6 +318,7 @@ export function buildContainer() {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
         tenantService: container.resolve('tenantService'),
+        hubRepository: container.resolve('hubRepository'),
       }),
     }),
     productRepository: asClass(MongoProductRepository, {
@@ -1015,6 +1017,18 @@ export function buildContainer() {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
         outletService: container.resolve('outletService'),
+      }),
+    }),
+    platformController: asClass(PlatformController, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        hubService: container.resolve('hubService'),
+        tenantService: container.resolve('tenantService'),
+        outletService: container.resolve('outletService'),
+        shiftService: container.resolve('shiftService'),
+        paymentService: container.resolve('paymentService'),
+        tenantRepository: container.resolve('tenantRepository'),
+        hubRepository: container.resolve('hubRepository'),
       }),
     }),
   });

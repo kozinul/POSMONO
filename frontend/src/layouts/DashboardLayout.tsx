@@ -1,10 +1,18 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { useAuthStore } from '../@shared/hooks/useAuth';
+import { useQueryClient } from '@tanstack/react-query';
+import { useAuthStore, hasPermission } from '../@shared/hooks/useAuth';
+import { useOutlets } from '../@shared/hooks/useOutlets';
 import { useRealtimeSync } from '../@shared/hooks/useRealtimeSync';
 import { ErrorBoundary } from '../@shared/components/ErrorBoundary';
 import clsx from 'clsx';
 
-const navigation = [
+interface NavItem {
+  name: string;
+  href: string;
+  permission?: string;
+}
+
+const navigation: NavItem[] = [
   { name: 'Dashboard', href: '/dashboard' },
   { name: 'POS', href: '/pos' },
   { name: 'Orders', href: '/orders' },
@@ -17,6 +25,7 @@ const navigation = [
   { name: 'Payment', href: '/payment-methods' },
   { name: 'Inventory', href: '/inventory' },
   { name: 'Gudang', href: '/inventory/warehouses' },
+  { name: 'Outlet', href: '/outlets', permission: 'outlet:manage' },
   { name: 'Templates', href: '/templates' },
   { name: 'Reports', href: '/reports' },
   { name: 'Shifts', href: '/shifts' },
@@ -26,17 +35,44 @@ const navigation = [
   { name: 'Database', href: '/database' },
 ];
 
+const OUTLET_SCOPE_KEYS: ReadonlyArray<readonly string[]> = [
+  ['inventory'],
+  ['products'],
+  ['orders'],
+  ['shifts'],
+  ['daily-report'],
+  ['sales-report'],
+  ['best-sellers'],
+];
+
 export function DashboardLayout() {
   const location = useLocation();
-  const { user, logout } = useAuthStore();
+  const { user, logout, activeOutletId, setActiveOutletId } = useAuthStore();
   const isPOSPage = location.pathname === '/pos';
 
   useRealtimeSync();
 
-  const visibleNavigation =
-    user?.roleName === 'Cashier'
-      ? navigation.filter((item) => item.href === '/pos')
-      : navigation;
+  const queryClient = useQueryClient();
+  const { data: outlets = [] } = useOutlets();
+
+  const visibleNavigation = navigation.filter(
+    (item) =>
+      (user?.roleName === 'Cashier' ? item.href === '/pos' : !item.permission || hasPermission(user, item.permission)),
+  );
+
+  const availableOutlets =
+    !!user && user.outletIds && user.outletIds.length > 0
+      ? outlets.filter((o) => user.outletIds!.includes(o.id))
+      : outlets;
+  const showOutletSwitcher = availableOutlets.length > 1;
+  const currentOutletName = availableOutlets.find((o) => o.id === activeOutletId)?.name ?? null;
+
+  const handleOutletChange = (outletId: string) => {
+    setActiveOutletId(outletId || null);
+    for (const key of OUTLET_SCOPE_KEYS) {
+      queryClient.invalidateQueries({ queryKey: key });
+    }
+  };
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
@@ -45,6 +81,26 @@ export function DashboardLayout() {
           POSMono
         </Link>
         <div className="flex items-center gap-4">
+          {showOutletSwitcher && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-white/60">Outlet:</span>
+              <select
+                aria-label="Pilih Outlet"
+                value={activeOutletId ?? ''}
+                onChange={(e) => handleOutletChange(e.target.value)}
+                className="text-sm bg-white/10 border border-white/20 text-white rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-white/40"
+              >
+                {availableOutlets.map((o) => (
+                  <option key={o.id} value={o.id} className="text-gray-900">
+                    {o.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          {currentOutletName && !showOutletSwitcher && (
+            <span className="text-sm text-white/70 hidden sm:inline">{currentOutletName}</span>
+          )}
           {user && (
             <span className="text-sm text-white/80">{user.displayName}</span>
           )}

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useOpenShiftMutation } from '../../shifts/hooks/useShift';
 import { useCarriedBills } from '../../shifts/hooks/useCarriedBills';
 import { useAuthStore } from '../../../@shared/hooks/useAuth';
+import { useActiveOutlet } from '../../../@shared/hooks/useOutlets';
 import { formatIDR } from '../utils/money';
 
 interface OpenShiftModalProps {
@@ -12,6 +13,7 @@ interface OpenShiftModalProps {
 
 export function OpenShiftModal({ onClose, error, onRetry }: OpenShiftModalProps) {
   const logout = useAuthStore((s) => s.logout);
+  const activeOutlet = useActiveOutlet();
   const [balance, setBalance] = useState('0');
   const [submitError, setSubmitError] = useState<string | null>(null);
   const openMut = useOpenShiftMutation();
@@ -52,6 +54,9 @@ export function OpenShiftModal({ onClose, error, onRetry }: OpenShiftModalProps)
           </button>
         )}
       </div>
+      {activeOutlet && (
+        <p className="text-sm font-semibold text-gray-600 mb-2">Outlet: {activeOutlet.name}</p>
+      )}
       <p className="text-sm text-gray-500 mb-4">
         Mulai transaksi dengan membuka shift terlebih dahulu. Keranjang &amp; bill yang belum
         dibayar akan tetap tersimpan.

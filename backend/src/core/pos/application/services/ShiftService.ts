@@ -164,4 +164,72 @@ export class ShiftService {
       fromShift,
     };
   }
+
+  async getPlatformShiftsSummary(
+    tenantIds: string[],
+    options?: { dateFrom?: Date; dateTo?: Date },
+  ) {
+    const shifts = await this.shiftRepository.findByTenantIds(tenantIds, {
+      from: options?.dateFrom,
+      to: options?.dateTo,
+    });
+
+    const perTenant: Record<string, any> = {};
+    const totals = { openShifts: 0, closedShifts: 0, totalSales: 0, cashSales: 0, nonCashSales: 0, totalTransactions: 0 };
+
+    for (const shift of shifts) {
+      const s = shift.serialize();
+      const tenantBucket = (perTenant[s.tenantId] ??= {
+        tenantId: s.tenantId,
+        openShifts: 0,
+        closedShifts: 0,
+        totalSales: 0,
+        cashSales: 0,
+        nonCashSales: 0,
+        totalTransactions: 0,
+        outlets: {} as Record<string, any>,
+      });
+      const outletKey = s.outletId ?? 'default';
+      const outletBucket = (tenantBucket.outlets[outletKey] ??= {
+        outletId: s.outletId ?? null,
+        openShifts: 0,
+        closedShifts: 0,
+        totalSales: 0,
+        cashSales: 0,
+        nonCashSales: 0,
+        totalTransactions: 0,
+      });
+
+      const inc = (target: any) => {
+        target.openShifts += s.status === 'open' ? 1 : 0;
+        target.closedShifts += s.status === 'closed' ? 1 : 0;
+        target.totalSales += s.totalSales;
+        target.cashSales += s.cashSales;
+        target.nonCashSales += s.nonCashSales;
+        target.totalTransactions += s.totalTransactions;
+      };
+      inc(tenantBucket);
+      inc(outletBucket);
+      inc(totals);
+    }
+
+    const tenants = Object.values(perTenant).map((t) => ({
+      tenantId: t.tenantId,
+      openShifts: t.openShifts,
+      closedShifts: t.closedShifts,
+      totalSales: t.totalSales,
+      cashSales: t.cashSales,
+      nonCashSales: t.nonCashSales,
+      totalTransactions: t.totalTransactions,
+      outlets: Object.values(t.outlets),
+    }));
+
+    return {
+      dateFrom: options?.dateFrom ?? null,
+      dateTo: options?.dateTo ?? null,
+      generatedAt: new Date().toISOString(),
+      totals,
+      tenants,
+    };
+  }
 }

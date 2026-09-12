@@ -1,7 +1,7 @@
 # Test Progress
 
-> **Updated:** 2026-08-30
-> **Total Tests:** Backend vitest: **950 passing** (78 files) · Frontend vitest: **76 passing** (Tabby)
+> **Updated:** 2026-09-12
+> **Total Tests:** Backend vitest: **991 passing** (82 files) · Frontend vitest: **83 passing** (12 files)
 > **Test infra:** Backend suite runs **full-stack without Docker** via `mongodb-memory-server` (arm64 mongod 7.3.4 from `~/.cache/mongodb-binaries`). Gate: `pnpm test` = `vitest run` (2× full runs green ~24s, `pool: 'forks'`, `maxForks: 1`).
 
 ---
@@ -135,7 +135,7 @@ Real HTTP flows through the actual Express stack (`buildIntegrationApp({ enforce
 | `ReceiptRenderService.test.ts` | 6 | ✅ |
 | `PrintService.test.ts` | 6 | ✅ |
 
-## Frontend (76 tests) ✅
+## Frontend (83 tests) ✅
 
 | Test File | Tests | Status |
 |-----------|-------|--------|
@@ -150,6 +150,17 @@ Real HTTP flows through the actual Express stack (`buildIntegrationApp({ enforce
 | `useInventorySummaryReport.test.tsx` | 2 | ✅ |
 | `useProfitLossReport.test.tsx` | 2 | ✅ |
 | `useQrisPayment.test.ts` | 6 | ✅ |
+| `useAuth.test.ts` (+outlet handling) | 7 | ✅ |
+
+## Terminal Center / Platform Layer (backend, added 2026-09-12)
+
+| Test File | Tests | Status |
+|-----------|-------|--------|
+| `tests/services/PlatformSummaries.test.ts` (`resolvePlatformScope`, shifts, payments, tenant list, outlets) | 12 | ✅ |
+| `tests/integration/platform-terminal.test.ts` (health, hub provision, tenant list, outlet list, shift/payment summary, session isolation 401/403) | 7 | ✅ |
+| `MongoTenantRepository.test.ts` `list` | 4 | ✅ |
+| `MongoShiftRepository.test.ts` `findByTenantIds` | 2 | ✅ |
+| `MongoPaymentRepository.test.ts` `findCompletedByTenantIds` | 2 | ✅ |
 
 ## Test Infrastructure (2026-08-30)
 

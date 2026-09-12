@@ -900,4 +900,57 @@ export class PaymentService {
   async list(tenantId: string): Promise<Payment[]> {
     return this.paymentRepository.findByTenant(tenantId);
   }
+
+  async getPlatformPaymentsSummary(
+    tenantIds: string[],
+    options?: { dateFrom?: Date; dateTo?: Date },
+  ) {
+    const payments = await this.paymentRepository.findCompletedByTenantIds(tenantIds, {
+      from: options?.dateFrom,
+      to: options?.dateTo,
+    });
+
+    const totals = { totalAmount: 0, totalTransactions: 0, methods: {} as Record<string, { total: number; count: number }> };
+    const perTenant: Record<string, any> = {};
+
+    for (const payment of payments) {
+      const p = payment.serialize();
+      const tenantBucket = (perTenant[p.tenantId] ??= {
+        tenantId: p.tenantId,
+        totalAmount: 0,
+        totalTransactions: 0,
+        methods: {} as Record<string, { total: number; count: number }>,
+      });
+      const methodBucket = (tenantBucket.methods[p.method] ??= { total: 0, count: 0 });
+      const totalMethodBucket = (totals.methods[p.method] ??= { total: 0, count: 0 });
+
+      tenantBucket.totalAmount += p.amount;
+      tenantBucket.totalTransactions += 1;
+      methodBucket.total += p.amount;
+      methodBucket.count += 1;
+      totals.totalAmount += p.amount;
+      totals.totalTransactions += 1;
+      totalMethodBucket.total += p.amount;
+      totalMethodBucket.count += 1;
+    }
+
+    const tenants = Object.values(perTenant).map((t) => ({
+      tenantId: t.tenantId,
+      totalAmount: t.totalAmount,
+      totalTransactions: t.totalTransactions,
+      methods: Object.entries(t.methods).map(([method, v]: any) => ({ method, ...v })),
+    }));
+
+    return {
+      dateFrom: options?.dateFrom ?? null,
+      dateTo: options?.dateTo ?? null,
+      generatedAt: new Date().toISOString(),
+      totals: {
+        totalAmount: totals.totalAmount,
+        totalTransactions: totals.totalTransactions,
+        methods: Object.entries(totals.methods).map(([method, v]: any) => ({ method, ...v })),
+      },
+      tenants,
+    };
+  }
 }

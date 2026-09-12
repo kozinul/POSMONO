@@ -36,6 +36,37 @@ Copy this block for each new day:
 
 ## Entries
 
+### DATE: 2026-09-12 — Terminal Center Fase 8 (Platform Layer + Hub/Outlet Fase 7 rampung)
+
+**Today I worked on:**
+
+- **Fase 7 finish (Hub/outlet di frontend)**: hook `useOutlets` pindah ke `@shared/hooks/useOutlets.ts` (+CRUD, `useActiveOutlet`); `useAuth.ts` + `activeOutletId` persist (`localStorage.activeOutletId`, auto-pick 1 outlet); `api.ts` kirim header `X-Outlet-Id`; `DashboardLayout` outlet switcher (>1 outlet, data-driven, invalidate query scope saat ganti outlet); halaman `/outlets` (`OutletListPage.tsx`, guarded `outlet:manage`); POS stock ter-scope per warehouse outlet (`PosPage.stockMap`), receipt + OpenShiftModal tampil outlet; `resolveOutlet` di-mount ke route transaksi POS (payment/order/shift)
+- **Terminal Center Fase 8 (layer platform terpisah)**: modul `backend/src/core/platform/` — middleware `platformAuthenticate`/`platformAuthorize` (validasi JWT `tenant === 'platform'`), `PlatformController` (health, list hubs w/ tenants, list tenants ter-paginate + search/hubId, list outlets lintas-tenant + tenantName, shift summary, payment summary), helper `resolvePlatformScope`, route group `/api/platform` di-mount terpisah; `OnboardingService` + defaults (roles/templates/payment-methods) pindah ke `core/platform/`
+- **Backend summaries**: `ShiftService.getPlatformShiftsSummary` + `MongoShiftRepository.findByTenantIds` (per tenant + per outlet), `PaymentService.getPlatformPaymentsSummary` + `MongoPaymentRepository.findCompletedByTenantIds` (total + metode); `TenantService.list` + `MongoTenantRepository.list` (paginate/search/hubId); `OutletService.listAllForPlatform`; `TenantController` + `hubId`/`hubName`
+- **Tests**: `PlatformSummaries.test.ts` (12) + `platform-terminal.test.ts` (7, HTTP penuh: health, hub provision via `/api/hubs` reflected di platform view, assign tenant → hubName, tenant list/search/pagination, outlet list, shift/payment summary, 401 untuk tenant session, 403 tanpa `platform.reports.read`) + repo tests (`findByTenantIds`, `findCompletedByTenantIds`, `list`) + `useAuth.test.ts` outlet handling (+7); docs sync HUB_ARCHITECTURE (Fase 1–8 `[x]`) + TEST_PROGRESS
+
+**Problems encountered:**
+
+- `AppError` di `platformAuth.platformAuthenticate` dilempar synchronously dari handler — default Express menangkap error sync dalam middleware (errorHandler global); sudah benar
+- `OutletService.listAllForPlatform` butuh iterasi per tenant (repo `findByTenant`) — N+1 ok untuk skala platform (jumlah tenant kecil)
+
+**What I completed:**
+
+- Terminal Center backend lengkap: `/api/platform` guard terpisah (token tenant biasa → 401), provision Hub + assign tenant (+ detail tenant dengan `hubName`), list lintas-tenant Hub/Tenant/Outlet, diagnostik shift & payment per-hub/per-tenant, health
+- Backend **991/991** pass (82 files), tsc backend bersih; frontend **83/83** + tsc + vite build OK; shared dist dibangun ulang
+
+**Tomorrow priority:**
+
+- Fase 9: HubMembership (user lintas-tenant, Hub Consolidated Report, UI admin Terminal Center yang mengonsumsi `/api/platform`)
+
+**Productivity score:** 9
+
+**Notes:**
+
+- Super-admin login: `platform@demo.com`/`admin123` dengan header `X-Tenant-Id: platform` (di-seed dev.ts & seed.ts, idempotent)
+- Frontend halaman admin Terminal Center sengaja di-wire bersama HubMembership (Fase 9), backend `/api/platform` sudah siap dikonsumsi
+- `docs/ops-dashboard-plan.md` (rencana lama 2026-07) digantikan oleh `docs/HUB_ARCHITECTURE.md` Fase 8 — grid endpoint yang diimplementasikan mengikuti dokumen ini
+
 ### DATE: 2026-08-13 — Printer Integration (Network ESC/POS, WebUSB, WebBluetooth, Auto-Print Struk & KOT)
 
 **Today I worked on:**

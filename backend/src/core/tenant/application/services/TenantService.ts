@@ -99,6 +99,18 @@ export class TenantService {
     return this.tenantRepository.findBySlug(slug);
   }
 
+  async list(options: { hubId?: string; search?: string; page?: number; limit?: number }) {
+    const page = Math.max(options.page ?? 1, 1);
+    const limit = Math.max(options.limit ?? 50, 1);
+    const { items, total } = await this.tenantRepository.list({
+      hubId: options.hubId ?? null,
+      search: options.search,
+      limit,
+      skip: (page - 1) * limit,
+    });
+    return { data: items.map((t: Tenant) => t.serialize()), total, page, limit };
+  }
+
   async updateConfig(id: string, config: Partial<TenantConfig>): Promise<Tenant> {
     const tenant = await this.getById(id);
     tenant.updateConfig(config);

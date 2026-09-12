@@ -30,6 +30,7 @@ import { createDatabaseRoutes } from '../core/database/interfaces/http/routes/da
 import { createPrinterRoutes, createPrintRoutes } from '../core/printing/interfaces/http/routes/printer.routes';
 import { createHubRoutes } from '../core/hub/interfaces/http/routes/hub.routes';
 import { createOutletRoutes } from '../core/outlet/interfaces/http/routes/outlet.routes';
+import { createPlatformRoutes } from '../core/platform/interfaces/http/routes/platform.routes';
 
 export function registerRoutes(app: Express, container: DIContainer): void {
   app.get('/health', (_req, res) => {
@@ -127,4 +128,7 @@ export function registerRoutes(app: Express, container: DIContainer): void {
 
   const outletController = container.resolve('outletController');
   app.use('/api/outlets', createOutletRoutes(outletController));
+
+  const platformController = container.resolve('platformController');
+  app.use('/api/platform', createPlatformRoutes(platformController));
 }

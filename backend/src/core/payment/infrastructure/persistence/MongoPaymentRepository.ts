@@ -105,6 +105,20 @@ export class MongoPaymentRepository {
     return docs.map((d: PaymentDoc) => this.toDomain(d));
   }
 
+  async findCompletedByTenantIds(
+    tenantIds: string[],
+    options?: { from?: Date; to?: Date },
+  ): Promise<Payment[]> {
+    const filter: any = { tenantId: { $in: tenantIds }, status: 'completed', paidAt: { $ne: null } };
+    if (options?.from || options?.to) {
+      filter.paidAt = {};
+      if (options.from) filter.paidAt.$gte = options.from;
+      if (options.to) filter.paidAt.$lte = options.to;
+    }
+    const docs = await this.model.find(filter).sort({ paidAt: -1 }).exec();
+    return docs.map((d: PaymentDoc) => this.toDomain(d));
+  }
+
   async findByOrderId(tenantId: string, orderId: string): Promise<Payment[]> {
     const docs = await this.model.find({ tenantId, orderId }).sort({ createdAt: -1 }).exec();
     return docs.map((d: PaymentDoc) => this.toDomain(d));

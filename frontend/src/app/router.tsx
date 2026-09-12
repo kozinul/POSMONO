@@ -15,6 +15,7 @@ const FamilyListPage = lazy(() => import('../core/families/pages/FamilyListPage'
 const CategoryListPage = lazy(() => import('../core/categories/pages/CategoryListPage'));
 const StockListPage = lazy(() => import('../core/inventory/pages/StockListPage'));
 const WarehouseListPage = lazy(() => import('../core/inventory/pages/WarehouseListPage'));
+const OutletListPage = lazy(() => import('../core/outlets/pages/OutletListPage'));
 const SettingsPage = lazy(() => import('../core/settings/pages/GeneralSettingsPage'));
 const PrinterSettingsPage = lazy(() => import('../core/printing/pages/PrinterSettingsPage'));
 const ReportPage = lazy(() => import('../core/reports/pages/ReportPage'));
@@ -54,6 +55,7 @@ export function AppRouter() {
               <Route path="/categories" element={<CategoryListPage />} />
               <Route path="/inventory" element={<StockListPage />} />
               <Route path="/inventory/warehouses" element={<WarehouseListPage />} />
+              <Route path="/outlets" element={<OutletListPage />} />
               <Route path="/reports" element={<ReportPage />} />
               <Route path="/reports/sales-per-product" element={<Navigate to="/reports" replace />} />
               <Route path="/shifts" element={<ShiftPage />} />

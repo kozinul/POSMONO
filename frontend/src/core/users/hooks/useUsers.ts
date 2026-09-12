@@ -1,5 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../../@shared/services/api';
+import { useOutlets } from '../../../@shared/hooks/useOutlets';
+import type { Outlet } from '../../../@shared/hooks/useOutlets';
+
+export { useOutlets };
+export type { Outlet };
 
 export interface User {
   id: string;
@@ -19,18 +24,6 @@ export interface Role {
   permissions: string[];
   isSystem: boolean;
   createdAt: string;
-}
-
-export interface Outlet {
-  id: string;
-  tenantId: string;
-  name: string;
-  address: string | null;
-  phone: string | null;
-  warehouseId: string | null;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
 }
 
 export interface CreateUserInput {
@@ -66,16 +59,6 @@ export function useRoles() {
     queryKey: ['roles'],
     queryFn: async () => {
       const res = await api.get<{ success: boolean; data: Role[] }>('/roles');
-      return res.data.data;
-    },
-  });
-}
-
-export function useOutlets() {
-  return useQuery({
-    queryKey: ['outlets'],
-    queryFn: async () => {
-      const res = await api.get<{ success: boolean; data: Outlet[] }>('/outlets');
       return res.data.data;
     },
   });

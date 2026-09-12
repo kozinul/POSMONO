@@ -54,6 +54,18 @@ export class OutletService {
     return this.outletRepository.findActiveByTenant(tenantId);
   }
 
+  async listAllForPlatform(tenantIds: string[], isActive?: boolean): Promise<Outlet[]> {
+    const results: Outlet[] = [];
+    for (const tenantId of tenantIds) {
+      let outlets = await this.outletRepository.findByTenant(tenantId);
+      if (isActive !== undefined) {
+        outlets = outlets.filter((o) => o.serialize().isActive === isActive);
+      }
+      results.push(...outlets);
+    }
+    return results.sort((a, b) => a.serialize().name.localeCompare(b.serialize().name));
+  }
+
   async update(tenantId: string, id: string, data: { name?: string; address?: string; phone?: string; isActive?: boolean }): Promise<Outlet> {
     const outlet = await this.getById(tenantId, id);
 

@@ -4,6 +4,7 @@ import { renderLayoutToHtml } from '../../templates/utils/renderLayoutToHtml';
 import type { PricingResult } from '../../../@shared/hooks/usePricing';
 import { useQueryClient } from '@tanstack/react-query';
 import { reprintReceipt } from '../../printing/utils/autoPrint';
+import { useActiveOutlet } from '../../../@shared/hooks/useOutlets';
 
 function getChargeRate(adjustments: PricingResult['adjustments']): number {
   const charge = adjustments.find((a) => a.type === 'CHARGE');
@@ -31,6 +32,7 @@ function downloadBase64(base64: string, filename: string, mime: string): void {
 export function ReceiptDisplay() {
   const { receipt, clearCart, openPaymentModal, clearReceipt, pricing } = usePOSStore();
   const queryClient = useQueryClient();
+  const activeOutlet = useActiveOutlet();
 
   if (!receipt) return null;
 
@@ -77,6 +79,9 @@ export function ReceiptDisplay() {
               <p className="text-xs text-gray-400 mt-0.5">
                 {new Date(receipt.createdAt).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
               </p>
+              {activeOutlet && (
+                <p className="text-xs text-gray-400 mt-0.5">Outlet: {activeOutlet.name}</p>
+              )}
               {receipt.hasRemaining && (
                 <p className="text-xs text-amber-600 font-medium mt-1">
                   Item tersisa di keranjang

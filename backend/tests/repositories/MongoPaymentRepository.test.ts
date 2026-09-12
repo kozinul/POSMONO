@@ -97,4 +97,38 @@ describe('MongoPaymentRepository', () => {
       expect(payments).toHaveLength(0);
     });
   });
+
+  describe('findCompletedByTenantIds', () => {
+    it('returns completed payments across tenants but excludes pending', async () => {
+      await repo.save(createPayment(TENANT_A, 'order-1'));
+      await repo.save(createPayment(TENANT_B, 'order-2'));
+      await repo.save(createPayment('tenant-c', 'order-3'));
+
+      const pending = Payment.create({
+        tenantId: TENANT_A,
+        orderId: 'order-pending',
+        amount: 10000,
+        status: 'pending',
+        method: 'cash',
+        referenceNumber: 'CASH-PENDING',
+        metadata: {},
+        paidAt: null,
+      });
+      await repo.save(pending);
+
+      const payments = await repo.findCompletedByTenantIds([TENANT_A, TENANT_B]);
+      expect(payments).toHaveLength(2);
+      expect(payments.every((p) => p.serialize().status === 'completed')).toBe(true);
+    });
+
+    it('filters by paidAt range', async () => {
+      await repo.save(createPayment(TENANT_A, 'order-1'));
+
+      const future = await repo.findCompletedByTenantIds([TENANT_A], {
+        from: new Date(Date.now() + 86400000),
+        to: new Date(Date.now() + 2 * 86400000),
+      });
+      expect(future).toHaveLength(0);
+    });
+  });
 });

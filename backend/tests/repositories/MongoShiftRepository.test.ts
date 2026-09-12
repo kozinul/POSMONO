@@ -116,4 +116,34 @@ describe('MongoShiftRepository', () => {
       expect(shifts).toHaveLength(0);
     });
   });
+
+  describe('findByTenantIds', () => {
+    it('returns shifts across many tenants', async () => {
+      await repo.save(createShift(TENANT_A));
+      await repo.save(createShift(TENANT_A, 'cashier-2'));
+      await repo.save(createShift(TENANT_B));
+      await repo.save(createShift('tenant-c'));
+
+      const shifts = await repo.findByTenantIds([TENANT_A, TENANT_B]);
+      expect(shifts).toHaveLength(3);
+      expect(shifts.every((s) => [TENANT_A, TENANT_B].includes(s.serialize().tenantId))).toBe(true);
+    });
+
+    it('filters by status and date range', async () => {
+      const open = createShift(TENANT_A, 'cashier-1');
+      await repo.save(open);
+      const closed = createShift(TENANT_A, 'cashier-2');
+      closed.close(500000);
+      await repo.save(closed);
+
+      const openOnly = await repo.findByTenantIds([TENANT_A], { status: 'open' });
+      expect(openOnly).toHaveLength(1);
+
+      const past = await repo.findByTenantIds([TENANT_A], {
+        from: new Date(Date.now() + 86400000),
+        to: new Date(Date.now() + 2 * 86400000),
+      });
+      expect(past).toHaveLength(0);
+    });
+  });
 });

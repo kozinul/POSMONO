@@ -36,6 +36,8 @@ export interface Tenant {
   address: string;
   phone: string;
   plan: string;
+  hubId: string | null;
+  hubName?: string | null;
   config: TenantConfig;
 }
 

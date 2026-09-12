@@ -16,6 +16,10 @@ api.interceptors.request.use((config) => {
   if (tenantId) {
     config.headers['X-Tenant-Id'] = tenantId;
   }
+  const outletId = localStorage.getItem('activeOutletId');
+  if (outletId) {
+    config.headers['X-Outlet-Id'] = outletId;
+  }
   return config;
 });
 

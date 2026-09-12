@@ -3,7 +3,7 @@
 > Dokumen rencana implementasi. Dibuat 2026-08-13.
 > Merevisi arah multi-outlet dari `docs/ROLE_ACCESS_PLAN.md` §3.5–3.6: Hub kini **di atas Tenant**, bukan anak Tenant.
 >
-> **Status: Fase 1–6 SELESAI & TERVERIFIKASI 2026-08-30** — shared types + permission, modul Hub, modul Outlet, scope transaksi (outletId di Order/Payment/Shift/Warehouse/Reports), provisioning boot (default outlet+warehouse + backfill), seed role platform, User `outletIds` + JWT + middleware `resolveOutlet` + validasi per-role + UI Users. Backend tsc bersih (964/964 tests), frontend tsc bersih + 76/76, shared dist dibangun ulang.
+> **Status: Fase 1–8 SELESAI & TERVERIFIKASI 2026-09-12** — modul Hub/Outlet + scope transaksi (outletId), provisioning boot, User `outletIds` + JWT + middleware `resolveOutlet` (dimount ke route transaksi POS), frontend: `activeOutletId`/`X-Outlet-Id`, outlet switcher, halaman Outlet, POS stock ter-scope per outlet, receipt/OpenShiftModal tampil outlet, `useTenant` +`hubId`/`hubName`; **Terminal Center**: auth platform terpisah (`platformAuthenticate`), `/api/platform` (health, hub/tenant/outlet lists, shift & payment summaries), provision Hub/tenant via `hub:manage`. Backend tsc bersih (991/991 tests), frontend tsc + vite build OK (83/83), shared dist dibangun ulang. Frontend halaman Terminal Center admin + HubMembership di-wire Fase 9.
 
 ---
 
@@ -175,24 +175,29 @@ Dibutuhkan untuk user lintas-tenant (Group Admin) dan Hub Consolidated Report. *
 - **Status**: verifikasi 2026-08-30 — backend 964/964 tests (+8 `UserService` outlet policy), frontend 76/76, tsc backend & frontend bersih, shared dist dibangun ulang. `resolveOutlet`/`scopeOutletIds` belum di-mount ke route transaksi (di-wire Fase 7).
 
 ### Fase 7 — Frontend
-- [ ] `useAuth.ts`: `AuthUser` + `outletIds` + `activeOutletId` (persist `localStorage.activeOutletId`)
-- [ ] `api.ts`: header `X-Outlet-Id`
-- [ ] Hooks `useOutlets`/`useHubs` + invalidasi; `useTenant` tampilkan `hubId` + nama Hub (read-only)
-- [ ] `DashboardLayout.tsx`: outlet switcher saat `outlets.length > 1` (data-driven, tanpa flag mode)
-- [ ] `frontend/src/core/outlets/pages/OutletListPage.tsx` (`/outlets`, guarded `outlet:manage`)
-- [ ] Halaman Users: assign outlet; POS: `useStockList()` di-scope warehouse outlet aktif; receipt nama outlet; `OpenShiftModal` tampil outlet aktif
+- [x] `useAuth.ts`: `AuthUser` + `outletIds`; store + `activeOutletId` (persist `localStorage.activeOutletId`, auto-pick 1 outlet bila user hanya punya 1, cleared saat logout/tak lagi dalam scope user)
+- [x] `api.ts`: header `X-Outlet-Id` dari `activeOutletId`
+- [x] Hooks `useOutlets` (pindah ke `@shared/hooks/useOutlets.ts` + CRUD) / `useHubs` (`@shared/hooks/useHubs.ts`); `useTenant` membaca `hubId` + `hubName` (read-only dari `GET /tenants/current`); backend `TenantController.getCurrent` +`hubId`/`hubName` (inject `hubRepository`)
+- [x] `DashboardLayout.tsx`: outlet switcher saat user punya >1 outlet (data-driven, tanpa flag mode; pilihan outlet dari `useOutlets` dibatasi `user.outletIds`; akses semua outlet `[]` → semua); ganti outlet → invalidate `inventory/products/orders/shifts/daily-report/sales-report/best-sellers`
+- [x] `frontend/src/core/outlets/pages/OutletListPage.tsx` (`/outlets`, nav "Outlet" guarded `outlet:manage`, CRUD via `OutletController` `outlet:manage`)
+- [x] Halaman Users: assign outlet (Fase 6); POS: `useStockList()` di-scope warehouse outlet aktif (`PosPage.stockMap` filter `activeWarehouseId` → `Outlet.warehouseId`); `ReceiptDisplay` fallback struk + nama outlet aktif; `OpenShiftModal` menampilkan "Outlet: {nama}"
+- [x] Backend `resolveOutlet` di-mount ke route transaksi POS: payment (`pay-cash`/`process`/`split`/`refund`/transfer confirm+cancel/`qris` initiate+confirm+cancel), order (semua mutasi), shift (`open`/`close`/`pickup`/`sales`) — validasi `X-Outlet-Id` ∈ `req.outletIds` (tanpa header / `[]` tetap jalan)
+- **Status**: verifikasi 2026-08-30 — backend tsc bersih + 964/964, frontend tsc bersih + 83/83 (+7 `useAuth.test` outlet), vite build OK. `req.outletId` belum dibaca service (masih body `outletId` default) — pembacaan layanan di-wire Fase 8/9.
 
 ### Fase 8 — Terminal Center (layer platform, terpisah dari auth tenant)
-- [ ] Grup route/konfigurasi platform terpisah (login super-admin, bukan tenant session)
-- [ ] Provision: buat Hub, assign tenant ke Hub, list Hub/Tenant/Outlet
-- [ ] Diagnostik read-only: ringkasan shift/payment, health
+- [x] **Auth platform terpisah** (`backend/src/core/platform/`): middleware `platformAuthenticate`/`platformAuthorize` (validasi JWT `tenant === 'platform'`, isi `req.platformUserId/…Permissions`); grup route `/api/platform` di-mount terpisah dari `/api/*` tenant (`platform.routes.ts`). Super-admin login lewat `POST /auth/login` dengan `X-Tenant-Id: platform` (user seeded `platform@demo.com`/`admin123`, kredensial didokumentasikan seed/dev); token tenant biasa **ditolak 401** di semua route platform
+- [x] **Provision**: CRUD Hub + assign/unassign tenant lewat `/api/hubs` (`hub:manage`, dimiliki Platform Super Admin); list lintas-tenant via `/api/platform/hubs`, `/api/platform/hubs/:hubId` (+`tenants`+`tenantCount`), `/api/platform/tenants` (filter `hubId`/`search`, pagination), `/api/platform/tenants/:tenantId` (+`hubName`), `/api/platform/outlets` (filter `tenantId`/`hubId`/`isActive` + `tenantName`) — semua read-only dari scope Hub/platform
+- [x] **Diagnostik read-only**: `GET /api/platform/health`, `GET /api/platform/shifts/summary` (`ShiftService.getPlatformShiftsSummary` + `MongoShiftRepository.findByTenantIds` → per tenant + per outlet), `GET /api/platform/payments/summary` (`PaymentService.getPlatformPaymentsSummary` + `MongoPaymentRepository.findCompletedByTenantIds` → total + metode)
+- [x] **Scope resolver** `resolvePlatformScope.ts` (tenantId → 1 tenant; hubId → tenant2 hub; tanpa → semua tenant; sertakan `tenantNameById`)
+- [x] DI container: `platformController` singleton (hub/tenant/outlet/shift/payment service + repo), `TenantController` +`hubRepository` untuk `hubName`; `OnboardingService` dipindah ke `core/platform/application/services`
+- **Status**: verifikasi 2026-09-12 — backend tsc bersih + **991/991** tests (+14 `PlatformSummaries`, +7 `platform-terminal` integration, +8 repo `findByTenantIds`/`findCompletedByTenantIds`/`list`), frontend tsc + vite build OK (83/83), shared dist dibangun ulang. Frontend halaman Terminal Center admin di-wire Fase 9 (Bersama HubMembership).
 
 ### Fase 9 — HubMembership (fase berikutnya, bukan MVP)
-- [ ] `HubMembership {userId, hubId, role}`; session lintas-tenant (`activeTenantId`); Hub Consolidated Report (Tenant→Outlet breakdown); UI group admin
+- [ ] `HubMembership {userId, hubId, role}`; session lintas-tenant (`activeTenantId`); Hub Consolidated Report (Tenant→Outlet breakdown); UI group admin + halaman Terminal Center (konsumsi `/api/platform`)
 
 ### Fase 10 — Uji & dokumentasi
 - [ ] Unit: Hub/Outlet domain, validasi `User.outletIds`, `scopeOutletIds`, `ensureDefaultOutlet`
-- [ ] Integrasi: tenant standalone tanpa Hub tidak berubah (regresi penuh); multi-outlet tenant → transaksi/laporan per outlet; platform → assign tenant ke Hub
+- [ ] Integrasi: tenant standalone tanpa Hub tidak berubah (regresi penuh); multi-outlet tenant → transaksi/laporan per outlet; platform → assign tenant ke Hub (Fase 8 integration `platform-terminal.test.ts` sudah cover path ini)
 - [ ] Typecheck backend + frontend; update `docs/ROLE_ACCESS_PLAN.md`, `docs/DAILY_LOG.md`, `docs/ARCHITECTURE.md`
 
 ---

@@ -3,9 +3,13 @@ import { BaseController } from '../../../../../@shared/interfaces/BaseController
 import { TenantService } from '../../../application/services/TenantService';
 import { createTenantSchema, updateTenantConfigSchema } from '@posmono/shared';
 import { ValidationError } from '../../../../../@shared/infrastructure/error/AppError';
+import { HubRepository } from '../../../../../core/hub/domain/HubRepository';
 
 export class TenantController extends BaseController {
-  constructor(private readonly tenantService: TenantService) {
+  constructor(
+    private readonly tenantService: TenantService,
+    private readonly hubRepository?: HubRepository,
+  ) {
     super();
   }
 
@@ -37,6 +41,12 @@ export class TenantController extends BaseController {
     const tenant = await this.tenantService.getById(req.tenantId);
     const data = tenant.serialize();
 
+    let hubName: string | null = null;
+    if (data.hubId && this.hubRepository) {
+      const hub = await this.hubRepository.findById(data.hubId);
+      hubName = hub?.serialize().name ?? null;
+    }
+
     this.ok(res, {
       id: data.id,
       name: data.name,
@@ -47,6 +57,8 @@ export class TenantController extends BaseController {
       phone: data.phone,
       status: data.status,
       plan: data.plan,
+      hubId: data.hubId,
+      hubName,
       config: tenant.configValue,
       modules: data.modules,
     });

@@ -106,4 +106,44 @@ describe('MongoTenantRepository', () => {
       expect(found).toBeNull();
     });
   });
+
+  describe('list', () => {
+    beforeEach(async () => {
+      const alpha = createTenant({ name: 'Alpha Kopi', slug: 'alpha-kopi' });
+      alpha.assignHub('hub-1');
+      const beta = createTenant({ name: 'Beta Resto', slug: 'beta-resto' });
+      beta.assignHub('hub-1');
+      const gamma = createTenant({ name: 'Gamma Mart', slug: 'gamma-mart' });
+      await repo.save(alpha);
+      await repo.save(beta);
+      await repo.save(gamma);
+    });
+
+    it('returns every tenant with total when no filter', async () => {
+      const { items, total } = await repo.list({});
+      expect(total).toBe(3);
+      expect(items).toHaveLength(3);
+    });
+
+    it('filters by hubId', async () => {
+      const { items, total } = await repo.list({ hubId: 'hub-1' });
+      expect(total).toBe(2);
+      expect(items.map((t) => t.serialize().name).sort()).toEqual(['Alpha Kopi', 'Beta Resto']);
+    });
+
+    it('searches name/slug case-insensitively', async () => {
+      const { items, total } = await repo.list({ search: 'gamma' });
+      expect(total).toBe(1);
+      expect(items[0].serialize().slug).toBe('gamma-mart');
+    });
+
+    it('paginates with limit + skip', async () => {
+      const first = await repo.list({ limit: 2, skip: 0 });
+      const second = await repo.list({ limit: 2, skip: 2 });
+      expect(first.items).toHaveLength(2);
+      expect(first.total).toBe(3);
+      expect(second.items).toHaveLength(1);
+      expect(second.total).toBe(3);
+    });
+  });
 });

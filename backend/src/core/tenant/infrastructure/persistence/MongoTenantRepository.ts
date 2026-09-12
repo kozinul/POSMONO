@@ -98,4 +98,31 @@ export class MongoTenantRepository {
     const docs = await this.model.find({ hubId }).exec();
     return docs.map((doc: TenantDoc) => this.toDomain(doc));
   }
+
+  async list(options: {
+    hubId?: string | null;
+    search?: string;
+    limit?: number;
+    skip?: number;
+  }): Promise<{ items: Tenant[]; total: number }> {
+    const filter: any = {};
+    if (options.hubId !== undefined && options.hubId !== null) {
+      filter.hubId = options.hubId;
+    }
+    if (options.search && options.search.trim()) {
+      const escaped = options.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(escaped, 'i');
+      filter.$or = [{ name: re }, { slug: re }, { domain: re }];
+    }
+
+    const limit = Math.min(Math.max(options.limit ?? 50, 1), 200);
+    const skip = Math.max(options.skip ?? 0, 0);
+
+    const [docs, total] = await Promise.all([
+      this.model.find(filter).sort({ name: 1 }).skip(skip).limit(limit).exec(),
+      this.model.countDocuments(filter).exec(),
+    ]);
+
+    return { items: docs.map((doc: TenantDoc) => this.toDomain(doc)), total };
+  }
 }

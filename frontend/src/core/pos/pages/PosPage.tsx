@@ -21,6 +21,7 @@ import { PosVoidModal } from '../components/PosVoidModal';
 import { PosActionPanel } from '../components/PosActionPanel';
 import { OpenShiftModal } from '../components/OpenShiftModal';
 import { useAuthStore, hasPermission } from '../../../@shared/hooks/useAuth';
+import { useOutlets } from '../../../@shared/hooks/useOutlets';
 import { VOID_ORDER_PERMISSION } from '../../../@shared/utils/permissions';
 import { useVoidOrder, useVoidItem } from '../../orders/hooks/useOrders';
 import { useBestSellers } from '../../orders/hooks/useOrders';
@@ -100,6 +101,9 @@ export default function PosPage() {
   const { lookupBarcode } = useBarcodeLookup();
   const { data: stocks = [] } = useStockList();
   const { data: heldOrdersQuery } = useHeldOrders();
+  const activeOutletId = useAuthStore((s) => s.activeOutletId);
+  const { data: outlets = [] } = useOutlets();
+  const activeWarehouseId = outlets.find((o) => o.id === activeOutletId)?.warehouseId ?? null;
 
   useEffect(() => {
     if (heldOrdersQuery) {
@@ -109,9 +113,12 @@ export default function PosPage() {
 
   const stockMap = useMemo(() => {
     const m: Record<string, number> = {};
-    for (const s of stocks) m[s.productId] = s.availableQuantity;
+    for (const s of stocks) {
+      if (activeWarehouseId && s.warehouseId && s.warehouseId !== activeWarehouseId) continue;
+      m[s.productId] = (m[s.productId] ?? 0) + s.availableQuantity;
+    }
     return m;
-  }, [stocks]);
+  }, [stocks, activeWarehouseId]);
 
   const cartQtyByProduct = useMemo(() => {
     const m: Record<string, number> = {};

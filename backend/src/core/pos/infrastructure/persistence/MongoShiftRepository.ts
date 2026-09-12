@@ -155,4 +155,19 @@ export class MongoShiftRepository {
     const docs = await this.model.find({ tenantId, status: 'open' }).exec();
     return docs.map((d: ShiftDoc) => this.toDomain(d));
   }
+
+  async findByTenantIds(
+    tenantIds: string[],
+    options?: { from?: Date; to?: Date; status?: string },
+  ): Promise<Shift[]> {
+    const filter: any = { tenantId: { $in: tenantIds } };
+    if (options?.status) filter.status = options.status;
+    if (options?.from || options?.to) {
+      filter.openedAt = {};
+      if (options.from) filter.openedAt.$gte = options.from;
+      if (options.to) filter.openedAt.$lte = options.to;
+    }
+    const docs = await this.model.find(filter).sort({ openedAt: -1 }).exec();
+    return docs.map((d: ShiftDoc) => this.toDomain(d));
+  }
 }
