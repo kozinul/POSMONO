@@ -28,6 +28,7 @@ const TemplateListPage = lazy(() => import('../core/templates/pages/TemplateList
 const DesignerPage = lazy(() => import('../core/templates/pages/DesignerPage'));
 const DatabasePage = lazy(() => import('../core/database/pages/DatabasePage'));
 const RefundPage = lazy(() => import('../core/refunds/pages/RefundPage'));
+const TerminalCenterPage = lazy(() => import('../core/platform/pages/TerminalCenterPage'));
 
 const Loading = () => (
   <div className="flex items-center justify-center min-h-screen">
@@ -48,6 +49,7 @@ export function AppRouter() {
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/pos" element={<PosPage />} />
+              <Route path="/terminal" element={<TerminalCenterPage />} />
               <Route path="/orders" element={<OrderListPage />} />
               <Route path="/refunds" element={<RefundPage />} />
               <Route path="/products" element={<ProductListPage />} />

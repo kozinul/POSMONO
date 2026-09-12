@@ -6,6 +6,7 @@ import { useAuthStore } from '../../../@shared/hooks/useAuth';
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [platformMode, setPlatformMode] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const setUser = useAuthStore((s) => s.setUser);
@@ -22,14 +23,24 @@ export default function LoginPage() {
     localStorage.removeItem('authUser');
 
     try {
-      const { data } = await api.post('/auth/login', { email: email.trim(), password });
+      const { data } = await api.post(
+        '/auth/login',
+        { email: email.trim(), password },
+        platformMode ? { headers: { 'X-Tenant-Id': 'platform' } } : {},
+      );
       localStorage.setItem('accessToken', data.data.accessToken);
       localStorage.setItem('refreshToken', data.data.refreshToken);
       const tokenPayload = JSON.parse(atob(data.data.accessToken.split('.')[1]));
-      localStorage.setItem('tenantId', tokenPayload.tenant);
-      setUser(data.data.user);
+      const tenantId = tokenPayload.tenant ?? data.data.user?.tenantId ?? '';
+      localStorage.setItem('tenantId', tenantId);
+      setUser({ ...data.data.user, tenantId });
       const roleName = data.data.user?.roleName ?? '';
-      navigate(roleName === 'Cashier' ? '/pos' : '/dashboard');
+      const dest = tenantId === 'platform' || platformMode
+        ? '/terminal'
+        : roleName === 'Cashier'
+          ? '/pos'
+          : '/dashboard';
+      navigate(dest);
     } catch (err: any) {
       setError(err?.response?.data?.error?.message || 'Invalid credentials');
     } finally {
@@ -67,6 +78,15 @@ export default function LoginPage() {
       >
         {isLoading ? 'Signing in...' : 'Sign in'}
       </button>
+      <label className="flex items-center justify-center gap-2 text-sm text-gray-600 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={platformMode}
+          onChange={(e) => setPlatformMode(e.target.checked)}
+          className="rounded border-gray-300"
+        />
+        Terminal Center (Super Admin Platform)
+      </label>
     </form>
   );
 }

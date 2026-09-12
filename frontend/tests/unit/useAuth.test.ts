@@ -1,5 +1,12 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useAuthStore, type AuthUser } from '../../src/@shared/hooks/useAuth';
+
+vi.mock('../../src/@shared/services/api', () => ({
+  api: { post: vi.fn() },
+}));
+
+import { api } from '../../src/@shared/services/api';
+const mockedPost = vi.mocked(api.post);
 
 function userWithOutlets(outletIds: string[]): AuthUser {
   return {
@@ -16,7 +23,7 @@ function userWithOutlets(outletIds: string[]): AuthUser {
 describe('useAuthStore outlet handling', () => {
   beforeEach(() => {
     localStorage.clear();
-    useAuthStore.setState({ user: null, isAuthenticated: false, activeOutletId: null });
+    useAuthStore.setState({ user: null, isAuthenticated: false, activeOutletId: null, activeTenantId: null });
   });
 
   it('auto-picks the single outlet when user has exactly one', () => {
@@ -70,5 +77,40 @@ describe('useAuthStore outlet handling', () => {
     expect(useAuthStore.getState().activeOutletId).toBeNull();
     expect(localStorage.getItem('activeOutletId')).toBeNull();
     expect(localStorage.getItem('authUser')).toBeNull();
+  });
+
+  it('switchTenant persists new tokens and tenant on success', async () => {
+    mockedPost.mockResolvedValueOnce({
+      data: {
+        data: {
+          accessToken: 'new-access',
+          refreshToken: 'new-refresh',
+          user: { id: 'u1', email: 'u@test.com', displayName: 'User', role: 'hub-owner', roleName: 'Hub Owner', permissions: ['reports:read'], outletIds: [] },
+        },
+      },
+    });
+    localStorage.setItem('activeOutletId', 'o1');
+    useAuthStore.setState({ activeOutletId: 'o1' });
+
+    const ok = await useAuthStore.getState().switchTenant('t2');
+
+    expect(ok).toBe(true);
+    expect(localStorage.getItem('accessToken')).toBe('new-access');
+    expect(localStorage.getItem('refreshToken')).toBe('new-refresh');
+    expect(localStorage.getItem('tenantId')).toBe('t2');
+    expect(localStorage.getItem('activeOutletId')).toBeNull();
+    expect(useAuthStore.getState().activeTenantId).toBe('t2');
+    expect(useAuthStore.getState().activeOutletId).toBeNull();
+    expect(useAuthStore.getState().user?.tenantId).toBe('t2');
+  });
+
+  it('switchTenant returns false and keeps state on failure', async () => {
+    mockedPost.mockRejectedValueOnce(new Error('boom'));
+
+    const ok = await useAuthStore.getState().switchTenant('t2');
+
+    expect(ok).toBe(false);
+    expect(useAuthStore.getState().activeTenantId).toBeNull();
+    expect(localStorage.getItem('tenantId')).toBeNull();
   });
 });

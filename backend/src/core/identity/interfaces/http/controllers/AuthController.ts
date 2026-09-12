@@ -105,4 +105,36 @@ export class AuthController extends BaseController {
       lastLoginAt: user.serialize().lastLoginAt,
     });
   }
+
+  async accessibleTenants(req: Request, res: Response): Promise<void> {
+    const tenants = await this.authService.listAccessibleTenants(req.userId);
+    this.ok(res, tenants);
+  }
+
+  async switchTenant(req: Request, res: Response): Promise<void> {
+    const { tenantId } = req.body;
+    if (!tenantId || typeof tenantId !== 'string') {
+      throw new ValidationError('tenantId is required');
+    }
+
+    const result = await this.authService.switchTenant(req.userId, tenantId, {
+      userAgent: req.headers['user-agent'],
+      ipAddress: req.ip,
+    });
+
+    this.ok(res, {
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+      user: {
+        id: result.user.id.toValue(),
+        email: result.user.emailValue,
+        displayName: result.user.displayNameValue,
+        role: result.user.roleIdValue,
+        roleName: result.roleName,
+        permissions: result.permissions,
+        outletIds: result.outletIds,
+      },
+      accessibleTenants: result.accessibleTenants,
+    });
+  }
 }

@@ -1,7 +1,8 @@
 import { UseCase } from '../../../../@shared/application/UseCase';
 import { User } from '../../domain/User';
 import { PasswordService } from '../../domain/services/PasswordService';
-import { UnauthorizedError, ValidationError } from '../../../../@shared/infrastructure/error/AppError';
+import { UnauthorizedError, ValidationError, ForbiddenError } from '../../../../@shared/infrastructure/error/AppError';
+import { HUB_MEMBER_ROLE_PERMS, HUB_MEMBER_ROLE_LABELS } from '../../../platform/defaults/roles';
 
 interface LoginInput {
   email: string;
@@ -27,6 +28,7 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
     private readonly passwordService: PasswordService,
     private readonly sessionService: any,
     private readonly roleRepository?: any,
+    private readonly hubMembershipService?: any,
   ) {}
 
   async execute(input: LoginInput): Promise<LoginOutput> {
@@ -170,12 +172,101 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
     tenantId: string,
   ): Promise<{ user: User; roleName: string | null; permissions: string[]; outletIds: string[] } | null> {
     const user = await this.userRepository.findByIdAndTenant(userId, tenantId);
+    if (user) {
+      const role = await this.resolveRole(user.roleIdValue);
+      const roleName = role?.serialize().name ?? null;
+      const permissions = role?.serialize().permissions ?? [];
+
+      return { user, roleName, permissions, outletIds: user.outletIdsValue };
+    }
+
+    return this.resolveHubMemberContext(userId, tenantId);
+  }
+
+  /**
+   * Session lintas-tenant: list every tenant the user can act on via their
+   * hub memberships (hub → tenant → outlet hierarchy).
+   */
+  async listAccessibleTenants(userId: string): Promise<any[]> {
+    if (!this.hubMembershipService) return [];
+    return this.hubMembershipService.findAccessibleTenants(userId);
+  }
+
+  /**
+   * Session lintas-tenant: re-issue tokens scoped to another tenant that the
+   * user can access through a hub membership. The access/refresh tokens embed
+   * the membership-derived role + permissions for the target tenant.
+   */
+  async switchTenant(
+    userId: string,
+    targetTenantId: string,
+    input?: { userAgent?: string; ipAddress?: string },
+  ): Promise<LoginOutput & { accessibleTenants: any[] }> {
+    if (!this.hubMembershipService) {
+      throw new ForbiddenError('Hub membership is not configured on this instance');
+    }
+
+    const accessibleTenants = await this.hubMembershipService.findAccessibleTenants(userId);
+    const target = accessibleTenants.find((t: any) => t.tenantId === targetTenantId);
+    if (!target) {
+      throw new ForbiddenError('No hub membership grants access to this tenant');
+    }
+
+    const user = await this.userRepository.findByIdRaw(userId);
+    if (!user) {
+      throw new UnauthorizedError('User not found');
+    }
+
+    const roleName = HUB_MEMBER_ROLE_LABELS[target.role] ?? 'Hub Member';
+    const permissions = HUB_MEMBER_ROLE_PERMS[target.role] ?? [];
+    const outletIds: string[] = [];
+
+    const refreshToken = this.tokenService.generateRefreshToken({
+      sub: user.id.toValue(),
+      tenant: targetTenantId,
+      role: `hub-${target.role}`,
+      roleName,
+      permissions,
+      outletIds,
+    });
+
+    await this.sessionService.create({
+      userId: user.id.toValue(),
+      tenantId: targetTenantId,
+      refreshToken,
+      userAgent: input?.userAgent || '',
+      ipAddress: input?.ipAddress || '',
+    });
+
+    const accessToken = this.tokenService.generateToken({
+      sub: user.id.toValue(),
+      tenant: targetTenantId,
+      role: `hub-${target.role}`,
+      roleName,
+      permissions,
+      outletIds,
+    });
+
+    return { user, roleName, permissions, outletIds, accessToken, refreshToken, accessibleTenants };
+  }
+
+  private async resolveHubMemberContext(
+    userId: string,
+    tenantId: string,
+  ): Promise<{ user: User; roleName: string | null; permissions: string[]; outletIds: string[] } | null> {
+    if (!this.hubMembershipService) return null;
+
+    const user = await this.userRepository.findByIdRaw(userId);
     if (!user) return null;
 
-    const role = await this.resolveRole(user.roleIdValue);
-    const roleName = role?.serialize().name ?? null;
-    const permissions = role?.serialize().permissions ?? [];
+    const role = await this.hubMembershipService.resolveRoleForTenant(userId, tenantId);
+    if (!role) return null;
 
-    return { user, roleName, permissions, outletIds: user.outletIdsValue };
+    return {
+      user,
+      roleName: HUB_MEMBER_ROLE_LABELS[role],
+      permissions: HUB_MEMBER_ROLE_PERMS[role] ?? [],
+      outletIds: [],
+    };
   }
 }

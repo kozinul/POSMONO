@@ -62,6 +62,12 @@ export class MongoUserRepository extends MongoRepository<User, UserId, UserDoc> 
     } as unknown as Partial<UserDoc>;
   }
 
+  async findByIdRaw(id: string): Promise<User | null> {
+    const doc = await this.model.findById(id).exec();
+    if (!doc) return null;
+    return this.toDomain(doc);
+  }
+
   async findByEmail(email: string, tenantId: string): Promise<User | null> {
     const doc = await this.model.findOne({ email, tenantId }).exec();
     if (!doc) return null;

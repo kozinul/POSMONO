@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { api } from '../services/api';
+import type { AccessibleTenant } from './useHubMemberships';
 
 export interface AuthUser {
   id: string;
@@ -8,14 +10,17 @@ export interface AuthUser {
   roleName?: string | null;
   permissions?: string[];
   outletIds?: string[];
+  tenantId?: string;
 }
 
 interface AuthState {
   user: AuthUser | null;
   isAuthenticated: boolean;
   activeOutletId: string | null;
+  activeTenantId: string | null;
   setUser: (user: AuthState['user']) => void;
   setActiveOutletId: (id: string | null) => void;
+  switchTenant: (tenantId: string) => Promise<boolean>;
   logout: () => void;
 }
 
@@ -47,8 +52,18 @@ export const useAuthStore = create<AuthState>((set) => ({
   })(),
   isAuthenticated: !!localStorage.getItem('accessToken'),
   activeOutletId: defaultActiveOutletId(),
+  activeTenantId: (() => {
+    try {
+      const raw = localStorage.getItem('authUser');
+      const user = raw ? (JSON.parse(raw) as AuthUser) : null;
+      return user?.tenantId ?? localStorage.getItem('tenantId') ?? null;
+    } catch {
+      return null;
+    }
+  })(),
   setUser: (user) => {
     let nextActiveOutletId: string | null = null;
+    let nextActiveTenantId: string | null = user?.tenantId ?? null;
     if (user) {
       localStorage.setItem('authUser', JSON.stringify(user));
       const current = localStorage.getItem('activeOutletId');
@@ -69,13 +84,30 @@ export const useAuthStore = create<AuthState>((set) => ({
     } else {
       localStorage.removeItem('authUser');
       localStorage.removeItem('activeOutletId');
+      localStorage.removeItem('authUser');
     }
-    set({ user, isAuthenticated: !!user, activeOutletId: nextActiveOutletId });
+    set({ user, isAuthenticated: !!user, activeOutletId: nextActiveOutletId, activeTenantId: nextActiveTenantId });
   },
   setActiveOutletId: (id) => {
     if (id) localStorage.setItem('activeOutletId', id);
     else localStorage.removeItem('activeOutletId');
     set({ activeOutletId: id });
+  },
+  switchTenant: async (tenantId) => {
+    try {
+      const { data } = await api.post('/auth/switch-tenant', { tenantId });
+      const payload = data.data;
+      const user: AuthUser = { ...payload.user, tenantId };
+      localStorage.setItem('accessToken', payload.accessToken);
+      localStorage.setItem('refreshToken', payload.refreshToken);
+      localStorage.setItem('tenantId', tenantId);
+      localStorage.setItem('authUser', JSON.stringify(user));
+      localStorage.removeItem('activeOutletId');
+      set({ user, isAuthenticated: true, activeOutletId: null, activeTenantId: tenantId });
+      return true;
+    } catch {
+      return false;
+    }
   },
   logout: () => {
     localStorage.removeItem('accessToken');
@@ -83,7 +115,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     localStorage.removeItem('tenantId');
     localStorage.removeItem('authUser');
     localStorage.removeItem('activeOutletId');
-    set({ user: null, isAuthenticated: false, activeOutletId: null });
+    set({ user: null, isAuthenticated: false, activeOutletId: null, activeTenantId: null });
     window.location.href = '/login';
   },
 }));

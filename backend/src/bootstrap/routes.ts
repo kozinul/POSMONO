@@ -29,6 +29,7 @@ import { createTemplateRoutes } from '../core/template/interfaces/http/routes/te
 import { createDatabaseRoutes } from '../core/database/interfaces/http/routes/database.routes';
 import { createPrinterRoutes, createPrintRoutes } from '../core/printing/interfaces/http/routes/printer.routes';
 import { createHubRoutes } from '../core/hub/interfaces/http/routes/hub.routes';
+import { createHubMembershipRoutes } from '../core/hub/interfaces/http/routes/hubmembership.routes';
 import { createOutletRoutes } from '../core/outlet/interfaces/http/routes/outlet.routes';
 import { createPlatformRoutes } from '../core/platform/interfaces/http/routes/platform.routes';
 
@@ -125,6 +126,9 @@ export function registerRoutes(app: Express, container: DIContainer): void {
 
   const hubController = container.resolve('hubController');
   app.use('/api/hubs', createHubRoutes(hubController));
+
+  const hubMembershipController = container.resolve('hubMembershipController');
+  app.use('/api/hub-memberships', createHubMembershipRoutes(hubMembershipController));
 
   const outletController = container.resolve('outletController');
   app.use('/api/outlets', createOutletRoutes(outletController));

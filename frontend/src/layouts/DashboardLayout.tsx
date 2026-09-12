@@ -1,6 +1,7 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore, hasPermission } from '../@shared/hooks/useAuth';
+import { useAccessibleTenants } from '../@shared/hooks/useHubMemberships';
 import { useOutlets } from '../@shared/hooks/useOutlets';
 import { useRealtimeSync } from '../@shared/hooks/useRealtimeSync';
 import { ErrorBoundary } from '../@shared/components/ErrorBoundary';
@@ -33,6 +34,7 @@ const navigation: NavItem[] = [
   { name: 'Settings', href: '/settings' },
   { name: 'Printer', href: '/settings/printers' },
   { name: 'Database', href: '/database' },
+  { name: 'Terminal Center', href: '/terminal', permission: 'hub:manage' },
 ];
 
 const OUTLET_SCOPE_KEYS: ReadonlyArray<readonly string[]> = [
@@ -47,13 +49,18 @@ const OUTLET_SCOPE_KEYS: ReadonlyArray<readonly string[]> = [
 
 export function DashboardLayout() {
   const location = useLocation();
-  const { user, logout, activeOutletId, setActiveOutletId } = useAuthStore();
+  const { user, logout, activeOutletId, setActiveOutletId, switchTenant } = useAuthStore();
   const isPOSPage = location.pathname === '/pos';
 
   useRealtimeSync();
 
   const queryClient = useQueryClient();
   const { data: outlets = [] } = useOutlets();
+  const { data: accessibleTenants = [] } = useAccessibleTenants();
+
+  const currentTenantId = user?.tenantId ?? '';
+  const currentTenantName = accessibleTenants.find((t) => t.tenantId === currentTenantId)?.tenantName ?? null;
+  const showTenantSwitcher = accessibleTenants.length > 0 && currentTenantId !== 'platform';
 
   const visibleNavigation = navigation.filter(
     (item) =>
@@ -74,6 +81,16 @@ export function DashboardLayout() {
     }
   };
 
+  const handleTenantSwitch = async (tenantId: string) => {
+    if (tenantId === currentTenantId) return;
+    const ok = await switchTenant(tenantId);
+    if (ok) {
+      queryClient.clear();
+    } else {
+      alert('Gagal beralih tenant');
+    }
+  };
+
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       <header className="blue-primary text-white h-16 flex items-center justify-between px-6 shrink-0 shadow-md z-10">
@@ -81,6 +98,26 @@ export function DashboardLayout() {
           POSMono
         </Link>
         <div className="flex items-center gap-4">
+          {showTenantSwitcher && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-white/60">Tenant:</span>
+              <select
+                aria-label="Ganti Tenant"
+                value={currentTenantId}
+                onChange={(e) => handleTenantSwitch(e.target.value)}
+                className="text-sm bg-white/10 border border-white/20 text-white rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-white/40"
+              >
+                {accessibleTenants.map((t) => (
+                  <option key={t.tenantId} value={t.tenantId} className="text-gray-900">
+                    {t.tenantName} · {t.hubName}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          {!showTenantSwitcher && currentTenantName && (
+            <span className="text-sm text-white/70 hidden sm:inline">{currentTenantName}</span>
+          )}
           {showOutletSwitcher && (
             <div className="flex items-center gap-2">
               <span className="text-xs text-white/60">Outlet:</span>

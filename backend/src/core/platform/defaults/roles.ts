@@ -66,6 +66,33 @@ export const DEFAULT_PLATFORM_ROLE: DefaultRoleDef = {
 
 export const PLATFORM_TENANT_ID = 'platform';
 
+/**
+ * Permissions granted to a user while acting as a hub member (cross-tenant
+ * session) inside a tenant that belongs to one of their hubs.
+ * - 'owner'  → full tenant permissions (same as the seeded Owner role)
+ * - 'admin'  → daily operations management (manager-level + reports)
+ * - 'viewer' → read-only tenant visibility
+ */
+export const HUB_MEMBER_ROLE_PERMS: Record<string, string[]> = {
+  owner: [...OWNER_PERMS],
+  admin: [...MANAGER_PERMS, 'users:read', 'reports:read'],
+  viewer: [
+    'reports:read',
+    'orders:read',
+    'products:read',
+    'customers:read',
+    'inventory:read',
+    'shifts:read',
+    'payments:read',
+  ],
+};
+
+export const HUB_MEMBER_ROLE_LABELS: Record<string, string> = {
+  owner: 'Hub Owner',
+  admin: 'Hub Admin',
+  viewer: 'Hub Viewer',
+};
+
 export const DEFAULT_ROLES: DefaultRoleDef[] = [
   {
     name: 'Owner',

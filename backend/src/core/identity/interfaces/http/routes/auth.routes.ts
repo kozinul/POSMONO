@@ -11,6 +11,8 @@ export function createAuthRoutes(authController: AuthController): Router {
   router.post('/refresh', asyncHandler(authController.refresh.bind(authController)));
   router.post('/logout', asyncHandler(authController.logout.bind(authController)));
   router.get('/me', authenticate, asyncHandler(authController.me.bind(authController)));
+  router.get('/accessible-tenants', authenticate, asyncHandler(authController.accessibleTenants.bind(authController)));
+  router.post('/switch-tenant', authenticate, asyncHandler(authController.switchTenant.bind(authController)));
 
   return router;
 }

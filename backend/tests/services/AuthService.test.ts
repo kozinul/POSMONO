@@ -245,4 +245,123 @@ describe('AuthService', () => {
       expect(userRepo.findByIdAndTenant).toHaveBeenCalledWith('user-1', TENANT_ID);
     });
   });
+
+  describe('cross-tenant hub membership (Fase 9)', () => {
+    let userRepo: ReturnType<typeof createMockUserRepo>;
+    let hubMembershipService: any;
+
+    beforeEach(() => {
+      userRepo = createMockUserRepo();
+      hubMembershipService = {
+        findAccessibleTenants: vi.fn(async () => [
+          { tenantId: 'tenant-beta', tenantName: 'Beta Resto', hubId: 'hub-1', hubName: 'BCA Hospitality', role: 'admin' },
+        ]),
+        resolveRoleForTenant: vi.fn(async (_userId: string, tenantId: string) =>
+          tenantId === 'tenant-beta' ? 'admin' : null,
+        ),
+      };
+      const tokenService = createMockTokenService();
+      const passwordService = createMockPasswordService();
+      const sessionService = createMockSessionService();
+      service = new AuthService(userRepo, tokenService, passwordService, sessionService, undefined, hubMembershipService);
+      userRepo.findByIdRaw = vi.fn();
+    });
+
+    it('lists accessible tenants from hub memberships', async () => {
+      const tenants = await service.listAccessibleTenants('user-1');
+      expect(tenants).toHaveLength(1);
+      expect(tenants[0]).toMatchObject({ tenantId: 'tenant-beta', role: 'admin' });
+    });
+
+    it('returns empty list when no membership service configured', async () => {
+      const bare = new AuthService(
+        createMockUserRepo() as any,
+        createMockTokenService(),
+        createMockPasswordService(),
+        createMockSessionService(),
+      );
+      expect(await bare.listAccessibleTenants('user-1')).toEqual([]);
+    });
+
+    it('switchTenant issues tokens scoped to the target tenant with membership permissions', async () => {
+      const user = createUser();
+      userRepo.findByIdRaw.mockResolvedValue(user);
+
+      const result = await service.switchTenant('user-1', 'tenant-beta', {
+        userAgent: 'agent',
+        ipAddress: '1.2.3.4',
+      });
+
+      expect(result.accessToken).toBe('access-token-123');
+      expect(result.roleName).toBe('Hub Admin');
+      expect(result.outletIds).toEqual([]);
+      expect(result.accessibleTenants).toHaveLength(1);
+      expect(result.user).toBe(user);
+    });
+
+    it('bakes tenant + role + permissions into the access token', async () => {
+      const user = createUser();
+      userRepo.findByIdRaw.mockResolvedValue(user);
+      const tokenService = createMockTokenService();
+      const sessionService = createMockSessionService();
+      const membershipService = {
+        findAccessibleTenants: vi.fn(async () => [
+          { tenantId: 'tenant-beta', tenantName: 'Beta', hubId: 'hub-1', hubName: 'BCA', role: 'owner' },
+        ]),
+        resolveRoleForTenant: vi.fn(),
+      };
+      const svc = new AuthService(
+        userRepo as any,
+        tokenService,
+        createMockPasswordService(),
+        sessionService,
+        undefined,
+        membershipService,
+      );
+
+      await svc.switchTenant('user-1', 'tenant-beta');
+
+      expect(tokenService.generateToken).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sub: user.id.toValue(),
+          tenant: 'tenant-beta',
+          role: 'hub-owner',
+          roleName: 'Hub Owner',
+          outletIds: [],
+          permissions: expect.arrayContaining(['reports:read', 'orders:read']),
+        }),
+      );
+      expect(sessionService.create).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: user.id.toValue(), tenantId: 'tenant-beta' }),
+      );
+    });
+
+    it('switchTenant rejects tenants outside the user memberships', async () => {
+      const user = createUser();
+      userRepo.findByIdRaw.mockResolvedValue(user);
+
+      await expect(service.switchTenant('user-1', 'tenant-not-member')).rejects.toThrow(
+        /No hub membership grants access/,
+      );
+    });
+
+    it('getCurrentUser falls back to hub-member context for cross-tenant sessions', async () => {
+      const user = createUser();
+      userRepo.findByIdAndTenant.mockResolvedValue(null);
+      userRepo.findByIdRaw.mockResolvedValue(user);
+
+      const result = await service.getCurrentUser('user-1', 'tenant-beta');
+      expect(result).not.toBeNull();
+      expect(result!.roleName).toBe('Hub Admin');
+      expect(result!.permissions).toEqual(expect.arrayContaining(['reports:read']));
+      expect(result!.outletIds).toEqual([]);
+    });
+
+    it('getCurrentUser returns null when neither tenant-scoped nor hub member', async () => {
+      userRepo.findByIdAndTenant.mockResolvedValue(null);
+      userRepo.findByIdRaw.mockResolvedValue(null);
+
+      expect(await service.getCurrentUser('user-1', 'tenant-unknown')).toBeNull();
+    });
+  });
 });

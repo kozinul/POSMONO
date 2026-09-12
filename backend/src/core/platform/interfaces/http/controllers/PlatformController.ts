@@ -93,6 +93,140 @@ export class PlatformController extends BaseController {
   }
 
   // Read-only summaries
+  async consolidated(req: Request, res: Response): Promise<void> {
+    const { dateFrom, dateTo } = req.query;
+    const hub = await this.deps.hubService.getById(req.params.hubId);
+
+    const [from, to] = this.resolveDateRange(dateFrom as string | undefined, dateTo as string | undefined);
+
+    const scope = await resolvePlatformScope(this.deps.tenantRepository, { hubId: req.params.hubId });
+
+    const tenants = await this.deps.hubService.listTenants(req.params.hubId);
+    const tenantNameById: Record<string, string> = {};
+    for (const tenant of tenants) {
+      const data = tenant.serialize();
+      tenantNameById[data.id] = data.name;
+    }
+
+    const outlets = await this.deps.outletService.listAllForPlatform(scope.tenantIds);
+    const outletNameByTenant: Record<string, Record<string, string>> = {};
+    for (const outlet of outlets) {
+      const data = outlet.serialize();
+      (outletNameByTenant[data.tenantId] ??= {})[data.id] = data.name;
+    }
+
+    const shiftSummary = await this.deps.shiftService.getPlatformShiftsSummary(scope.tenantIds, {
+      dateFrom: from,
+      dateTo: to,
+    });
+    const paymentsSummary = await this.deps.paymentService.getPlatformPaymentsConsolidationByOutlet(scope.tenantIds, {
+      dateFrom: from,
+      dateTo: to,
+    });
+
+    const shiftTenants: Record<string, any> = {};
+    for (const t of shiftSummary.tenants) {
+      shiftTenants[t.tenantId] = t;
+    }
+    const payTenants: Record<string, any> = {};
+    for (const t of paymentsSummary.tenants) {
+      payTenants[t.tenantId] = t;
+    }
+
+    const allTenantIds = new Set([...scope.tenantIds, ...Object.keys(shiftTenants), ...Object.keys(payTenants)]);
+
+    const totals = {
+      openShifts: 0,
+      closedShifts: 0,
+      shiftSales: 0,
+      shiftTransactions: 0,
+      paymentAmount: 0,
+      paymentTransactions: 0,
+    };
+
+    const resultTenants: any[] = [];
+    for (const tenantId of [...allTenantIds].sort()) {
+      const shiftT = shiftTenants[tenantId];
+      const payT = payTenants[tenantId];
+
+      const shiftByOutlet: Record<string, any> = {};
+      for (const outlet of shiftT?.outlets ?? []) {
+        shiftByOutlet[outlet.outletId ?? 'default'] = outlet;
+      }
+      const payByOutlet: Record<string, any> = {};
+      for (const outlet of payT?.outlets ?? []) {
+        payByOutlet[outlet.outletId ?? 'default'] = outlet;
+      }
+
+      const outletNames = outletNameByTenant[tenantId] ?? {};
+      const allOutletKeys = new Set([
+        ...Object.keys(outletNames),
+        ...Object.keys(shiftByOutlet),
+        ...Object.keys(payByOutlet),
+      ]);
+
+      const tenantTotals = { openShifts: 0, closedShifts: 0, shiftSales: 0, shiftTransactions: 0, paymentAmount: 0, paymentTransactions: 0 };
+      const outletRows: any[] = [];
+
+      for (const outletKey of [...allOutletKeys].sort()) {
+        const so = shiftByOutlet[outletKey];
+        const po = payByOutlet[outletKey];
+
+        const row = {
+          outletId: outletKey === 'default' ? null : outletKey,
+          outletName: outletNames[outletKey] ?? null,
+          shifts: {
+            openShifts: so?.openShifts ?? 0,
+            closedShifts: so?.closedShifts ?? 0,
+            totalSales: so?.totalSales ?? 0,
+            cashSales: so?.cashSales ?? 0,
+            nonCashSales: so?.nonCashSales ?? 0,
+            totalTransactions: so?.totalTransactions ?? 0,
+          },
+          payments: {
+            totalAmount: po?.totalAmount ?? 0,
+            totalTransactions: po?.totalTransactions ?? 0,
+            methods: po?.methods ?? [],
+          },
+        };
+
+        tenantTotals.openShifts += row.shifts.openShifts;
+        tenantTotals.closedShifts += row.shifts.closedShifts;
+        tenantTotals.shiftSales += row.shifts.totalSales;
+        tenantTotals.shiftTransactions += row.shifts.totalTransactions;
+        tenantTotals.paymentAmount += row.payments.totalAmount;
+        tenantTotals.paymentTransactions += row.payments.totalTransactions;
+
+        outletRows.push(row);
+      }
+
+      totals.openShifts += tenantTotals.openShifts;
+      totals.closedShifts += tenantTotals.closedShifts;
+      totals.shiftSales += tenantTotals.shiftSales;
+      totals.shiftTransactions += tenantTotals.shiftTransactions;
+      totals.paymentAmount += tenantTotals.paymentAmount;
+      totals.paymentTransactions += tenantTotals.paymentTransactions;
+
+      resultTenants.push({
+        tenantId,
+        tenantName: tenantNameById[tenantId] ?? null,
+        hasData: !!shiftT || !!payT,
+        totals: tenantTotals,
+        outlets: outletRows,
+      });
+    }
+
+    this.ok(res, {
+      hub: hub.serialize(),
+      dateFrom: from.toISOString(),
+      dateTo: to.toISOString(),
+      generatedAt: new Date().toISOString(),
+      tenantCount: allTenantIds.size,
+      tenants: resultTenants,
+      totals,
+    });
+  }
+
   async shiftsSummary(req: Request, res: Response): Promise<void> {
     const { dateFrom, dateTo, hubId, tenantId } = req.query;
     const scope = await resolvePlatformScope(this.deps.tenantRepository, {

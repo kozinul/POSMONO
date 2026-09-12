@@ -953,4 +953,79 @@ export class PaymentService {
       tenants,
     };
   }
+
+  /**
+   * Tenant → outlet breakdown of completed payments (for the Hub consolidated
+   * report). Mirrors the shape used by ShiftService.getPlatformShiftsSummary.
+   */
+  async getPlatformPaymentsConsolidationByOutlet(
+    tenantIds: string[],
+    options?: { dateFrom?: Date; dateTo?: Date },
+  ) {
+    const payments = await this.paymentRepository.findCompletedByTenantIds(tenantIds, {
+      from: options?.dateFrom,
+      to: options?.dateTo,
+    });
+
+    const perTenant: Record<string, any> = {};
+    const totals = {
+      totalAmount: 0,
+      totalTransactions: 0,
+      methods: {} as Record<string, { total: number; count: number }>,
+    };
+
+    for (const payment of payments) {
+      const p = payment.serialize();
+      const tenantBucket = (perTenant[p.tenantId] ??= {
+        tenantId: p.tenantId,
+        totalAmount: 0,
+        totalTransactions: 0,
+        methods: {} as Record<string, { total: number; count: number }>,
+        outlets: {} as Record<string, any>,
+      });
+      const outletKey = p.outletId ?? 'default';
+      const outletBucket = (tenantBucket.outlets[outletKey] ??= {
+        outletId: p.outletId ?? null,
+        totalAmount: 0,
+        totalTransactions: 0,
+        methods: {} as Record<string, { total: number; count: number }>,
+      });
+
+      const inc = (bucket: any) => {
+        bucket.totalAmount += p.amount;
+        bucket.totalTransactions += 1;
+        const methodBucket = (bucket.methods[p.method] ??= { total: 0, count: 0 });
+        methodBucket.total += p.amount;
+        methodBucket.count += 1;
+      };
+      inc(tenantBucket);
+      inc(outletBucket);
+      inc(totals);
+    }
+
+    const tenants = Object.values(perTenant).map((t) => ({
+      tenantId: t.tenantId,
+      totalAmount: t.totalAmount,
+      totalTransactions: t.totalTransactions,
+      methods: Object.entries(t.methods).map(([method, v]: any) => ({ method, ...v })),
+      outlets: Object.values(t.outlets).map((o: any) => ({
+        outletId: o.outletId,
+        totalAmount: o.totalAmount,
+        totalTransactions: o.totalTransactions,
+        methods: Object.entries(o.methods).map(([method, v]: any) => ({ method, ...v })),
+      })),
+    }));
+
+    return {
+      dateFrom: options?.dateFrom ?? null,
+      dateTo: options?.dateTo ?? null,
+      generatedAt: new Date().toISOString(),
+      totals: {
+        totalAmount: totals.totalAmount,
+        totalTransactions: totals.totalTransactions,
+        methods: Object.entries(totals.methods).map(([method, v]: any) => ({ method, ...v })),
+      },
+      tenants,
+    };
+  }
 }
