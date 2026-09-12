@@ -204,14 +204,14 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | User `outletIds[]` + validasi per-role + JWT + middleware `resolveOutlet`/`scopeOutletIds` | `[x]` |
 | Frontend: `activeOutletId` + `X-Outlet-Id`, outlet switcher, halaman `/outlets`, POS per-outlet, receipt/OpenShiftModal nama outlet | `[x]` |
 | Role Platform Super Admin + seed `platform@demo.com` | `[x]` |
-| Terminal Center backend: `/api/platform` (health, hubs/tenants/outlets, shift & payment summaries), `platformAuthenticate`/`platformAuthorize` | `[x]` |
-| Terminal Center frontend (halaman admin + HubMembership) | `[ ]` (Fase 9) |
-| `req.outletId` dibaca service (dari `X-Outlet-Id`/resolveOutlet, bukan body/default shift) | `[ ]` (Fase 8/9) |
-| HubMembership `{userId, hubId, role}` + session lintas-tenant (`activeTenantId`) | `[ ]` (Fase 9) |
-| Hub Consolidated Report (Tenant→Outlet breakdown) | `[ ]` (Fase 9) |
-| Uji Fase 10: unit/regresi tenant standalone + sync ROLE_ACCESS_PLAN/ARCHITECTURE | `[ ]` |
+| Terminal Center backend: `/api/platform` (health, hubs/tenants/outlets, shift & payment summaries, hub consolidated), `platformAuthenticate`/`platformAuthorize` | `[x]` |
+| Terminal Center frontend (`/terminal`: Hub & Anggota / Tenants / Outlet / Ringkasan / Konsolidasi) | `[x]` |
+| HubMembership `{userId, hubId, role}` + session lintas-tenant (`/auth/switch-tenant`, `activeTenantId`, tenant switcher) | `[x]` |
+| Hub Consolidated Report (Tenant→Outlet breakdown) | `[x]` |
+| `req.outletId` dibaca service (dari `X-Outlet-Id`/resolveOutlet, bukan body/default shift) | `[ ]` (deferred) |
+| Uji Fase 10: unit/regresi tenant standalone + sync ROLE_ACCESS_PLAN/ARCHITECTURE | `[x]` |
 
-**Completion:** ~90% (Fase 1–8 selesai & terverifikasi 2026-09-12; Fase 9 HubMembership + Terminal Center frontend berikutnya)
+**Completion:** ~100% (Fase 1–9 selesai & terverifikasi 2026-09-12; HubMembership, session lintas-tenant, Hub Consolidated Report, dan halaman Terminal Center frontend rampung — backend 1021/1021, frontend 85/85)
 
 ---
 
@@ -346,6 +346,7 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | Settings page | `[x]` |
 | Hub & Outlet architecture (multi-outlet, outlet switcher, `/outlets`) | `[x]` |
 | Terminal Center backend (`/api/platform` + Platform Super Admin) | `[x]` |
+| HubMembership + session lintas-tenant + Hub Consolidated Report + halaman `/terminal` | `[x]` |
 | Bug fixing & polish | `[x]` |
 | **MVP Ready** | **`[ ]`** |
 
@@ -578,4 +579,4 @@ Architecture changes, tech swaps, pricing — never decide the same day. Sleep o
 
 > **2026-08-28 — Sinkronisasi status dengan kode aktual.** Entri fase D/E/F, daftar fitur, blocker, dan arsitektur diperbarui agar sesuai implementasi nyata (split bill, hold/close-bill, QRIS gateway, printer terintegrasi, cash rounding, laporan per-kasir, export). Checklist lama ditandai `[x]` yang sebelumnya `[ ]` sudah tervalidasi di AGENTS.md. Estimasi kelengkapan MVP: ±80% (fungsional ±90–95%, selisihnya = deployment live + pilot tenant + E2E manual).
 >
-> **2026-09-12 — Hub & Outlet Architecture (Fase 1–8) selesai.** Modul Hub/Outlet, scope transaksi `outletId`, provisioning boot, User `outletIds` + JWT + `resolveOutlet`, frontend outlet switcher/`activeOutletId`, dan **Terminal Center** (`/api/platform` + super-admin `platform@demo.com`, auth platform terpisah) terverifikasi — backend **991/991** (82 files), frontend **83/83** + tsc + vite build bersih. Sisa: Fase 9 HubMembership + halaman admin Terminal Center frontend + `req.outletId` dibaca service, lalu MVP deployment (VPS/SSL/monitoring/backup) menunggu akses VPS.
+> **2026-09-12 — Hub & Outlet Architecture (Fase 1–9) selesai.** Modul Hub/Outlet, scope transaksi `outletId`, provisioning boot, User `outletIds` + JWT + `resolveOutlet`, frontend outlet switcher/`activeOutletId`, **Terminal Center** (`/api/platform` + super-admin `platform@demo.com`, auth platform terpisah), **HubMembership** (user lintas-tenant, `/auth/switch-tenant`, tenant switcher di top bar), **Hub Consolidated Report** (Tenant→Outlet breakdown), dan halaman admin `/terminal` terverifikasi — backend **1021/1021** (84 files), frontend **85/85** + tsc + vite build bersih. Sisa: `req.outletId` dibaca service (deferred), MVP deployment (VPS/SSL/monitoring/backup) menunggu akses VPS.

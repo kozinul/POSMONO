@@ -1150,10 +1150,11 @@ export type CreateOrderInput = {
 
 ## 23. Domain: Hub (Grouping Lintas-Tenant)
 
-> Rencana lengkap: `docs/HUB_ARCHITECTURE.md` (Fase 1–8 selesai, Fase 9 HubMembership berikutnya).
+> Rencana lengkap: `docs/HUB_ARCHITECTURE.md` (Fase 1–9 selesai & terverifikasi 2026-09-12).
 
 ### Models
 - **Hub** (`Hub.ts`, `core/hub/`) — `{ name, description?, createdAt, updatedAt }` (tanpa `tenantId`; murni grouping)
+- **HubMembership** (`HubMembership.ts`, `core/hub/`) — `{ hubId, userId, role: 'owner'|'admin'|'viewer' }` unique `{hubId, userId}`
 - **Tenant** kini punya `hubId: string | null` (null = standalone)
 - **User `outletIds`** juga disimpan — outlet scope per user (JWT + request)
 
@@ -1190,11 +1191,25 @@ export type CreateOrderInput = {
 | GET | `/api/platform/outlets` | `platform.tenants.read` | Outlet lintas-tenant + `tenantName`; filter `tenantId`/`hubId`/`isActive` |
 | GET | `/api/platform/shifts/summary` | `platform.reports.read` | Summary shift per tenant + per outlet (`dateFrom`/`dateTo`/`hubId`/`tenantId`) |
 | GET | `/api/platform/payments/summary` | `platform.reports.read` | Total pembayaran + breakdown metode lintas-tenant |
+| GET | `/api/platform/hubs/:hubId/consolidated` | `platform.reports.read` | Hub Consolidated Report (Tenant→Outlet breakdown shift & payment) + filter `dateFrom`/`dateTo` |
+
+### HubMembership & Session Lintas-Tenant (`/api/hub-memberships`, `/api/auth`)
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/api/hub-memberships` | `hub:manage` | Tambah anggota `{hubId, userId, role}` |
+| GET | `/api/hub-memberships/hub/:hubId` | `hub:manage` | List anggota + nama/email user |
+| PUT | `/api/hub-memberships/:hubId/:userId` | `hub:manage` | Ganti role anggota |
+| DELETE | `/api/hub-memberships/:hubId/:userId` | `hub:manage` | Hapus anggota |
+| GET | `/api/hub-memberships/me` | authenticate | Membership milik user |
+| GET | `/api/hub-memberships/me/tenants` | authenticate | Tenant yang bisa diakses user via membership |
+| GET | `/api/auth/accessible-tenants` | authenticate | Sama dengan `/me/tenants` (dipakai tenant switcher) |
+| POST | `/api/auth/switch-tenant` | authenticate | Token baru scope target tenant (`role: hub-*`, permissions dari `HUB_MEMBER_ROLE_PERMS`) |
 
 ### Business Logic
 - `resolvePlatformScope`: `tenantId` → 1 tenant; `hubId` → semua tenant anggota hub; kosong → semua tenant
-- `ShiftService.getPlatformShiftsSummary` + `MongoShiftRepository.findByTenantIds`; `PaymentService.getPlatformPaymentsSummary` + `MongoPaymentRepository.findCompletedByTenantIds`; `TenantService.list` + `MongoTenantRepository.list`
-- Frontend halaman admin Terminal Center **belum di-wire** — dikonsumsi bersama HubMembership (Fase 9)
+- `ShiftService.getPlatformShiftsSummary` + `MongoShiftRepository.findByTenantIds`; `PaymentService.getPlatformPaymentsSummary`/`getPlatformPaymentsConsolidationByOutlet` + `MongoPaymentRepository.findCompletedByTenantIds`; `TenantService.list` + `MongoTenantRepository.list`
+- **Halaman admin Terminal Center** (`/terminal`, tab Hub & Anggota / Tenants / Outlet / Ringkasan / Konsolidasi) **di-wire bersama HubMembership (Fase 9)** — login lewat checkbox "Terminal Center (Super Admin Platform)" (`X-Tenant-Id: platform` → mendarat `/terminal`); group admin lintas-tenant memakai tenant switcher di top bar
+- **Permissions hub member**: `owner` = `OWNER_PERMS`; `admin` = `MANAGER_PERMS + users:read + reports:read`; `viewer` = read-only (`reports/orders/products/customers/inventory/shifts/payments:read`) — dari `backend/src/core/platform/defaults/roles.ts: HUB_MEMBER_ROLE_PERMS`
 
 ---
 

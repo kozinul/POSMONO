@@ -998,6 +998,7 @@ Hub = grouping non-tenant di atas tenant (`hubId` di Tenant; null = standalone).
 | GET | `/api/platform/outlets` | platform | `platform.tenants.read` |
 | GET | `/api/platform/shifts/summary` | platform | `platform.reports.read` |
 | GET | `/api/platform/payments/summary` | platform | `platform.reports.read` |
+| GET | `/api/platform/hubs/:hubId/consolidated` | platform | `platform.reports.read` |
 
 **Query params:**
 
@@ -1005,8 +1006,37 @@ Hub = grouping non-tenant di atas tenant (`hubId` di Tenant; null = standalone).
 - `GET /api/platform/outlets?tenantId=&hubId=&isActive=true|false` → outlets lintas-tenant + `tenantName`
 - `GET /api/platform/shifts/summary?dateFrom=&dateTo=&hubId=&tenantId=` → per tenant + per outlet (jumlah shift, durasi, total)
 - `GET /api/platform/payments/summary?dateFrom=&dateTo=&hubId=&tenantId=` → total + breakdown metode pembayaran lintas-tenant
+- `GET /api/platform/hubs/:hubId/consolidated?dateFrom=&dateTo=` → **Hub Consolidated Report**: `{ hub, tenantCount, tenants[{ tenantId, tenantName, totals, outlets[{ outletId, outletName, shifts, payments }] }], totals }`
 
 Response shifts/payments summary menambahkan `tenantName` per tenant (dari `resolvePlatformScope.tenantNameById`).
+
+---
+
+## HubMembership (`/api/hub-memberships`)
+
+User lintas-tenant (Group Admin). Role: `owner` | `admin` | `viewer`; unique `{hubId, userId}`. Mutasi & list per hub hanya Platform Super Admin (`hub:manage`); `/me` & `/me/tenants` siapa pun terautentikasi.
+
+| Method | Path | Auth | Permission |
+|--------|------|------|------------|
+| POST | `/api/hub-memberships` | ✓ | `hub:manage` |
+| GET | `/api/hub-memberships/hub/:hubId` | ✓ | `hub:manage` (list + nama/email user) |
+| PUT | `/api/hub-memberships/:hubId/:userId` | ✓ | `hub:manage` (ganti role) |
+| DELETE | `/api/hub-memberships/:hubId/:userId` | ✓ | `hub:manage` |
+| GET | `/api/hub-memberships/me` | ✓ | — (membership milik user) |
+| GET | `/api/hub-memberships/me/tenants` | ✓ | — (tenant yang bisa diakses via membership) |
+
+**Body** POST: `{ hubId, userId, role }`; PUT: `{ role }`. Errors: 400 invalid role, 404 hub/user/membership tidak ada, 409 duplikat.
+
+---
+
+## Auth — Session Lintas-Tenant (`/api/auth`)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/auth/accessible-tenants` | ✓ | Tenant yang bisa diakses user via hub memberships `{ tenantId, tenantName, hubId, hubName, role }` |
+| POST | `/api/auth/switch-tenant` | ✓ | `{ tenantId }` → token access+refresh baru scope target; `role: 'hub-'+membershipRole`, permissions `HUB_MEMBER_ROLE_PERMS`, `outletIds: []`; 403 bila tidak tercakup membership |
+
+Permissions hub member: `owner` = full Owner; `admin` = Manager-level + `users:read` + `reports:read`; `viewer` = read-only (`reports/orders/products/customers/inventory/shifts/payments:read`).
 
 ---
 
@@ -1169,3 +1199,12 @@ id, tenantId, email, displayName, roleId, isActive, lastLoginAt, createdAt, upda
 | 107 | GET | `/api/platform/outlets` | platform `platform.tenants.read` |
 | 108 | GET | `/api/platform/shifts/summary` | platform `platform.reports.read` |
 | 109 | GET | `/api/platform/payments/summary` | platform `platform.reports.read` |
+| 110 | GET | `/api/platform/hubs/:hubId/consolidated` | platform `platform.reports.read` |
+| 111 | POST | `/api/hub-memberships` | ✓ `hub:manage` |
+| 112 | GET | `/api/hub-memberships/hub/:hubId` | ✓ `hub:manage` |
+| 113 | PUT | `/api/hub-memberships/:hubId/:userId` | ✓ `hub:manage` |
+| 114 | DELETE | `/api/hub-memberships/:hubId/:userId` | ✓ `hub:manage` |
+| 115 | GET | `/api/hub-memberships/me` | ✓ |
+| 116 | GET | `/api/hub-memberships/me/tenants` | ✓ |
+| 117 | GET | `/api/auth/accessible-tenants` | ✓ |
+| 118 | POST | `/api/auth/switch-tenant` | ✓ |

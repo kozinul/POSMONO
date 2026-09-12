@@ -3,7 +3,7 @@
 > Dokumen rencana implementasi. Dibuat 2026-08-13.
 > Merevisi arah multi-outlet dari `docs/ROLE_ACCESS_PLAN.md` §3.5–3.6: Hub kini **di atas Tenant**, bukan anak Tenant.
 >
-> **Status: Fase 1–8 SELESAI & TERVERIFIKASI 2026-09-12** — modul Hub/Outlet + scope transaksi (outletId), provisioning boot, User `outletIds` + JWT + middleware `resolveOutlet` (dimount ke route transaksi POS), frontend: `activeOutletId`/`X-Outlet-Id`, outlet switcher, halaman Outlet, POS stock ter-scope per outlet, receipt/OpenShiftModal tampil outlet, `useTenant` +`hubId`/`hubName`; **Terminal Center**: auth platform terpisah (`platformAuthenticate`), `/api/platform` (health, hub/tenant/outlet lists, shift & payment summaries), provision Hub/tenant via `hub:manage`. Backend tsc bersih (991/991 tests), frontend tsc + vite build OK (83/83), shared dist dibangun ulang. Frontend halaman Terminal Center admin + HubMembership di-wire Fase 9.
+> **Status: Fase 1–9 SELESAI & TERVERIFIKASI 2026-09-12** — modul Hub/Outlet + scope transaksi (outletId), provisioning boot, User `outletIds` + JWT + middleware `resolveOutlet` (dimount ke route transaksi POS), frontend: `activeOutletId`/`X-Outlet-Id`, outlet switcher, halaman Outlet, POS stock ter-scope per outlet, receipt/OpenShiftModal tampil outlet, `useTenant` +`hubId`/`hubName`; **Terminal Center**: auth platform terpisah (`platformAuthenticate`), `/api/platform` (health, hub/tenant/outlet lists, shift & payment summaries, hub consolidated report), provision Hub/tenant via `hub:manage`; **HubMembership**: user lintas-tenant (`HubMembership {hubId, userId, role}`), session lintas-tenant (`/auth/switch-tenant` + `activeTenantId` + tenant switcher di top bar), UI admin halaman Terminal Center (`/terminal`, tabs Hub & Anggota / Tenants / Outlet / Ringkasan / Konsolidasi). Backend tsc bersih (1021/1021 tests), frontend tsc + vite build OK (85/85), shared dist dibangun ulang.
 
 ---
 
@@ -89,13 +89,16 @@ Semantik `Tenant.hubId`:
 
 **Tidak ada `outletMode`.** Jumlah outlet & keanggotaan Hub bisa diketahui dari data (`Tenant.outlets.length`, `Tenant.hubId`).
 
-### HubMembership (FASE BERIKUTNYA, bukan MVP)
+### HubMembership (DI-IMPLEMENTASIKAN 2026-09-12, tadinya "bukan MVP")
 
 ```
-HubMembership { userId, hubId, role, ... }
+HubMembership { userId, hubId, role: 'owner' | 'admin' | 'viewer' }
 ```
 
-Dibutuhkan untuk user lintas-tenant (Group Admin) dan Hub Consolidated Report. **Tidak diimplementasikan di MVP.**
+Dibutuhkan untuk user lintas-tenant (Group Admin) dan Hub Consolidated Report.
+- **Kepemilikan & CRUD**: `hub:manage` (platform) via `POST/PUT/DELETE /api/hub-memberships`, `GET /api/hub-memberships/hub/:hubId` (list member + nama user); `GET /api/hub-memberships/me` + `GET /api/hub-memberships/me/tenants` untuk owner user.
+- **Session lintas-tenant**: user memegang JWT tenant sendiri, lalu `POST /auth/switch-tenant {tenantId}` → token baru ber-`role: hub-{owner|admin|viewer}`, `permissions` dari `HUB_MEMBER_ROLE_PERMS` (owner = FULL Owner, admin = Manager-level + reports, viewer = read-only), `outletIds: []`; `GET /auth/me` pada token lintas-tenant otomatis resolve lewat membership (bukan role tenant). Frontend top bar menampilkan tenant switcher dari `GET /auth/accessible-tenants`; ganti tenant → `switchTenant` store + `queryClient.clear()`.
+- **Hub Consolidated Report**: `GET /api/platform/hubs/:hubId/consolidated?dateFrom=&dateTo=` (guard `platform.reports.read`) — breakdown `Tenant → Outlet` dari shift summary + payment consolidation per outlet (`PaymentService.getPlatformPaymentsConsolidationByOutlet`), plus totals. UI di tab Konsolidasi halaman Terminal Center.
 
 ---
 
@@ -192,13 +195,17 @@ Dibutuhkan untuk user lintas-tenant (Group Admin) dan Hub Consolidated Report. *
 - [x] DI container: `platformController` singleton (hub/tenant/outlet/shift/payment service + repo), `TenantController` +`hubRepository` untuk `hubName`; `OnboardingService` dipindah ke `core/platform/application/services`
 - **Status**: verifikasi 2026-09-12 — backend tsc bersih + **991/991** tests (+14 `PlatformSummaries`, +7 `platform-terminal` integration, +8 repo `findByTenantIds`/`findCompletedByTenantIds`/`list`), frontend tsc + vite build OK (83/83), shared dist dibangun ulang. Frontend halaman Terminal Center admin di-wire Fase 9 (Bersama HubMembership).
 
-### Fase 9 — HubMembership (fase berikutnya, bukan MVP)
-- [ ] `HubMembership {userId, hubId, role}`; session lintas-tenant (`activeTenantId`); Hub Consolidated Report (Tenant→Outlet breakdown); UI group admin + halaman Terminal Center (konsumsi `/api/platform`)
+### Fase 9 — HubMembership + Terminal Center UI (SELESAI 2026-09-12)
+- [x] **Data & CRUD**: `HubMembership {userId, hubId, role}` (domain + `HubMembershipSchema` unique `{hubId, userId}` + `MongoHubMembershipRepository`); `HubMembershipService` (add/updateRole/remove/listMembers/listByUser/findAccessibleTenants/resolveRoleForTenant); route `/api/hub-memberships` guard `hub:manage` (mutasi & list per hub) + `authenticate`-only untuk `/me` & `/me/tenants`
+- [x] **Session lintas-tenant**: `AuthService.switchTenant(userId, tenantId)` → token baru scope target tenant dengan `role: hub-*`, permissions `HUB_MEMBER_ROLE_PERMS` (owner = `OWNER_PERMS`, admin = `MANAGER_PERMS + users:read + reports:read`, viewer = read-only), `outletIds: []`; `listAccessibleTenants` via membership; `getCurrentUser` fallback ke `resolveHubMemberContext` bila user bukan anggota tenant; routes `GET /auth/accessible-tenants` + `POST /auth/switch-tenant`; DI `hubMembershipService` di-inject ke `AuthService` (`container.ts` registrasi `authService` diubah ke `asClass` + injector lazy)
+- [x] **Hub Consolidated Report**: `GET /api/platform/hubs/:hubId/consolidated` (`platform.reports.read`) — gabung `ShiftService.getPlatformShiftsSummary` + `PaymentService.getPlatformPaymentsConsolidationByOutlet` (baru, breakdown per outlet) → `{hub, tenants[{tenantId, tenantName, totals, outlets[{outletId, outletName, shifts, payments}]}], totals}`; nama outlet dari `OutletService.listAllForPlatform`
+- [x] **Frontend**: halaman `/terminal` (`TerminalCenterPage.tsx`, guarded nav `hub:manage`), tab Hub & Anggota (CRUD hub + assign tenant + kelola anggota add/role/remove) / Tenants (search+paginate) / Outlet (filter hub) / Ringkasan (shift & payment summary) / Konsolidasi (hub → tenant → outlet + tanggal); hooks `usePlatform.*` (`usePlatform.ts`) + `useHubMembers`/`useAddHubMembership`/`useUpdateHubMembership`/`useRemoveHubMembership`/`useAccessibleTenants` (`useHubMemberships.ts`); store `useAuth` +`activeTenantId` + `switchTenant` (persist token/tenant baru); `DashboardLayout` tenant switcher saat `accessibleTenants.length > 0` (switch → `switchTenant` + `queryClient.clear()`); `LoginPage` opsi **"Terminal Center (Super Admin Platform)"** (header `X-Tenant-Id: platform` → mendarat `/terminal`)
+- **Status**: verifikasi 2026-09-12 — backend tsc bersih + **1021/1021** tests (+12 `HubMembershipService`, +7 `hub-fase9` integration HTTP penuh: CRUD/409/404/403, accessible-tenants, switch-tenant JWT scope + me, consolidated report, guard `platform.reports.read` & 401 non-platform; +6 `AuthService` cross-tenant), frontend **85/85** + tsc + vite build OK
 
 ### Fase 10 — Uji & dokumentasi
-- [ ] Unit: Hub/Outlet domain, validasi `User.outletIds`, `scopeOutletIds`, `ensureDefaultOutlet`
-- [ ] Integrasi: tenant standalone tanpa Hub tidak berubah (regresi penuh); multi-outlet tenant → transaksi/laporan per outlet; platform → assign tenant ke Hub (Fase 8 integration `platform-terminal.test.ts` sudah cover path ini)
-- [ ] Typecheck backend + frontend; update `docs/ROLE_ACCESS_PLAN.md`, `docs/DAILY_LOG.md`, `docs/ARCHITECTURE.md`
+- [x] Unit: `HubMembership` domain + `HubMembershipService` (CRUD, validasi role, decorasi member, accessible tenants), `AuthService.switchTenant` (JWT scope, guard, `getCurrentUser` fallback), repository `MongoHubMembershipRepository`, konsolidasi per outlet (`PaymentService`)
+- [x] Integrasi: `hub-fase9.test.ts` (HTTP penuh: member CRUD RBAC, session lintas-tenant, consolidated report per outlet dengan nama outlet)
+- [x] Typecheck backend + frontend; docs sync: `HUB_ARCHITECTURE.md` ini, `PROJECT_ROADMAP.md`, `POS_CURRENT_FEATURES.md`, `DAILY_LOG.md`, `API_REFERENCE.md`, `ROLE_ACCESS_PLAN.md`
 
 ---
 

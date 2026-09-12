@@ -73,6 +73,8 @@ Prinsip:
 ### 2.2 Seed role saat ini (`backend/src/seed.ts` / `core/platform/defaults/roles.ts`)
 
 > **Status 2026-09-12:** men-seed `Owner`, `Manager`, `Cashier` + **`Platform Super Admin`** (`tenantId: 'platform'`, `hub:manage`, `platform.*`). Role `Supervisor`/`Administrator`/`Waiter`/`Kitchen`/`Barista`/`Inventory` **belum** di-seed (9-role template tetap rencana).
+>
+> **Group Admin lintas-tenant (HubMembership, Fase 9 2026-09-12):** user lintas-tenant memakai `HubMembership {hubId, userId, role}` — BUKAN role tenant. Saat `switch-tenant`, token baru ber-`role: hub-{owner|admin|viewer}` dengan permission dari `HUB_MEMBER_ROLE_PERMS` (`core/platform/defaults/roles.ts`): **owner** = set Owner penuh, **admin** = Manager-level + `users:read` + `reports:read`, **viewer** = read-only (`reports/orders/products/customers/inventory/shifts/payments:read`). `outletIds: []` (semua outlet tenant target). Manajemen anggota via `/api/hub-memberships` (`hub:manage`, platform).
 
 ### 2.3 Outlet
 
@@ -86,12 +88,12 @@ Prinsip:
 
 > **Status 2026-09-12: sudah diimplementasikan** (Fase 7 Hub/Outlet).
 
-- **Auth store** (`frontend/src/@shared/hooks/useAuth.ts`) — `user = { id, email, displayName, roleName, roleId, permissions, outletIds }` + `activeOutletId` (persist `localStorage.activeOutletId`, auto-pick 1 outlet, cleared saat logout).
+- **Auth store** (`frontend/src/@shared/hooks/useAuth.ts`) — `user = { id, email, displayName, roleName, roleId, permissions, outletIds, tenantId }` + `activeOutletId` (persist `localStorage.activeOutletId`, auto-pick 1 outlet, cleared saat logout) + `activeTenantId` + `switchTenant()` (session lintas-tenant).
 - **Guard** (`ProtectedRoute`) — redirect non-`/pos` → `/pos` untuk kasir; `DashboardLayout` sidebar filter by permission.
 - API client kirim `X-Outlet-Id` (dari `activeOutletId`) + JWT.
-- **Router** (`frontend/src/app/router.tsx`) — 15 halaman, semuanya di bawah `ProtectedRoute` + `DashboardLayout`. Tidak ada guard per-route.
-- **Sidebar** (`frontend/src/layouts/DashboardLayout.tsx`) — array `navigation[]` **statis** untuk semua role (Dashboard, POS, Orders, Products, Families, Categories, Members, Promotions, Payment, Inventory, Gudang, Templates, Reports, Shifts, Settings).
-- **Login** (`frontend/src/core/auth/pages/LoginPage.tsx`) — simpan token + tenant di localStorage, `setUser(data.data.user)`.
+- **Router** (`frontend/src/app/router.tsx`) — 16 halaman, semuanya di bawah `ProtectedRoute` + `DashboardLayout`. Tidak ada guard per-route; `/terminal` (Terminal Center) di-filter nav `hub:manage`.
+- **Sidebar** (`frontend/src/layouts/DashboardLayout.tsx`) — array `navigation[]` **statis** untuk semua role (Dashboard, POS, Orders, Products, Families, Categories, Members, Promotions, Payment, Inventory, Gudang, Templates, Reports, Shifts, Settings, Terminal Center); **tenant switcher** muncul di top bar saat user punya hub membership lintas-tenant (`GET /auth/accessible-tenants`).
+- **Login** (`frontend/src/core/auth/pages/LoginPage.tsx`) — simpan token + tenant di localStorage, `setUser(data.data.user)`; checkbox **"Terminal Center (Super Admin Platform)"** → login dengan `X-Tenant-Id: platform` → mendarat `/terminal`.
 
 ---
 
