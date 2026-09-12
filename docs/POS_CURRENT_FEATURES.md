@@ -142,23 +142,29 @@ families.view, families.edit
 ## 4. Domain: Outlet
 
 ### Models
-- **Outlet** (`Outlet.ts`)
-  - `name` (string)
-  - `code` (string, unique)
-  - `status` ('active' | 'inactive')
+- **Outlet** (`Outlet.ts`, `core/outlet/`)
+  - `tenantId` (string, indexed)
+  - `name`, `code`
+  - `warehouseId` (string, **1:1 ke Warehouse Utama**)
+  - `isActive` (boolean)
+- **Warehouse** (`core/inventory/`) kini punya field `outletId` (1:1 balik ke Outlet)
+- **User `outletIds: string[]`** — `[]` = semua outlet tenant (owner/admin); kasir = 1 outlet; manager/supervisor ≥ 1
 
 ### API Endpoints
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| GET | `/api/outlets` | ❌ | List outlets |
-| GET | `/api/outlets/:id` | ❌ | Get outlet detail |
-| POST | `/api/outlets` | ✅ admin | Create outlet |
-| PUT | `/api/outlets/:id` | ✅ admin | Update outlet |
-| DELETE | `/api/outlets/:id` | ✅ admin | Delete outlet |
+| GET | `/api/outlets` | ✅ authenticate | List outlets (contoh untuk switcher) |
+| GET | `/api/outlets/:id` | ✅ authenticate | Get outlet detail |
+| POST | `/api/outlets` | ✅ `outlet:manage` | Create outlet + Warehouse terkait |
+| PUT | `/api/outlets/:id` | ✅ `outlet:manage` | Update outlet |
+| DELETE | `/api/outlets/:id` | ✅ `outlet:manage` | Delete outlet |
 
 ### Business Logic
-- Multi-outlet: produk, user, payment method, promosi, pajak bisa di-scoping per outlet
-- Outlet status active/inactive
+- Multi-outlet: Order/Payment/Shift/Warehouse/report punya `outletId`; `resolveOutlet` middleware memvalidasi header `X-Outlet-Id` ∈ `req.outletIds`
+- Frontend `activeOutletId` (persist `localStorage.activeOutletId`) dikirim sebagai `X-Outlet-Id`; outlet switcher di `DashboardLayout` bila user punya >1 outlet; ganti outlet → invalidate query scope
+- Halaman `/outlets` (`OutletListPage.tsx`, guarded `outlet:manage`)
+- Provisioning boot `provisionDefaults.ensureDefaultOutlet`: **Outlet Utama** + **Warehouse Utama** (`id: 'utama'`) + backfill order/payment/shift lama
+- Promosi/diskon/pajak/pricing masih scoped per tenant (bukan per outlet)
 
 ---
 
@@ -806,8 +812,8 @@ families.view, families.edit
 - Context API (auth state)
 
 ### Layout
-- **Sidebar** (280px width) — grouped navigation
-- **Header** — user info, logout
+- **Sidebar** (280px width) — grouped navigation (dinamis per role: kasir hanya melihat `/pos`)
+- **Header** — user info, logout, **outlet switcher** (muncul bila user punya >1 outlet; memilih `activeOutletId`, ganti outlet → invalidate `inventory/products/orders/shifts/daily-report/sales-report/best-sellers`)
 - **Content** — `<Outlet />` (nested routes)
 
 ### Halaman (20 pages)
@@ -824,7 +830,7 @@ families.view, families.edit
 | 8 | Rounding Config | `/rounding-config` | Pengaturan pembulatan |
 | 9 | Payment Methods | `/payment-methods` | CRUD metode pembayaran |
 | 10 | Modifiers | `/modifiers` | CRUD modifier produk |
-| 11 | Outlets | `/outlets` | CRUD outlet |
+| 11 | Outlets | `/outlets` | CRUD outlet (+ Warehouse terkait), guarded `outlet:manage` |
 | 12 | Roles | `/roles` | CRUD role + permissions |
 | 13 | Users | `/users` | CRUD user, assign role & outlets |
 | 14 | Orders | `/orders` | List transaksi, detail, filter |
@@ -1142,6 +1148,56 @@ export type CreateOrderInput = {
 
 ---
 
+## 23. Domain: Hub (Grouping Lintas-Tenant)
+
+> Rencana lengkap: `docs/HUB_ARCHITECTURE.md` (Fase 1–8 selesai, Fase 9 HubMembership berikutnya).
+
+### Models
+- **Hub** (`Hub.ts`, `core/hub/`) — `{ name, description?, createdAt, updatedAt }` (tanpa `tenantId`; murni grouping)
+- **Tenant** kini punya `hubId: string | null` (null = standalone)
+- **User `outletIds`** juga disimpan — outlet scope per user (JWT + request)
+
+### API Endpoints (`/api/hubs`, permission `hub:manage` — dimiliki Platform Super Admin & Owner)
+| Method | Endpoint | Auth |
+|--------|----------|------|
+| GET | `/api/hubs` | ✅ `hub:manage` |
+| GET | `/api/hubs/:id` | ✅ `hub:manage` |
+| POST | `/api/hubs` | ✅ `hub:manage` |
+| PUT | `/api/hubs/:id` | ✅ `hub:manage` |
+| DELETE | `/api/hubs/:id` | ✅ `hub:manage` |
+| POST | `/api/hubs/:hubId/tenants/:tenantId` | ✅ `hub:manage` (assign) |
+| DELETE | `/api/hubs/:hubId/tenants/:tenantId` | ✅ `hub:manage` (unassign) |
+| GET | `/api/hubs/:hubId/tenants` | ✅ `hub:manage` |
+
+### Business Logic
+- Hub **tidak menyentuh Order/Payment/Shift** — `tenantId` = legal boundary, `outletId` = operational boundary, `hubId` = grouping saja
+- Assign tenant = set `tenant.hubId` (tenant masih punya data bisnisnya sendiri)
+
+---
+
+## 24. Domain: Terminal Center (Platform Layer `/api/platform`)
+
+> Auth terpisah (`platformAuthenticate`): token dengan klaim `tenant: 'platform'`. Login super-admin: `POST /api/auth/login` + header `X-Tenant-Id: platform` → `platform@demo.com` / `admin123` (seeded dev & prod, idempotent). Token tenant biasa → **401** di semua route platform.
+
+### API Endpoints
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/api/platform/health` | platform | Diagnostik `{status:'ok', timestamp}` |
+| GET | `/api/platform/hubs` | `hub:manage` | List semua Hub |
+| GET | `/api/platform/hubs/:hubId` | `hub:manage` | Detail Hub + `tenants[]` + `tenantCount` |
+| GET | `/api/platform/tenants` | `platform.tenants.read` | List tenant paginated + filter `hubId`/`search` |
+| GET | `/api/platform/tenants/:tenantId` | `platform.tenants.read` | Detail tenant + `hubName` |
+| GET | `/api/platform/outlets` | `platform.tenants.read` | Outlet lintas-tenant + `tenantName`; filter `tenantId`/`hubId`/`isActive` |
+| GET | `/api/platform/shifts/summary` | `platform.reports.read` | Summary shift per tenant + per outlet (`dateFrom`/`dateTo`/`hubId`/`tenantId`) |
+| GET | `/api/platform/payments/summary` | `platform.reports.read` | Total pembayaran + breakdown metode lintas-tenant |
+
+### Business Logic
+- `resolvePlatformScope`: `tenantId` → 1 tenant; `hubId` → semua tenant anggota hub; kosong → semua tenant
+- `ShiftService.getPlatformShiftsSummary` + `MongoShiftRepository.findByTenantIds`; `PaymentService.getPlatformPaymentsSummary` + `MongoPaymentRepository.findCompletedByTenantIds`; `TenantService.list` + `MongoTenantRepository.list`
+- Frontend halaman admin Terminal Center **belum di-wire** — dikonsumsi bersama HubMembership (Fase 9)
+
+---
+
 ## Seed Data Default
 
 | Data | Isi |
@@ -1171,8 +1227,10 @@ export type CreateOrderInput = {
 - Permission check via `roleRef.permissions`
 
 ### Multi-Tenancy
-- Multi-outlet support
-- Products, users, payment methods, promotions, taxes can be outlet-scoped
+- Hierarki: **Hub (optional, grouping) → Tenant (legal) → Outlet (operasional) → Warehouse**
+- `tenantId` = isolation boundary (repository selalu tenant-scoped); `outletId` = operational boundary (di Order/Payment/Shift/Warehouse + laporan); `hubId` = murni grouping, tidak ada data bisnis
+- Header `X-Outlet-Id` (dari `activeOutletId`) divalidasi `resolveOutlet` terhadap `req.outletIds`; `[]` = semua outlet tenant
+- Tenant standalone otomatis punya Outlet Utama + Warehouse Utama (tanpa header)
 
 ### Infrastructure
 - Docker Compose: 4 services (api, cashier, dashboard, mongodb)

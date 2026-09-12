@@ -963,6 +963,16 @@ interface DomainEvent {
 
 - **Module activation:** Each tenant has a `modules.enabled` field in their config (e.g., `["restaurant", "retail"]`). The module loader checks this before registering routes/event handlers.
 
+- **Hub → Tenant → Outlet → Warehouse (implemented 2026-09-12, lihat `docs/HUB_ARCHITECTURE.md`):**
+  - `tenantId` = **legal** isolation boundary (semua repository tenant-scoped)
+  - `outletId` = **operational** boundary (Order/Payment/Shift/Warehouse + laporan punya field ini; header `X-Outlet-Id` divalidasi middleware `resolveOutlet` terhadap `req.outletIds`)
+  - `hubId` = murni **grouping** lintas-tenant (tidak mengandung data bisnis; `Tenant.hubId: null` = standalone)
+  - `User.outletIds: string[]` — `[]` = semua outlet tenant; di-embed ke JWT; perubahan require re-login
+  - Provisioning boot `ensureDefaultOutlet`: tiap tenant otomatis mendapat Outlet Utama + Warehouse Utama + backfill data lama
+  - Modul baru: `core/hub/` (CRUD + assign tenant, permission `hub:manage`), `core/outlet/` (CRUD + Warehouse 1:1, permission `outlet:manage`)
+
+- **Platform layer / Terminal Center (`core/platform/`):** lapisan super-admin lintas-tenant yang **terpisah dari auth tenant biasa**. Login `POST /api/auth/login` dengan header `X-Tenant-Id: platform` (seeded `platform@demo.com`/`admin123`) menghasilkan token JWT berklaim `tenant: 'platform'`; middleware `platformAuthenticate`/`platformAuthorize` mewajibkan klaim tersebut (token tenant biasa → 401). Route grup `/api/platform` (health, hub/tenant/outlet listing lintas-tenant, shift & payment summary) di-mount terpisah dari `/api/*` tenant. Scope query (`tenantId`/`hubId`) di-resolve oleh `resolvePlatformScope`.
+
 ---
 
 ## 8. Module System

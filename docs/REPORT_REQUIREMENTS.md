@@ -36,7 +36,7 @@ Endpoint yang tersedia di `report.routes.ts`:
 - `hooks/useSalesPerProductReport.ts`, `useOrders.ts` (`useDashboardSummary`, `useDailyReport`, `useSalesReport`)
 - Router: `/reports`, `/reports/sales-per-product` (di `src/app/router.tsx`)
 - **Belum ada** UI cashier-performance (`/reports/cashier`). UI shift-close report sudah ada di halaman Shift (`ShiftPage`).
-- Role user: `admin` | `cashier`. Satu-satunya permission yang terdaftar di seed/dev adalah `reports:read` — **belum ada** `reports.export`/`reports.dashboard.customize`/`platform.reports.read`, dan semua route report hanya pakai middleware `authenticate` (belum ada enforcement `authorize`/permission).
+- Role user: `admin` | `cashier`. Permission utama yang terdaftar di seed/dev: **`reports:read`** (Owner/Manager — semua route report `/reports/*` kini enforced via `authorize('reports:read')`; kasir tetap dapat `GET /reports/shift` + `GET /reports/best-sellers` untuk POS). Permission **platform** untuk Terminal Center (`platform.tenants.read`, `platform.reports.read`, `platform.reports` dashboard, dll.) terdaftar di `core/platform/defaults/roles.ts` — dipakai oleh route `/api/platform/*` via `platformAuthorize`. Tidak ada `reports.export`/`reports.dashboard.customize` sebagai permission terpisah — guard laporan memakai `reports:read` saja.
 
 ### Data pendukung
 
@@ -68,13 +68,13 @@ Fokus: **analitik**, **akuntansi**, **tren**, **evaluasi performa**.
 | # | Kebutuhan | Sumber / aksi | Gap |
 |---|-----------|---------------|-----|
 | M1 | **Sales report (rentang tanggal)** | `/reports/sales`, `getSalesByCategoryAggregation`, `getTopProductsAggregation`, `orders[]` | Sudah ada |
-| M2 | **Finance report (nett, pajak, SC, diskon)** | Docs sebut `/reports/finance` | Endpoint belum ada; butuh pemisahan `discount`, `tax`, `serviceCharge` per order |
+| M2 | **Finance report (nett, pajak, SC, diskon)** | `getFinanceAggregation` → `/reports/finance` | Sudah ada (2026-08-06); `discount`: `$max[discount, discountTotal]` anti-dobel |
 | M3 | **Cashier performance** (per kasir: order, revenue, avg) | `getCashierPerformanceAggregation` → `/reports/cashier` | API ada, UI belum |
 | M4 | **Sales per product** | `getSalesPerProductAggregation` → `/reports/sales-per-product` | Sudah ada |
 | M5 | **Dashboard summary** | `/reports/dashboard` + `useDashboardSummary` (todayRevenue, todayOrders, pendingOrders, lowStockCount, recentOrders, refetch 30s) | Sudah ada |
 | M6 | **Daily metrics (historis)** | `DailyMetric` + `generateDailyMetric` / `daily-metrics` | Generate belum otomatis (perlu cron/penjadwalan) |
-| M7 | **Export data mentah** | permission `reports.export` | Belum ada endpoint export |
-| M8 | **Multi-outlet** | docs: `/api/reports/sales?...&outlet=` | Perlu filter `outletId` di aggregation jika multi-outlet |
+| M7 | **Export data mentah** | permission `reports.export` | **Sudah ada** — tiap laporan punya `/export?format=pdf|xlsx` (guard `reports:read`); tidak ada permission terpisah `reports.export` |
+| M8 | **Multi-outlet** | docs: `/api/reports/sales?...&outlet=` | **Sudah ada (2026-09-12)** — aggregation & laporan terima filter `outletId` opsional |
 
 ---
 
@@ -136,6 +136,7 @@ Status jawaban berdasarkan kondisi kode (2026-08-06):
 | M5 Dashboard summary | ✅ |
 | M6 Daily metrics otomatis | ⏳ — generate masih manual (POST `/reports/daily-metrics/generate`); belum ada cron |
 | M7 Export data mentah | ⏳ — belum ada endpoint export |
-| M8 Multi-outlet | ⏳ — belum ada entitas outlet |
+| M7 Export data mentah | ⏳ — belum ada endpoint export |
+| M8 Multi-outlet | ✅ **Terimplementasi (2026-08-30/09-12)** — modul Outlet + `outletId` di Order/Payment/Shift/Warehouse; laporan daily/sales/finance/shift terima filter `outletId` opsional; konsolidasi lintas-tenant via `/api/platform/*` (Terminal Center, `platform.reports.read`) |
 
-*Dokumen ini belum diimplementasikan — untuk dipakai saat tasking fitur report.*
+*Status dokumen: sebagian besar item sudah diimplementasikan (terverifikasi 2026-08-30 & 2026-09-12) — tabel pemetaan ini dipakai sebagai checklist; item ⏳ menandakan yang benar-benar tersisa.*

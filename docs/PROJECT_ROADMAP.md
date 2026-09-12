@@ -190,6 +190,31 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 
 ---
 
+### PHASE G2 — Hub & Outlet Architecture `[~]`
+
+> Rencana lengkap: `docs/HUB_ARCHITECTURE.md`. Hierarki: **Hub (optional) → Tenant → Outlet → Warehouse**; `tenantId` = legal boundary, `outletId` = operational, `hubId` = grouping (tanpa data bisnis).
+
+| Task | Status |
+|------|--------|
+| Shared types hub/outlet + permission `outlet:manage`/`hub:manage` | `[x]` |
+| Modul Hub (domain/schema/repo/service/controller) + assign tenant | `[x]` |
+| Modul Outlet (domain/schema/repo/service/controller, 1:1 → Warehouse) | `[x]` |
+| Scope transaksi: `outletId` di Order/Payment/Shift/Warehouse/laporan | `[x]` |
+| Provisioning boot: Outlet Utama + Warehouse Utama + backfill `outletId: null` | `[x]` |
+| User `outletIds[]` + validasi per-role + JWT + middleware `resolveOutlet`/`scopeOutletIds` | `[x]` |
+| Frontend: `activeOutletId` + `X-Outlet-Id`, outlet switcher, halaman `/outlets`, POS per-outlet, receipt/OpenShiftModal nama outlet | `[x]` |
+| Role Platform Super Admin + seed `platform@demo.com` | `[x]` |
+| Terminal Center backend: `/api/platform` (health, hubs/tenants/outlets, shift & payment summaries), `platformAuthenticate`/`platformAuthorize` | `[x]` |
+| Terminal Center frontend (halaman admin + HubMembership) | `[ ]` (Fase 9) |
+| `req.outletId` dibaca service (dari `X-Outlet-Id`/resolveOutlet, bukan body/default shift) | `[ ]` (Fase 8/9) |
+| HubMembership `{userId, hubId, role}` + session lintas-tenant (`activeTenantId`) | `[ ]` (Fase 9) |
+| Hub Consolidated Report (Tenant→Outlet breakdown) | `[ ]` (Fase 9) |
+| Uji Fase 10: unit/regresi tenant standalone + sync ROLE_ACCESS_PLAN/ARCHITECTURE | `[ ]` |
+
+**Completion:** ~90% (Fase 1–8 selesai & terverifikasi 2026-09-12; Fase 9 HubMembership + Terminal Center frontend berikutnya)
+
+---
+
 ### PHASE H — MVP Deployment `[~]`
 
 | Task | Status |
@@ -319,6 +344,8 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | Shift management (open/close register) | `[x]` |
 | Dashboard (summary cards + recent orders) | `[x]` |
 | Settings page | `[x]` |
+| Hub & Outlet architecture (multi-outlet, outlet switcher, `/outlets`) | `[x]` |
+| Terminal Center backend (`/api/platform` + Platform Super Admin) | `[x]` |
 | Bug fixing & polish | `[x]` |
 | **MVP Ready** | **`[ ]`** |
 
@@ -546,7 +573,9 @@ Architecture changes, tech swaps, pricing — never decide the same day. Sleep o
 
 ---
 
-*Last updated: 2026-08-30*
+*Last updated: 2026-09-12*
 *Updated daily during development.*
 
 > **2026-08-28 — Sinkronisasi status dengan kode aktual.** Entri fase D/E/F, daftar fitur, blocker, dan arsitektur diperbarui agar sesuai implementasi nyata (split bill, hold/close-bill, QRIS gateway, printer terintegrasi, cash rounding, laporan per-kasir, export). Checklist lama ditandai `[x]` yang sebelumnya `[ ]` sudah tervalidasi di AGENTS.md. Estimasi kelengkapan MVP: ±80% (fungsional ±90–95%, selisihnya = deployment live + pilot tenant + E2E manual).
+>
+> **2026-09-12 — Hub & Outlet Architecture (Fase 1–8) selesai.** Modul Hub/Outlet, scope transaksi `outletId`, provisioning boot, User `outletIds` + JWT + `resolveOutlet`, frontend outlet switcher/`activeOutletId`, dan **Terminal Center** (`/api/platform` + super-admin `platform@demo.com`, auth platform terpisah) terverifikasi — backend **991/991** (82 files), frontend **83/83** + tsc + vite build bersih. Sisa: Fase 9 HubMembership + halaman admin Terminal Center frontend + `req.outletId` dibaca service, lalu MVP deployment (VPS/SSL/monitoring/backup) menunggu akses VPS.

@@ -1,6 +1,8 @@
 # PLAN — Role-Based Access & Outlet Scoping (RBAC)
 
-> Dokumen rencana (belum diimplementasikan). Dibuat 2026-08-05, direvisi 2026-08-06.
+> **Status: TERVERIFIKASI 2026-09-12.** Bagian §2 (recon) & §3 (desain) = WHAT-WAS dan rencana; bagian §5 (fase) ditandai `[x]` per item yang sudah diimplementasikan.
+> Diimplementasikan: RBAC JWT permission (`authenticate` isi `req.userPermissions` dari token, `authorize()` aktif), redirect kasir → `/pos` + filter sidebar, guard route per permission, modul Outlet + `User.outletIds` + `resolveOutlet` (`X-Outlet-Id`), frontend outlet switcher/`activeOutletId`, laporan per-outlet. **Keterbatasan aktif**: 9-role template belum (baru `Owner`/`Manager`/`Cashier` + `Platform Super Admin`), KDS/drink-queue tidak ada, device/integration permission belum dibuat, limit nominal (approval by amount) deferred.
+> Dokumen dibuat 2026-08-05, direvisi 2026-08-06; impl. bertahap 2026-08-08 s/d 2026-09-12. Detail terkini: `docs/HUB_ARCHITECTURE.md`.
 > Melengkapi `docs/VOID_APPROVAL_PLAN.md` (void approval) — keputusan "fix `authorize()`/JWT roleName" di dokumen itu menjadi fondasi dokumen ini.
 
 ---
@@ -55,33 +57,38 @@ Prinsip:
 ## 2. Fakta Arsitektur Saat Ini (hasil recon)
 
 ### 2.1 Identity & Auth (backend)
-- **User** (`backend/src/core/identity/domain/User.ts`) — punya `tenantId`, `roleId` (referensi ke `Role`). **Belum ada field `outletIds`/`outletId`.**
-- **Role** (`backend/src/core/identity/domain/Role.ts`) — RBAC berbasis **permissions**: `{ name, description, permissions: string[], isSystem }`. Ada kunci `isSystem` (role sistem tidak bisa diubah/dihapus).
-- **JWT** (`backend/src/core/identity/infrastructure/auth/JwtStrategy.ts`) — payload `{ sub, tenant, role }`; **`role` = roleId**, bukan role name.
-- **Login** (`AuthController.login`) — mengembalikan `user.role = roleId` (bukan name) dan tidak ada `permissions`/`outletIds`.
-- **Middleware**:
-  - `authenticate` (`backend/src/@shared/interfaces/middleware/authenticate.ts`) — verifikasi JWT, isi `req.userId`, `req.tenantId`, `req.userRole`, dan **`req.userPermissions = []` (hardcode, TODO)**.
-  - `authorize(...permissions)` (`backend/src/@shared/interfaces/middleware/authorize.ts`) — cek `req.userPermissions`, **tapi karena di-set `[]`, middleware ini efektif tidak berfungsi.**
-  - `tenantContext` (`backend/src/@shared/interfaces/middleware/tenantContext.ts`) — ambil tenant dari header `x-tenant-id` / query / `req.user.tenantId`; fallback `dev-tenant` di development.
-- **Route**: SEMUA route hanya `authenticate` — **`authorize` tidak dipakai di file route mana pun** (konfirmasi: satu-satunya pemakaian adalah definisi middleware). Contoh: `promotion.routes.ts`, `role.routes.ts`, `order.routes.ts` (`/:id/void`, `/:id/void-item`, `/:id/void-payment`).
 
-### 2.2 Seed role saat ini (`backend/src/seed.ts`)
-- Men-seed **3 role sistem** (`isSystem: true`): `Owner`, `Manager`, `Cashier` (line 59–110).
-- Format permission: `resource:action` (mis. `orders:cancel`, `settings:write`, `reports:read`).
-- **Belum ada** role `Supervisor`/`Administrator`/`Waiter`/`Kitchen`/`Barista`/`Inventory`.
-- Role puncak bernama `Owner` (bukan `admin`) — menjadi dasar resolusi konflik penamaan di §4.
+> **Status 2026-09-12: sudah diimplementasikan.** Rekam jejak dibawah ini adalah kondisi saat dokumen dibuat (2026-08-05/06).
+
+- **User** (`backend/src/core/identity/domain/User.ts`) — punya `tenantId`, `roleId`, **`outletIds: string[]`** (`[]` = semua outlet tenant).
+- **Role** (`backend/src/core/identity/domain/Role.ts`) — RBAC berbasis **permissions**: `{ name, description, permissions: string[], isSystem }`.
+- **JWT** — payload kini memuat `roleName`, `permissions`, `outletIds` (access + refresh).
+- **Login/me** — mengembalikan `{ id, email, displayName, roleName, roleId, permissions, outletIds }`.
+- **Middleware**:
+  - `authenticate` — verifikasi JWT, isi `req.userId`, `req.tenantId`, `req.userRole`, `req.userPermissions` (dari token, bukan `[]`), `req.outletIds`.
+  - `authorize(...permissions)` — aktif (403 bila kurang permission); di-mount ke route user/role/settings/reports/produk/inventory/hub/outlet/platform.
+  - `resolveOutlet` + `scopeOutletIds(req)` — validasi header `X-Outlet-Id` ∈ `req.outletIds`; `[]`/tanpa header tetap jalan (`HUB_ARCHITECTURE.md` Fase 7).
+- **Route**: route transaksi POS (payment/order/shift) kini pakai `resolveOutlet`; route protected lain pakai `authorize(...)`.
+
+### 2.2 Seed role saat ini (`backend/src/seed.ts` / `core/platform/defaults/roles.ts`)
+
+> **Status 2026-09-12:** men-seed `Owner`, `Manager`, `Cashier` + **`Platform Super Admin`** (`tenantId: 'platform'`, `hub:manage`, `platform.*`). Role `Supervisor`/`Administrator`/`Waiter`/`Kitchen`/`Barista`/`Inventory` **belum** di-seed (9-role template tetap rencana).
 
 ### 2.3 Outlet
-- **BELUM ADA model Outlet** (entity/schema/CRUD).
-- Kata `outlet` hanya muncul sebagai **dimensi scope** di:
-  - `backend/src/core/discount/domain/DiscountScope.ts` (`type: 'outlet'`, `outletId?`)
-  - `backend/src/core/tax/domain/TaxScope.ts` (`forOutlet(outletId, outletName)`)
-- Tidak ada `outletId` di `User`, `Order`, `Shift`, `Product`, `Promotion`, `Member`.
-- `Tenant` (`backend/src/core/tenant/domain/Tenant.ts`) = 1 bisnis (ownerId, config, modules, businessType). Tenancy saat ini adalah **1 tenant = 1 bisnis**.
+
+> **Status 2026-09-12: modul Outlet sudah ada** (`core/outlet/`), lengkap dengan domain/schema/repo/service/controller/routes. Hierarki penuh: Hub (optional) → Tenant → Outlet → Warehouse (`docs/HUB_ARCHITECTURE.md`).
+
+- Model **Outlet** (entity/schema/CRUD) — `{ tenantId, name, code, warehouseId, isActive }`, 1:1 ke Warehouse; CRUD via `/api/outlets` guarded `outlet:manage`; halaman `/outlets`.
+- **`outletId`** kini ada di `Order`, `Payment`, `Shift`, `Warehouse` (+ laporan). Produk/Promosi/Member **tetap tenant-level**. `Tenant.hubId` opsional (null = standalone).
+- Default: tiap tenant otomatis punya **Outlet Utama** + **Warehouse Utama** (`provisionDefaults.ensureDefaultOutlet`) + backfill data lama (`outletId: null` → utama).
 
 ### 2.4 Frontend
-- **Auth store** (`frontend/src/@shared/hooks/useAuth.ts`) — `user = { id, email, displayName, role }`; `role` = roleId (belum di-resolve ke name/permissions). Tidak ada `outletIds`.
-- **Guard** (`frontend/src/@shared/components/ProtectedRoute.tsx`) — hanya cek `isAuthenticated` (ada token). Tidak ada cek role/outlet.
+
+> **Status 2026-09-12: sudah diimplementasikan** (Fase 7 Hub/Outlet).
+
+- **Auth store** (`frontend/src/@shared/hooks/useAuth.ts`) — `user = { id, email, displayName, roleName, roleId, permissions, outletIds }` + `activeOutletId` (persist `localStorage.activeOutletId`, auto-pick 1 outlet, cleared saat logout).
+- **Guard** (`ProtectedRoute`) — redirect non-`/pos` → `/pos` untuk kasir; `DashboardLayout` sidebar filter by permission.
+- API client kirim `X-Outlet-Id` (dari `activeOutletId`) + JWT.
 - **Router** (`frontend/src/app/router.tsx`) — 15 halaman, semuanya di bawah `ProtectedRoute` + `DashboardLayout`. Tidak ada guard per-route.
 - **Sidebar** (`frontend/src/layouts/DashboardLayout.tsx`) — array `navigation[]` **statis** untuk semua role (Dashboard, POS, Orders, Products, Families, Categories, Members, Promotions, Payment, Inventory, Gudang, Templates, Reports, Shifts, Settings).
 - **Login** (`frontend/src/core/auth/pages/LoginPage.tsx`) — simpan token + tenant di localStorage, `setUser(data.data.user)`.
@@ -224,52 +231,52 @@ Rincian (hanya permission; aturan approval mengikuti policy terpisah):
 ## 5. Urutan Implementasi (fase)
 
 ### Fase 0 — Fondasi Identity (unblock semua)
-- [ ] Perbaiki `authenticate` + `tenantContext`: load user+role dari DB; isi `req.userRole` (name), `req.userPermissions`, `req.outletIds`. Tambahkan deklarasi `Express.Request` yang lengkap.
-- [ ] Aktifkan `authorize(...permissions)` (403 saat kurang permission).
-- [ ] Ubah login/me: kembalikan `roleName`, `permissions`, `outletIds`.
-- [ ] **Seed 9 role template** `isSystem`: `owner` (rename dari `Owner`), `administrator`, `manager`, `supervisor`, `cashier`, `waiter`, `kitchen`, `barista`, `inventory-staff` — dengan permission default per §3.1.
-- [ ] Update `frontend/useAuth` + guard + sidebar + API client (header outlet).
-- [ ] Tes: unit (auth/authorize) + integrasi login.
+- [x] Perbaiki `authenticate` + `tenantContext`: load user+role dari DB; isi `req.userRole` (name), `req.userPermissions`, `req.outletIds`. Tambahkan deklarasi `Express.Request` yang lengkap. *(2026-08-08: permissions di-embed ke JWT; `authenticate` isi dari token)*
+- [x] Aktifkan `authorize(...permissions)` (403 saat kurang permission).
+- [x] Ubah login/me: kembalikan `roleName`, `permissions`, `outletIds`.
+- [~] **Seed 9 role template** `isSystem` — **SELESAI SEBAGIAN**: `owner`, `manager`, `cashier` + `Platform Super Admin`; `administrator`, `supervisor`, `waiter`, `kitchen`, `barista`, `inventory-staff` **belum**.
+- [x] Update `frontend/useAuth` + guard + sidebar + API client (header outlet).
+- [x] Tes: unit (auth/authorize) + integrasi login.
 
 ### Fase 1 — Outlet
-- [ ] Modul `outlet` (domain, schema, repository, service, controller, routes) — CRUD owner/administrator.
-- [ ] Tambah `outletIds` di `User` (validasi: cashier = 1; lainnya ≥ 1; owner/administrator = semua).
-- [ ] Seed outlet default + backfill data lama.
-- [ ] Tambah `outletId` di agregat Order/Shift/Product/Promotion/Member + set saat create.
-- [ ] Helper scoping `scopeOutletIds(req)` + terapkan di query.
+- [x] Modul `outlet` (domain, schema, repository, service, controller, routes) — CRUD guarded `outlet:manage`.
+- [x] Tambah `outletIds` di `User` (validasi: cashier = 1; lainnya ≥ 1; owner/administrator = semua).
+- [x] Seed outlet default + backfill data lama (`ensureDefaultOutlet`: Outlet Utama + Warehouse Utama + backfill `outletId: null`).
+- [~] Tambah `outletId` di agregat Order/Shift/Payment/Warehouse + laporan ✅; **Product/Promotion/Member belum** (tetap tenant-level).
+- [x] Helper scoping `scopeOutletIds(req)` + `resolveOutlet` middleware.
 
 ### Fase 2 — Guard backend per route
-- [ ] Promotion: mutasi butuh `promotion:create`.
-- [ ] Void/refund: guard permission `order:void`/`payment:void`; Approval Policy terpisah (integrasi `VOID_APPROVAL_PLAN.md`).
-- [ ] Settings: Business (owner/manager) vs System (`system:settings` owner/administrator).
-- [ ] User/Role management: `user:manage`/`role:manage` (owner/administrator).
-- [ ] Device/Integrasi (baru): `device:manage`/`integration:manage` (owner/administrator).
-- [ ] Product/Family/Category/Inventory/Payment-method/Template/Member: guard mutasi + scoping GET.
-- [ ] KDS/drink-queue: `kds:view`/`kds:status`, `drink-queue:view`/`drink-queue:status`.
-- [ ] Reports & Shifts: scoping per outlet.
+- [x] Promotion, produk/kategori/family: mutasi butuh `products:write`. *(promotions: semua mutasi → `products:write`)*
+- [x] Void/refund: `order:void` gating + Approval Policy terpisah (`VOID_APPROVAL_PLAN.md`).
+- [x] Settings: `settings:read`/`settings:write`.
+- [x] User/Role management: `users:read`/`users:write`, `roles:read`/`roles:write`.
+- [ ] Device/Integrasi (baru): `device:manage`/`integration:manage` — **belum dibuat** (tidak ada modul device/integration).
+- [x] Product/Family/Category/Inventory/Payment-method/Template/Member: guard mutasi (`products:write`/`inventory:write`) + scoping GET (tetap tenant-wide, bukan per-outlet).
+- [ ] KDS/drink-queue: `kds:view`/`kds:status`, `drink-queue:view`/`drink-queue:status` — **belum ada** (KDS bukan MVP).
+- [x] Reports & Shifts: `reports:read` di route report; `GET /reports/shift`, `GET /reports/best-sellers` tetap terbuka untuk kasir; laporan per-outlet (filter `outletId`).
 
 ### Fase 3 — Frontend
-- [ ] `RoleRoute`/permission guard di router.
-- [ ] Sidebar dinamis + outlet switcher.
-- [ ] Sembunyikan aksi per role + halaman 403.
+- [x] `RoleRoute`/permission guard di router. *(redirect kasir → `/pos`; sidebar admin filtered)*
+- [x] Sidebar dinamis + outlet switcher (`DashboardLayout` + `activeOutletId`).
+- [~] Sembunyikan aksi per role + halaman 403. *(guard route per-permission ada; UI 403 khusus belum)*
 - [ ] POS: gating tombol aksi per permission; layar KDS/drink-queue terpisah untuk kitchen/barista.
-- [ ] Laporan per outlet + konsolidasi owner.
+- [x] Laporan per outlet + konsolidasi owner. *(report filter `outletId` opsional; konsolidasi lintas-tenant via `/api/platform` Terminal Center)*
 
 > **Fokus awal**: redirect kasir langsung ke POS + filter sidebar role-aware — lihat `docs/POS_REDIRECT_PLAN.md` (2026-08-07).
 
 ### Fase 4 — Uji & dokumentasi
-- [ ] Unit test (guard/scope/outlet), integrasi (login→route per role).
+- [x] Unit test (guard/scope/outlet), integrasi (login→route per role). *(backend 991/991; `platform-terminal.test.ts`, `useAuth.test.ts` outlet)*
 - [ ] **Test permission matrix** — pastikan daftar permission eksplisit per role tidak drift (regresi saat permission baru ditambahkan).
-- [ ] Update `docs/POS_CURRENT_FEATURES.md`, `docs/DAILY_LOG.md`, `docs/REPORT_REQUIREMENTS.md`.
+- [x] Update `docs/POS_CURRENT_FEATURES.md`, `docs/DAILY_LOG.md`, `docs/REPORT_REQUIREMENTS.md`. *(DAILY_LOG sinkron 2026-09-12; sisanya di-sync bersama commit docs ini)*
 
 ---
 
 ## 6. Risiko & Catatan
 
-- **`authorize` saat ini mati** — memperbaikinya (Fase 0) akan **langsung memblokir** endpoint yang mulai diberi guard; pastikan guard per route ditegakkan bertahap agar tidak "jebol" di tengah.
+- **`authorize` kini aktif** (Fase 0 selesai 2026-08-08) — pastikan guard per route ditegakkan bertahap & setiap permission template baru di-review; risiko yang tersisa adalah **drift** jika permission baru ditambahkan tanpa update role template.
 - **Drift permission antar role** — karena tiap role berdaftar eksplisit, perubahan permission template perlu ditinjau per-role; mitigasi dengan test permission matrix (Fase 4).
-- **Scoping penuh ke semua agregat besar** — MVP hanya 5 agregat utama; resource lain (mis. template, settings) di-scope secara org-wide atau owner/administrator-only.
+- **Scoping penuh ke semua agregat besar** — saat ini Order/Payment/Shift/Warehouse + laporan sudah `outletId`; Product/Promotion/Member tetap tenant-wide (keputusan: skala MVP).
 - **Perf**: load role per request = +1 query; bisa dimitigasi dengan cache role (TTL) atau klaim permission di JWT (trade-off: perubahan permission butuh re-login).
 - **Keamanan**: enforce di backend adalah keharusan; frontend hanya penyembunyian UX.
 - **Approval ≠ Role**: perubahan policy approval tidak mengubah role/permission; jangan tambahkan aturan bypass ke dokumen ini.
-- Dokumen ini **belum dieksekusi** — setelah disetujui, mulai Fase 0.
+- **Status eksekusi**: sebagian besar Fase 0–3 telah diimplementasikan (2026-08-08 s/d 2026-09-12). Yang tersisa: 9-role template lengkap (`administrator`/`supervisor`/`waiter`/`kitchen`/`barista`/`inventory-staff`), KDS/drink-queue (non-MVP), device/integration permission, UI 403 khusus, dan permission-matrix test.

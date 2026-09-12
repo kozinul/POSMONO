@@ -8,6 +8,10 @@
 
 **Auth:** All endpoints except `/health`, `/api/auth/login`, `/api/auth/register`, `/api/auth/refresh`, `/api/auth/logout`, `GET /api/tenants/slug/:slug`, and **WebSocket (Socket.io)** connections require a JWT in the `Authorization: Bearer <token>` header.
 
+**Outlet header (multi-outlet):** Endpoint transaksi POS (payment, order mutations, shift mutations) juga divalidasi terhadap `X-Outlet-Id` header oleh middleware `resolveOutlet`. Header diisi dari `activeOutletId` di frontend; bila user punya `outletIds = []` (semua outlet) header bebas/opsional, selain itu harus ∈ `outletIds` user (403 bila tidak). Nilai header hanya **memvalidasi akses** — service tetap derive `outletId` dari shift terbuka / body, bukan langsung dari `req.outletId` (lihat `HUB_ARCHITECTURE.md` Fase 8/9).
+
+**Platform session (Terminal Center):** Semua endpoint `/api/platform` memakai JWT terpisah dengan klaim `tenant: 'platform'` (dari session Platform Super Admin). Token tenant biasa → **401**. Cukup via `POST /api/auth/login` dengan header `X-Tenant-Id: platform`.
+
 ---
 
 ## WebSocket (Socket.io)
@@ -941,6 +945,71 @@ Unified pricing calculation — single source of truth for all frontend totals. 
 
 ---
 
+## Outlets (`/api/outlets`)
+
+Multi-outlet operational boundaries. Tenant otomatis punya **Outlet Utama** + **Warehouse Utama** (`provisionDefaults` boot). Outlet 1:1 ke Warehouse.
+
+| Method | Path | Auth | Permission |
+|--------|------|------|------------|
+| GET | `/api/outlets` | ✓ | — (list, outlet-scoped) |
+| GET | `/api/outlets/:id` | ✓ | — |
+| POST | `/api/outlets` | ✓ | `outlet:manage` |
+| PUT | `/api/outlets/:id` | ✓ | `outlet:manage` |
+| DELETE | `/api/outlets/:id` | ✓ | `outlet:manage` |
+
+**Response** (GET list): array outlet `{ id, tenantId, name, code, warehouseId, isActive, createdAt, updatedAt }`.
+
+Catatan: ganti outlet membutuhkan re-login bila `outletIds` di JWT berubah; assign outlet via Users page.
+
+---
+
+## Hubs (`/api/hubs`)
+
+Hub = grouping non-tenant di atas tenant (`hubId` di Tenant; null = standalone). CRUD & assign tenant goto Platform Super Admin (`hub:manage`). Hub **tidak menyentuh data bisnis** — murni grouping.
+
+| Method | Path | Auth | Permission |
+|--------|------|------|------------|
+| GET | `/api/hubs` | ✓ | `hub:manage` |
+| GET | `/api/hubs/:id` | ✓ | `hub:manage` |
+| POST | `/api/hubs` | ✓ | `hub:manage` |
+| PUT | `/api/hubs/:id` | ✓ | `hub:manage` |
+| DELETE | `/api/hubs/:id` | ✓ | `hub:manage` |
+| POST | `/api/hubs/:hubId/tenants/:tenantId` | ✓ | `hub:manage` (assign) |
+| DELETE | `/api/hubs/:hubId/tenants/:tenantId` | ✓ | `hub:manage` (unassign) |
+| GET | `/api/hubs/:hubId/tenants` | ✓ | `hub:manage` |
+
+**Body** POST/PUT: `{ name, description? }`. Assign tenant = set `tenant.hubId` (via `HubService.assignTenant`).
+
+---
+
+## Terminal Center — Platform Layer (`/api/platform`)
+
+> Layer terpisah dari auth tenant. Super-admin login: `POST /api/auth/login` dengan `X-Tenant-Id: platform` (seeded `platform@demo.com`/`admin123`). Semua endpoint di bawah **wajib token `tenant='platform'`** (`platformAuthenticate`), dipasang di grup route terpisah (`createPlatformRoutes`), bukan `/api/*` tenant.
+
+**Scope query params** (semua list/summary): `tenantId` → scope satu tenant; `hubId` → semua tenant dalam hub; kosong → semua tenant.
+
+| Method | Path | Auth | Permission |
+|--------|------|------|------------|
+| GET | `/api/platform/health` | platform | — (diagnostik) |
+| GET | `/api/platform/hubs` | platform | `hub:manage` |
+| GET | `/api/platform/hubs/:hubId` | platform | `hub:manage` |
+| GET | `/api/platform/tenants` | platform | `platform.tenants.read` |
+| GET | `/api/platform/tenants/:tenantId` | platform | `platform.tenants.read` |
+| GET | `/api/platform/outlets` | platform | `platform.tenants.read` |
+| GET | `/api/platform/shifts/summary` | platform | `platform.reports.read` |
+| GET | `/api/platform/payments/summary` | platform | `platform.reports.read` |
+
+**Query params:**
+
+- `GET /api/platform/tenants?page=&limit=&hubId=&search=` → `{ items, total, page, limit }`
+- `GET /api/platform/outlets?tenantId=&hubId=&isActive=true|false` → outlets lintas-tenant + `tenantName`
+- `GET /api/platform/shifts/summary?dateFrom=&dateTo=&hubId=&tenantId=` → per tenant + per outlet (jumlah shift, durasi, total)
+- `GET /api/platform/payments/summary?dateFrom=&dateTo=&hubId=&tenantId=` → total + breakdown metode pembayaran lintas-tenant
+
+Response shifts/payments summary menambahkan `tenantName` per tenant (dari `resolvePlatformScope.tenantNameById`).
+
+---
+
 ## Domain Entity Shapes
 
 ### Product
@@ -1079,3 +1148,24 @@ id, tenantId, email, displayName, roleId, isActive, lastLoginAt, createdAt, upda
 | 86 | POST | `/api/printers/:id/test` | ✓ |
 | 87 | POST | `/api/print/receipt` | ✓ |
 | 88 | POST | `/api/print/kot/:orderId` | ✓ |
+| 89 | GET | `/api/outlets` | ✓ |
+| 90 | GET | `/api/outlets/:id` | ✓ outlet scope |
+| 91 | POST | `/api/outlets` | ✓ `outlet:manage` |
+| 92 | PUT | `/api/outlets/:id` | ✓ `outlet:manage` |
+| 93 | DELETE | `/api/outlets/:id` | ✓ `outlet:manage` |
+| 94 | GET | `/api/hubs` | ✓ `hub:manage` |
+| 95 | GET | `/api/hubs/:id` | ✓ `hub:manage` |
+| 96 | POST | `/api/hubs` | ✓ `hub:manage` |
+| 97 | PUT | `/api/hubs/:id` | ✓ `hub:manage` |
+| 98 | DELETE | `/api/hubs/:id` | ✓ `hub:manage` |
+| 99 | POST | `/api/hubs/:hubId/tenants/:tenantId` | ✓ `hub:manage` |
+| 100 | DELETE | `/api/hubs/:hubId/tenants/:tenantId` | ✓ `hub:manage` |
+| 101 | GET | `/api/hubs/:hubId/tenants` | ✓ `hub:manage` |
+| 102 | GET | `/api/platform/health` | platform |
+| 103 | GET | `/api/platform/hubs` | platform `hub:manage` |
+| 104 | GET | `/api/platform/hubs/:hubId` | platform `hub:manage` |
+| 105 | GET | `/api/platform/tenants` | platform `platform.tenants.read` |
+| 106 | GET | `/api/platform/tenants/:tenantId` | platform `platform.tenants.read` |
+| 107 | GET | `/api/platform/outlets` | platform `platform.tenants.read` |
+| 108 | GET | `/api/platform/shifts/summary` | platform `platform.reports.read` |
+| 109 | GET | `/api/platform/payments/summary` | platform `platform.reports.read` |
