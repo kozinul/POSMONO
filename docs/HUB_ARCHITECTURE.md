@@ -104,7 +104,7 @@ Dibutuhkan untuk user lintas-tenant (Group Admin) dan Hub Consolidated Report.
 
 ## 3. Fakta Arsitektur Saat Ini (recon 2026-08-13)
 
-- **Satu database bersama**: semua model di-register di `systemConnection` (`backend/src/bootstrap/container.ts:126-156`, `mongoose.connection`), dipisah oleh field `tenantId`. `ConnectionManager.getTenantConnection` ada tapi **tidak dipakai** di bootstrap.
+- **Satu database bersama**: semua model di-register di `systemConnection` (`backend/src/bootstrap/container.ts:151-188`, `mongoose.connection`), dipisah oleh field `tenantId`. `ConnectionManager.getTenantConnection` ada tapi **tidak dipakai** di bootstrap.
   - Implikasi: `Hub → Tenant[]` = `Tenant.find({ hubId })`; Hub Consolidated Report lintas tenant = `tenantId: { $in: hubTenantIds }` (murah, tanpa ETL).
 - **Tenant** (`backend/src/core/tenant/domain/Tenant.ts`) = 1 bisnis; sudah ada `ownerId`, `config`, `modules`, `businessType`. **Belum ada `hubId`.**
 - **Warehouse** (`backend/src/core/inventory/domain/Warehouse.ts`) sudah tenant-scoped; stock per warehouse (`StockSchema` index `{tenantId, productId, variantId, warehouseId}`). `InventoryService.resolveWarehouseId()` (`InventoryService.ts:23`) fallback ke warehouse pertama / `'utama'`. **Belum terhubung outlet.**
