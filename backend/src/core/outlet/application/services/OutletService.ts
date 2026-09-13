@@ -38,6 +38,45 @@ export class OutletService {
     return outlet;
   }
 
+  async createWithWarehouse(
+    tenantId: string,
+    data: { name: string; address?: string; phone?: string },
+    session?: any,
+  ): Promise<Outlet> {
+    const existing = await this.outletRepository.findByName(tenantId, data.name);
+    if (existing) {
+      throw new ConflictError('Outlet name already exists for this tenant');
+    }
+
+    const outlet = Outlet.create({
+      tenantId,
+      name: data.name,
+      address: data.address ?? '',
+      phone: data.phone ?? '',
+      warehouseId: null,
+      isActive: true,
+    });
+
+    await this.outletRepository.save(outlet, { session });
+
+    const warehouse = Warehouse.create(
+      {
+        tenantId,
+        outletId: outlet.id.toValue(),
+        name: `Warehouse ${data.name}`,
+        address: data.address ?? '',
+        isActive: true,
+      },
+    );
+
+    await this.warehouseRepository.save(warehouse, { session });
+
+    outlet.assignWarehouse(warehouse.id.toValue());
+    await this.outletRepository.save(outlet, { session });
+
+    return outlet;
+  }
+
   async getById(tenantId: string, id: string): Promise<Outlet> {
     const outlet = await this.outletRepository.findById(id);
     if (!outlet || outlet.serialize().tenantId !== tenantId) {
@@ -86,19 +125,19 @@ export class OutletService {
     await this.outletRepository.delete(id);
   }
 
-  async ensureDefault(tenantId: string): Promise<Outlet> {
+  async ensureDefault(tenantId: string, data?: { name?: string; address?: string; phone?: string }, session?: any): Promise<Outlet> {
     let outlet = await this.outletRepository.findDefault(tenantId);
     if (!outlet) {
       outlet = Outlet.create({
         tenantId,
-        name: DEFAULT_OUTLET_NAME,
-        address: '',
-        phone: '',
+        name: data?.name || DEFAULT_OUTLET_NAME,
+        address: data?.address || '',
+        phone: data?.phone || '',
         warehouseId: null,
         isActive: true,
       });
 
-      await this.outletRepository.save(outlet);
+      await this.outletRepository.save(outlet, { session });
     }
 
     const outletId = outlet.serialize().id;
@@ -119,15 +158,15 @@ export class OutletService {
         DEFAULT_WAREHOUSE_ID,
       );
 
-      await this.warehouseRepository.save(warehouse);
+      await this.warehouseRepository.save(warehouse, { session });
     } else if (warehouse.serialize().outletId !== outletId) {
       warehouse.update({ outletId });
-      await this.warehouseRepository.save(warehouse);
+      await this.warehouseRepository.save(warehouse, { session });
     }
 
     if (outlet.serialize().warehouseId !== warehouse.serialize().id) {
       outlet.assignWarehouse(warehouse.serialize().id);
-      await this.outletRepository.save(outlet);
+      await this.outletRepository.save(outlet, { session });
     }
 
     return outlet;

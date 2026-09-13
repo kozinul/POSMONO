@@ -1,7 +1,7 @@
 import { Warehouse } from './Warehouse';
 
 export interface WarehouseRepository {
-  save(warehouse: Warehouse): Promise<void>;
+  save(warehouse: Warehouse, options?: { session?: any }): Promise<void>;
   findById(id: string): Promise<Warehouse | null>;
   findByTenant(tenantId: string): Promise<Warehouse[]>;
   findActiveByTenant(tenantId: string): Promise<Warehouse[]>;

@@ -43,11 +43,12 @@ export class MongoOutletRepository {
     } as unknown as Partial<OutletDoc>;
   }
 
-  async save(outlet: Outlet): Promise<void> {
+  async save(outlet: Outlet, options?: { session?: any }): Promise<void> {
     const data = this.toPersistence(outlet);
     await this.model.findOneAndUpdate({ _id: outlet.id.toValue() }, data, {
       upsert: true,
       new: true,
+      session: options?.session,
     });
     outlet.clearEvents();
   }

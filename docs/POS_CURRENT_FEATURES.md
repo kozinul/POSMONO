@@ -155,14 +155,12 @@ families.view, families.edit
 |--------|----------|------|-------------|
 | GET | `/api/outlets` | ✅ authenticate | List outlets (contoh untuk switcher) |
 | GET | `/api/outlets/:id` | ✅ authenticate | Get outlet detail |
-| POST | `/api/outlets` | ✅ `outlet:manage` | Create outlet + Warehouse terkait |
-| PUT | `/api/outlets/:id` | ✅ `outlet:manage` | Update outlet |
-| DELETE | `/api/outlets/:id` | ✅ `outlet:manage` | Delete outlet |
+| PUT | `/api/outlets/:id` | ✅ `outlet:manage` | Update outlet (nama/alamat/telepon/status) |
 
 ### Business Logic
 - Multi-outlet: Order/Payment/Shift/Warehouse/report punya `outletId`; `resolveOutlet` middleware memvalidasi header `X-Outlet-Id` ∈ `req.outletIds`
 - Frontend `activeOutletId` (persist `localStorage.activeOutletId`) dikirim sebagai `X-Outlet-Id`; outlet switcher di `DashboardLayout` bila user punya >1 outlet; ganti outlet → invalidate query scope
-- Halaman `/outlets` (`OutletListPage.tsx`, guarded `outlet:manage`)
+- Halaman `/outlets` (`OutletListPage.tsx`, guarded `outlet:manage`) — **create/delete platform-only** (Fase 12): owner hanya melihat + edit info outlet; penambahan cabang lewat Terminal Center (`POST /api/platform/outlets`)
 - Provisioning boot `provisionDefaults.ensureDefaultOutlet`: **Outlet Utama** + **Warehouse Utama** (`id: 'utama'`) + backfill order/payment/shift lama
 - Promosi/diskon/pajak/pricing masih scoped per tenant (bukan per outlet)
 
@@ -1188,6 +1186,7 @@ export type CreateOrderInput = {
 | GET | `/api/platform/hubs/:hubId` | `hub:manage` | Detail Hub + `tenants[]` + `tenantCount` |
 | GET | `/api/platform/tenants` | `platform.tenants.read` | List tenant paginated + filter `hubId`/`search` |
 | GET | `/api/platform/tenants/:tenantId` | `platform.tenants.read` | Detail tenant + `hubName` |
+| POST | `/api/platform/provision/tenant` | `hub:manage` | **Buat Tenant baru** (`ProvisionTenantService`): Tenant + Owner + Outlet Utama + Warehouse Utama atomik; body: `{tenant, owner, outlet, hubId?}`; header `Idempotency-Key` (opsional); response `201` |
 | GET | `/api/platform/outlets` | `platform.tenants.read` | Outlet lintas-tenant + `tenantName`; filter `tenantId`/`hubId`/`isActive` |
 | GET | `/api/platform/shifts/summary` | `platform.reports.read` | Summary shift per tenant + per outlet (`dateFrom`/`dateTo`/`hubId`/`tenantId`) |
 | GET | `/api/platform/payments/summary` | `platform.reports.read` | Total pembayaran + breakdown metode lintas-tenant |
@@ -1210,6 +1209,7 @@ export type CreateOrderInput = {
 - `ShiftService.getPlatformShiftsSummary` + `MongoShiftRepository.findByTenantIds`; `PaymentService.getPlatformPaymentsSummary`/`getPlatformPaymentsConsolidationByOutlet` + `MongoPaymentRepository.findCompletedByTenantIds`; `TenantService.list` + `MongoTenantRepository.list`
 - **Halaman admin Terminal Center** (`/terminal-center`, di layout khusus `TerminalLayout` + guard `PlatformRoute`; tab Hub & Anggota / Tenants / Outlet / Ringkasan / Konsolidasi) **di-wire bersama HubMembership (Fase 9)** — login super admin di **URL terpisah `/terminal/login`** (`TerminalLoginPage` selalu kirim `X-Tenant-Id: platform` → mendarat `/terminal-center`, tanpa checkbox); group admin lintas-tenant memakai tenant switcher di top bar
 - **Permissions hub member**: `owner` = `OWNER_PERMS`; `admin` = `MANAGER_PERMS + users:read + reports:read`; `viewer` = read-only (`reports/orders/products/customers/inventory/shifts/payments:read`) — dari `backend/src/core/platform/defaults/roles.ts: HUB_MEMBER_ROLE_PERMS`
+- **Provision Tenant** (`ProvisionTenantService`, endpoint `POST /api/platform/provision/tenant`): membuat Tenant + Owner User + default Outlet + default Warehouse secara atomik (MongoDB transaction fallback standalone). `OutletService.ensureDefault(tenantId, outletData?, session?)` reusable dari boot. Owner email dicek uniqueness global (`MongoUserRepository.findByEmailGlobal`), role default dibuat (Owner/Manager/Cashier), owner memakai `outletIds: []`. Hub bersifat **opsional** — `hubId: null` = tenant standalone, tidak membuat Hub baru. Idempotency key via header `Idempotency-Key` prevent double-submit. UI: `CreateTenantModal` di halaman `/terminal-center` tab Tenants (tombol `+ New Tenant`) dengan loading/error/success state
 
 ---
 

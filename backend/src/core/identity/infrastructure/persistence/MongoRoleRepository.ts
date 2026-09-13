@@ -38,11 +38,12 @@ export class MongoRoleRepository {
     } as unknown as Partial<RoleDoc>;
   }
 
-  async save(role: Role): Promise<void> {
+  async save(role: Role, options?: { session?: any }): Promise<void> {
     const data = this.toPersistence(role);
     await this.model.findOneAndUpdate({ _id: role.id.toValue() }, data, {
       upsert: true,
       new: true,
+      session: options?.session,
     });
   }
 

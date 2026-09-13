@@ -949,13 +949,13 @@ Unified pricing calculation — single source of truth for all frontend totals. 
 
 Multi-outlet operational boundaries. Tenant otomatis punya **Outlet Utama** + **Warehouse Utama** (`provisionDefaults` boot). Outlet 1:1 ke Warehouse.
 
+**Pembuatan & penghapusan outlet hanya via Terminal Center** (`POST /api/platform/outlets`, Platform Super Admin `outlet:manage`). Owner/tenant hanya dapat **meng-update info** outlet (nama/alamat/telepon/status) dan membaca.
+
 | Method | Path | Auth | Permission |
 |--------|------|------|------------|
 | GET | `/api/outlets` | ✓ | — (list, outlet-scoped) |
 | GET | `/api/outlets/:id` | ✓ | — |
-| POST | `/api/outlets` | ✓ | `outlet:manage` |
 | PUT | `/api/outlets/:id` | ✓ | `outlet:manage` |
-| DELETE | `/api/outlets/:id` | ✓ | `outlet:manage` |
 
 **Response** (GET list): array outlet `{ id, tenantId, name, code, warehouseId, isActive, createdAt, updatedAt }`.
 
@@ -995,7 +995,9 @@ Hub = grouping non-tenant di atas tenant (`hubId` di Tenant; null = standalone).
 | GET | `/api/platform/hubs/:hubId` | platform | `hub:manage` |
 | GET | `/api/platform/tenants` | platform | `platform.tenants.read` |
 | GET | `/api/platform/tenants/:tenantId` | platform | `platform.tenants.read` |
+| POST | `/api/platform/provision/tenant` | platform | `hub:manage` |
 | GET | `/api/platform/outlets` | platform | `platform.tenants.read` |
+| POST | `/api/platform/outlets` | platform | `outlet:manage` |
 | GET | `/api/platform/shifts/summary` | platform | `platform.reports.read` |
 | GET | `/api/platform/payments/summary` | platform | `platform.reports.read` |
 | GET | `/api/platform/hubs/:hubId/consolidated` | platform | `platform.reports.read` |
@@ -1004,11 +1006,49 @@ Hub = grouping non-tenant di atas tenant (`hubId` di Tenant; null = standalone).
 
 - `GET /api/platform/tenants?page=&limit=&hubId=&search=` → `{ items, total, page, limit }`
 - `GET /api/platform/outlets?tenantId=&hubId=&isActive=true|false` → outlets lintas-tenant + `tenantName`
+- `POST /api/platform/outlets` → **buat outlet baru untuk tenant existing** (`{ tenantId, name, address?, phone? }`); `PlatformController.createOutlet` memastikan tenant ada (404), lalu `OutletService.createWithWarehouse` membuat **Outlet + Warehouse 1:1** ("Warehouse {name}") dan melink `outlet.warehouseId`. Duplikat nama per tenant → 409. Response menyertakan `tenantName`.
 - `GET /api/platform/shifts/summary?dateFrom=&dateTo=&hubId=&tenantId=` → per tenant + per outlet (jumlah shift, durasi, total)
 - `GET /api/platform/payments/summary?dateFrom=&dateTo=&hubId=&tenantId=` → total + breakdown metode pembayaran lintas-tenant
 - `GET /api/platform/hubs/:hubId/consolidated?dateFrom=&dateTo=` → **Hub Consolidated Report**: `{ hub, tenantCount, tenants[{ tenantId, tenantName, totals, outlets[{ outletId, outletName, shifts, payments }] }], totals }`
 
 Response shifts/payments summary menambahkan `tenantName` per tenant (dari `resolvePlatformScope.tenantNameById`).
+
+### Provision Tenant (`POST /api/platform/provision/tenant`)
+
+`ProvisionTenantService` membuat Tenant + Owner User + Outlet Utama + Warehouse Utama secara **atomik** (MongoDB transaction; fallback non-transaction pada standalone non-replicaset) dengan memakai `OutletService.ensureDefault` yang sama dengan boot provisioning. Hub **opsional** — bila `hubId` diberikan, tenant ditautkan ke hub existing (tidak pernah membuat hub baru).
+
+**Body:**
+
+```json
+{
+  "tenant": { "name": "Kopi Bali Sejahtera", "businessType": "restaurant" },
+  "owner": { "name": "Budi", "email": "budi@kopibali.com", "password": "temporary-password" },
+  "outlet": { "name": "Kopi Bali Sanur", "address": "Jl. Danau Tamblingan", "phone": "08123456789" },
+  "hubId": null
+}
+```
+
+**Header opsional:** `Idempotency-Key: <uuid>` — request yang sama dikirim ulang dengan key yang sama tidak membuat tenant kedua (dikembalikan result yang sama).
+
+**Response `201 Created`:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "success": true,
+    "tenant": { "id": "…", "name": "Kopi Bali Sejahtera", "hubId": null },
+    "owner": { "id": "…", "name": "Budi", "email": "budi@kopibali.com" },
+    "outlet": { "id": "…", "name": "Kopi Bali Sanur", "warehouseId": "utama" },
+    "warehouse": { "id": "utama", "name": "Warehouse Utama" },
+    "status": "ready"
+  }
+}
+```
+
+**Errors:** `400` `TENANT_NAME_REQUIRED` / `OWNER_NAME_REQUIRED` / `OWNER_EMAIL_INVALID` / `OUTLET_NAME_REQUIRED` · `404` Hub tidak ditemukan (HUB_NOT_FOUND) · `409` `OWNER_EMAIL_ALREADY_EXISTS` (owner email sudah terdaftar) / konflik idempotency · `401/403` non-platform user.
+
+**Catatan:** role Owner/Manager/Cashier dibuat bersama tenant (default roles), owner memakai role Owner dengan `outletIds: []`, outlet ↔ warehouse ter-link 1:1 (`Outlet.warehouseId ↔ Warehouse.outletId`), dan password TIDAK pernah dikembalikan response.
 
 ---
 
@@ -1180,31 +1220,30 @@ id, tenantId, email, displayName, roleId, isActive, lastLoginAt, createdAt, upda
 | 88 | POST | `/api/print/kot/:orderId` | ✓ |
 | 89 | GET | `/api/outlets` | ✓ |
 | 90 | GET | `/api/outlets/:id` | ✓ outlet scope |
-| 91 | POST | `/api/outlets` | ✓ `outlet:manage` |
-| 92 | PUT | `/api/outlets/:id` | ✓ `outlet:manage` |
-| 93 | DELETE | `/api/outlets/:id` | ✓ `outlet:manage` |
-| 94 | GET | `/api/hubs` | ✓ `hub:manage` |
-| 95 | GET | `/api/hubs/:id` | ✓ `hub:manage` |
-| 96 | POST | `/api/hubs` | ✓ `hub:manage` |
-| 97 | PUT | `/api/hubs/:id` | ✓ `hub:manage` |
-| 98 | DELETE | `/api/hubs/:id` | ✓ `hub:manage` |
-| 99 | POST | `/api/hubs/:hubId/tenants/:tenantId` | ✓ `hub:manage` |
-| 100 | DELETE | `/api/hubs/:hubId/tenants/:tenantId` | ✓ `hub:manage` |
-| 101 | GET | `/api/hubs/:hubId/tenants` | ✓ `hub:manage` |
-| 102 | GET | `/api/platform/health` | platform |
-| 103 | GET | `/api/platform/hubs` | platform `hub:manage` |
-| 104 | GET | `/api/platform/hubs/:hubId` | platform `hub:manage` |
-| 105 | GET | `/api/platform/tenants` | platform `platform.tenants.read` |
-| 106 | GET | `/api/platform/tenants/:tenantId` | platform `platform.tenants.read` |
-| 107 | GET | `/api/platform/outlets` | platform `platform.tenants.read` |
-| 108 | GET | `/api/platform/shifts/summary` | platform `platform.reports.read` |
-| 109 | GET | `/api/platform/payments/summary` | platform `platform.reports.read` |
-| 110 | GET | `/api/platform/hubs/:hubId/consolidated` | platform `platform.reports.read` |
-| 111 | POST | `/api/hub-memberships` | ✓ `hub:manage` |
-| 112 | GET | `/api/hub-memberships/hub/:hubId` | ✓ `hub:manage` |
-| 113 | PUT | `/api/hub-memberships/:hubId/:userId` | ✓ `hub:manage` |
-| 114 | DELETE | `/api/hub-memberships/:hubId/:userId` | ✓ `hub:manage` |
-| 115 | GET | `/api/hub-memberships/me` | ✓ |
+| 91 | PUT | `/api/outlets/:id` | ✓ `outlet:manage` (update info; create/delete platform-only) |
+| 92 | GET | `/api/hubs` | ✓ `hub:manage` |
+| 93 | GET | `/api/hubs/:id` | ✓ `hub:manage` |
+| 94 | POST | `/api/hubs` | ✓ `hub:manage` |
+| 95 | PUT | `/api/hubs/:id` | ✓ `hub:manage` |
+| 96 | DELETE | `/api/hubs/:id` | ✓ `hub:manage` |
+| 97 | POST | `/api/hubs/:hubId/tenants/:tenantId` | ✓ `hub:manage` |
+| 98 | DELETE | `/api/hubs/:hubId/tenants/:tenantId` | ✓ `hub:manage` |
+| 99 | GET | `/api/hubs/:hubId/tenants` | ✓ `hub:manage` |
+| 100 | GET | `/api/platform/health` | platform |
+| 101 | GET | `/api/platform/hubs` | platform `hub:manage` |
+| 102 | GET | `/api/platform/hubs/:hubId` | platform `hub:manage` |
+| 103 | GET | `/api/platform/tenants` | platform `platform.tenants.read` |
+| 104 | GET | `/api/platform/tenants/:tenantId` | platform `platform.tenants.read` |
+| 105 | GET | `/api/platform/outlets` | platform `platform.tenants.read` |
+| 106 | POST | `/api/platform/outlets` | platform `outlet:manage` |
+| 107 | GET | `/api/platform/shifts/summary` | platform `platform.reports.read` |
+| 108 | GET | `/api/platform/payments/summary` | platform `platform.reports.read` |
+| 109 | GET | `/api/platform/hubs/:hubId/consolidated` | platform `platform.reports.read` |
+| 110 | POST | `/api/hub-memberships` | ✓ `hub:manage` |
+| 111 | GET | `/api/hub-memberships/hub/:hubId` | ✓ `hub:manage` |
+| 112 | PUT | `/api/hub-memberships/:hubId/:userId` | ✓ `hub:manage` |
+| 113 | DELETE | `/api/hub-memberships/:hubId/:userId` | ✓ `hub:manage` |
+| 114 | GET | `/api/hub-memberships/me` | ✓ |
 | 116 | GET | `/api/hub-memberships/me/tenants` | ✓ |
 | 117 | GET | `/api/auth/accessible-tenants` | ✓ |
 | 118 | POST | `/api/auth/switch-tenant` | ✓ |

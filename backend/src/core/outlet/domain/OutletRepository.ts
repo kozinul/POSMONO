@@ -1,7 +1,7 @@
 import { Outlet } from './Outlet';
 
 export interface OutletRepository {
-  save(outlet: Outlet): Promise<void>;
+  save(outlet: Outlet, options?: { session?: any }): Promise<void>;
   findById(id: string): Promise<Outlet | null>;
   findByTenant(tenantId: string): Promise<Outlet[]>;
   findActiveByTenant(tenantId: string): Promise<Outlet[]>;

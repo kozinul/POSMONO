@@ -5,7 +5,8 @@ import { TenantService } from '../../../../tenant/application/services/TenantSer
 import { OutletService } from '../../../../outlet/application/services/OutletService';
 import { ShiftService } from '../../../../pos/application/services/ShiftService';
 import { PaymentService } from '../../../../payment/application/services/PaymentService';
-import { ValidationError } from '../../../../../@shared/infrastructure/error/AppError';
+import { ProvisionTenantService } from '../../../application/services/ProvisionTenantService';
+import { ValidationError, NotFoundError } from '../../../../../@shared/infrastructure/error/AppError';
 import { resolvePlatformScope } from '../../../application/helpers/resolvePlatformScope';
 
 interface PlatformControllerDeps {
@@ -16,11 +17,24 @@ interface PlatformControllerDeps {
   paymentService: PaymentService;
   tenantRepository: any;
   hubRepository?: any;
+  provisionTenantService?: ProvisionTenantService;
 }
 
 export class PlatformController extends BaseController {
   constructor(private readonly deps: PlatformControllerDeps) {
     super();
+  }
+
+  async provisionTenant(req: Request, res: Response): Promise<void> {
+    if (!this.deps.provisionTenantService) {
+      throw new ValidationError('ProvisionTenantService not configured');
+    }
+    const idempotencyKey = (req.headers['idempotency-key'] as string) || undefined;
+    const result = await this.deps.provisionTenantService.execute({
+      ...req.body,
+      idempotencyKey,
+    });
+    this.created(res, result);
   }
 
   // Diagnostics
@@ -90,6 +104,33 @@ export class PlatformController extends BaseController {
         return { ...data, tenantName: scope.tenantNameById[data.tenantId] ?? null };
       }),
     );
+  }
+
+  async createOutlet(req: Request, res: Response): Promise<void> {
+    const { tenantId, name, address, phone } = req.body;
+    if (!tenantId || typeof tenantId !== 'string' || !tenantId.trim()) {
+      throw new ValidationError('Tenant ID is required');
+    }
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      throw new ValidationError('Outlet name is required');
+    }
+
+    const tenant = await this.deps.tenantRepository.findById(tenantId.trim());
+    if (!tenant) {
+      throw new NotFoundError('Tenant', tenantId);
+    }
+
+    const outlet = await this.deps.outletService.createWithWarehouse(tenantId.trim(), {
+      name: name.trim(),
+      address: address?.trim() || '',
+      phone: phone?.trim() || '',
+    });
+
+    const data = outlet.serialize();
+    this.created(res, {
+      ...data,
+      tenantName: tenant.serialize().name,
+    });
   }
 
   // Read-only summaries

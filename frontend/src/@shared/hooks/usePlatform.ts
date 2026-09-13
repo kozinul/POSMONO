@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 
 export interface PlatformHub {
@@ -204,6 +204,77 @@ export function usePlatformPaymentsSummary(filters: { hubId?: string; tenantId?:
         `${BASE}/payments/summary${p.toString() ? `?${p.toString()}` : ''}`,
       );
       return res.data.data;
+    },
+  });
+}
+
+export interface ProvisionTenantInput {
+  tenant: {
+    name: string;
+    businessType?: string;
+  };
+  owner: {
+    name: string;
+    email: string;
+    password?: string;
+  };
+  outlet: {
+    name: string;
+    address?: string;
+    phone?: string;
+  };
+  hubId?: string | null;
+}
+
+export interface ProvisionTenantResult {
+  success: boolean;
+  tenant: { id: string; name: string; hubId: string | null };
+  owner: { id: string; name: string; email: string };
+  outlet: { id: string; name: string; warehouseId: string | null };
+  warehouse: { id: string; name: string } | null;
+  status: 'ready';
+}
+
+export function usePlatformProvisionTenant() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: ProvisionTenantInput) => {
+      const res = await api.post<{ success: boolean; data: ProvisionTenantResult }>(
+        `${BASE}/provision/tenant`,
+        input,
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['platform-tenants'] });
+      queryClient.invalidateQueries({ queryKey: ['platform-outlets'] });
+      queryClient.invalidateQueries({ queryKey: ['platform-hubs'] });
+    },
+  });
+}
+
+export interface PlatformCreateOutletInput {
+  tenantId: string;
+  name: string;
+  address?: string;
+  phone?: string;
+}
+
+export interface PlatformOutletCreated extends PlatformOutletRow {}
+
+export function usePlatformCreateOutlet() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: PlatformCreateOutletInput) => {
+      const res = await api.post<{ success: boolean; data: PlatformOutletCreated }>(
+        `${BASE}/outlets`,
+        input,
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['platform-outlets'] });
+      queryClient.invalidateQueries({ queryKey: ['platform-tenants'] });
     },
   });
 }

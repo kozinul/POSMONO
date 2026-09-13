@@ -41,11 +41,12 @@ export class MongoWarehouseRepository implements WarehouseRepository {
     } as unknown as Partial<WarehouseDoc>;
   }
 
-  async save(warehouse: Warehouse): Promise<void> {
+  async save(warehouse: Warehouse, options?: { session?: any }): Promise<void> {
     const data = this.toPersistence(warehouse);
     await this.model.findOneAndUpdate({ _id: warehouse.id.toValue() }, data, {
       upsert: true,
       new: true,
+      session: options?.session,
     });
     warehouse.clearEvents();
   }

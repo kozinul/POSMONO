@@ -36,6 +36,85 @@ Copy this block for each new day:
 
 ## Entries
 
+### DATE: 2026-09-13 — Outlet Platform-Only (Eksklusivitas: Owner Tidak Bisa Tambah Outlet)
+
+**Today I worked on:**
+
+- **Keputusan produk**: pembuatan/penghapusan outlet hanya oleh **Platform Super Admin** (lisensi per cabang / eksklusivitas). Owner/tenant hanya meng-update info outlet. Alur: Terminal Center → tab Outlet → `+ Tambah Outlet` → pilih tenant.
+- **Backend**: `OutletService.createWithWarehouse(tenantId, data?, session?)` — buat Outlet + **Warehouse 1:1** (`Warehouse {name}`) lalu link `outlet.warehouseId` (duplikat nama per tenant → 409); `PlatformController.createOutlet` + `POST /api/platform/outlets` (guard `platformAuthenticate` + `platformAuthorize('outlet:manage')`, cek tenant ada → 404, return `tenantName`). Route tenant diramping: `POST /api/outlets` & `DELETE /api/outlets/:id` **dihapus** (`outlet.routes.ts` = GET/GET:utid/PUT saja).
+- **Frontend Terminal Center**: `usePlatformCreateOutlet` hook (invalidate `platform-outlets`/`platform-tenants`); `CreateOutletModal` di tab Outlet (dropdown tenant dari `usePlatformTenants` limit 200, nama/alamat/telepon, banner amber "warehouse dibuat otomatis & outlet platform-only", success card)
+- **Frontend tenant**: `OutletListPage` — tombol create & aksi Hapus dihapus, banner amber "Butuh cabang tambahan? Hubungi tim sales/support kami", hanya Edit + toggle status; `useCreateOutlet`/`useDeleteOutlet` dihapus dari `useOutlets.ts`
+- **Tests**: `OutletService.test.ts` +3 (`createWithWarehouse` link 1:1 / ConflictError / session forwarding); `platform-create-outlet.test.ts` +10 (integration HTTP penuh: 201+warehouse linked, 404, 400, 409, 401 tenant/no-auth, 403 tanpa `outlet:manage`, tenant POST/DELETE 404 & GET 200)
+- **Docs sync**: API_REFERENCE (tabel outlet + platform + index angka), HUB_ARCHITECTURE (Fase 12 + update Fase 3), POS_CURRENT_FEATURES (tabel + business logic outlet), DAILY_LOG ini
+
+**Problems encountered:**
+
+- Edit `PlatformController` sempat menyisakan stub duplikat `paymentsSummary`/`createOutlet` kosong dari percobaan salah → dibersihkan sebelum tsc
+- Test session forwarding salah assert (`{ session }` wrapper vs bare `session`) → disesuaikan ke kontrak repository `save(entity, { session })`
+
+**What I completed:**
+
+- Backend **1048/1048** (87 files, +13: 3 unit + 10 integration) hijau; `tsc` backend & frontend bersih; frontend **85/85** + vite build OK
+- Endpoint `POST /api/platform/outlets` + UI `+ Tambah Outlet` Terminal Center + dashboard tenant creadit/delete nonaktif
+- Docs sinkron (API_REFERENCE / HUB_ARCHITECTURE / POS_CURRENT_FEATURES / DAILY_LOG)
+
+**What I learned:**
+
+- Memindahkan mutasi outlet ke platform = menerapkan pola monetisasi industri SaaS POS (Moka/Pawoon): lisensi per cabang, penambahan cabang = alur resmi lewat platform, bukan self-serve tenant
+- `Owner` tetap dapat update info outlet — bukan read-only penuh — agar operasional (ubah alamat/telepon) tidak terganggu tanpa harus hubungi support
+
+**Tomorrow priority:**
+
+- Menunggu arahan: apakah perlu endpoint platform untuk update/aktif/nonaktif outlet dari Terminal Center (saat ini update tetap via tenant), atau cukup sampai di sini
+
+**Productivity score:** 8
+
+**Notes:**
+
+- `OutletController.create`/`delete` method masih ada di controller/service (utk batch/backfill), hanya tidak lagi di-route tenant
+- Outlet baru via platform dibuat **tanpa** memakai `ensureDefault` — `createWithWarehouse` sengaja independen (tidak menyentuh Warehouse `'utama'` tenant)
+
+### DATE: 2026-09-13 — Terminal Center: ProvisionTenantService (Create Tenant API + UI)
+
+**Today I worked on:**
+
+- **ProvisionTenantService (backend)**: `ProvisionTenantService` — service baru `core/platform/application/services/` untuk membuat Tenant + Owner User + Outlet Utama + Warehouse Utama secara atomik via `mongoose.startSession().withTransaction` (fallback non-transaction bila standalone); validasi nama/email (global uniqueness `MongoUserRepository.findByEmailGlobal`), Hub existence check, slug generation, `PasswordService` hash, `OutletService.ensureDefault` reusable (dengan session + custom outlet data); ID generasi sebelum create sehingga `Tenant.ownerId` konsisten; idempotency key cache untuk mencegah double-click
+- **MongoDB session support (repositories)**: tambah optional `options?: { session?: ClientSession }` di `save(...)` semua repository (`MongoTenantRepository`, `MongoUserRepository`, `MongoRoleRepository`, `MongoOutletRepository`, `MongoWarehouseRepository`, `MongoHubRepository`, `MongoRepository` base); update domain interfaces (`OutletRepository`, `WarehouseRepository`) untuk menerima options
+- **OutletService refactor**: `ensureDefault(tenantId, data?, session?)` — menerima nama/alamat/phone outlet + session opsional, tetap default bila tidak ada (boot provisioning lama tidak berubah); `OutletService` inject ke `ProvisionTenantService`
+- **API endpoint**: `POST /api/platform/provision/tenant` (guard `platformAuthenticate` + `hub:manage`); controller `PlatformController.provisionTenant` delegasi ke `ProvisionTenantService.execute`, support header `Idempotency-Key` → cache result; response `201 Created`
+- **Unit tests**: `ProvisionTenantService.test.ts` — happy path standalone, hub assignment, hub not found (404), duplicate email (409), validation (400), idempotency key cache
+- **Integration tests**: `platform-provision-tenant.test.ts` — HTTP full: 201 + DB verification (tenant/roles/user/outlet/warehouse linked), hub assignment, 401 non-platform, 401 no auth, 404 hub not found, 409 duplicate email, validation 400, idempotency key reuse
+- **Frontend hook**: `usePlatformProvisionTenant` (mutation, invalidates `platform-tenants` / `platform-outlets` / `platform-hubs` queries) di `@shared/hooks/usePlatform.ts`
+- **Terminal Center UI**: `CreateTenantModal` di `TerminalCenterPage.tsx` tab Tenants — form (business name, type, owner name/email/password, outlet name/address/phone, hub dropdown), loading/error/success state, button disable saat pending; tombol `+ New Tenant` di tab Tenants
+- **Container DI**: `provisionTenantService` singleton di `container.ts` → inject ke `platformController`
+- **Docs sync**: API_REFERENCE (endpoint provision/tenant + body/response/errors), DAILY_LOG entry, HUB_ARCHITECTURE (status update)
+
+**Problems encountered:**
+
+- MongoDB `startSession()` gagal pada standalone / memory-server non-replicaset ("Transaction numbers are only allowed on a replica set member or mongos") → handle fallback: detect `readyState === 1`, catch error dan execute tanpa session; unit test jalan tanpa transaction karena mock repos tidak perlu session
+- `TenantRepository` / `UserRepository` tidak punya `findByEmailGlobal` interface awalnya → tambah `findByEmailGlobal(email)` di `MongoUserRepository` untuk cek uniqueness global; frontend validation error `OWNER_EMAIL_ALREADY_EXISTS`
+- Typecheck error `OutletRepository.save` signature mismatch → update interface + domain contracts agar sesuai optional `options?: { session?: any }`
+
+**What I completed:**
+
+- `ProvisionTenantService` + route + controller + DI wiring + idempotency key + session support di semua repository terkait
+- Unit + integration tests: backend 1035/1035 (86 files) hijau (termasuk 6 unit + 8 integration baru)
+- Frontend tsc + vite build OK; frontend test 85/85 hijau; hook `usePlatformProvisionTenant` + `CreateTenantModal` UI
+- `OutletService.ensureDefault` backward-compatible refactor (boot provisioning tetap jalan tanpa session/argumen baru)
+- Docs: API_REFERENCE (POST provision endpoint), DAILY_LOG, HUB_ARCHITECTURE status
+
+**Tomorrow priority:**
+
+- `req.outletId` dibaca service dari `X-Outlet-Id`/resolveOutlet (deferred — tetap body/default shift untuk sekarang); MVP deployment (VPS/SSL/monitoring/backup) menunggu akses VPS
+
+**Productivity score:** 9
+
+**Notes:**
+
+- ProvisionTenantService memakai `OutletService.ensureDefault` yang sama dengan boot (`provisionDefaults`) → tidak ada duplikasi logic outlet/warehouse
+- `HubId` bersifat optional — tenant `standalone` = `hubId: null`, tidak membuat Hub baru dari endpoint ini
+- Password owner tidak pernah dikembalikan API response; hanya nama dan email
+
 ### DATE: 2026-09-13 — Terminal Center: Layout Standalone + Login URL Terpisah
 
 **Today I worked on:**

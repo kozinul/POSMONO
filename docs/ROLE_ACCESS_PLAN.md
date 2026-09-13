@@ -78,9 +78,9 @@ Prinsip:
 
 ### 2.3 Outlet
 
-> **Status 2026-09-12: modul Outlet sudah ada** (`core/outlet/`), lengkap dengan domain/schema/repo/service/controller/routes. Hierarki penuh: Hub (optional) → Tenant → Outlet → Warehouse (`docs/HUB_ARCHITECTURE.md`).
+> **Status 2026-09-12: modul Outlet sudah ada** (`core/outlet/`), lengkap dengan domain/schema/repo/service/controller/routes. Hierarki penuh: Hub (optional) → Tenant → Outlet → Warehouse (`docs/HUB_ARCHITECTURE.md`). **Sejak 2026-09-13 (Fase 12) pembuatan/penghapusan outlet hanya via Terminal Center** (`POST /api/platform/outlets`, Platform Super Admin `outlet:manage`); tenant hanya `GET`/`PUT /api/outlets`.
 
-- Model **Outlet** (entity/schema/CRUD) — `{ tenantId, name, code, warehouseId, isActive }`, 1:1 ke Warehouse; CRUD via `/api/outlets` guarded `outlet:manage`; halaman `/outlets`.
+- Model **Outlet** (entity/schema/CRUD) — `{ tenantId, name, code, warehouseId, isActive }`, 1:1 ke Warehouse; **create/delete platform-only** (`OutletService.createWithWarehouse` buat Outlet + Warehouse 1:1), update info via `PUT /api/outlets` guarded `outlet:manage`; halaman `/outlets` (Edit + toggle status + banner "Hubungi sales/support").
 - **`outletId`** kini ada di `Order`, `Payment`, `Shift`, `Warehouse` (+ laporan). Produk/Promosi/Member **tetap tenant-level**. `Tenant.hubId` opsional (null = standalone).
 - Default: tiap tenant otomatis punya **Outlet Utama** + **Warehouse Utama** (`provisionDefaults.ensureDefaultOutlet`) + backfill data lama (`outletId: null` → utama).
 

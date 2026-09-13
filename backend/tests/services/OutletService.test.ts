@@ -101,3 +101,65 @@ describe('OutletService.ensureDefault', () => {
     expect(warehouseRepo.findByName).toHaveBeenCalledWith(TENANT_ID, DEFAULT_WAREHOUSE_NAME);
   });
 });
+
+describe('OutletService.createWithWarehouse', () => {
+  let outletRepo: ReturnType<typeof createMockOutletRepo>;
+  let warehouseRepo: ReturnType<typeof createMockWarehouseRepo>;
+  let service: OutletService;
+
+  beforeEach(() => {
+    outletRepo = createMockOutletRepo();
+    warehouseRepo = createMockWarehouseRepo();
+    service = new OutletService(outletRepo, warehouseRepo);
+  });
+
+  it('creates outlet + linked warehouse 1:1 with name prefixed "Warehouse"', async () => {
+    outletRepo.findByName.mockResolvedValue(null);
+
+    const outlet = await service.createWithWarehouse(TENANT_ID, {
+      name: 'Cabang Kuta',
+      address: 'Jl. Raya Kuta No. 1',
+      phone: '0812345',
+    });
+
+    const out = outlet.serialize();
+    expect(out.name).toBe('Cabang Kuta');
+    expect(out.address).toBe('Jl. Raya Kuta No. 1');
+    expect(out.phone).toBe('0812345');
+    expect(out.warehouseId).not.toBeNull();
+
+    // Warehouse created and linked 1:1
+    expect(warehouseRepo.save).toHaveBeenCalledTimes(1);
+    const savedWh = warehouseRepo.save.mock.calls[0][0] as Warehouse;
+    expect(savedWh.serialize().name).toBe('Warehouse Cabang Kuta');
+    expect(savedWh.serialize().outletId).toBe(out.id);
+    expect(savedWh.serialize().tenantId).toBe(TENANT_ID);
+
+    // Outlet saved twice: once before warehouse, once after link
+    expect(outletRepo.save).toHaveBeenCalledTimes(2);
+    expect(out.warehouseId).toBe(savedWh.serialize().id);
+  });
+
+  it('throws ConflictError when outlet name already exists for tenant', async () => {
+    const existing = Outlet.create({ tenantId: TENANT_ID, name: 'Cabang Kuta', address: '', phone: '', warehouseId: null, isActive: true });
+    outletRepo.findByName.mockResolvedValue(existing);
+
+    await expect(
+      service.createWithWarehouse(TENANT_ID, { name: 'Cabang Kuta' }),
+    ).rejects.toThrow('Outlet name already exists for this tenant');
+
+    expect(outletRepo.save).not.toHaveBeenCalled();
+    expect(warehouseRepo.save).not.toHaveBeenCalled();
+  });
+
+  it('forwards session to repository saves', async () => {
+    outletRepo.findByName.mockResolvedValue(null);
+    const session = { session: 'txn' };
+
+    await service.createWithWarehouse(TENANT_ID, { name: 'Cabang Ubud' }, session);
+
+    expect(outletRepo.save).toHaveBeenCalledTimes(2);
+    expect(outletRepo.save).toHaveBeenCalledWith(expect.any(Outlet), { session });
+    expect(warehouseRepo.save).toHaveBeenCalledWith(expect.any(Warehouse), { session });
+  });
+});

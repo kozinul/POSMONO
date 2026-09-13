@@ -62,11 +62,12 @@ export class MongoTenantRepository {
     } as unknown as Partial<TenantDoc>;
   }
 
-  async save(tenant: Tenant): Promise<void> {
+  async save(tenant: Tenant, options?: { session?: any }): Promise<void> {
     const data = this.toPersistence(tenant);
     await this.model.findOneAndUpdate({ _id: tenant.id.toValue() }, data, {
       upsert: true,
       new: true,
+      session: options?.session,
     });
     tenant.clearEvents();
   }

@@ -209,9 +209,12 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | HubMembership `{userId, hubId, role}` + session lintas-tenant (`/auth/switch-tenant`, `activeTenantId`, tenant switcher) | `[x]` |
 | Hub Consolidated Report (Tenant→Outlet breakdown) | `[x]` |
 | `req.outletId` dibaca service (dari `X-Outlet-Id`/resolveOutlet, bukan body/default shift) | `[ ]` (deferred) |
+| Provision Tenant API: `ProvisionTenantService` + `POST /api/platform/provision/tenant` (Tenant + Owner + Outlet + Warehouse atomik, hub opsional, idempotency key) + `MongoUserRepository.findByEmailGlobal` + session support repos | `[x]` |
+| Terminal Center `+ New Tenant` UI (`CreateTenantModal` + `usePlatformProvisionTenant`) | `[x]` |
+| **Outlet Platform-Only** (Fase 12): owner TIDAK bisa tambah outlet — `OutletService.createWithWarehouse` + `POST /api/platform/outlets`, route tenant `POST`/`DELETE /api/outlets` dihapus, UI `+ Tambah Outlet` Terminal Center, banner tenant | `[x]` |
 | Uji Fase 10: unit/regresi tenant standalone + sync ROLE_ACCESS_PLAN/ARCHITECTURE | `[x]` |
 
-**Completion:** ~100% (Fase 1–9 selesai & terverifikasi 2026-09-12; HubMembership, session lintas-tenant, Hub Consolidated Report, dan halaman Terminal Center frontend rampung — backend 1021/1021, frontend 85/85)
+**Completion:** ~100% (Fase 1–9 + Fase 11 ProvisionTenantService + Fase 12 Outlet Platform-Only selesai & terverifikasi 2026-09-13; HubMembership, session lintas-tenant, Hub Consolidated Report, halaman Terminal Center frontend, Create Tenant API/UI, dan kontrol outlet platform-only rampung — backend 1048/1048, frontend 85/85)
 
 ---
 
@@ -347,6 +350,7 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | Hub & Outlet architecture (multi-outlet, outlet switcher, `/outlets`) | `[x]` |
 | Terminal Center backend (`/api/platform` + Platform Super Admin) | `[x]` |
 | HubMembership + session lintas-tenant + Hub Consolidated Report + halaman `/terminal-center` | `[x]` |
+| ProvisionTenantService — Create Tenant dari Terminal Center (Tenant + Owner + Outlet + Warehouse atomik, hub opsional) | `[x]` |
 | Bug fixing & polish | `[x]` |
 | **MVP Ready** | **`[ ]`** |
 
@@ -574,9 +578,13 @@ Architecture changes, tech swaps, pricing — never decide the same day. Sleep o
 
 ---
 
-*Last updated: 2026-09-12*
+*Last updated: 2026-09-13*
 *Updated daily during development.*
 
 > **2026-08-28 — Sinkronisasi status dengan kode aktual.** Entri fase D/E/F, daftar fitur, blocker, dan arsitektur diperbarui agar sesuai implementasi nyata (split bill, hold/close-bill, QRIS gateway, printer terintegrasi, cash rounding, laporan per-kasir, export). Checklist lama ditandai `[x]` yang sebelumnya `[ ]` sudah tervalidasi di AGENTS.md. Estimasi kelengkapan MVP: ±80% (fungsional ±90–95%, selisihnya = deployment live + pilot tenant + E2E manual).
 >
 > **2026-09-12 — Hub & Outlet Architecture (Fase 1–9) selesai.** Modul Hub/Outlet, scope transaksi `outletId`, provisioning boot, User `outletIds` + JWT + `resolveOutlet`, frontend outlet switcher/`activeOutletId`, **Terminal Center** (`/api/platform` + super-admin `platform@demo.com`, auth platform terpisah), **HubMembership** (user lintas-tenant, `/auth/switch-tenant`, tenant switcher di top bar), **Hub Consolidated Report** (Tenant→Outlet breakdown), dan halaman admin `/terminal-center` terverifikasi — backend **1021/1021** (84 files), frontend **85/85** + tsc + vite build bersih. Sisa: `req.outletId` dibaca service (deferred), MVP deployment (VPS/SSL/monitoring/backup) menunggu akses VPS.
+>
+> **2026-09-13 — ProvisionTenantService (Fase 11) selesai.** Endpoint **`POST /api/platform/provision/tenant`** membuat Tenant + Owner User + Outlet Utama + Warehouse Utama secara **atomik** (`mongoose` transaction, fallback non-transaction pada standalone) memakai `OutletService.ensureDefault` yang sama dengan boot provisioning; owner memakai role Owner dengan `outletIds: []`, hub opsional (`hubId: null` = standalone, tidak membuat Hub baru), email owner dicek uniqueness global, dukungan header `Idempotency-Key` (request ulang → result sama, tanpa tenant ganda). Session support ditambahkan di repository (Tenant/User/Role/Outlet/Warehouse/Hub) via optional `options?: { session }`. UI: tombol **`+ New Tenant`** + `CreateTenantModal` di tab Tenants Terminal Center + hook `usePlatformProvisionTenant`. Backend **1035/1035** (86 files; +6 unit, +8 integrasi HTTP), frontend **85/85** + tsc + vite build bersih. Sisa: `req.outletId` dibaca service (deferred), invite email/billing/product seed (fase lanjutan), MVP deployment menunggu akses VPS.
+>
+> **2026-09-13 — Outlet Platform-Only (Fase 12) selesai.** Keputusan produk — **owner tidak bisa menambah outlet sendiri** (eksklusivitas + lisensi per cabang). `OutletService.createWithWarehouse` (Outlet + Warehouse 1:1 "Warehouse {name}" + link `warehouseId`, duplikat → 409) dipakai endpoint baru **`POST /api/platform/outlets`** (`platformAuthenticate` + `outlet:manage`, cek tenant → 404) di Terminal Center. Route tenant diramping: `POST /api/outlets` & `DELETE /api/outlets/:id` **dihapus** (tinggal `GET`/`PUT`); `useCreateOutlet`/`useDeleteOutlet` dihapus dari frontend. UI: `+ Tambah Outlet` + `CreateOutletModal` (dropdown tenant) di tab Outlet; `OutletListPage` tenant hanya Edit + toggle dengan banner "Butuh cabang tambahan? Hubungi tim sales/support kami". Backend **1048/1048** (87 files; +3 unit `createWithWarehouse`, +10 integrasi `platform-create-outlet`), frontend **85/85** + tsc + vite build bersih. Docs sync: HUB_ARCHITECTURE (Fase 12), API_REFERENCE, POS_CURRENT_FEATURES, DAILY_LOG.

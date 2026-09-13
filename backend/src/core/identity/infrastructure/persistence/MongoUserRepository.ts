@@ -74,6 +74,12 @@ export class MongoUserRepository extends MongoRepository<User, UserId, UserDoc> 
     return this.toDomain(doc);
   }
 
+  async findByEmailGlobal(email: string): Promise<User | null> {
+    const doc = await this.model.findOne({ email }).exec();
+    if (!doc) return null;
+    return this.toDomain(doc);
+  }
+
   async findByIdAndTenant(id: string, tenantId: string): Promise<User | null> {
     const doc = await this.model.findOne({ _id: id, tenantId }).exec();
     if (!doc) return null;

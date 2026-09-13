@@ -9,9 +9,7 @@ export function createOutletRoutes(outletController: OutletController): Router {
 
   router.get('/', authenticate, asyncHandler(outletController.list.bind(outletController)));
   router.get('/:id', authenticate, asyncHandler(outletController.getById.bind(outletController)));
-  router.post('/', authenticate, authorize('outlet:manage'), asyncHandler(outletController.create.bind(outletController)));
   router.put('/:id', authenticate, authorize('outlet:manage'), asyncHandler(outletController.update.bind(outletController)));
-  router.delete('/:id', authenticate, authorize('outlet:manage'), asyncHandler(outletController.delete.bind(outletController)));
 
   return router;
 }

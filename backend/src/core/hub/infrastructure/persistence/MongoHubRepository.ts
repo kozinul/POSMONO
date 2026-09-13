@@ -34,11 +34,12 @@ export class MongoHubRepository {
     } as unknown as Partial<HubDoc>;
   }
 
-  async save(hub: Hub): Promise<void> {
+  async save(hub: Hub, options?: { session?: any }): Promise<void> {
     const data = this.toPersistence(hub);
     await this.model.findOneAndUpdate({ _id: hub.id.toValue() }, data, {
       upsert: true,
       new: true,
+      session: options?.session,
     });
     hub.clearEvents();
   }

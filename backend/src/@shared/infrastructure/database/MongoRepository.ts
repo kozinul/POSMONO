@@ -14,12 +14,12 @@ export abstract class MongoRepository<
   abstract toDomain(doc: TDoc): TAggregate;
   abstract toPersistence(aggregate: TAggregate): Partial<TDoc>;
 
-  async save(aggregate: TAggregate): Promise<void> {
+  async save(aggregate: TAggregate, options?: { session?: any }): Promise<void> {
     const data = this.toPersistence(aggregate);
     await this.model.findOneAndUpdate(
       { _id: aggregate.id.toValue() } as FilterQuery<TDoc>,
       data,
-      { upsert: true, new: true },
+      { upsert: true, new: true, session: options?.session },
     );
     aggregate.clearEvents();
   }

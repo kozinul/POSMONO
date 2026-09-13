@@ -7,7 +7,10 @@ import {
   usePlatformOutlets,
   usePlatformShiftsSummary,
   usePlatformPaymentsSummary,
+  usePlatformProvisionTenant,
+  usePlatformCreateOutlet,
   type PlatformHub,
+  type PlatformTenantRow,
 } from '../../../@shared/hooks/usePlatform';
 import {
   useHubMembers,
@@ -232,28 +235,326 @@ function HubDetail({ hubId }: { hubId: string }) {
   );
 }
 
+function CreateTenantModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  const { data: hubs = [] } = usePlatformHubs();
+  const provisionTenant = usePlatformProvisionTenant();
+
+  const [tenantName, setTenantName] = useState('');
+  const [businessType, setBusinessType] = useState('restaurant');
+  const [ownerName, setOwnerName] = useState('');
+  const [ownerEmail, setOwnerEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [outletName, setOutletName] = useState('');
+  const [address, setAddress] = useState('');
+  const [phone, setPhone] = useState('');
+  const [hubId, setHubId] = useState<string>('');
+  const [error, setError] = useState('');
+  const [successData, setSuccessData] = useState<any>(null);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    if (!tenantName.trim()) return setError('Nama bisnis wajib diisi');
+    if (!ownerName.trim()) return setError('Nama owner wajib diisi');
+    if (!ownerEmail.trim()) return setError('Email owner wajib diisi');
+    if (!password.trim()) return setError('Password sementara wajib diisi');
+    if (!outletName.trim()) return setError('Nama outlet wajib diisi');
+
+    try {
+      const res = await provisionTenant.mutateAsync({
+        tenant: {
+          name: tenantName.trim(),
+          businessType,
+        },
+        owner: {
+          name: ownerName.trim(),
+          email: ownerEmail.trim(),
+          password: password.trim(),
+        },
+        outlet: {
+          name: outletName.trim(),
+          address: address.trim() || undefined,
+          phone: phone.trim() || undefined,
+        },
+        hubId: hubId || null,
+      });
+
+      setSuccessData(res);
+    } catch (err: any) {
+      const msg =
+        err.response?.data?.error?.message ||
+        err.response?.data?.message ||
+        err.message ||
+        'Gagal membuat tenant';
+      if (msg.includes('OWNER_EMAIL_ALREADY_EXISTS') || msg.includes('already exists')) {
+        setError('Email owner sudah terdaftar di sistem.');
+      } else if (msg.includes('HUB_NOT_FOUND')) {
+        setError('Hub yang dipilih tidak ditemukan.');
+      } else {
+        setError(msg);
+      }
+    }
+  };
+
+  const handleClose = () => {
+    setSuccessData(null);
+    setError('');
+    setTenantName('');
+    setBusinessType('restaurant');
+    setOwnerName('');
+    setOwnerEmail('');
+    setPassword('');
+    setOutletName('');
+    setAddress('');
+    setPhone('');
+    setHubId('');
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between border-b px-6 py-4">
+          <h3 className="text-lg font-bold text-gray-900">
+            {successData ? 'Tenant Berhasil Dibuat' : 'Buat Tenant Baru'}
+          </h3>
+          <button
+            onClick={handleClose}
+            disabled={provisionTenant.isPending}
+            className="text-gray-400 hover:text-gray-600 text-lg font-bold disabled:opacity-50"
+          >
+            ✕
+          </button>
+        </div>
+
+        {successData ? (
+          <div className="p-6 space-y-4">
+            <div className="p-4 bg-green-50 border border-green-200 rounded-xl space-y-2">
+              <p className="font-semibold text-green-800">Tenant berhasil di-provision!</p>
+              <div className="text-sm text-green-700 space-y-1">
+                <div>
+                  <strong>Tenant:</strong> {successData.tenant.name} ({successData.tenant.id})
+                </div>
+                <div>
+                  <strong>Owner:</strong> {successData.owner.name} ({successData.owner.email})
+                </div>
+                <div>
+                  <strong>Outlet:</strong> {successData.outlet.name}
+                </div>
+                <div>
+                  <strong>Warehouse:</strong> {successData.warehouse?.name ?? '-'}
+                </div>
+                <div>
+                  <strong>Status:</strong> <span className="uppercase font-semibold">{successData.status}</span>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={handleClose}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+              >
+                Selesai
+              </button>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            {error && (
+              <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+                {error}
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Informasi Bisnis</h4>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Nama Bisnis *</label>
+                <input
+                  className={inputCls}
+                  placeholder="Contoh: Kopi Bali Sejahtera"
+                  value={tenantName}
+                  onChange={(e) => {
+                    setTenantName(e.target.value);
+                    if (!outletName || outletName === tenantName + ' Utama') {
+                      setOutletName(e.target.value ? e.target.value + ' Utama' : '');
+                    }
+                  }}
+                  disabled={provisionTenant.isPending}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Tipe Bisnis</label>
+                <select
+                  className={inputCls}
+                  value={businessType}
+                  onChange={(e) => setBusinessType(e.target.value)}
+                  disabled={provisionTenant.isPending}
+                >
+                  <option value="restaurant">Restaurant / F&B</option>
+                  <option value="retail">Retail</option>
+                  <option value="service">Jasa / Service</option>
+                  <option value="cafe">Cafe / Coffee Shop</option>
+                  <option value="bakery">Bakery</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-3 pt-2 border-t">
+              <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Owner Akun</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Nama Owner *</label>
+                  <input
+                    className={inputCls}
+                    placeholder="Contoh: Budi Pratama"
+                    value={ownerName}
+                    onChange={(e) => setOwnerName(e.target.value)}
+                    disabled={provisionTenant.isPending}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Email Owner *</label>
+                  <input
+                    type="email"
+                    className={inputCls}
+                    placeholder="budi@kopibali.com"
+                    value={ownerEmail}
+                    onChange={(e) => setOwnerEmail(e.target.value)}
+                    disabled={provisionTenant.isPending}
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Password Sementara *</label>
+                <input
+                  type="password"
+                  className={inputCls}
+                  placeholder="Minimal 6 karakter"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={provisionTenant.isPending}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-3 pt-2 border-t">
+              <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Outlet & Hub</h4>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Nama Outlet *</label>
+                <input
+                  className={inputCls}
+                  placeholder="Contoh: Kopi Bali Sanur"
+                  value={outletName}
+                  onChange={(e) => setOutletName(e.target.value)}
+                  disabled={provisionTenant.isPending}
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Alamat Outlet</label>
+                  <input
+                    className={inputCls}
+                    placeholder="Jl. Danau Tamblingan"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    disabled={provisionTenant.isPending}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">No. Telepon Outlet</label>
+                  <input
+                    className={inputCls}
+                    placeholder="08123456789"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    disabled={provisionTenant.isPending}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Hub (Opsional)</label>
+                <select
+                  className={inputCls}
+                  value={hubId}
+                  onChange={(e) => setHubId(e.target.value)}
+                  disabled={provisionTenant.isPending}
+                >
+                  <option value="">Standalone (Tanpa Hub)</option>
+                  {hubs.map((h) => (
+                    <option key={h.id} value={h.id}>
+                      {h.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t">
+              <button
+                type="button"
+                onClick={handleClose}
+                disabled={provisionTenant.isPending}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                disabled={provisionTenant.isPending}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium disabled:opacity-50 flex items-center gap-2"
+              >
+                {provisionTenant.isPending ? 'Membuat Tenant...' : 'Buat Tenant'}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function TenantsSection() {
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
   const [page, setPage] = useState(1);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
   const { data, isLoading } = usePlatformTenants({ search: debounced || undefined, page, limit: 20 });
 
   return (
     <div className={`${cardCls} space-y-4`}>
       <div className="flex justify-between items-center">
         <SectionTitle>Tenants ({data?.total ?? '-'})</SectionTitle>
-        <input
-          className={inputCls + ' w-72'}
-          placeholder="Cari tenant..."
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(1);
-            const v = e.target.value;
-            setTimeout(() => setDebounced(v), 300);
-          }}
-        />
+        <div className="flex items-center gap-3">
+          <input
+            className={inputCls + ' w-72'}
+            placeholder="Cari tenant..."
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+              const v = e.target.value;
+              setTimeout(() => setDebounced(v), 300);
+            }}
+          />
+          <button
+            onClick={() => setCreateModalOpen(true)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium whitespace-nowrap"
+          >
+            + New Tenant
+          </button>
+        </div>
       </div>
+      <CreateTenantModal isOpen={createModalOpen} onClose={() => setCreateModalOpen(false)} />
       <div className="overflow-x-auto border rounded-lg">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
@@ -296,20 +597,206 @@ function TenantsSection() {
   );
 }
 
+function CreateOutletModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  const createOutlet = usePlatformCreateOutlet();
+  const { data: tenantsData, isLoading: tenantsLoading } = usePlatformTenants({ page: 1, limit: 200 });
+
+  const [tenantId, setTenantId] = useState('');
+  const [name, setName] = useState('');
+  const [address, setAddress] = useState('');
+  const [phone, setPhone] = useState('');
+  const [error, setError] = useState('');
+  const [saved, setSaved] = useState<PlatformTenantRow | null>(null);
+
+  if (!isOpen) return null;
+
+  const tenants: PlatformTenantRow[] = tenantsData?.data ?? [];
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    if (!tenantId) return setError('Pilih tenant tujuan');
+    if (!name.trim()) return setError('Nama outlet wajib diisi');
+
+    try {
+      const created = await createOutlet.mutateAsync({
+        tenantId,
+        name: name.trim(),
+        address: address.trim() || undefined,
+        phone: phone.trim() || undefined,
+      });
+      setSaved(tenants.find((t) => t.id === created.tenantId) ?? null);
+    } catch (err: any) {
+      const msg =
+        err.response?.data?.error?.message ||
+        err.response?.data?.message ||
+        err.message ||
+        'Gagal membuat outlet';
+      setError(msg.includes('already exists') ? 'Nama outlet sudah dipakai di tenant ini.' : msg);
+    }
+  };
+
+  const handleClose = () => {
+    setSaved(null);
+    setError('');
+    setTenantId('');
+    setName('');
+    setAddress('');
+    setPhone('');
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between border-b px-6 py-4">
+          <h3 className="text-lg font-bold text-gray-900">
+            {saved ? 'Outlet Berhasil Dibuat' : 'Tambah Outlet Baru'}
+          </h3>
+          <button
+            onClick={handleClose}
+            disabled={createOutlet.isPending}
+            className="text-gray-400 hover:text-gray-600 text-lg font-bold disabled:opacity-50"
+          >
+            ✕
+          </button>
+        </div>
+
+        {saved ? (
+          <div className="p-6 space-y-4">
+            <div className="p-4 bg-green-50 border border-green-200 rounded-xl space-y-2">
+              <p className="font-semibold text-green-800">Outlet berhasil dibuat!</p>
+              <div className="text-sm text-green-700 space-y-1">
+                <div>
+                  <strong>Tenant:</strong> {saved.name}
+                </div>
+                <div>
+                  <strong>Outlet:</strong> {name}
+                </div>
+                <div className="text-xs text-green-600">
+                  Warehouse terkait sudah dibuat otomatis. Tenant (owner) hanya dapat meng-update informasi outlet ini; penambahan cabang dilakukan dari Terminal Center.
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={handleClose}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+              >
+                Selesai
+              </button>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            {error && (
+              <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{error}</div>
+            )}
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Tenant Tujuan *</label>
+              {tenantsLoading ? (
+                <p className="text-sm text-gray-500">Memuat tenant...</p>
+              ) : (
+                <select className={inputCls} value={tenantId} onChange={(e) => setTenantId(e.target.value)} disabled={createOutlet.isPending} required>
+                  <option value="">Pilih tenant...</option>
+                  {tenants.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} ({t.slug})
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Nama Outlet *</label>
+              <input
+                className={inputCls}
+                placeholder="Contoh: Cabang Kuta"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                disabled={createOutlet.isPending}
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Alamat</label>
+                <input
+                  className={inputCls}
+                  placeholder="Jl. Raya Kuta No. 1"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  disabled={createOutlet.isPending}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">No. Telepon</label>
+                <input
+                  className={inputCls}
+                  placeholder="08123456789"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  disabled={createOutlet.isPending}
+                />
+              </div>
+            </div>
+
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
+              Outlet baru otomatis dibuatkan Warehouse 1:1. Penambahan cabang hanya dapat dilakukan oleh platform (Terminal Center); owner mengelola outlet lewat dashboard tenant.
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t">
+              <button
+                type="button"
+                onClick={handleClose}
+                disabled={createOutlet.isPending}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                disabled={createOutlet.isPending}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium disabled:opacity-50"
+              >
+                {createOutlet.isPending ? 'Membuat Outlet...' : 'Buat Outlet'}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function OutletsSection() {
   const { data: hubs = [] } = usePlatformHubs();
   const [hubId, setHubId] = useState('');
+  const [createOpen, setCreateOpen] = useState(false);
   const { data: outlets = [], isLoading } = usePlatformOutlets({ hubId: hubId || undefined });
 
   return (
     <div className={`${cardCls} space-y-4`}>
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center gap-3 flex-wrap">
         <SectionTitle>Outlet Lintas-Tenant</SectionTitle>
-        <select className={inputCls + ' w-72'} value={hubId} onChange={(e) => setHubId(e.target.value)}>
-          <option value="">Semua Hub</option>
-          {hubs.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
-        </select>
+        <div className="flex items-center gap-3">
+          <select className={inputCls + ' w-72'} value={hubId} onChange={(e) => setHubId(e.target.value)}>
+            <option value="">Semua Hub</option>
+            {hubs.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+          </select>
+          <button
+            onClick={() => setCreateOpen(true)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium whitespace-nowrap"
+          >
+            + Tambah Outlet
+          </button>
+        </div>
       </div>
+      <CreateOutletModal isOpen={createOpen} onClose={() => setCreateOpen(false)} />
       <div className="overflow-x-auto border rounded-lg">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">

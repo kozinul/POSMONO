@@ -1,9 +1,7 @@
 import { useState } from 'react';
 import {
   useOutlets,
-  useCreateOutlet,
   useUpdateOutlet,
-  useDeleteOutlet,
   type Outlet,
 } from '../../../@shared/hooks/useOutlets';
 
@@ -16,9 +14,7 @@ export default function OutletListPage() {
   const [error, setError] = useState('');
 
   const { data: outlets = [], isLoading } = useOutlets();
-  const createMutation = useCreateOutlet();
   const updateMutation = useUpdateOutlet();
-  const deleteMutation = useDeleteOutlet();
 
   const resetForm = () => {
     setName('');
@@ -27,11 +23,6 @@ export default function OutletListPage() {
     setError('');
     setShowCreate(false);
     setEditItem(null);
-  };
-
-  const openCreate = () => {
-    resetForm();
-    setShowCreate(true);
   };
 
   const openEdit = (o: Outlet) => {
@@ -48,42 +39,33 @@ export default function OutletListPage() {
       return;
     }
 
-    const onSuccess = () => resetForm();
+    if (!editItem) return;
 
-    if (editItem) {
-      updateMutation.mutate(
-        { id: editItem.id, data: { name: name.trim(), address: address.trim(), phone: phone.trim() } },
-        { onSuccess, onError: (err: any) => setError(err?.response?.data?.error?.message || err?.response?.data?.message || 'Gagal update') },
-      );
-    } else {
-      createMutation.mutate(
-        { name: name.trim(), address: address.trim(), phone: phone.trim() },
-        { onSuccess, onError: (err: any) => setError(err?.response?.data?.error?.message || err?.response?.data?.message || 'Gagal buat') },
-      );
-    }
-  };
-
-  const handleDelete = (o: Outlet) => {
-    if (!confirm(`Hapus outlet "${o.name}"?`)) return;
-    deleteMutation.mutate(o.id);
+    updateMutation.mutate(
+      { id: editItem.id, data: { name: name.trim(), address: address.trim(), phone: phone.trim() } },
+      {
+        onSuccess: resetForm,
+        onError: (err: any) => setError(err?.response?.data?.error?.message || err?.response?.data?.message || 'Gagal update'),
+      },
+    );
   };
 
   const handleToggleActive = (o: Outlet) => {
     updateMutation.mutate({ id: o.id, data: { isActive: !o.isActive } });
   };
 
-  const isPending = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
+  const isPending = updateMutation.isPending;
 
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Outlet</h1>
-        <button
-          onClick={openCreate}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
-        >
-          + Tambah Outlet
-        </button>
+      </div>
+
+      <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-3">
+        <span className="text-amber-700 text-sm">
+          Penambahan cabang/outlet baru dilakukan oleh platform (Terminal Center). Butuh cabang tambahan? Hubungi tim sales/support kami.
+        </span>
       </div>
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -106,7 +88,7 @@ export default function OutletListPage() {
             ) : outlets.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                  Belum ada outlet. Klik "Tambah Outlet" untuk membuat.
+                  Belum ada outlet. Penambahan cabang dilakukan oleh platform.
                 </td>
               </tr>
             ) : (
@@ -131,15 +113,9 @@ export default function OutletListPage() {
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <button
                       onClick={() => openEdit(o)}
-                      className="text-blue-600 hover:text-blue-900 mr-3"
+                      className="text-blue-600 hover:text-blue-900"
                     >
                       Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(o)}
-                      className="text-red-600 hover:text-red-900"
-                    >
-                      Hapus
                     </button>
                   </td>
                 </tr>
@@ -149,12 +125,12 @@ export default function OutletListPage() {
         </table>
       </div>
 
-      {showCreate && (
+      {showCreate && editItem && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl w-full max-w-md">
             <div className="border-b border-gray-200 px-6 py-4 rounded-t-xl">
               <h2 className="text-lg font-bold text-gray-900">
-                {editItem ? 'Edit Outlet' : 'Tambah Outlet'}
+                Edit Outlet
               </h2>
             </div>
             <div className="p-6 space-y-4">

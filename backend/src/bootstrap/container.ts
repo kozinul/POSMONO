@@ -142,6 +142,7 @@ import { MongoOutletRepository } from '../core/outlet/infrastructure/persistence
 import { OutletService } from '../core/outlet/application/services/OutletService';
 import { OutletController } from '../core/outlet/interfaces/http/controllers/OutletController';
 import { PlatformController } from '../core/platform/interfaces/http/controllers/PlatformController';
+import { ProvisionTenantService } from '../core/platform/application/services/ProvisionTenantService';
 
 export type DIContainer = ReturnType<typeof buildContainer>;
 
@@ -1053,6 +1054,18 @@ export function buildContainer() {
         outletService: container.resolve('outletService'),
       }),
     }),
+    provisionTenantService: asClass(ProvisionTenantService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        deps: {
+          tenantRepository: container.resolve('tenantRepository'),
+          userRepository: container.resolve('userRepository'),
+          roleRepository: container.resolve('roleRepository'),
+          hubRepository: container.resolve('hubRepository'),
+          outletService: container.resolve('outletService'),
+        },
+      }),
+    }),
     platformController: asClass(PlatformController, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
@@ -1064,6 +1077,7 @@ export function buildContainer() {
           paymentService: container.resolve('paymentService'),
           tenantRepository: container.resolve('tenantRepository'),
           hubRepository: container.resolve('hubRepository'),
+          provisionTenantService: container.resolve('provisionTenantService'),
         },
       }),
     }),
