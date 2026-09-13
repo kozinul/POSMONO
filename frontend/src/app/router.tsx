@@ -9,6 +9,7 @@ import NotFoundPage from '../@shared/pages/NotFoundPage';
 
 // Lazy-loaded pages
 const LoginPage = lazy(() => import('../core/auth/pages/LoginPage'));
+const TerminalLoginPage = lazy(() => import('../core/platform/pages/TerminalLoginPage'));
 const DashboardPage = lazy(() => import('../core/dashboard/pages/DashboardPage'));
 const PosPage = lazy(() => import('../core/pos/pages/PosPage'));
 const OrderListPage = lazy(() => import('../core/orders/pages/OrderListPage'));
@@ -45,6 +46,7 @@ export function AppRouter() {
         <Routes>
           <Route element={<AuthLayout />}>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/terminal/login" element={<TerminalLoginPage />} />
           </Route>
           <Route element={<ProtectedRoute />}>
             <Route element={<DashboardLayout />}>

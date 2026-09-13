@@ -36,14 +36,45 @@ Copy this block for each new day:
 
 ## Entries
 
-### DATE: 2026-09-12 — Fase 9 Rampung: HubMembership, Session Lintas-Tenant, Hub Consolidated Report & Halaman /terminal
+### DATE: 2026-09-13 — Terminal Center: Layout Standalone + Login URL Terpisah
+
+**Today I worked on:**
+
+- **Perombakan routing Terminal Center**: `/terminal` → `/terminal-center` di layout sendiri (`TerminalLayout.tsx` + guard `PlatformRoute.tsx`); `DashboardLayout` redirect platform super admin (`tenantId === 'platform'`) ke `/terminal-center`, item nav "Terminal Center" dari sidebar tenant dihapus; `/terminal` lama hanya redirect
+- **Login tanpa checkbox**: `LoginPage` dihapus dari checkbox "Terminal Center (Super Admin Platform)" → diganti link ke `/terminal/login`; `TerminalLoginPage.tsx` baru (URL terpisah) selalu mengirim header `X-Tenant-Id: platform` → mendarat `/terminal-center`; `AuthLayout` judul dinamis (Platform Super Admin); `PlatformRoute` belum login → `/terminal/login`
+- **container.ts**: injector `OnboardingService`/`HubMembershipService`/`PlatformController` dibungkus objek `{ deps }` (mengikuti pola registrasi service baru)
+
+**Problems encountered:**
+
+- Keharusan centang checkbox untuk masuk Terminal Center = UX buruk & mudah lupa; solusi dipilih: URL login khusus sehingga alur platform murni ditentukan rute, bukan checkbox UI
+
+**What I completed:**
+
+- `/terminal/login` (super admin) + `/terminal-center` (halaman) + guard terpisah; `LoginPage` bersih tanpa centang; tsc bersih, frontend **85/85** test hijau, vite build OK
+- Docs sync: HUB_ARCHITECTURE (Fase 9 + status header), ROLE_ACCESS_PLAN (router/sidebar/login), PROJECT_ROADMAP (roadmap + log), POS_CURRENT_FEATURES §24, DAILY_LOG
+
+**What I learned:**
+
+-
+
+**Tomorrow priority:**
+
+- `req.outletId` dibaca service dari `X-Outlet-Id`/resolveOutlet (deferred); MVP deployment (VPS/SSL/monitoring/backup) menunggu akses VPS
+
+**Productivity score:** 8
+
+**Notes:**
+
+- Login Terminal Center: `/terminal/login` → `platform@demo.com`/`admin123` (header `X-Tenant-Id: platform` otomatis)
+- Group Admin: tambah user → Tengah admin `hub:manage` tabel Hub → tab "Hub & Anggota" → add member (User ID + role); user tsb lalu login sebagai user tenant-nya sendiri dan memakai tenant switcher di top bar untuk berpindah tenant dalam hub
+- Role `hub-owner` = FULL akses tenant (sama seperti Owner), `hub-admin` = Manager-level, `hub-viewer` = read-only
 
 **Today I worked on:**
 
 - **HubMembership (backend)**: domain `HubMembership {hubId, userId, role: owner|admin|viewer}` + `HubMembershipSchema` (unique `{hubId, userId}`) + `MongoHubMembershipRepository` (findByHub/findByUser/findByHubAndUser/save/delete); `HubMembershipService` (add/updateRole/remove/listMembers di-decorasi nama+email user/listByUser/findAccessibleTenants/resolveRoleForTenant); controller + route `/api/hub-memberships` (mutasi & list per hub guard `hub:manage`; `/me` & `/me/tenants` authenticate-only)
 - **Session lintas-tenant (auth)**: `AuthService.switchTenant(userId, tenantId)` — cek membership, token access+refresh baru scope target dengan `role: hub-*`, `roleName: Hub Owner/Admin/Viewer`, `permissions: HUB_MEMBER_ROLE_PERMS` (owner = `OWNER_PERMS`, admin = `MANAGER_PERMS + users:read + reports:read`, viewer = read-only), `outletIds: []`, session di-`create`; `listAccessibleTenants`; `getCurrentUser` fallback ke `resolveHubMemberContext` (user non-anggota tenant tapi punya membership); routes `GET /auth/accessible-tenants` + `POST /auth/switch-tenant`; DI `hubMembershipService` → `AuthService` (container registrasi `authService` diubah ke `asClass` + injector); `MongoUserRepository.findByIdRaw`
 - **Hub Consolidated Report**: `PaymentService.getPlatformPaymentsConsolidationByOutlet` (per tenant + per outlet breakdown, metode) + `PlatformController.consolidated` → `GET /api/platform/hubs/:hubId/consolidated` (guard `platform.reports.read`); gabung shift summary (per outlet) + payment consolidation (per outlet) + nama outlet via `OutletService.listAllForPlatform`
-- **Frontend**: halaman `/terminal` (`TerminalCenterPage.tsx` — tabs Hub & Anggota / Tenants / Outlet / Ringkasan / Konsolidasi), hooks `usePlatform.*` + `useHubMembers`/`useAddHubMembership`/`useUpdateHubMembership`/`useRemoveHubMembership`/`useAccessibleTenants`; store `useAuth` + `activeTenantId` + `switchTenant` + `setUser` sinkron tenant; `DashboardLayout` tenant switcher lintas-tenant (top bar) → switch → `queryClient.clear()`; `LoginPage` checkbox "Terminal Center (Super Admin Platform)" (header `X-Tenant-Id: platform` → `/terminal`)
+- **Frontend**: halaman `/terminal-center` (`TerminalCenterPage.tsx` — tabs Hub & Anggota / Tenants / Outlet / Ringkasan / Konsolidasi) di layout sendiri (`TerminalLayout` + guard `PlatformRoute`), hooks `usePlatform.*` + `useHubMembers`/`useAddHubMembership`/`useUpdateHubMembership`/`useRemoveHubMembership`/`useAccessibleTenants`; store `useAuth` + `activeTenantId` + `switchTenant` + `setUser` sinkron tenant; `DashboardLayout` tenant switcher lintas-tenant (top bar) → switch → `queryClient.clear()`; `LoginPage` link ke `/terminal/login` (login super admin terpisah, tanpa checkbox)
 
 **Problems encountered:**
 
@@ -64,7 +95,7 @@ Copy this block for each new day:
 
 **Notes:**
 
-- Login Terminal Center: checkbox di LoginPage → `platform@demo.com`/`admin123` + `X-Tenant-Id: platform`
+- Login Terminal Center: URL terpisah `/terminal/login` → `platform@demo.com`/`admin123` + `X-Tenant-Id: platform` (tanpa checkbox di LoginPage)
 - Group Admin: tambah user → Tengah admin `hub:manage` tabel Hub → tab "Hub & Anggota" → add member (User ID + role); user tsb lalu login sebagai user tenant-nya sendiri dan memakai tenant switcher di top bar untuk berpindah tenant dalam hub
 - Role `hub-owner` = FULL akses tenant (sama seperti Owner), `hub-admin` = Manager-level, `hub-viewer` = read-only
 

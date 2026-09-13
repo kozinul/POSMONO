@@ -7,7 +7,7 @@ export function PlatformRoute() {
   const location = useLocation();
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+    return <Navigate to="/terminal/login" replace state={{ from: location.pathname }} />;
   }
 
   if (user?.tenantId !== 'platform') {

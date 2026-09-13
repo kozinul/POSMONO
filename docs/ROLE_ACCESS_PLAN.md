@@ -91,9 +91,9 @@ Prinsip:
 - **Auth store** (`frontend/src/@shared/hooks/useAuth.ts`) — `user = { id, email, displayName, roleName, roleId, permissions, outletIds, tenantId }` + `activeOutletId` (persist `localStorage.activeOutletId`, auto-pick 1 outlet, cleared saat logout) + `activeTenantId` + `switchTenant()` (session lintas-tenant).
 - **Guard** (`ProtectedRoute`) — redirect non-`/pos` → `/pos` untuk kasir; `DashboardLayout` sidebar filter by permission.
 - API client kirim `X-Outlet-Id` (dari `activeOutletId`) + JWT.
-- **Router** (`frontend/src/app/router.tsx`) — 16 halaman, semuanya di bawah `ProtectedRoute` + `DashboardLayout`. Tidak ada guard per-route; `/terminal` (Terminal Center) di-filter nav `hub:manage`.
-- **Sidebar** (`frontend/src/layouts/DashboardLayout.tsx`) — array `navigation[]` **statis** untuk semua role (Dashboard, POS, Orders, Products, Families, Categories, Members, Promotions, Payment, Inventory, Gudang, Templates, Reports, Shifts, Settings, Terminal Center); **tenant switcher** muncul di top bar saat user punya hub membership lintas-tenant (`GET /auth/accessible-tenants`).
-- **Login** (`frontend/src/core/auth/pages/LoginPage.tsx`) — simpan token + tenant di localStorage, `setUser(data.data.user)`; checkbox **"Terminal Center (Super Admin Platform)"** → login dengan `X-Tenant-Id: platform` → mendarat `/terminal`.
+- **Router** (`frontend/src/app/router.tsx`) — 16 halaman tenant di bawah `ProtectedRoute` + `DashboardLayout`; **Terminal Center** (`/terminal-center`) di layout terpisah (`TerminalLayout` + `PlatformRoute`) guard platform; `/terminal` redirect ke `/terminal-center`; halaman login platform di `/terminal/login`.
+- **Sidebar** (`frontend/src/layouts/DashboardLayout.tsx`) — array `navigation[]` **statis** untuk semua role tenant (Dashboard, POS, Orders, Products, Families, Categories, Members, Promotions, Payment, Inventory, Gudang, Templates, Reports, Shifts, Settings, Printer, Database; **Terminal Center sudah tidak di sidebar** — platform super admin otomatis di-redirect ke `/terminal-center` oleh `DashboardLayout`); **tenant switcher** muncul di top bar saat user punya hub membership lintas-tenant (`GET /auth/accessible-tenants`).
+- **Login** (`frontend/src/core/auth/pages/LoginPage.tsx`) — simpan token + tenant di localStorage, `setUser(data.data.user)`; **tidak ada checkbox platform** — login super admin pakai URL terpisah `/terminal/login` (`TerminalLoginPage.tsx` selalu mengirim `X-Tenant-Id: platform` → mendarat `/terminal-center`).
 
 ---
 

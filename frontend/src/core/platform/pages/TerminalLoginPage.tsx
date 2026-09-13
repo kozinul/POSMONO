@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../../../@shared/services/api';
 import { useAuthStore } from '../../../@shared/hooks/useAuth';
 
-export default function LoginPage() {
+export default function TerminalLoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -25,7 +25,7 @@ export default function LoginPage() {
       const { data } = await api.post(
         '/auth/login',
         { email: email.trim(), password },
-        {},
+        { headers: { 'X-Tenant-Id': 'platform' } },
       );
       localStorage.setItem('accessToken', data.data.accessToken);
       localStorage.setItem('refreshToken', data.data.refreshToken);
@@ -33,13 +33,7 @@ export default function LoginPage() {
       const tenantId = tokenPayload.tenant ?? data.data.user?.tenantId ?? '';
       localStorage.setItem('tenantId', tenantId);
       setUser({ ...data.data.user, tenantId });
-      const roleName = data.data.user?.roleName ?? '';
-      const dest = tenantId === 'platform'
-        ? '/terminal-center'
-        : roleName === 'Cashier'
-          ? '/pos'
-          : '/dashboard';
-      navigate(dest);
+      navigate('/terminal-center');
     } catch (err: any) {
       setError(err?.response?.data?.error?.message || 'Invalid credentials');
     } finally {
@@ -57,7 +51,7 @@ export default function LoginPage() {
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="Email address"
+          placeholder="Platform super admin email"
           required
           className="w-full px-3 py-2 border border-gray-300 rounded-md"
         />
@@ -75,11 +69,11 @@ export default function LoginPage() {
         disabled={isLoading}
         className="w-full py-2 px-4 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50"
       >
-        {isLoading ? 'Signing in...' : 'Sign in'}
+        {isLoading ? 'Signing in...' : 'Sign in to Terminal Center'}
       </button>
       <p className="text-center text-sm text-gray-600">
-        <Link to="/terminal/login" className="hover:underline">
-          Login Terminal Center (Super Admin Platform)
+        <Link to="/login" className="hover:underline">
+          Login sebagai tenant (POS)
         </Link>
       </p>
     </form>

@@ -1208,7 +1208,7 @@ export type CreateOrderInput = {
 ### Business Logic
 - `resolvePlatformScope`: `tenantId` → 1 tenant; `hubId` → semua tenant anggota hub; kosong → semua tenant
 - `ShiftService.getPlatformShiftsSummary` + `MongoShiftRepository.findByTenantIds`; `PaymentService.getPlatformPaymentsSummary`/`getPlatformPaymentsConsolidationByOutlet` + `MongoPaymentRepository.findCompletedByTenantIds`; `TenantService.list` + `MongoTenantRepository.list`
-- **Halaman admin Terminal Center** (`/terminal`, tab Hub & Anggota / Tenants / Outlet / Ringkasan / Konsolidasi) **di-wire bersama HubMembership (Fase 9)** — login lewat checkbox "Terminal Center (Super Admin Platform)" (`X-Tenant-Id: platform` → mendarat `/terminal`); group admin lintas-tenant memakai tenant switcher di top bar
+- **Halaman admin Terminal Center** (`/terminal-center`, di layout khusus `TerminalLayout` + guard `PlatformRoute`; tab Hub & Anggota / Tenants / Outlet / Ringkasan / Konsolidasi) **di-wire bersama HubMembership (Fase 9)** — login super admin di **URL terpisah `/terminal/login`** (`TerminalLoginPage` selalu kirim `X-Tenant-Id: platform` → mendarat `/terminal-center`, tanpa checkbox); group admin lintas-tenant memakai tenant switcher di top bar
 - **Permissions hub member**: `owner` = `OWNER_PERMS`; `admin` = `MANAGER_PERMS + users:read + reports:read`; `viewer` = read-only (`reports/orders/products/customers/inventory/shifts/payments:read`) — dari `backend/src/core/platform/defaults/roles.ts: HUB_MEMBER_ROLE_PERMS`
 
 ---
