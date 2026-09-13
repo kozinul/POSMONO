@@ -1,4 +1,4 @@
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import { Outlet, Link, useLocation, Navigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore, hasPermission } from '../@shared/hooks/useAuth';
 import { useAccessibleTenants } from '../@shared/hooks/useHubMemberships';
@@ -34,7 +34,6 @@ const navigation: NavItem[] = [
   { name: 'Settings', href: '/settings' },
   { name: 'Printer', href: '/settings/printers' },
   { name: 'Database', href: '/database' },
-  { name: 'Terminal Center', href: '/terminal', permission: 'hub:manage' },
 ];
 
 const OUTLET_SCOPE_KEYS: ReadonlyArray<readonly string[]> = [
@@ -51,6 +50,11 @@ export function DashboardLayout() {
   const location = useLocation();
   const { user, logout, activeOutletId, setActiveOutletId, switchTenant } = useAuthStore();
   const isPOSPage = location.pathname === '/pos';
+
+  // Redirect platform super admin to Terminal Center
+  if (user?.tenantId === 'platform') {
+    return <Navigate to="/terminal-center" replace />;
+  }
 
   useRealtimeSync();
 

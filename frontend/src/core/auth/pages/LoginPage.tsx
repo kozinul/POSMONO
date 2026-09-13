@@ -36,7 +36,7 @@ export default function LoginPage() {
       setUser({ ...data.data.user, tenantId });
       const roleName = data.data.user?.roleName ?? '';
       const dest = tenantId === 'platform' || platformMode
-        ? '/terminal'
+        ? '/terminal-center'
         : roleName === 'Cashier'
           ? '/pos'
           : '/dashboard';

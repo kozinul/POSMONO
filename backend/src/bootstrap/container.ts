@@ -260,12 +260,14 @@ export function buildContainer() {
     onboardingService: asClass(OnboardingService, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
-        tenantRepository: container.resolve('tenantRepository'),
-        roleRepository: container.resolve('roleRepository'),
-        userRepository: container.resolve('userRepository'),
-        paymentMethodRepository: container.resolve('paymentMethodRepository'),
-        warehouseService: container.resolve('warehouseService'),
-        templateService: container.resolve('templateService'),
+        deps: {
+          tenantRepository: container.resolve('tenantRepository'),
+          roleRepository: container.resolve('roleRepository'),
+          userRepository: container.resolve('userRepository'),
+          paymentMethodRepository: container.resolve('paymentMethodRepository'),
+          warehouseService: container.resolve('warehouseService'),
+          templateService: container.resolve('templateService'),
+        },
       }),
     }),
     roleRepository: asClass(MongoRoleRepository, {
@@ -1018,10 +1020,12 @@ export function buildContainer() {
     hubMembershipService: asClass(HubMembershipService, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
-        hubMembershipRepository: container.resolve('hubMembershipRepository'),
-        hubRepository: container.resolve('hubRepository'),
-        tenantRepository: container.resolve('tenantRepository'),
-        userRepository: container.resolve('userRepository'),
+        deps: {
+          hubMembershipRepository: container.resolve('hubMembershipRepository'),
+          hubRepository: container.resolve('hubRepository'),
+          tenantRepository: container.resolve('tenantRepository'),
+          userRepository: container.resolve('userRepository'),
+        },
       }),
     }),
     hubMembershipController: asClass(HubMembershipController, {
@@ -1052,13 +1056,15 @@ export function buildContainer() {
     platformController: asClass(PlatformController, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
-        hubService: container.resolve('hubService'),
-        tenantService: container.resolve('tenantService'),
-        outletService: container.resolve('outletService'),
-        shiftService: container.resolve('shiftService'),
-        paymentService: container.resolve('paymentService'),
-        tenantRepository: container.resolve('tenantRepository'),
-        hubRepository: container.resolve('hubRepository'),
+        deps: {
+          hubService: container.resolve('hubService'),
+          tenantService: container.resolve('tenantService'),
+          outletService: container.resolve('outletService'),
+          shiftService: container.resolve('shiftService'),
+          paymentService: container.resolve('paymentService'),
+          tenantRepository: container.resolve('tenantRepository'),
+          hubRepository: container.resolve('hubRepository'),
+        },
       }),
     }),
   });

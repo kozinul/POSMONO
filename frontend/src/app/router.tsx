@@ -1,8 +1,10 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { DashboardLayout } from '../layouts/DashboardLayout';
+import { TerminalLayout } from '../layouts/TerminalLayout';
 import { AuthLayout } from '../layouts/AuthLayout';
 import { ProtectedRoute } from '../@shared/components/ProtectedRoute';
+import { PlatformRoute } from '../@shared/components/PlatformRoute';
 import NotFoundPage from '../@shared/pages/NotFoundPage';
 
 // Lazy-loaded pages
@@ -49,7 +51,6 @@ export function AppRouter() {
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/pos" element={<PosPage />} />
-              <Route path="/terminal" element={<TerminalCenterPage />} />
               <Route path="/orders" element={<OrderListPage />} />
               <Route path="/refunds" element={<RefundPage />} />
               <Route path="/products" element={<ProductListPage />} />
@@ -72,6 +73,12 @@ export function AppRouter() {
               <Route path="/database" element={<DatabasePage />} />
             </Route>
           </Route>
+          <Route element={<PlatformRoute />}>
+            <Route element={<TerminalLayout />}>
+              <Route path="/terminal-center" element={<TerminalCenterPage />} />
+            </Route>
+          </Route>
+          <Route path="/terminal" element={<Navigate to="/terminal-center" replace />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </Suspense>
