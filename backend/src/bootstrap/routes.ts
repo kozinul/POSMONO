@@ -32,6 +32,8 @@ import { createHubRoutes } from '../core/hub/interfaces/http/routes/hub.routes';
 import { createHubMembershipRoutes } from '../core/hub/interfaces/http/routes/hubmembership.routes';
 import { createOutletRoutes } from '../core/outlet/interfaces/http/routes/outlet.routes';
 import { createPlatformRoutes } from '../core/platform/interfaces/http/routes/platform.routes';
+import { createPlanRoutes } from '../core/billing/interfaces/http/routes/plan.routes';
+import { createPlatformSubscriptionRoutes, createMerchantEntitlementRoutes } from '../core/billing/interfaces/http/routes/subscription.routes';
 
 export function registerRoutes(app: Express, container: DIContainer): void {
   app.get('/health', (_req, res) => {
@@ -135,4 +137,11 @@ export function registerRoutes(app: Express, container: DIContainer): void {
 
   const platformController = container.resolve('platformController');
   app.use('/api/platform', createPlatformRoutes(platformController));
+
+  const planController = container.resolve('planController');
+  app.use('/api/platform/plans', createPlanRoutes(planController));
+
+  const subscriptionController = container.resolve('subscriptionController');
+  app.use('/api/platform', createPlatformSubscriptionRoutes(subscriptionController));
+  app.use('/api/tenants', createMerchantEntitlementRoutes(subscriptionController));
 }

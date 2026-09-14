@@ -7,6 +7,7 @@ export interface Tenant {
   domain: string | null;
   ownerId: string;
   plan: string;
+  planId: string | null;
   status: TenantStatus;
   subscriptionExpiresAt: Date | null;
   businessType: BusinessType;
@@ -43,25 +44,3 @@ export interface TenantConfig {
   autoPrintKot: boolean;
 }
 
-export interface Subscription {
-  id: string;
-  tenantId: string;
-  planId: string;
-  status: SubscriptionStatus;
-  currentPeriodStart: Date;
-  currentPeriodEnd: Date;
-  cancelledAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export type SubscriptionStatus = 'active' | 'past_due' | 'cancelled' | 'expired';
-
-export interface Plan {
-  id: string;
-  name: string;
-  price: number;
-  billingCycle: 'monthly' | 'annual';
-  features: Record<string, unknown>;
-  isActive: boolean;
-}

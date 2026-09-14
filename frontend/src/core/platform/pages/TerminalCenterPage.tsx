@@ -9,6 +9,14 @@ import {
   usePlatformPaymentsSummary,
   usePlatformProvisionTenant,
   usePlatformCreateOutlet,
+  usePlatformUpdateTenantStatus,
+  usePlatformExtendSubscription,
+  usePlatformTenant,
+  usePlatformPlans,
+  usePlatformTenantSubscription,
+  usePlatformAssignPlan,
+  usePlatformCancelSubscription,
+  PLAN_MODULE_LABELS,
   type PlatformHub,
   type PlatformTenantRow,
 } from '../../../@shared/hooks/usePlatform';
@@ -20,6 +28,7 @@ import {
 } from '../../../@shared/hooks/useHubMemberships';
 import { formatCurrency } from '../../../@shared/utils/format';
 import { paymentMethodLabel } from '../../pos/utils/paymentLabels';
+import PlansSection from '../components/PlansSection';
 
 const inputCls =
   'block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50';
@@ -523,12 +532,284 @@ function CreateTenantModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
   );
 }
 
+function TenantDetailModal({ tenantId, onClose }: { tenantId: string; onClose: () => void }) {
+  const { data: tenant, isLoading } = usePlatformTenant(tenantId);
+  const { data: plans = [] } = usePlatformPlans(true);
+  const { data: tenantSub } = usePlatformTenantSubscription(tenantId);
+  const assignPlan = usePlatformAssignPlan();
+  const cancelSub = usePlatformCancelSubscription();
+  const [selectedPlanId, setSelectedPlanId] = useState('');
+  const [assignMsg, setAssignMsg] = useState('');
+  const [assigning, setAssigning] = useState(false);
+
+  const expiresAt = tenant?.subscriptionExpiresAt ? new Date(tenant.subscriptionExpiresAt) : null;
+  const daysRemaining = expiresAt
+    ? Math.max(0, Math.ceil((expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    : null;
+
+  const handleAssign = async () => {
+    if (!selectedPlanId) return setAssignMsg('Pilih plan terlebih dahulu');
+    setAssignMsg('');
+    setAssigning(true);
+    try {
+      await assignPlan.mutateAsync({ tenantId, planId: selectedPlanId });
+      setAssignMsg('Plan berhasil di-assign');
+      setSelectedPlanId('');
+    } catch (e: any) {
+      setAssignMsg(e?.response?.data?.error?.message || 'Gagal assign plan');
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  const handleCancelSub = async () => {
+    if (!confirm('Batalkan langganan tenant ini? Tenant akan berstatus "deactivated" (tidak aktif).')) return;
+    try {
+      await cancelSub.mutateAsync(tenantId);
+    } catch (e: any) {
+      alert(e?.response?.data?.error?.message || 'Gagal membatalkan langganan');
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between border-b px-6 py-4 sticky top-0 bg-white z-10">
+          <h3 className="text-lg font-bold text-gray-900">
+            {isLoading ? 'Memuat...' : tenant?.name ?? 'Detail Tenant'}
+          </h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg font-bold">✕</button>
+        </div>
+
+        {isLoading || !tenant ? (
+          <div className="p-8"><Loading /></div>
+        ) : (
+          <div className="p-6 space-y-6">
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Nama Bisnis</p>
+                <p className="font-medium text-gray-900">{tenant.name}</p>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Slug</p>
+                <p className="font-medium text-gray-900">{tenant.slug}</p>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Status</p>
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                  tenant.status === 'active' ? 'bg-green-100 text-green-700' :
+                  tenant.status === 'frozen' ? 'bg-blue-100 text-blue-700' :
+                  tenant.status === 'suspended' ? 'bg-red-100 text-red-700' :
+                  'bg-amber-100 text-amber-700'
+                }`}>{tenant.status}</span>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Plan</p>
+                <p className="font-medium text-gray-900">{tenant.plan}</p>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Tipe Bisnis</p>
+                <p className="font-medium text-gray-900">{tenant.businessType ?? '-'}</p>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Hub</p>
+                <p className="font-medium text-gray-900">{tenant.hubName ?? tenant.hubId ?? 'Standalone'}</p>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Masa Aktif</p>
+                <p className="font-medium text-gray-900">
+                  {expiresAt ? expiresAt.toLocaleDateString('id-ID') : '-'}
+                  {daysRemaining !== null && (
+                    <span className={`ml-2 text-xs ${daysRemaining <= 7 ? 'text-red-600' : 'text-gray-500'}`}>
+                      ({daysRemaining} hari)
+                    </span>
+                  )}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Email Billing</p>
+                <p className="font-medium text-gray-900">{tenant.billingEmail || '-'}</p>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Telepon</p>
+                <p className="font-medium text-gray-900">{tenant.phone || '-'}</p>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Alamat</p>
+                <p className="font-medium text-gray-900">{tenant.address || '-'}</p>
+              </div>
+            </div>
+
+            <div className="border-t pt-4">
+              <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-3">
+                Outlet ({tenant.outlets?.length ?? 0})
+              </h4>
+              {!tenant.outlets || tenant.outlets.length === 0 ? (
+                <p className="text-sm text-gray-500">Belum ada outlet.</p>
+              ) : (
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Nama</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Alamat</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Telepon</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-100">
+                      {tenant.outlets.map((o) => (
+                        <tr key={o.id} className="hover:bg-gray-50">
+                          <td className="px-3 py-2 text-sm font-medium text-gray-900">{o.name}</td>
+                          <td className="px-3 py-2 text-sm text-gray-500">{o.address || '-'}</td>
+                          <td className="px-3 py-2 text-sm text-gray-500">{o.phone || '-'}</td>
+                          <td className="px-3 py-2 text-sm">
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${o.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                              {o.isActive ? 'Aktif' : 'Nonaktif'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <div className="border-t pt-4">
+              <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-3">Plan & Langganan</h4>
+
+              <div className="grid grid-cols-2 gap-4 text-sm mb-4">
+                <div>
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Plan Aktif</p>
+                  <p className="font-medium text-gray-900">{tenantSub?.plan?.name ?? tenant.plan ?? 'Trial'}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Status Langganan</p>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                    tenantSub?.subscription.status === 'active' ? 'bg-green-100 text-green-700' :
+                    tenantSub?.subscription.status === 'trialing' ? 'bg-blue-100 text-blue-700' :
+                    tenantSub?.subscription.status === 'past_due' ? 'bg-amber-100 text-amber-700' :
+                    'bg-gray-100 text-gray-500'
+                  }`}>
+                    {tenantSub?.subscription.status ?? 'Tidak ada'}
+                  </span>
+                </div>
+                {tenantSub?.subscription && (
+                  <>
+                    <div>
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Siklus</p>
+                      <p className="font-medium text-gray-900">{tenantSub.subscription.billingCycle}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Periode Berjalan</p>
+                      <p className="font-medium text-gray-900">
+                        {tenantSub.subscription.currentPeriodStart
+                          ? new Date(tenantSub.subscription.currentPeriodStart).toLocaleDateString('id-ID')
+                          : '-'}{' '}
+                        s/d{' '}
+                        {tenantSub.subscription.currentPeriodEnd
+                          ? new Date(tenantSub.subscription.currentPeriodEnd).toLocaleDateString('id-ID')
+                          : '-'}
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {tenantSub?.plan && (
+                <div className="mb-4 bg-gray-50 rounded-lg p-3">
+                  <p className="text-xs text-gray-500 mb-2">Modul aktif ({tenantSub.plan.modules.length}):</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {tenantSub.plan.modules.map((mod) => (
+                      <span key={mod} className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-[10px] font-medium">
+                        {PLAN_MODULE_LABELS?.[mod] ?? mod}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3 items-end">
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Assign / Ganti Plan</label>
+                  <select className={inputCls} value={selectedPlanId} onChange={(e) => setSelectedPlanId(e.target.value)}>
+                    <option value="">— Pilih Plan —</option>
+                    {plans.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} ({p.basePrice === 0 ? 'Gratis' : formatCurrency(p.basePrice)}/{p.billingCycle === 'annual' ? 'tahun' : 'bulan'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  onClick={handleAssign}
+                  disabled={assigning}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium disabled:opacity-50"
+                >
+                  {assigning ? 'Assign...' : 'Assign Plan'}
+                </button>
+                {tenantSub?.subscription && tenantSub.subscription.status !== 'cancelled' && (
+                  <button
+                    onClick={handleCancelSub}
+                    className="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded border border-red-200"
+                  >
+                    Batalkan
+                  </button>
+                )}
+              </div>
+              {assignMsg && <p className={`mt-2 text-xs ${assignMsg.startsWith('Plan berhasil') ? 'text-green-600' : 'text-red-600'}`}>{assignMsg}</p>}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function TenantsSection() {
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
   const [page, setPage] = useState(1);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [detailTenantId, setDetailTenantId] = useState<string | null>(null);
   const { data, isLoading } = usePlatformTenants({ search: debounced || undefined, page, limit: 20 });
+  const updateStatus = usePlatformUpdateTenantStatus();
+  const extendSub = usePlatformExtendSubscription();
+
+  const handleStatusChange = async (tenantId: string, currentStatus: string) => {
+    const nextStatus = currentStatus === 'active' ? 'frozen' : 'active';
+    const actionName = currentStatus === 'active' ? 'membekukan (freeze)' : 'mengaktifkan kembali';
+    if (!confirm(`Yakin ingin ${actionName} tenant ini?`)) return;
+    try {
+      await updateStatus.mutateAsync({ tenantId, status: nextStatus });
+    } catch (e: any) {
+      alert(e?.response?.data?.error?.message || 'Gagal mengubah status tenant');
+    }
+  };
+
+  const handleSuspend = async (tenantId: string) => {
+    const reason = prompt('Masukkan alasan suspend (penangguhan):');
+    if (!reason || !reason.trim()) return;
+    try {
+      await updateStatus.mutateAsync({ tenantId, status: 'suspended', reason: reason.trim() });
+    } catch (e: any) {
+      alert(e?.response?.data?.error?.message || 'Gagal mensuspend tenant');
+    }
+  };
+
+  const handleExtend = async (tenantId: string) => {
+    const daysStr = prompt('Masukkan jumlah hari perpanjangan masa aktif (cth: 30):', '30');
+    if (!daysStr) return;
+    const days = parseInt(daysStr, 10);
+    if (isNaN(days) || days <= 0) return alert('Jumlah hari tidak valid');
+    try {
+      await extendSub.mutateAsync({ tenantId, days });
+      alert(`Berhasil memperpanjang langganan selama ${days} hari.`);
+    } catch (e: any) {
+      alert(e?.response?.data?.error?.message || 'Gagal memperpanjang langganan');
+    }
+  };
 
   return (
     <div className={`${cardCls} space-y-4`}>
@@ -555,6 +836,7 @@ function TenantsSection() {
         </div>
       </div>
       <CreateTenantModal isOpen={createModalOpen} onClose={() => setCreateModalOpen(false)} />
+      {detailTenantId && <TenantDetailModal tenantId={detailTenantId} onClose={() => setDetailTenantId(null)} />}
       <div className="overflow-x-auto border rounded-lg">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
@@ -564,20 +846,61 @@ function TenantsSection() {
               <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">Hub</th>
               <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">Kategori</th>
               <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">Status / Plan</th>
+              <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500 uppercase">Aksi</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {isLoading ? (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400 text-sm">Memuat...</td></tr>
+              <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400 text-sm">Memuat...</td></tr>
             ) : (data?.data ?? []).map((t) => (
               <tr key={t.id} className="hover:bg-gray-50">
-                <td className="px-4 py-2.5 text-sm font-medium text-gray-900">{t.name}</td>
+                <td className="px-4 py-2.5 text-sm font-medium text-gray-900">
+                  <button onClick={() => setDetailTenantId(t.id)} className="hover:text-blue-600 hover:underline text-left">
+                    {t.name}
+                  </button>
+                </td>
                 <td className="px-4 py-2.5 text-sm text-gray-500">{t.slug}</td>
                 <td className="px-4 py-2.5 text-sm text-gray-500">{t.hubName ?? t.hubId ?? '-'}</td>
                 <td className="px-4 py-2.5 text-sm text-gray-500">{t.businessType ?? '-'}</td>
                 <td className="px-4 py-2.5 text-sm">
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${t.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{t.status}</span>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                    t.status === 'active' ? 'bg-green-100 text-green-700' :
+                    t.status === 'frozen' ? 'bg-blue-100 text-blue-700' :
+                    t.status === 'suspended' ? 'bg-red-100 text-red-700' :
+                    'bg-amber-100 text-amber-700'
+                  }`}>{t.status}</span>
                   <span className="ml-2 text-xs text-gray-400">{t.plan}</span>
+                </td>
+                <td className="px-4 py-2.5 text-sm text-right space-x-2 whitespace-nowrap">
+                  {t.status === 'active' ? (
+                    <button
+                      onClick={() => handleStatusChange(t.id, 'active')}
+                      className="px-2 py-1 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 rounded border border-amber-200"
+                    >
+                      Freeze
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleStatusChange(t.id, t.status)}
+                      className="px-2 py-1 text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100 rounded border border-green-200"
+                    >
+                      Activate
+                    </button>
+                  )}
+                  {t.status !== 'suspended' && (
+                    <button
+                      onClick={() => handleSuspend(t.id)}
+                      className="px-2 py-1 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded border border-red-200"
+                    >
+                      Suspend
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleExtend(t.id)}
+                    className="px-2 py-1 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200"
+                  >
+                    + Extend
+                  </button>
                 </td>
               </tr>
             ))}
@@ -1034,6 +1357,7 @@ async function apiDelete(url: string): Promise<any> {
 }
 
 const TABS = [
+  { id: 'plans', label: 'Plans' },
   { id: 'hubs', label: 'Hub & Anggota' },
   { id: 'tenants', label: 'Tenants' },
   { id: 'outlets', label: 'Outlet' },
@@ -1065,6 +1389,7 @@ export default function TerminalCenterPage() {
         ))}
       </div>
 
+      {tab === 'plans' && <PlansSection />}
       {tab === 'hubs' && <HubsSection />}
       {tab === 'tenants' && <TenantsSection />}
       {tab === 'outlets' && <OutletsSection />}

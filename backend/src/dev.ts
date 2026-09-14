@@ -234,6 +234,11 @@ async function main() {
   const { ensurePromotionIndexes } = await import('./core/promotion/infrastructure/persistence/ensurePromotionIndexes');
   await ensurePromotionIndexes();
 
+  const { PlanSchema } = await import('./core/billing/infrastructure/persistence/schemas/PlanSchema');
+  const { upsertDefaultPlans } = await import('./core/billing/defaults/seedPlans');
+  const PlanModelSync = mongoose.model('Plan', PlanSchema);
+  await upsertDefaultPlans(PlanModelSync);
+
   // Always keep system role permissions in sync (idempotent) — fixes roles that
   // predate a permission being added and would otherwise only set on $setOnInsert.
   const RoleSync = mongoose.model('Role', RoleSchema);

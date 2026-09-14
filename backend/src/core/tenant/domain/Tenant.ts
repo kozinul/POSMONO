@@ -10,6 +10,7 @@ export interface ITenant {
   domain: string | null;
   ownerId: string;
   plan: string;
+  planId: string | null;
   status: TenantStatus;
   subscriptionExpiresAt: Date | null;
   businessType: BusinessType;
@@ -55,6 +56,7 @@ export class Tenant extends AggregateRoot<TenantId> {
   private domain: string | null;
   private ownerId: string;
   private plan: string;
+  private planId: string | null;
   private status: TenantStatus;
   private subscriptionExpiresAt: Date | null;
   private businessType: BusinessType;
@@ -76,6 +78,7 @@ export class Tenant extends AggregateRoot<TenantId> {
     this.domain = props.domain;
     this.ownerId = props.ownerId;
     this.plan = props.plan;
+    this.planId = props.planId ?? null;
     this.status = props.status;
     this.subscriptionExpiresAt = props.subscriptionExpiresAt ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     this.businessType = props.businessType;
@@ -91,10 +94,11 @@ export class Tenant extends AggregateRoot<TenantId> {
     this.updatedAt = props.updatedAt;
   }
 
-  static create(props: Omit<ITenant, 'id' | 'createdAt' | 'updatedAt' | 'businessCategory' | 'address' | 'phone' | 'hubId' | 'subscriptionExpiresAt'> & { subscriptionExpiresAt?: Date }): Tenant {
+  static create(props: Omit<ITenant, 'id' | 'createdAt' | 'updatedAt' | 'businessCategory' | 'address' | 'phone' | 'hubId' | 'planId' | 'subscriptionExpiresAt'> & { subscriptionExpiresAt?: Date }): Tenant {
     const tenant = new Tenant({
       ...props,
       id: new TenantId().toValue(),
+      planId: null,
       subscriptionExpiresAt: props.subscriptionExpiresAt ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       businessCategory: '',
       address: '',
@@ -134,6 +138,7 @@ export class Tenant extends AggregateRoot<TenantId> {
       domain: this.domain,
       ownerId: this.ownerId,
       plan: this.plan,
+      planId: this.planId,
       status: this.status,
       subscriptionExpiresAt: this.subscriptionExpiresAt,
       businessType: this.businessType,
@@ -203,6 +208,15 @@ export class Tenant extends AggregateRoot<TenantId> {
 
   deactivate(): void {
     this.status = 'deactivated';
+    this.updatedAt = new Date();
+  }
+
+  assignPlan(planId: string, planName: string, modules: string[], expiresAt: Date): void {
+    this.planId = planId;
+    this.plan = planName;
+    this.modules = [...modules];
+    this.subscriptionExpiresAt = expiresAt;
+    this.status = 'active';
     this.updatedAt = new Date();
   }
 

@@ -29,6 +29,17 @@ export interface PlatformTenantRow extends PlatformTenantBrief {
   hubName?: string | null;
 }
 
+export interface PlatformTenantDetail extends PlatformTenantRow {
+  subscriptionExpiresAt: string | null;
+  billingEmail: string;
+  address: string;
+  phone: string;
+  databaseName: string;
+  modules: string[];
+  createdAt: string;
+  outlets: PlatformOutletRow[];
+}
+
 export interface PlatformOutletRow {
   id: string;
   tenantId: string;
@@ -98,6 +109,89 @@ export interface HubConsolidated {
   totals: { openShifts: number; closedShifts: number; shiftSales: number; shiftTransactions: number; paymentAmount: number; paymentTransactions: number };
 }
 
+export interface PlatformPlanLimits {
+  maxUsers: number;
+  maxProducts: number;
+  maxCategories: number;
+  maxOutlets: number;
+  maxOrdersPerMonth: number;
+  maxInventoryItems: number;
+  maxWarehouses: number;
+}
+
+export interface PlatformPlanAddOn {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  type: 'module' | 'limit';
+  value: string | number;
+}
+
+export interface PlatformPlan {
+  id: string;
+  name: string;
+  description: string;
+  basePrice: number;
+  billingCycle: 'monthly' | 'annual' | 'custom';
+  isActive: boolean;
+  isPublic: boolean;
+  isDefault: boolean;
+  sortOrder: number;
+  modules: string[];
+  limits: PlatformPlanLimits;
+  addOns: PlatformPlanAddOn[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PlatformSubscription {
+  id: string;
+  tenantId: string;
+  planId: string;
+  status: string;
+  billingCycle: 'monthly' | 'annual' | 'custom';
+  currentPeriodStart: string;
+  currentPeriodEnd: string;
+  cancelledAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PlatformTenantSubscription {
+  subscription: PlatformSubscription;
+  plan: PlatformPlan | null;
+}
+
+export interface PlatformEntitlement {
+  plan: (PlatformPlan & { name: string; basePrice: number }) | null;
+  subscription: PlatformSubscription | null;
+  modules: string[];
+  limits: PlatformPlanLimits;
+}
+
+export const PLAN_MODULE_LABELS: Record<string, string> = {
+  products: 'Manajemen Produk',
+  categories: 'Kategori & Keluarga',
+  modifiers: 'Modifier Produk',
+  inventory: 'Inventori & Stok',
+  warehouses: 'Gudang',
+  orders: 'Transaksi & Order',
+  payments: 'Pembayaran',
+  shifts: 'Shift Kasir',
+  customers: 'Manajemen Pelanggan',
+  reports: 'Laporan Dasar',
+  'reports-advanced': 'Laporan Lanjutan & Export',
+  promotions: 'Promosi & Diskon',
+  'multi-outlet': 'Multi Outlet',
+  'hub-management': 'Hub Management',
+  'qr-printing': 'Printing QRIS',
+  'auto-print': 'Cetak Struk & KOT Otomatis',
+  'api-access': 'API Access',
+  restaurant: 'Restoran (Meja & Dapur)',
+  hospitality: 'Hospitality (Kamar & Booking)',
+};
+
 const BASE = '/platform';
 
 export function usePlatformHubs() {
@@ -119,6 +213,18 @@ export function usePlatformHub(hubId: string | null) {
       return res.data.data;
     },
     enabled: !!hubId,
+    staleTime: 30_000,
+  });
+}
+
+export function usePlatformTenant(tenantId: string | null) {
+  return useQuery({
+    queryKey: ['platform-tenant', tenantId],
+    queryFn: async () => {
+      const res = await api.get<{ success: boolean; data: PlatformTenantDetail }>(`${BASE}/tenants/${tenantId}`);
+      return res.data.data;
+    },
+    enabled: !!tenantId,
     staleTime: 30_000,
   });
 }
@@ -276,5 +382,169 @@ export function usePlatformCreateOutlet() {
       queryClient.invalidateQueries({ queryKey: ['platform-outlets'] });
       queryClient.invalidateQueries({ queryKey: ['platform-tenants'] });
     },
+  });
+}
+
+export function usePlatformUpdateTenantStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ tenantId, status, reason }: { tenantId: string; status: string; reason?: string }) => {
+      const res = await api.post(`${BASE}/tenants/${tenantId}/status`, { status, reason });
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['platform-tenants'] });
+    },
+  });
+}
+
+export function usePlatformExtendSubscription() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ tenantId, days }: { tenantId: string; days: number }) => {
+      const res = await api.post(`${BASE}/tenants/${tenantId}/extend`, { days });
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['platform-tenants'] });
+    },
+  });
+}
+
+export function usePlatformPlans(activeOnly = false) {
+  return useQuery({
+    queryKey: ['platform-plans', activeOnly],
+    queryFn: async () => {
+      const res = await api.get<{ success: boolean; data: PlatformPlan[] }>(
+        `${BASE}/plans${activeOnly ? '?active=true' : ''}`,
+      );
+      return res.data.data;
+    },
+    staleTime: 30_000,
+  });
+}
+
+export function usePlatformPlan(planId: string | null) {
+  return useQuery({
+    queryKey: ['platform-plan', planId],
+    queryFn: async () => {
+      const res = await api.get<{ success: boolean; data: PlatformPlan }>(`${BASE}/plans/${planId}`);
+      return res.data.data;
+    },
+    enabled: !!planId,
+  });
+}
+
+export type PlanInput = {
+  name: string;
+  description?: string;
+  basePrice: number;
+  billingCycle?: 'monthly' | 'annual' | 'custom';
+  isActive?: boolean;
+  isPublic?: boolean;
+  isDefault?: boolean;
+  sortOrder?: number;
+  modules?: string[];
+  limits?: Partial<PlatformPlanLimits>;
+  addOns?: PlatformPlanAddOn[];
+};
+
+export function usePlatformCreatePlan() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: PlanInput) => {
+      const res = await api.post<{ success: boolean; data: PlatformPlan }>(`${BASE}/plans`, input);
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['platform-plans'] });
+    },
+  });
+}
+
+export function usePlatformUpdatePlan() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ planId, ...input }: { planId: string } & PlanInput) => {
+      const res = await api.put<{ success: boolean; data: PlatformPlan }>(`${BASE}/plans/${planId}`, input);
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['platform-plans'] });
+    },
+  });
+}
+
+export function usePlatformDeletePlan() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (planId: string) => {
+      const res = await api.delete<{ success: boolean; data: { success: boolean } }>(`${BASE}/plans/${planId}`);
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['platform-plans'] });
+    },
+  });
+}
+
+export function usePlatformTenantSubscription(tenantId: string | null) {
+  return useQuery({
+    queryKey: ['platform-tenant-subscription', tenantId],
+    queryFn: async () => {
+      const res = await api.get<{ success: boolean; data: PlatformTenantSubscription }>(
+        `${BASE}/tenants/${tenantId}/subscription`,
+      );
+      return res.data.data;
+    },
+    enabled: !!tenantId,
+    staleTime: 30_000,
+  });
+}
+
+export function usePlatformAssignPlan() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ tenantId, planId, billingCycle }: { tenantId: string; planId: string; billingCycle?: 'monthly' | 'annual' | 'custom' }) => {
+      const res = await api.post<{ success: boolean; data: PlatformSubscription }>(
+        `${BASE}/tenants/${tenantId}/subscription`,
+        { planId, billingCycle },
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['platform-tenants'] });
+      queryClient.invalidateQueries({ queryKey: ['platform-tenant-subscription'] });
+    },
+  });
+}
+
+export function usePlatformCancelSubscription() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (tenantId: string) => {
+      const res = await api.post<{ success: boolean; data: PlatformSubscription }>(
+        `${BASE}/tenants/${tenantId}/subscription/cancel`,
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['platform-tenants'] });
+      queryClient.invalidateQueries({ queryKey: ['platform-tenant-subscription'] });
+    },
+  });
+}
+
+export function usePlatformTenantEntitlement(tenantId: string | null) {
+  return useQuery({
+    queryKey: ['platform-tenant-entitlement', tenantId],
+    queryFn: async () => {
+      const res = await api.get<{ success: boolean; data: PlatformEntitlement }>(
+        `${BASE}/tenants/${tenantId}/entitlement`,
+      );
+      return res.data.data;
+    },
+    enabled: !!tenantId,
+    staleTime: 30_000,
   });
 }

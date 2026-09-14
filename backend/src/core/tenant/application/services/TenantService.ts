@@ -118,6 +118,13 @@ export class TenantService {
     return tenant;
   }
 
+  async updateProfile(id: string, data: { name?: string; businessCategory?: string; address?: string; phone?: string }): Promise<Tenant> {
+    const tenant = await this.getById(id);
+    tenant.updateProfile(data);
+    await this.tenantRepository.save(tenant);
+    return tenant;
+  }
+
   async updateStatus(id: string, status: 'active' | 'frozen' | 'suspended' | 'deactivated', reason?: string): Promise<Tenant> {
     const tenant = await this.getById(id);
     if (status === 'active') tenant.activate();

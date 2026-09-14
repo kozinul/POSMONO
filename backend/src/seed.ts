@@ -10,6 +10,8 @@ import { StockSchema } from './core/inventory/infrastructure/persistence/schemas
 import { PaymentMethodSchema } from './core/payment/infrastructure/persistence/schemas/PaymentMethodSchema';
 import { TemplateSchema } from './core/template/infrastructure/persistence/schemas/TemplateSchema';
 import { DEFAULT_ROLES, DEFAULT_TEMPLATES, DEFAULT_PAYMENT_METHODS, DEFAULT_PLATFORM_ROLE, PLATFORM_TENANT_ID } from './core/platform/defaults';
+import { PlanSchema } from './core/billing/infrastructure/persistence/schemas/PlanSchema';
+import { upsertDefaultPlans } from './core/billing/defaults/seedPlans';
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27018';
 const SYSTEM_DB = 'posmono_system';
@@ -184,6 +186,10 @@ async function seed() {
     maxLevel: 100,
   }));
   await Stock.create(stockEntries);
+
+  console.log('Seeding plans...');
+  const Plan = systemConn.model('Plan', PlanSchema);
+  await upsertDefaultPlans(Plan);
 
   console.log('Seeding templates...');
   await Template.create(

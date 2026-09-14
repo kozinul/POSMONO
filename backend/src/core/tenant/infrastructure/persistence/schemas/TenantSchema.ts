@@ -8,6 +8,7 @@ export const TenantSchema = new Schema(
     domain: { type: String, default: null },
     ownerId: { type: String, required: true },
     plan: { type: String, default: 'starter' },
+    planId: { type: String, default: null },
     status: {
       type: String,
       enum: ['active', 'suspended', 'trial', 'cancelled', 'frozen', 'deactivated'],

@@ -46,3 +46,5 @@ export class DiscountConfigurationId extends Identifier {}
 export class PromoCodeId extends Identifier {}
 export class PromotionId extends Identifier {}
 export class PrinterId extends Identifier {}
+export class PlanId extends Identifier {}
+export class SubscriptionId extends Identifier {}

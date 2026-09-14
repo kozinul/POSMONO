@@ -9,6 +9,7 @@ interface TenantDoc extends Document<string> {
   domain: string | null;
   ownerId: string;
   plan: string;
+  planId: string | null;
   status: string;
   subscriptionExpiresAt: Date | null;
   businessType: string;
@@ -32,6 +33,7 @@ export class MongoTenantRepository {
       domain: doc.domain,
       ownerId: doc.ownerId,
       plan: doc.plan,
+      planId: doc.planId ?? null,
       status: doc.status as ITenant['status'],
       subscriptionExpiresAt: doc.subscriptionExpiresAt ?? null,
       businessType: doc.businessType as ITenant['businessType'],
@@ -54,6 +56,7 @@ export class MongoTenantRepository {
       domain: data.domain,
       ownerId: data.ownerId,
       plan: data.plan,
+      planId: data.planId,
       status: data.status,
       subscriptionExpiresAt: data.subscriptionExpiresAt,
       businessType: data.businessType,

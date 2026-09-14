@@ -81,7 +81,14 @@ export class PlatformController extends BaseController {
       hubName = hub?.serialize().name ?? null;
     }
 
-    this.ok(res, { ...data, hubId: data.hubId, hubName });
+    const outlets = await this.deps.outletService.listAllForPlatform([data.id]);
+
+    this.ok(res, {
+      ...data,
+      hubId: data.hubId,
+      hubName,
+      outlets: outlets.map((o) => o.serialize()),
+    });
   }
 
   // Outlet listing across tenants

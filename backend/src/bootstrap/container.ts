@@ -143,6 +143,15 @@ import { OutletService } from '../core/outlet/application/services/OutletService
 import { OutletController } from '../core/outlet/interfaces/http/controllers/OutletController';
 import { PlatformController } from '../core/platform/interfaces/http/controllers/PlatformController';
 import { ProvisionTenantService } from '../core/platform/application/services/ProvisionTenantService';
+import { PlanSchema } from '../core/billing/infrastructure/persistence/schemas/PlanSchema';
+import { SubscriptionSchema } from '../core/billing/infrastructure/persistence/schemas/SubscriptionSchema';
+import { MongoPlanRepository } from '../core/billing/infrastructure/persistence/MongoPlanRepository';
+import { MongoSubscriptionRepository } from '../core/billing/infrastructure/persistence/MongoSubscriptionRepository';
+import { PlanService } from '../core/billing/application/services/PlanService';
+import { SubscriptionService } from '../core/billing/application/services/SubscriptionService';
+import { EntitlementService } from '../core/billing/application/services/EntitlementService';
+import { PlanController } from '../core/billing/interfaces/http/controllers/PlanController';
+import { SubscriptionController } from '../core/billing/interfaces/http/controllers/SubscriptionController';
 
 export type DIContainer = ReturnType<typeof buildContainer>;
 
@@ -188,6 +197,10 @@ export function buildContainer() {
   HubMembershipModel.syncIndexes().catch(() => {});
   const OutletModel = systemConnection.model('Outlet', OutletSchema);
   OutletModel.syncIndexes().catch(() => {});
+  const PlanModel = systemConnection.model('Plan', PlanSchema);
+  PlanModel.syncIndexes().catch(() => {});
+  const SubscriptionModel = systemConnection.model('Subscription', SubscriptionSchema);
+  SubscriptionModel.syncIndexes().catch(() => {});
 
   const eventBus = new EventBus();
 
@@ -227,6 +240,8 @@ export function buildContainer() {
     hubModel: asValue(HubModel),
     hubMembershipModel: asValue(HubMembershipModel),
     outletModel: asValue(OutletModel),
+    planModel: asValue(PlanModel),
+    subscriptionModel: asValue(SubscriptionModel),
     userRepository: asClass(MongoUserRepository, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
@@ -1079,6 +1094,49 @@ export function buildContainer() {
           hubRepository: container.resolve('hubRepository'),
           provisionTenantService: container.resolve('provisionTenantService'),
         },
+      }),
+    }),
+    planRepository: asClass(MongoPlanRepository, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({ model: PlanModel }),
+    }),
+    subscriptionRepository: asClass(MongoSubscriptionRepository, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({ model: SubscriptionModel }),
+    }),
+    planService: asClass(PlanService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        planRepository: container.resolve('planRepository'),
+      }),
+    }),
+    subscriptionService: asClass(SubscriptionService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        subscriptionRepository: container.resolve('subscriptionRepository'),
+        planRepository: container.resolve('planRepository'),
+        tenantRepository: container.resolve('tenantRepository'),
+      }),
+    }),
+    entitlementService: asClass(EntitlementService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        subscriptionRepository: container.resolve('subscriptionRepository'),
+        planRepository: container.resolve('planRepository'),
+        tenantRepository: container.resolve('tenantRepository'),
+      }),
+    }),
+    planController: asClass(PlanController, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        planService: container.resolve('planService'),
+      }),
+    }),
+    subscriptionController: asClass(SubscriptionController, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        subscriptionService: container.resolve('subscriptionService'),
+        entitlementService: container.resolve('entitlementService'),
       }),
     }),
   });
