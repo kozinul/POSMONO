@@ -92,6 +92,19 @@ export class TenantController extends BaseController {
     });
   }
 
+  async getSubscription(req: Request, res: Response): Promise<void> {
+    const sub = await this.tenantService.getSubscription(req.tenantId);
+    this.ok(res, sub);
+  }
+
+  async renewSubscription(req: Request, res: Response): Promise<void> {
+    const { days } = req.body;
+    const numDays = parseInt(days, 10) || 30;
+    const tenant = await this.tenantService.extendSubscription(req.tenantId, numDays);
+    const sub = await this.tenantService.getSubscription(req.tenantId);
+    this.ok(res, { message: 'Subscription successfully renewed', subscription: sub });
+  }
+
   async getBySlug(req: Request, res: Response): Promise<void> {
     const tenant = await this.tenantService.getBySlug(req.params.slug);
     if (!tenant) {

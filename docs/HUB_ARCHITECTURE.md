@@ -221,6 +221,11 @@ Dibutuhkan untuk user lintas-tenant (Group Admin) dan Hub Consolidated Report.
 - [x] **Tests**: `OutletService.test.ts` +3 (`createWithWarehouse`: link 1:1, ConflictError, session forwarding); `platform-create-outlet.test.ts` (10 test, integration HTTP penuh: 201 + warehouse linked, 404 tenant, 400 validasi, 409 duplikat, 401 tenant/non-auth, 403 tanpa `outlet:manage`, tenant-level POST/DELETE 404 & GET tetap jalan)
 - **Status**: verifikasi 2026-09-13 — backend tsc bersih + **1048/1048** tests (87 files), frontend tsc + vite build OK + **85/85**
 
+### Fase 13 — Tenant Lifecycle & Merchant Client Portal (Sep 2026)
+- [x] **Tenant Lifecycle (Terminal Center)**: Status `active`, `suspended`, `frozen`, `deactivated`, `trial`. Endpoint `POST /api/platform/tenants/:tenantId/status` & `POST /api/platform/tenants/:tenantId/extend` (`hub:manage`) agar tim Kuire dapat membekukan, menangguhkan, mengaktifkan, atau memperpanjang masa aktif tenant secara manual.
+- [x] **Merchant Client Portal API**: Endpoint `GET /api/tenants/current/subscription` & `POST /api/tenants/current/subscription/renew` bagi owner/tenant untuk memantau sisa masa aktif langganan dan melakukan perpanjangan mandiri.
+- [x] **Domain & Schema**: Field `subscriptionExpiresAt` di `Tenant` domain dan `TenantSchema`, beserta metode `freeze()`, `unfreeze()`, `deactivate()`, `extendSubscription()`.
+
 ---
 
 ## 6. Catatan Kunci

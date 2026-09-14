@@ -8,6 +8,7 @@ export interface Tenant {
   ownerId: string;
   plan: string;
   status: TenantStatus;
+  subscriptionExpiresAt: Date | null;
   businessType: BusinessType;
   businessCategory: string;
   address: string;
@@ -21,7 +22,7 @@ export interface Tenant {
   updatedAt: Date;
 }
 
-export type TenantStatus = 'active' | 'suspended' | 'trial' | 'cancelled';
+export type TenantStatus = 'active' | 'suspended' | 'trial' | 'cancelled' | 'frozen' | 'deactivated';
 
 export interface TenantConfig {
   timezone: string;

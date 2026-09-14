@@ -10,10 +10,11 @@ interface TenantDoc extends Document<string> {
   ownerId: string;
   plan: string;
   status: string;
+  subscriptionExpiresAt: Date | null;
   businessType: string;
   modules: string[];
   databaseName: string;
-  config: { timezone: string; currency: string; locale: string };
+  config: any;
   billingEmail: string;
   hubId: string | null;
   createdAt: Date;
@@ -32,6 +33,7 @@ export class MongoTenantRepository {
       ownerId: doc.ownerId,
       plan: doc.plan,
       status: doc.status as ITenant['status'],
+      subscriptionExpiresAt: doc.subscriptionExpiresAt ?? null,
       businessType: doc.businessType as ITenant['businessType'],
       modules: doc.modules,
       databaseName: doc.databaseName,
@@ -53,6 +55,7 @@ export class MongoTenantRepository {
       ownerId: data.ownerId,
       plan: data.plan,
       status: data.status,
+      subscriptionExpiresAt: data.subscriptionExpiresAt,
       businessType: data.businessType,
       modules: data.modules,
       databaseName: data.databaseName,

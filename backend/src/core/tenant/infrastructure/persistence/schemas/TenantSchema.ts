@@ -10,9 +10,10 @@ export const TenantSchema = new Schema(
     plan: { type: String, default: 'starter' },
     status: {
       type: String,
-      enum: ['active', 'suspended', 'trial', 'cancelled'],
+      enum: ['active', 'suspended', 'trial', 'cancelled', 'frozen', 'deactivated'],
       default: 'trial',
     },
+    subscriptionExpiresAt: { type: Date, default: () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) },
     businessType: {
       type: String,
       enum: ['retail', 'restaurant', 'hospitality', 'mixed'],

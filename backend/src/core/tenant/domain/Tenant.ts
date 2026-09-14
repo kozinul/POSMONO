@@ -11,6 +11,7 @@ export interface ITenant {
   ownerId: string;
   plan: string;
   status: TenantStatus;
+  subscriptionExpiresAt: Date | null;
   businessType: BusinessType;
   businessCategory: string;
   address: string;
@@ -24,7 +25,7 @@ export interface ITenant {
   updatedAt: Date;
 }
 
-export type TenantStatus = 'active' | 'suspended' | 'trial' | 'cancelled';
+export type TenantStatus = 'active' | 'suspended' | 'trial' | 'cancelled' | 'frozen' | 'deactivated';
 
 export interface TenantConfig {
   timezone: string;
@@ -55,6 +56,7 @@ export class Tenant extends AggregateRoot<TenantId> {
   private ownerId: string;
   private plan: string;
   private status: TenantStatus;
+  private subscriptionExpiresAt: Date | null;
   private businessType: BusinessType;
   private businessCategory: string;
   private address: string;
@@ -75,6 +77,7 @@ export class Tenant extends AggregateRoot<TenantId> {
     this.ownerId = props.ownerId;
     this.plan = props.plan;
     this.status = props.status;
+    this.subscriptionExpiresAt = props.subscriptionExpiresAt ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     this.businessType = props.businessType;
     this.businessCategory = props.businessCategory || '';
     this.address = props.address || '';
@@ -88,10 +91,11 @@ export class Tenant extends AggregateRoot<TenantId> {
     this.updatedAt = props.updatedAt;
   }
 
-  static create(props: Omit<ITenant, 'id' | 'createdAt' | 'updatedAt' | 'businessCategory' | 'address' | 'phone' | 'hubId'>): Tenant {
+  static create(props: Omit<ITenant, 'id' | 'createdAt' | 'updatedAt' | 'businessCategory' | 'address' | 'phone' | 'hubId' | 'subscriptionExpiresAt'> & { subscriptionExpiresAt?: Date }): Tenant {
     const tenant = new Tenant({
       ...props,
       id: new TenantId().toValue(),
+      subscriptionExpiresAt: props.subscriptionExpiresAt ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       businessCategory: '',
       address: '',
       phone: '',
@@ -131,6 +135,7 @@ export class Tenant extends AggregateRoot<TenantId> {
       ownerId: this.ownerId,
       plan: this.plan,
       status: this.status,
+      subscriptionExpiresAt: this.subscriptionExpiresAt,
       businessType: this.businessType,
       businessCategory: this.businessCategory,
       address: this.address,
@@ -167,6 +172,16 @@ export class Tenant extends AggregateRoot<TenantId> {
     return this.status === 'active' || this.status === 'trial';
   }
 
+  freeze(): void {
+    this.status = 'frozen';
+    this.updatedAt = new Date();
+  }
+
+  unfreeze(): void {
+    this.status = 'active';
+    this.updatedAt = new Date();
+  }
+
   suspend(reason: string): void {
     this.status = 'suspended';
     this.updatedAt = new Date();
@@ -183,6 +198,25 @@ export class Tenant extends AggregateRoot<TenantId> {
 
   activate(): void {
     this.status = 'active';
+    this.updatedAt = new Date();
+  }
+
+  deactivate(): void {
+    this.status = 'deactivated';
+    this.updatedAt = new Date();
+  }
+
+  extendSubscription(days: number): void {
+    const current = this.subscriptionExpiresAt && this.subscriptionExpiresAt > new Date() ? this.subscriptionExpiresAt : new Date();
+    this.subscriptionExpiresAt = new Date(current.getTime() + days * 24 * 60 * 60 * 1000);
+    if (this.status === 'suspended' || this.status === 'frozen' || this.status === 'trial') {
+      this.status = 'active';
+    }
+    this.updatedAt = new Date();
+  }
+
+  setSubscriptionExpiry(date: Date): void {
+    this.subscriptionExpiresAt = date;
     this.updatedAt = new Date();
   }
 

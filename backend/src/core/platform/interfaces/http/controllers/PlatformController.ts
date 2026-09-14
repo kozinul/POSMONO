@@ -314,6 +314,27 @@ export class PlatformController extends BaseController {
     });
   }
 
+  async updateTenantStatus(req: Request, res: Response): Promise<void> {
+    const { status, reason } = req.body;
+    const { tenantId } = req.params;
+    if (!['active', 'frozen', 'suspended', 'deactivated'].includes(status)) {
+      throw new ValidationError('Invalid status');
+    }
+    const tenant = await this.deps.tenantService.updateStatus(tenantId, status, reason);
+    this.ok(res, tenant.serialize());
+  }
+
+  async extendTenantSubscription(req: Request, res: Response): Promise<void> {
+    const { days } = req.body;
+    const { tenantId } = req.params;
+    const numDays = parseInt(days, 10);
+    if (isNaN(numDays) || numDays <= 0) {
+      throw new ValidationError('Valid positive number of days is required');
+    }
+    const tenant = await this.deps.tenantService.extendSubscription(tenantId, numDays);
+    this.ok(res, tenant.serialize());
+  }
+
   private resolveDateRange(dateFrom?: string, dateTo?: string): [Date, Date] {
     const from = dateFrom ? new Date(dateFrom) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const to = dateTo ? new Date(dateTo) : new Date();

@@ -15,6 +15,8 @@ export function createPlatformRoutes(platformController: PlatformController): Ro
 
   router.get('/tenants', platformAuthenticate, platformAuthorize('platform.tenants.read'), asyncHandler(platformController.listTenants.bind(platformController)));
   router.get('/tenants/:tenantId', platformAuthenticate, platformAuthorize('platform.tenants.read'), asyncHandler(platformController.getTenant.bind(platformController)));
+  router.post('/tenants/:tenantId/status', platformAuthenticate, platformAuthorize('hub:manage'), asyncHandler(platformController.updateTenantStatus.bind(platformController)));
+  router.post('/tenants/:tenantId/extend', platformAuthenticate, platformAuthorize('hub:manage'), asyncHandler(platformController.extendTenantSubscription.bind(platformController)));
   router.post('/provision/tenant', platformAuthenticate, platformAuthorize('hub:manage'), asyncHandler(platformController.provisionTenant.bind(platformController)));
 
   router.get('/outlets', platformAuthenticate, platformAuthorize('platform.tenants.read'), asyncHandler(platformController.listOutlets.bind(platformController)));

@@ -118,10 +118,34 @@ export class TenantService {
     return tenant;
   }
 
-  async updateProfile(id: string, data: { name?: string; businessCategory?: string; address?: string; phone?: string }): Promise<Tenant> {
+  async updateStatus(id: string, status: 'active' | 'frozen' | 'suspended' | 'deactivated', reason?: string): Promise<Tenant> {
     const tenant = await this.getById(id);
-    tenant.updateProfile(data);
+    if (status === 'active') tenant.activate();
+    else if (status === 'frozen') tenant.freeze();
+    else if (status === 'suspended') tenant.suspend(reason ?? 'Suspended by admin');
+    else if (status === 'deactivated') tenant.deactivate();
     await this.tenantRepository.save(tenant);
     return tenant;
+  }
+
+  async extendSubscription(id: string, days: number): Promise<Tenant> {
+    const tenant = await this.getById(id);
+    tenant.extendSubscription(days);
+    await this.tenantRepository.save(tenant);
+    return tenant;
+  }
+
+  async getSubscription(id: string) {
+    const tenant = await this.getById(id);
+    const data = tenant.serialize();
+    const expiresAt = data.subscriptionExpiresAt ? new Date(data.subscriptionExpiresAt) : null;
+    const now = new Date();
+    const daysRemaining = expiresAt ? Math.ceil((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : 0;
+    return {
+      plan: data.plan,
+      status: data.status,
+      subscriptionExpiresAt: data.subscriptionExpiresAt,
+      daysRemaining: Math.max(daysRemaining, 0),
+    };
   }
 }
