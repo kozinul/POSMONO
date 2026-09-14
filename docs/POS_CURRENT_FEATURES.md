@@ -1191,6 +1191,15 @@ export type CreateOrderInput = {
 | GET | `/api/platform/shifts/summary` | `platform.reports.read` | Summary shift per tenant + per outlet (`dateFrom`/`dateTo`/`hubId`/`tenantId`) |
 | GET | `/api/platform/payments/summary` | `platform.reports.read` | Total pembayaran + breakdown metode lintas-tenant |
 | GET | `/api/platform/hubs/:hubId/consolidated` | `platform.reports.read` | Hub Consolidated Report (Tenant→Outlet breakdown shift & payment) + filter `dateFrom`/`dateTo` |
+| GET | `/api/platform/plans` | `platform.plans.read` | List plan (default+active atau semua) |
+| POST | `/api/platform/plans` | `platform.plans.manage` | Buat plan baru (modular: basePrice + modules + limits + addOns) |
+| PUT | `/api/platform/plans/:id` | `platform.plans.manage` | Update plan |
+| DELETE | `/api/platform/plans/:id` | `platform.plans.manage` | Hapus plan (plan **default** ditolak `400`) |
+| GET | `/api/platform/tenants/:tenantId/subscription` | `platform.tenants.read` | Subscription tenant (plan + status + periode) |
+| POST | `/api/platform/tenants/:tenantId/subscription` | `platform.tenants.manage` | Assign/ganti plan tenant (wajib `planId` eksplisit) |
+| POST | `/api/platform/tenants/:tenantId/subscription/cancel` | `platform.tenants.manage` | Batalkan subscription → tenant `deactivated` |
+| GET | `/api/platform/tenants/:tenantId/entitlement` | `platform.tenants.read` | Entitlement (modules/limits) per tenant |
+| GET | `/api/tenants/current/entitlement` | authenticate | Entitlement merchant scope (fallback Trial tanpa subscription) |
 
 ### HubMembership & Session Lintas-Tenant (`/api/hub-memberships`, `/api/auth`)
 | Method | Endpoint | Auth | Description |
@@ -1210,6 +1219,11 @@ export type CreateOrderInput = {
 - **Halaman admin Terminal Center** (`/terminal-center`, di layout khusus `TerminalLayout` + guard `PlatformRoute`; tab Hub & Anggota / Tenants / Outlet / Ringkasan / Konsolidasi) **di-wire bersama HubMembership (Fase 9)** — login super admin di **URL terpisah `/terminal/login`** (`TerminalLoginPage` selalu kirim `X-Tenant-Id: platform` → mendarat `/terminal-center`, tanpa checkbox); group admin lintas-tenant memakai tenant switcher di top bar
 - **Permissions hub member**: `owner` = `OWNER_PERMS`; `admin` = `MANAGER_PERMS + users:read + reports:read`; `viewer` = read-only (`reports/orders/products/customers/inventory/shifts/payments:read`) — dari `backend/src/core/platform/defaults/roles.ts: HUB_MEMBER_ROLE_PERMS`
 - **Provision Tenant** (`ProvisionTenantService`, endpoint `POST /api/platform/provision/tenant`): membuat Tenant + Owner User + default Outlet + default Warehouse secara atomik (MongoDB transaction fallback standalone). `OutletService.ensureDefault(tenantId, outletData?, session?)` reusable dari boot. Owner email dicek uniqueness global (`MongoUserRepository.findByEmailGlobal`), role default dibuat (Owner/Manager/Cashier), owner memakai `outletIds: []`. Hub bersifat **opsional** — `hubId: null` = tenant standalone, tidak membuat Hub baru. Idempotency key via header `Idempotency-Key` prevent double-submit. UI: `CreateTenantModal` di halaman `/terminal-center` tab Tenants (tombol `+ New Tenant`) dengan loading/error/success state
+- **Billing & Plan Management (Fase 14)** — self-service **nonaktif**; admin Kuire mengelola plan & assign plan per tenant via Terminal Center:
+  - Tab **Plans** (`PlansSection.tsx`): grid plan card + modal create/edit/delete — checkbox modules (`PLAN_MODULE_LABELS`), limits editor (`-1` = unlimited), badge plan default, delete plan default diproteksi; data via `usePlatformPlans`/`usePlatformCreatePlan`/`usePlatformUpdatePlan`/`usePlatformDeletePlan`
+  - `TenantDetailModal` → section **Plan & Langganan**: plan aktif + status + siklus + periode + badges modules pada subscription via `usePlatformTenantSubscription`; dropdown Assign/Ganti plan + tombol Assign (`usePlatformAssignPlan`) dan Batalkan (`usePlatformCancelSubscription`, konfirmasi "tenant menjadi deactivated")
+  - Default plans di-seed: **Trial** (gratis) / **Starter** (Rp199K) / **Pro** (Rp499K) / **Enterprise** (Rp999K) — `backend/src/core/billing/defaults/plans.ts`
+  - `EntitlementService`: module/limit dicek dengan OR-add-on; tanpa subscription → fallback entitlement Trial hardcoded (`GET /api/tenants/current/entitlement`)
 
 ---
 

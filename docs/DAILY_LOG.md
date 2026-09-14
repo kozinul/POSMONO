@@ -36,6 +36,47 @@ Copy this block for each new day:
 
 ## Entries
 
+### DATE: 2026-09-14 — Modular SaaS Plan Management (Billing: Plan/Subscription/Entitlement)
+
+**Today I worked on:**
+
+- **Keputusan produk**: self-service **tidak aktif** — membuat/mengubah plan & assign plan ke tenant hanya oleh Platform Super Admin via Terminal Center. Monetisasi modular: `basePrice` + `addOns[]` (`module`/`limit`) + `limits` per plan.
+- **Backend modul `core/billing`**: domain `Plan` + `Subscription` (dengan `PlanId`/`SubscriptionId`), `PlanSchema`/`SubscriptionSchema` **`_id` string** (subdoc `PlanLimitsSchema`/`PlanAddOnSchema`, pola untyped `new Schema(...)` seperti `TenantSchema` — reparasi `findByIdAndUpdate` + serialisasi), `MongoPlanRepository.toDomain` pakai `doc.toObject()` + deep-copy `limits`/`addOns`/`modules` (menghindari subdocument wrapper bikin `limits.maxUsers` undefined saat serialize); `PlanService` (CRUD, duplikat nama 400, delete plan default 400), `SubscriptionService.assignPlan` (**wajib explicit `planId`**, change pada existing subscription, `cancelSubscription` → `tenant.deactivate()` = `deactivated`, BUKAN downgrade Trial), `EntitlementService` (module/limit dengan OR-add-on; tanpa subscription → fallback entitlement Trial hardcoded).
+- **API**: platform `GET/POST /api/platform/plans` + `GET/PUT/DELETE /api/platform/plans/:id` (`platform.plans.read`/`manage`), `GET /api/platform/tenants/:tenantId/subscription` + `POST .../subscription` + `POST .../subscription/cancel` + `GET .../entitlement` (`platform.tenants.read`/`manage`); merchant `GET /api/tenants/current/entitlement` (`authenticate`). Wiring DI `container.ts`, route di `routes.ts`; `Tenant.planId` + `assignPlan()` + `TenantSchema.planId`.
+- **Default plans** (`core/billing/defaults/plans.ts`, seed via dev/seed idempotent): **Trial** (gratis), **Starter** (Rp199K/bln), **Pro** (Rp499K/bln), **Enterprise** (Rp999K/bln).
+- **Frontend hooks** (`@shared/hooks/usePlatform.ts`): `usePlatformPlans`/`usePlatformPlan`/`PlanInput`/`usePlatformCreatePlan`/`usePlatformUpdatePlan`/`usePlatformDeletePlan`/`usePlatformTenantSubscription`/`usePlatformAssignPlan`/`usePlatformCancelSubscription`/`usePlatformTenantEntitlement` + `PLAN_MODULE_LABELS`.
+- **UI Terminal Center**: tab **Plans** (`PlansSection.tsx`, urutan pertama) — grid card + modal create/edit/delete (checkbox modules, limits editor, badge default, delete default diproteksi); `TenantDetailModal` → section **Plan & Langganan** (plan/status/cycle/period, badges module, dropdown Assign/Ganti + Batalkan, confirm "tenant menjadi deactivated").
+- **Tests**: `billing-plans.test.ts` **25 integrasi HTTP penuh** (CRUD 201/list/404/duplicate 400/delete-default 400, RBAC 401-403, assign explicit planId, change plan, cancel → deactivated, cancel tanpa sub 404, entitlement fallback Trial + refleksi plan). Backend **1073/1073** (88 files; +25), frontend **85/85** + tsc + vite build OK.
+- **Docs sync**: HUB_ARCHITECTURE (Fase 14 + status), PROJECT_ROADMAP (G2 + daily log), API_REFERENCE (endpoint billing + route summary 117–126), POS_CURRENT_FEATURES (API table + business logic), TEST_PROGRESS (1073/88 + Layer 5b), DAILY_LOG ini, AGENTS.md.
+
+**Problems encountered:**
+
+- Mongoose `_id` ObjectId vs string: `MongoPlanRepository.findBy...`/`findByIdAndUpdate` tidak mencocokkan `_id` string dari `toPersistence` → schema diubah `_id: { type: String }`.
+- `toDomain` mengembalikan subdocument Mongoose (`limits.maxUsers` undefined lewat JSON/serialize) → rewrite dgn `doc.toObject()` + deep-copy.
+- Hubungan add-on `module` vs `limit` di entitlement perlu OR-check (`modules.has(mod) || addOns.some(a => a.type==='module' && a.value===mod)`).
+
+**What I completed:**
+
+- Sistem plan lengkap backend (modul billing, service, controller, routes, DI, seed) + frontend (hooks, Plans tab, plan assignment di tenant detail)
+- 25 integration tests billing + full suite backend 1073/1073 hijau; frontend 85/85 + tsc kedua sisi + vite build OK
+- Docs sync penuh; commit `98b2cf41` ter-push
+
+**What I learned:**
+
+- `assignPlan` yang bersarang (subscription eksisting) harus di-handle bukan sebagai create kedua — pola upsert/change dengan reuse `id` subscription yang ada; kembalikan status jelas `changed` vs `created`
+- Error semantics platform: `create` → `this.created` (201), assign → `this.ok` (200)
+
+**Tomorrow priority:**
+
+- Membership enforcement per-permission di route tenant (deferred); self-service checkout tenant (nonaktif by-design); MVP deployment (butuh akses VPS)
+
+**Productivity score:** 9
+
+**Notes:**
+
+- Billing schemas memakai pola `_id` string sama seperti `TenantSchema` — untuk modul platform, ID selalu `PlanId`/`SubscriptionId` dari aplikasi, bukan auto ObjectId
+- `MongoPlanRepository.toDomain` seed defaults untuk `max*` saat field hilang (backward-compatible plan lama)
+
 ### DATE: 2026-09-13 — Outlet Platform-Only (Eksklusivitas: Owner Tidak Bisa Tambah Outlet)
 
 **Today I worked on:**

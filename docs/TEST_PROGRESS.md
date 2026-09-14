@@ -1,7 +1,7 @@
 # Test Progress
 
-> **Updated:** 2026-09-12
-> **Total Tests:** Backend vitest: **991 passing** (82 files) · Frontend vitest: **83 passing** (12 files)
+> **Updated:** 2026-09-14
+> **Total Tests:** Backend vitest: **1073 passing** (88 files) · Frontend vitest: **85 passing** (12 files)
 > **Test infra:** Backend suite runs **full-stack without Docker** via `mongodb-memory-server` (arm64 mongod 7.3.4 from `~/.cache/mongodb-binaries`). Gate: `pnpm test` = `vitest run` (2× full runs green ~24s, `pool: 'forks'`, `maxForks: 1`).
 
 ---
@@ -95,6 +95,17 @@
 
 > All three integration files run on the rewritten shared harness `tests/helpers/integration.ts` (correct modern service wiring — PaymentService 14 args, OrderController 24 args, tax mock rebuilds the 12% VAT pipeline) against real MongoDB (memory-server). `tenant-isolation` uses `ISOLATION_PERMS` (order/payment/shift routes are `authenticate`-only, product/inventory mutations now require `products:write`/`inventory:write`).
 
+## Layer 5b — Platform / Billing Integration (HTTP penuh, JWT platform) ✅
+
+| Test File | Tests | Status |
+|-----------|-------|--------|
+| `platform-terminal.test.ts` (health, hub/tenant/outlet lists, shift/payment summary, 401/403) | 7 | ✅ |
+| `platform-provision-tenant.test.ts` (provision atomik, hub, duplicate email, idempotency key) | 8 | ✅ |
+| `platform-create-outlet.test.ts` (outlet + warehouse 1:1, tenant create/delete 404) | 10 | ✅ |
+| `hub-fase9.test.ts` (HubMembership + session lintas-tenant) | 11 | ✅ |
+| `billing-plans.test.ts` (Plan CRUD, RBAC 401/403, subscription assign/change/cancel, entitlement fallback) | 25 | ✅ |
+| `provisioning.test.ts` (boot provisioning) | 2 | ✅ |
+
 ## Layer 6 — E2E Critical Paths (5 tests) ✅
 
 | Test File | Tests | Status |
@@ -135,7 +146,7 @@ Real HTTP flows through the actual Express stack (`buildIntegrationApp({ enforce
 | `ReceiptRenderService.test.ts` | 6 | ✅ |
 | `PrintService.test.ts` | 6 | ✅ |
 
-## Frontend (83 tests) ✅
+## Frontend (85 tests) ✅
 
 | Test File | Tests | Status |
 |-----------|-------|--------|
@@ -161,6 +172,7 @@ Real HTTP flows through the actual Express stack (`buildIntegrationApp({ enforce
 | `MongoTenantRepository.test.ts` `list` | 4 | ✅ |
 | `MongoShiftRepository.test.ts` `findByTenantIds` | 2 | ✅ |
 | `MongoPaymentRepository.test.ts` `findCompletedByTenantIds` | 2 | ✅ |
+| `tests/integration/billing-plans.test.ts` (Plan CRUD, subscription assign/change/cancel, entitlement, RBAC platform) | 25 | ✅ |
 
 ## Test Infrastructure (2026-08-30)
 

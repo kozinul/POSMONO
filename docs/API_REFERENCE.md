@@ -1001,6 +1001,15 @@ Hub = grouping non-tenant di atas tenant (`hubId` di Tenant; null = standalone).
 | GET | `/api/platform/shifts/summary` | platform | `platform.reports.read` |
 | GET | `/api/platform/payments/summary` | platform | `platform.reports.read` |
 | GET | `/api/platform/hubs/:hubId/consolidated` | platform | `platform.reports.read` |
+| GET | `/api/platform/plans` | platform | `platform.plans.read` |
+| GET | `/api/platform/plans/:id` | platform | `platform.plans.read` |
+| POST | `/api/platform/plans` | platform | `platform.plans.manage` |
+| PUT | `/api/platform/plans/:id` | platform | `platform.plans.manage` |
+| DELETE | `/api/platform/plans/:id` | platform | `platform.plans.manage` |
+| GET | `/api/platform/tenants/:tenantId/subscription` | platform | `platform.tenants.read` |
+| POST | `/api/platform/tenants/:tenantId/subscription` | platform | `platform.tenants.manage` |
+| POST | `/api/platform/tenants/:tenantId/subscription/cancel` | platform | `platform.tenants.manage` |
+| GET | `/api/platform/tenants/:tenantId/entitlement` | platform | `platform.tenants.read` |
 
 **Query params:**
 
@@ -1049,6 +1058,50 @@ Response shifts/payments summary menambahkan `tenantName` per tenant (dari `reso
 **Errors:** `400` `TENANT_NAME_REQUIRED` / `OWNER_NAME_REQUIRED` / `OWNER_EMAIL_INVALID` / `OUTLET_NAME_REQUIRED` · `404` Hub tidak ditemukan (HUB_NOT_FOUND) · `409` `OWNER_EMAIL_ALREADY_EXISTS` (owner email sudah terdaftar) / konflik idempotency · `401/403` non-platform user.
 
 **Catatan:** role Owner/Manager/Cashier dibuat bersama tenant (default roles), owner memakai role Owner dengan `outletIds: []`, outlet ↔ warehouse ter-link 1:1 (`Outlet.warehouseId ↔ Warehouse.outletId`), dan password TIDAK pernah dikembalikan response.
+
+---
+
+## Billing — Plans & Subscriptions (`/api/platform/plans`, `/api/platform/tenants/:tenantId/subscription`)
+
+> **Keputusan produk**: self-service **nonaktif** — pembuatan/pengubahan plan dan assign plan ke tenant hanya oleh Platform Super Admin (Terminal Center → tab Plans / TenantDetailModal). Sistem monetisasi modular: `basePrice` + `addOns[]` (module/limit) + `limits` per plan. Default plans di-seed: **Trial** (gratis), **Starter** (Rp199K/bln), **Pro** (Rp499K/bln), **Enterprise** (Rp999K/bln).
+
+**Plan shape** (lihat `shared/src/types/domain/billing.ts`):
+
+```json
+{
+  "id": "plan-pro",
+  "name": "Pro",
+  "description": "…",
+  "basePrice": 499000,
+  "billingCycle": "monthly",
+  "isActive": true,
+  "isPublic": true,
+  "isDefault": false,
+  "sortOrder": 30,
+  "modules": ["products", "orders", "payments", "shifts", "reports", "promotions", "multi-outlet", "qr-printing"],
+  "limits": { "maxUsers": 10, "maxProducts": -1, "maxCategories": -1, "maxOutlets": 3, "maxOrdersPerMonth": -1, "maxInventoryItems": -1, "maxWarehouses": 3 },
+  "addOns": [ { "id": "hk", "name": "Hospitality Kit", "description": "…", "price": 200000, "type": "module", "value": "hospitality" } ]
+}
+```
+
+- `POST /api/platform/plans` → `201` create (`PlanController.create` → `this.created`); nama duplikat → `400`; `limits` nilai `-1` = unlimited.
+- `DELETE /api/platform/plans/:id` → **plan default tidak bisa dihapus** (`400`); non-default → `200`.
+- `POST /api/platform/tenants/:tenantId/subscription` body `{ planId, billingCycle? }` → assign atau ganti plan (wajib `planId` eksplisit, **tidak ada fallback default**), return `200` (`this.ok`); tenant/plan tidak ditemukan → `404`.
+- `POST /api/platform/tenants/:tenantId/subscription/cancel` → `SubscriptionService.cancelSubscription` → **tenant di-deactivate** (`status='deactivated'`), `200`.
+- `GET /api/platform/tenants/:tenantId/entitlement` → entitlement per tenant (plan yang dipakai untuk menilai izin module/limit).
+- `GET /api/tenants/current/entitlement` (`authenticate` saja, merchant scope) → plan ter-resolve untuk tenant pemanggil: subscription → plan; tanpa subscription → fallback **entitlement Trial** hardcoded.
+
+**Entitlement shape:**
+
+```json
+{
+  "tenantId": "…",
+  "planId": "plan-starter",
+  "subscription": { "id": "…", "status": "active", "billingCycle": "monthly", "currentPeriodStart": "…", "currentPeriodEnd": "…" },
+  "modules": ["products", "orders", "payments", "shifts"],
+  "limits": { "maxUsers": 3, "maxProducts": 50, "…": "…" }
+}
+```
 
 ---
 
@@ -1245,5 +1298,15 @@ id, tenantId, email, displayName, roleId, isActive, lastLoginAt, createdAt, upda
 | 113 | DELETE | `/api/hub-memberships/:hubId/:userId` | ✓ `hub:manage` |
 | 114 | GET | `/api/hub-memberships/me` | ✓ |
 | 116 | GET | `/api/hub-memberships/me/tenants` | ✓ |
+| 117 | GET | `/api/tenants/current/entitlement` | ✓ |
+| 118 | GET | `/api/platform/plans` | platform `platform.plans.read` |
+| 119 | GET | `/api/platform/plans/:id` | platform `platform.plans.read` |
+| 120 | POST | `/api/platform/plans` | platform `platform.plans.manage` |
+| 121 | PUT | `/api/platform/plans/:id` | platform `platform.plans.manage` |
+| 122 | DELETE | `/api/platform/plans/:id` | platform `platform.plans.manage` |
+| 123 | GET | `/api/platform/tenants/:tenantId/subscription` | platform `platform.tenants.read` |
+| 124 | POST | `/api/platform/tenants/:tenantId/subscription` | platform `platform.tenants.manage` |
+| 125 | POST | `/api/platform/tenants/:tenantId/subscription/cancel` | platform `platform.tenants.manage` |
+| 126 | GET | `/api/platform/tenants/:tenantId/entitlement` | platform `platform.tenants.read` |
 | 117 | GET | `/api/auth/accessible-tenants` | ✓ |
 | 118 | POST | `/api/auth/switch-tenant` | ✓ |
