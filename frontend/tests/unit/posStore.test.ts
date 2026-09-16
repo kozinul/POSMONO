@@ -69,7 +69,7 @@ describe('POS Store (free-item cart flow)', () => {
     usePOSStore.setState({
       items: [], pricing: null, pricingLoading: false, promoCode: '', manualDiscount: 0, manualDiscountType: 'nominal',
       discountRules: [], productPrices: {}, paymentModalOpen: false, paymentState: 'idle',
-      receipt: null, customerName: '', tableNumber: '', heldOrders: [], heldOrdersPanelOpen: false,
+      receipt: null, customerName: '', tableNumber: '', heldOrders: [],
       dismissedHeldOrderIds: [], activeBillId: null, activeBillNumber: null, splitNumber: 0, splitBaseOrderNumber: null,
       openShiftId: null, shiftTotals: { ...EMPTY_SHIFT_TOTALS },
     } as any);

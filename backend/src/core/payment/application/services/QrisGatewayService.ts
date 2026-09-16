@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { ValidationError } from '../../../../@shared/infrastructure/error/AppError';
 import { logger } from '../../../../@shared/infrastructure/logger/Logger';
 
-export interface QrisTenantConfig {
+interface QrisTenantConfig {
   qrisGatewayEnabled?: boolean;
   qrisGatewayBaseUrl?: string;
   qrisGatewayApiKey?: string;

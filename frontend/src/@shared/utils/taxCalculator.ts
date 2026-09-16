@@ -1,6 +1,6 @@
 import type { ITaxConfiguration, ITaxRule, IModifierConfig } from '../hooks/useTaxConfiguration';
 
-export interface TaxCalcItem {
+interface TaxCalcItem {
   productId: string;
   categoryId?: string;
   quantity: number;
@@ -17,7 +17,7 @@ export interface TaxCalcInput {
   customerTags?: string[];
 }
 
-export interface IChargeConfig {
+interface IChargeConfig {
   id: string;
   name: string;
   rate?: number;
@@ -31,28 +31,28 @@ export interface IChargeConfig {
   expiresAt?: string;
 }
 
-export interface ChargeItem {
+interface ChargeItem {
   name: string;
   amount: number;
   includeInTaxBase: boolean;
 }
 
-export interface ModifierInfo {
+interface ModifierInfo {
   type: string;
   before: number;
   after: number;
 }
 
-export interface TaxLineItem {
+interface TaxLineItem {
   ruleId: string;
   name: string;
   rate: number;
   amount: number;
 }
 
-export type AdjustmentType = 'DISCOUNT' | 'CHARGE' | 'TAX' | 'ROUNDING';
+type AdjustmentType = 'DISCOUNT' | 'CHARGE' | 'TAX' | 'ROUNDING';
 
-export interface Adjustment {
+interface Adjustment {
   id: string;
   type: AdjustmentType;
   name: string;
@@ -188,10 +188,6 @@ function calcDiscount(subtotal: number, discount: number, isPercentage: boolean)
   if (discount <= 0) return 0;
   if (isPercentage) return subtotal * (Math.min(discount, 100) / 100);
   return Math.min(discount, subtotal);
-}
-
-export function roundIDR(amount: number): number {
-  return Math.round(amount / 1000) * 1000;
 }
 
 function calcInclusiveRuleAmount(price: number, rule: ITaxRule): number {

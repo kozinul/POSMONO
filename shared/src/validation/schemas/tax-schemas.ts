@@ -32,8 +32,6 @@ export const updateTaxConfigurationSchema = z.object({
   rules: z.array(taxRuleSchema).optional(),
 });
 
-export const createTaxRuleSchema = taxRuleSchema;
-
 export const updateTaxRuleSchema = taxRuleSchema.partial();
 
 export const taxCalculateSchema = z.object({

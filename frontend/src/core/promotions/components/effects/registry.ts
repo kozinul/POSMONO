@@ -9,7 +9,7 @@ import BundlePriceEditor from './BundlePriceEditor';
 import BuyXPayYEditor from '../rules/BuyXPayYEditor';
 import BuyXGetYEditor from '../rules/BuyXGetYEditor';
 
-export type EffectEditorComponent = FC<EffectEditorProps | RuleEditorProps>;
+type EffectEditorComponent = FC<EffectEditorProps | RuleEditorProps>;
 
 export interface EffectTypeConfig {
   label: string;

@@ -4,7 +4,7 @@ import { ForbiddenError } from '../../infrastructure/error/AppError';
 /** Effective outlet scope for the authenticated user.
  * Empty list = ALL outlets of the tenant (owner/admin semantics, `[]`).
  */
-export function scopeOutletIds(req: Request): string[] {
+function scopeOutletIds(req: Request): string[] {
   return req.outletIds ?? [];
 }
 
@@ -25,11 +25,4 @@ export function resolveOutlet(req: Request, _res: Response, next: NextFunction):
 
   req.outletId = header || null;
   next();
-}
-
-export function requireOutlet(req: Request, _res: Response, next: NextFunction): void {
-  resolveOutlet(req, _res, next);
-  if (!req.outletId) {
-    throw new ForbiddenError('Outlet wajib dipilih (X-Outlet-Id)');
-  }
 }

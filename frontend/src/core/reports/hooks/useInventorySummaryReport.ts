@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../../@shared/services/api';
 
-export interface InventorySummaryItem {
+interface InventorySummaryItem {
   productId: string;
   warehouseId: string;
   warehouseName?: string;

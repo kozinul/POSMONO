@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../../../@shared/services/api';
 import type { CartItem } from '../store/posStore';
 
-export interface HeldOrder {
+interface HeldOrder {
   id: string;
   orderNumber: string;
   items: CartItem[];

@@ -64,28 +64,6 @@ export function useAdjustStock() {
   });
 }
 
-export function useReserveStock() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (input: { productId: string; quantity: number; referenceId?: string }) =>
-      api.post('/inventory/reserve', input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['inventory'] });
-    },
-  });
-}
-
-export function useReleaseStock() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (input: { productId: string; quantity: number; referenceId?: string }) =>
-      api.post('/inventory/release', input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['inventory'] });
-    },
-  });
-}
-
 export function useExportStock() {
   return useMutation({
     mutationFn: async () => {

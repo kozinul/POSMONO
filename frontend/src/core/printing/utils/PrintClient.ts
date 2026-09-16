@@ -8,7 +8,7 @@ interface PairedPrinter {
   label: string;
 }
 
-export interface USBDeviceLike {
+interface USBDeviceLike {
   productName?: string;
   manufacturerName?: string;
   vendorId?: number;
@@ -29,7 +29,7 @@ export interface USBDeviceLike {
   transferOut: (endpoint: number, data: Uint8Array) => Promise<{ status: string; bytesWritten: number }>;
 }
 
-export interface BluetoothDeviceLike {
+interface BluetoothDeviceLike {
   name?: string;
   gatt?: {
     connect: () => Promise<unknown>;
@@ -63,7 +63,7 @@ export interface ClientPrintResult {
   error?: string;
 }
 
-export function loadPairedPrinters(): PairedPrinter[] {
+function loadPairedPrinters(): PairedPrinter[] {
   try {
     const raw = localStorage.getItem(PAIRING_KEY);
     return raw ? (JSON.parse(raw) as PairedPrinter[]) : [];
@@ -76,15 +76,12 @@ function savePairedPrinters(list: PairedPrinter[]): void {
   localStorage.setItem(PAIRING_KEY, JSON.stringify(list));
 }
 
-export function rememberPairing(id: string, kind: 'usb' | 'bluetooth', label: string): void {
+function rememberPairing(id: string, kind: 'usb' | 'bluetooth', label: string): void {
   const list = loadPairedPrinters().filter((p) => p.id !== id);
   list.push({ id, kind, label });
   savePairedPrinters(list);
 }
 
-export function isClientSupported(): boolean {
-  return typeof navigator !== 'undefined' && (!!navigator.usb || !!navigator.bluetooth);
-}
 
 function findEndpoint(device: USBDeviceLike): number | null {
   const iface = device.configurations?.[0]?.interfaces?.[0];
@@ -96,7 +93,7 @@ function findEndpoint(device: USBDeviceLike): number | null {
   return endpoint?.endpointNumber ?? null;
 }
 
-export async function sendToUsb(printer: Printer, bufferBase64: string): Promise<ClientPrintResult> {
+async function sendToUsb(printer: Printer, bufferBase64: string): Promise<ClientPrintResult> {
   const nav = navigator as NavigatorWithUSB;
   if (!nav.usb) return { ok: false, error: 'WebUSB tidak didukung di peramban ini (gunakan Chrome/Edge)' };
 
@@ -151,7 +148,7 @@ const BT_SERVICE = 0xff00;
 const BT_CHARACTERISTIC = 0xff02;
 const CHUNK_SIZE = 20;
 
-export async function sendToBluetooth(printer: Printer, bufferBase64: string): Promise<ClientPrintResult> {
+async function sendToBluetooth(printer: Printer, bufferBase64: string): Promise<ClientPrintResult> {
   const nav = navigator as NavigatorWithBluetooth;
   if (!nav.bluetooth) return { ok: false, error: 'WebBluetooth tidak didukung di peramban ini (gunakan Chrome/Edge)' };
 
@@ -187,9 +184,6 @@ export async function printViaClient(printer: Printer, bufferBase64: string): Pr
   return { ok: false, error: 'Bukan printer USB/Bluetooth' };
 }
 
-export function getClientPrinters(printers: Printer[]): Printer[] {
-  return printers.filter((p) => p.connectionType === 'usb' || p.connectionType === 'bluetooth');
-}
 
 export function findPrinterByPurpose(printers: Printer[], purpose: 'receipt' | 'kot'): Printer | null {
   return (

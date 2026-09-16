@@ -34,7 +34,7 @@ export interface IVoidedItem {
   voidedAt: Date;
 }
 
-export type VoidApprovalType = 'order' | 'item' | 'payment';
+type VoidApprovalType = 'order' | 'item' | 'payment';
 
 export interface IVoidApproval {
   voidType: VoidApprovalType;

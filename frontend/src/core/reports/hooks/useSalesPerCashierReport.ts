@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../../@shared/services/api';
 
-export interface SalesPerCashierRow {
+interface SalesPerCashierRow {
   cashierId: string;
   cashierName: string;
   totalOrders: number;

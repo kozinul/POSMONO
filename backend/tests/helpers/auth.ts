@@ -20,14 +20,4 @@ export function generateTestToken(overrides?: Partial<TokenPayload>): string {
   return jwt.sign(payload, TEST_SECRET, { expiresIn: '1h' });
 }
 
-export function generateExpiredToken(): string {
-  const payload: TokenPayload = {
-    sub: 'user-test-1',
-    tenant: 'tenant-test-1',
-    role: 'owner',
-  };
-
-  return jwt.sign(payload, TEST_SECRET, { expiresIn: '0s' });
-}
-
 export { TEST_SECRET };

@@ -13,7 +13,7 @@ export interface AllocationParams {
   freeCount: number;
 }
 
-export interface SelectedItem {
+interface SelectedItem {
   productId: string;
   unitPrice: number;
 }

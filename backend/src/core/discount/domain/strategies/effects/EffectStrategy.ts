@@ -1,6 +1,6 @@
 import { IDiscountCondition } from '../conditions/ConditionStrategy';
 
-export type EffectType =
+type EffectType =
   | 'percentage_off'
   | 'nominal_off'
   | 'free_item'

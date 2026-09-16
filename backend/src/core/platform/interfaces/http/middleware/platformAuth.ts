@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import { env } from '../../../../../@shared/config/env';
 import { UnauthorizedError, ForbiddenError } from '../../../../../@shared/infrastructure/error/AppError';
 
-export interface PlatformJwtPayload {
+interface PlatformJwtPayload {
   sub: string;
   tenant: 'platform';
   role: string;

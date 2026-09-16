@@ -1,4 +1,4 @@
-export type ConditionType =
+type ConditionType =
   | 'min_purchase'
   | 'min_items'
   | 'category_match'

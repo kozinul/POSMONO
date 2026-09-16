@@ -34,28 +34,6 @@ export function useMembers(params?: { page?: number; limit?: number }) {
   });
 }
 
-export function useSearchMembers(query: string) {
-  return useQuery({
-    queryKey: ['members', 'search', query],
-    queryFn: async () => {
-      const res = await api.get<{ success: boolean; data: Customer[] }>('/members/search', { params: { q: query } });
-      return res.data;
-    },
-    enabled: query.length >= 2,
-  });
-}
-
-export function useMember(id: string) {
-  return useQuery({
-    queryKey: ['members', id],
-    queryFn: async () => {
-      const res = await api.get<{ success: boolean; data: Customer }>(`/members/${id}`);
-      return res.data;
-    },
-    enabled: !!id,
-  });
-}
-
 export function useCreateMember() {
   const qc = useQueryClient();
   return useMutation({

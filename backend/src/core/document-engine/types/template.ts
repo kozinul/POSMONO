@@ -1,12 +1,12 @@
 import { PaperPreset } from './paper';
 
 export type DocumentType = 'receipt' | 'invoice' | 'kot' | 'label' | 'report' | 'slip';
-export type SectionType =
+type SectionType =
   | 'header' | 'store_info' | 'order_info' | 'customer_info'
   | 'items' | 'item_modifiers' | 'item_adjustments'
   | 'summary' | 'payment' | 'tax_detail' | 'footer' | 'qrcode' | 'barcode';
 
-export type ComponentType =
+type ComponentType =
   | 'field' | 'text' | 'image' | 'divider' | 'spacer'
   | 'qrcode' | 'barcode' | 'line_separator'
   | 'container' | 'row' | 'column' | 'table' | 'repeater';
@@ -19,7 +19,7 @@ export interface VisibilityRule {
   value?: string | number | boolean;
 }
 
-export type VisibilityLogicalOperator = 'AND' | 'OR' | 'NOT';
+type VisibilityLogicalOperator = 'AND' | 'OR' | 'NOT';
 
 export interface VisibilityGroup {
   operator: VisibilityLogicalOperator;
@@ -27,19 +27,19 @@ export interface VisibilityGroup {
   groups?: VisibilityGroup[];
 }
 
-export type ComponentDimension =
+type ComponentDimension =
   | { unit: 'auto' }
   | { unit: 'mm'; value: number }
   | { unit: 'percent'; value: number };
 
-export interface BoxEdges {
+interface BoxEdges {
   top: number;
   right: number;
   bottom: number;
   left: number;
 }
 
-export interface ComponentStyle {
+interface ComponentStyle {
   margin?: BoxEdges;
   padding?: BoxEdges;
   font?: {
@@ -59,7 +59,7 @@ export interface ComponentStyle {
   };
 }
 
-export interface BaseNode {
+interface BaseNode {
   id: string;
   style?: ComponentStyle;
   visibility?: VisibilityGroup;
@@ -84,37 +84,37 @@ export interface ImageNode extends BaseNode {
   maxHeight?: number;
 }
 
-export interface DividerNode extends BaseNode {
+interface DividerNode extends BaseNode {
   type: 'divider';
 }
 
-export interface SpacerNode extends BaseNode {
+interface SpacerNode extends BaseNode {
   type: 'spacer';
   height: number;
 }
 
-export interface BarcodeNode extends BaseNode {
+interface BarcodeNode extends BaseNode {
   type: 'barcode';
   field: string;
 }
 
-export interface QrNode extends BaseNode {
+interface QrNode extends BaseNode {
   type: 'qrcode';
   content: string;
 }
 
-export interface ContainerNode extends BaseNode {
+interface ContainerNode extends BaseNode {
   type: 'container';
   layout?: 'vertical' | 'horizontal';
   children: DocumentNode[];
 }
 
-export interface RowNode extends BaseNode {
+interface RowNode extends BaseNode {
   type: 'row';
   children: ColumnNode[];
 }
 
-export interface ColumnNode extends BaseNode {
+interface ColumnNode extends BaseNode {
   type: 'column';
   width?: ComponentDimension;
   children: DocumentNode[];
@@ -175,7 +175,7 @@ export interface Template {
   metadata: TemplateMetadata;
 }
 
-export interface TemplateVersion {
+interface TemplateVersion {
   id: string;
   templateId: string;
   version: number;

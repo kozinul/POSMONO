@@ -5,7 +5,7 @@ import { TaxConfiguration } from '../../../tax/domain/TaxConfiguration';
 import { ITaxConfigurationRepository } from '../../../tax/infrastructure/persistence/ITaxConfigurationRepository';
 import { logger } from '../../../../@shared/infrastructure/logger/Logger';
 
-export interface PricingLineItem {
+interface PricingLineItem {
   productId: string;
   productName: string;
   categoryId: string;

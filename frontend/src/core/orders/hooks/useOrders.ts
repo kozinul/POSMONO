@@ -140,17 +140,6 @@ export function useOrders(params?: { status?: string; dateFrom?: string; dateTo?
   });
 }
 
-export function useOrder(id: string) {
-  return useQuery({
-    queryKey: ['order', id],
-    queryFn: async () => {
-      const res = await api.get<{ success: boolean; data: Order }>(`/orders/${id}`);
-      return res.data.data;
-    },
-    enabled: !!id,
-  });
-}
-
 export function useDashboardSummary() {
   return useQuery({
     queryKey: ['dashboard-summary'],
@@ -319,14 +308,14 @@ export function useBestSellers(days = 7) {
   });
 }
 
-export interface FamilyTopProduct {
+interface FamilyTopProduct {
   productId: string;
   name: string;
   quantity: number;
   revenue: number;
 }
 
-export interface FamilyTopProducts {
+interface FamilyTopProducts {
   familyId: string;
   familyName: string;
   products: FamilyTopProduct[];
@@ -356,7 +345,7 @@ export function useTopProductsPerFamily(days = 7, limit = 5) {
   });
 }
 
-export interface ActiveCashier {
+interface ActiveCashier {
   cashierId: string;
   cashierName: string;
   openedAt: string;
@@ -379,4 +368,4 @@ export function useActiveCashiers() {
   });
 }
 
-export type { Order, OrderItem, IVoidedItem, IPaymentBreakdownEntry };
+export type { Order, IPaymentBreakdownEntry };

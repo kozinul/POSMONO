@@ -10,7 +10,7 @@ export interface PlatformHub {
   updatedAt: string;
 }
 
-export interface PlatformTenantBrief {
+interface PlatformTenantBrief {
   id: string;
   name: string;
   slug: string;
@@ -50,13 +50,13 @@ export interface PlatformOutletRow {
   isActive: boolean;
 }
 
-export interface PlatformMethodsGroup {
+interface PlatformMethodsGroup {
   method: string;
   total: number;
   count: number;
 }
 
-export interface PlatformShiftTenant {
+interface PlatformShiftTenant {
   tenantId: string;
   tenantName: string | null;
   openShifts: number;
@@ -84,14 +84,14 @@ export interface PlatformPaymentsSummary {
   tenants: Array<{ tenantId: string; tenantName: string | null; totalAmount: number; totalTransactions: number; methods: PlatformMethodsGroup[] }>;
 }
 
-export interface HubConsolidatedOutlet {
+interface HubConsolidatedOutlet {
   outletId: string | null;
   outletName: string | null;
   shifts: { openShifts: number; closedShifts: number; totalSales: number; cashSales: number; nonCashSales: number; totalTransactions: number };
   payments: { totalAmount: number; totalTransactions: number; methods: PlatformMethodsGroup[] };
 }
 
-export interface HubConsolidatedTenant {
+interface HubConsolidatedTenant {
   tenantId: string;
   tenantName: string | null;
   hasData: boolean;
@@ -119,7 +119,7 @@ export interface PlatformPlanLimits {
   maxWarehouses: number;
 }
 
-export interface PlatformPlanAddOn {
+interface PlatformPlanAddOn {
   id: string;
   name: string;
   description: string;
@@ -161,13 +161,6 @@ export interface PlatformSubscription {
 export interface PlatformTenantSubscription {
   subscription: PlatformSubscription;
   plan: PlatformPlan | null;
-}
-
-export interface PlatformEntitlement {
-  plan: (PlatformPlan & { name: string; basePrice: number }) | null;
-  subscription: PlatformSubscription | null;
-  modules: string[];
-  limits: PlatformPlanLimits;
 }
 
 export const PLAN_MODULE_LABELS: Record<string, string> = {
@@ -424,17 +417,6 @@ export function usePlatformPlans(activeOnly = false) {
   });
 }
 
-export function usePlatformPlan(planId: string | null) {
-  return useQuery({
-    queryKey: ['platform-plan', planId],
-    queryFn: async () => {
-      const res = await api.get<{ success: boolean; data: PlatformPlan }>(`${BASE}/plans/${planId}`);
-      return res.data.data;
-    },
-    enabled: !!planId,
-  });
-}
-
 export type PlanInput = {
   name: string;
   description?: string;
@@ -532,19 +514,5 @@ export function usePlatformCancelSubscription() {
       queryClient.invalidateQueries({ queryKey: ['platform-tenants'] });
       queryClient.invalidateQueries({ queryKey: ['platform-tenant-subscription'] });
     },
-  });
-}
-
-export function usePlatformTenantEntitlement(tenantId: string | null) {
-  return useQuery({
-    queryKey: ['platform-tenant-entitlement', tenantId],
-    queryFn: async () => {
-      const res = await api.get<{ success: boolean; data: PlatformEntitlement }>(
-        `${BASE}/tenants/${tenantId}/entitlement`,
-      );
-      return res.data.data;
-    },
-    enabled: !!tenantId,
-    staleTime: 30_000,
   });
 }

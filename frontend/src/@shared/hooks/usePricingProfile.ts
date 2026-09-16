@@ -23,17 +23,6 @@ export function usePricingProfiles() {
   });
 }
 
-export function usePricingProfile(id: string) {
-  return useQuery<IPricingProfile>({
-    queryKey: ['pricing-profiles', id],
-    queryFn: async () => {
-      const { data } = await api.get(`/pricing-profiles/${id}`);
-      return data;
-    },
-    enabled: !!id,
-  });
-}
-
 export function useCreatePricingProfile() {
   const qc = useQueryClient();
   return useMutation({

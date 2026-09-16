@@ -1,4 +1,4 @@
-export const validOrderItem = {
+const validOrderItem = {
   productId: 'product-1',
   variantId: null,
   productName: 'Nasi Goreng',

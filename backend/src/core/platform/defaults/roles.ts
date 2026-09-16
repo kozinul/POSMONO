@@ -33,7 +33,7 @@ export const MANAGER_PERMS = [
   'printers:read', 'printers:write',
 ];
 
-export const CASHIER_PERMS = [
+const CASHIER_PERMS = [
   'products:read',
   'orders:read', 'orders:write',
   'payments:read',

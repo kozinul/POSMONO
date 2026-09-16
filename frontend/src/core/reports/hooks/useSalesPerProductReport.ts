@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../../@shared/services/api';
 
-export interface ProductTransaction {
+interface ProductTransaction {
   orderId: string;
   createdAt: string;
   quantity: number;
@@ -22,7 +22,7 @@ export interface SalesPerProductRow {
   transactions: ProductTransaction[];
 }
 
-export interface SalesPerProductSummary {
+interface SalesPerProductSummary {
   quantity: number;
   totalSales: number;
   dpp: number;

@@ -1,6 +1,6 @@
 import type { DocumentType } from './template';
 
-export type FieldCategory =
+type FieldCategory =
   | 'store' | 'order' | 'customer' | 'item' | 'payment' | 'promotion' | 'summary';
 
 export interface FieldDefinition {

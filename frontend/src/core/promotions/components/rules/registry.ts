@@ -11,7 +11,7 @@ import DateRangeEditor from './DateRangeEditor';
 import TimeRangeEditor from './TimeRangeEditor';
 import CustomerTagEditor from './CustomerTagEditor';
 
-export type RuleEditorComponent = FC<RuleEditorProps>;
+type RuleEditorComponent = FC<RuleEditorProps>;
 
 export interface RuleTypeConfig {
   label: string;

@@ -4,7 +4,7 @@ import { TaxRule, ITaxRule } from './TaxRule';
 import { Charge, ICharge } from './Charge';
 
 export type PricingMode = 'inclusive' | 'exclusive';
-export type TaxVersionStatus = 'draft' | 'active' | 'deprecated';
+type TaxVersionStatus = 'draft' | 'active' | 'deprecated';
 
 export interface ITaxVersion {
   id: string;

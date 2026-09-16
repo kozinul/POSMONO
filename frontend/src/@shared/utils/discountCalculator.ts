@@ -1,6 +1,6 @@
-import type { IDiscountRule, IDiscountResult } from '../hooks/useDiscountConfiguration';
+import type { IDiscountRule } from '../hooks/useDiscountConfiguration';
 
-export interface DiscountCalcItem {
+interface DiscountCalcItem {
   productId: string;
   categoryId: string;
   quantity: number;
@@ -303,66 +303,4 @@ function applyEffects(
   }
 
   return { amount: Math.round(total * 100) / 100, description: descParts.join(' + ') || rule.name };
-}
-
-export function calculateDiscount(
-  items: DiscountCalcItem[],
-  rules: IDiscountRule[],
-  promoCode?: string,
-  productPriceLookup?: (productId: string) => number,
-): IDiscountResult {
-  const subtotal = items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
-
-  const sorted = rules
-    .filter((r) => r.active)
-    .sort((a, b) => a.priority - b.priority);
-
-  let totalDiscount = 0;
-  const appliedRules: IDiscountResult['appliedRules'] = [];
-  const freeItems: Array<{ productId: string; quantity: number; ruleId: string }> = [];
-
-  for (const rule of sorted) {
-    if (!evaluateConditions(rule, items, subtotal, promoCode)) continue;
-
-    const freeEffect = rule.effects.find((e) => e.type === 'free_item');
-    let freeItemValue = 0;
-    let freeItemCount = 0;
-
-    if (freeEffect) {
-      const productId = freeEffect.config.productId as string;
-      const qtyPerSet = (freeEffect.config.quantity as number) || 1;
-      const sets = countQualifyingSets(rule, items);
-      freeItemCount = sets * qtyPerSet;
-
-      if (productPriceLookup && freeItemCount > 0) {
-        const freeItemPrice = productPriceLookup(productId);
-        freeItemValue = freeItemPrice * freeItemCount;
-      }
-
-      freeItems.push({ productId, quantity: freeItemCount, ruleId: rule.id });
-    }
-
-    const result = applyEffects(rule, subtotal, totalDiscount, freeItemValue, freeItemCount, items);
-    totalDiscount += result.amount;
-
-    appliedRules.push({
-      ruleId: rule.id,
-      ruleName: rule.name,
-      discountAmount: result.amount,
-      description: result.description,
-    });
-
-    if (!rule.stackable) break;
-  }
-
-  totalDiscount = Math.min(totalDiscount, subtotal);
-  totalDiscount = Math.round(totalDiscount * 100) / 100;
-
-  return {
-    totalDiscount,
-    appliedRules,
-    freeItems,
-    finalSubtotal: subtotal - totalDiscount,
-    breakdown: appliedRules,
-  };
 }

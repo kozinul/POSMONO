@@ -19,7 +19,7 @@ export interface CartItem {
   stock?: number;
 }
 
-export type PaymentState = 'idle' | 'processing' | 'success' | 'error';
+type PaymentState = 'idle' | 'processing' | 'success' | 'error';
 
 interface HeldOrder {
   id: string;
@@ -34,7 +34,7 @@ interface HeldOrder {
   createdAt: string;
 }
 
-export interface ReceiptLayout {
+interface ReceiptLayout {
   paper: Record<string, unknown>;
   pages: { width: number; height: number; nodes: Array<Record<string, unknown>> }[];
 }
@@ -70,7 +70,7 @@ export interface ShiftTotals {
   paymentBreakdown: ShiftPaymentBreakdownEntry[];
 }
 
-export interface OpenShiftSnapshot {
+interface OpenShiftSnapshot {
   id: string;
   totalSales: number;
   cashSales: number;
@@ -108,7 +108,6 @@ interface POSState {
   tableNumber: string;
 
   heldOrders: HeldOrder[];
-  heldOrdersPanelOpen: boolean;
   dismissedHeldOrderIds: string[];
 
   activeBillId: string | null;
@@ -142,7 +141,6 @@ interface POSState {
 
   dismissHeldOrder: (orderId: string) => void;
   mergeHeldOrders: (orders: HeldOrder[]) => void;
-  toggleHeldOrdersPanel: () => void;
 
   openBill: () => Promise<void>;
   saveBill: () => Promise<boolean>;
@@ -199,7 +197,6 @@ export const usePOSStore = create<POSState>((set, get) => ({
   tableNumber: '',
 
   heldOrders: [],
-  heldOrdersPanelOpen: false,
   dismissedHeldOrderIds: [],
 
   activeBillId: null,
@@ -730,7 +727,6 @@ export const usePOSStore = create<POSState>((set, get) => ({
     });
   },
 
-  toggleHeldOrdersPanel: () => set((s) => ({ heldOrdersPanelOpen: !s.heldOrdersPanelOpen })),
 
   removeItems: (productIds) => {
     set((state) => {

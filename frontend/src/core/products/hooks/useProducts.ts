@@ -24,14 +24,14 @@ export interface Product {
   updatedAt: string;
 }
 
-export interface Category {
+interface Category {
   id: string;
   name: string;
   familyId: string | null;
   sortOrder: number;
 }
 
-export interface Family {
+interface Family {
   id: string;
   name: string;
   sortOrder: number;

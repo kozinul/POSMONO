@@ -14,7 +14,7 @@ export interface ICharge {
   expiresAt?: Date;
 }
 
-export interface ChargeCalculationResult {
+interface ChargeCalculationResult {
   name: string;
   amount: number;
   includeInTaxBase: boolean;

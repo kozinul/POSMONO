@@ -29,19 +29,19 @@ export interface PricingInput {
   orderId?: string;
 }
 
-export interface ChargeItem {
+interface ChargeItem {
   name: string;
   amount: number;
   includeInTaxBase: boolean;
 }
 
-export interface ModifierInfo {
+interface ModifierInfo {
   type: string;
   before: number;
   after: number;
 }
 
-export interface TaxLineItem {
+interface TaxLineItem {
   name: string;
   rate: number;
   amount: number;

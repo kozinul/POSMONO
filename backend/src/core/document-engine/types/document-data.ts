@@ -1,4 +1,4 @@
-export interface LineItem {
+interface LineItem {
   name: string;
   sku?: string;
   barcode?: string;
@@ -11,24 +11,24 @@ export interface LineItem {
   isFreeItem?: boolean;
 }
 
-export interface ItemModifier {
+interface ItemModifier {
   name: string;
   price: number;
 }
 
-export interface LineAdjustment {
+interface LineAdjustment {
   name: string;
   type: 'promotion' | 'discount' | 'charge';
   amount: number;
 }
 
-export interface AppliedPromotion {
+interface AppliedPromotion {
   name: string;
   code?: string;
   discount: number;
 }
 
-export interface PaymentInfo {
+interface PaymentInfo {
   method: string;
   paidAmount: number;
   change: number;

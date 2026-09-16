@@ -94,7 +94,7 @@ export interface IntegrationAppOptions {
   permissions?: string[];
 }
 
-export function buildTaxServiceMock(): { calculate: (input: any) => Promise<any> } {
+function buildTaxServiceMock(): { calculate: (input: any) => Promise<any> } {
   return {
     calculate: async (input: any) => {
       const subtotal = input.items.reduce((s: number, i: any) => s + i.quantity * i.unitPrice, 0);

@@ -1,5 +1,2 @@
-export { AllocationType, AllocationItem, AllocationParams, AllocationResult, SelectedItem, IAllocationStrategy } from './AllocationStrategy';
-export { CheapestAllocation } from './CheapestAllocation';
-export { MostExpensiveAllocation } from './MostExpensiveAllocation';
-export { ProportionalAllocation } from './ProportionalAllocation';
+export { AllocationType } from './AllocationStrategy';
 export { allocateDiscount, describeAllocation } from './AllocationApplier';

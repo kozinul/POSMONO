@@ -1,13 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../../@shared/services/api';
 
-export interface MethodTotal {
+interface MethodTotal {
   method: string;
   total: number;
   count: number;
 }
 
-export interface CashierReceipt {
+interface CashierReceipt {
   cashierId: string;
   cashierName: string;
   methods: MethodTotal[];
@@ -15,7 +15,7 @@ export interface CashierReceipt {
   totalTransactions: number;
 }
 
-export interface CashierReceiptsReport {
+interface CashierReceiptsReport {
   cashiers: CashierReceipt[];
   totals: {
     total: number;

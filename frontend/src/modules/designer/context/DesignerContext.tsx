@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, useCallback } from 'react';
 
-export interface DesignerNode {
+interface DesignerNode {
   id: string;
   type: string; // 'field' | 'text' | 'image' | 'divider' | 'spacer' | 'container' | 'row' | 'column' | 'table' | 'repeater'
   field?: string;
@@ -16,7 +16,7 @@ export interface DesignerNode {
   height?: { unit: string; value?: number };
 }
 
-export interface DesignerSection {
+interface DesignerSection {
   id: string;
   type: string;
   enabled: boolean;

@@ -1,8 +1,3 @@
-export interface PlatformTenantRef {
-  id: string;
-  name: string;
-}
-
 export interface PlatformScope {
   tenantIds: string[];
   tenantNameById: Record<string, string>;

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    "backend": {
+      "entry": [
+        "src/dev.ts",
+        "src/bootstrap/app.ts",
+        "src/seed.ts",
+        "src/scripts/**/*.ts",
+        "tests/**/*.{ts,tsx}",
+        "vitest.config.ts"
+      ],
+      "project": ["src/**/*.ts", "tests/**/*.{ts,tsx}"],
+      "ignoreDependencies": ["pino-pretty"]
+    },
+    "frontend": {
+      "entry": ["src/main.tsx", "tests/**/*.{ts,tsx}", "vitest.config.ts", "vite.config.ts"],
+      "project": ["src/**/*.{ts,tsx}", "tests/**/*.{ts,tsx}"]
+    },
+    "shared": {
+      "entry": ["src/index.ts", "src/**/*.d.ts"],
+      "project": ["src/**/*.ts"]
+    }
+  }
+}

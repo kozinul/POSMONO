@@ -46,7 +46,7 @@ export interface IChargeConfig {
   expiresAt?: string;
 }
 
-export interface ITaxVersion {
+interface ITaxVersion {
   id: string;
   versionNumber: number;
   effectiveDate: string;

@@ -1,7 +1,7 @@
 import { TaxItem } from './PricingEngine';
 import { ScopeMatchContext } from './TaxScope';
 
-export type AdjustmentType = 'DISCOUNT' | 'CHARGE' | 'TAX' | 'ROUNDING';
+type AdjustmentType = 'DISCOUNT' | 'CHARGE' | 'TAX' | 'ROUNDING';
 
 export interface Adjustment {
   id: string;

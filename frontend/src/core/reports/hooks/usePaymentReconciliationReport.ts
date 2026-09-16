@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../../@shared/services/api';
 
-export interface ReconciliationItem {
+interface ReconciliationItem {
   method: string;
   paymentTotal: number;
   paymentCount: number;

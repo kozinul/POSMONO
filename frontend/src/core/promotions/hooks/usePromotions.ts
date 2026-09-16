@@ -1,12 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../../@shared/services/api';
 
-export interface PromotionRule {
+interface PromotionRule {
   type: string;
   params: Record<string, unknown>;
 }
 
-export interface PromotionEffect {
+interface PromotionEffect {
   type: string;
   value: number;
   target: string;
@@ -53,17 +53,6 @@ export function usePromotions(params?: { page?: number; limit?: number; isActive
   });
 }
 
-export function usePromotion(id: string) {
-  return useQuery({
-    queryKey: ['promotions', id],
-    queryFn: async () => {
-      const res = await api.get<{ success: boolean; data: Promotion }>(`/promotions/${id}`);
-      return res.data;
-    },
-    enabled: !!id,
-  });
-}
-
 export function useCreatePromotion() {
   const qc = useQueryClient();
   return useMutation({
@@ -106,11 +95,3 @@ export function useDeletePromotion() {
   });
 }
 
-export function useValidatePromotion() {
-  return useMutation({
-    mutationFn: async (data: { code: string; subtotal: number; itemCount: number; productIds?: string[]; categoryIds?: string[]; customerTags?: string[] }) => {
-      const res = await api.post('/promotions/validate', data);
-      return res.data;
-    },
-  });
-}

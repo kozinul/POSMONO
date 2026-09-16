@@ -1,4 +1,4 @@
-export const PAYMENT_METHOD_LABELS: Record<string, string> = {
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
   cash: 'Tunai',
   qris: 'QRIS',
   transfer: 'Transfer',
@@ -8,7 +8,7 @@ export const PAYMENT_METHOD_LABELS: Record<string, string> = {
   ewallet: 'E-Wallet',
 };
 
-export const PAYMENT_METHOD_ORDER = [
+const PAYMENT_METHOD_ORDER = [
   'cash',
   'qris',
   'transfer',

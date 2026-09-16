@@ -1,9 +1,9 @@
 import { EffectStrategy, IDiscountEffect, EffectContext, EffectResult, GeneratedLineItem } from './EffectStrategy';
 import { allocateDiscount, AllocationType } from '../allocation';
 
-export type BuyXGetYTargetType = 'cart_item' | 'product' | 'category' | 'same_product';
+type BuyXGetYTargetType = 'cart_item' | 'product' | 'category' | 'same_product';
 
-export interface BuyXGetYTarget {
+interface BuyXGetYTarget {
   type: BuyXGetYTargetType;
   productId?: string;
   productName?: string;

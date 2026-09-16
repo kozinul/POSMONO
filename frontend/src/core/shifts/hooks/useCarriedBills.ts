@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../../@shared/services/api';
 
-export interface CarriedBill {
+interface CarriedBill {
   orderId: string;
   orderNumber: string;
   total: number;

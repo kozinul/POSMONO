@@ -10,23 +10,6 @@ const SplitBillSchema = new Schema(
   { _id: false },
 );
 
-const RefundSchema = new Schema(
-  {
-    _id: { type: String },
-    paymentId: { type: String, required: true },
-    orderId: { type: String, required: true },
-    amount: { type: Number, required: true },
-    reason: { type: String, default: '' },
-    status: { type: String, enum: ['pending', 'completed', 'failed'], default: 'pending' },
-    refundedBy: { type: String, default: '' },
-    refundedByName: { type: String, default: '' },
-    refundedAt: { type: Date, default: null },
-  },
-  { _id: false, timestamps: true },
-);
-
-export { RefundSchema };
-
 export const PaymentSchema = new Schema(
   {
     _id: { type: String },
