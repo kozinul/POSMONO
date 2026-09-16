@@ -105,7 +105,7 @@ describe('ReceiptAssembler', () => {
       order: makeOrder({ createdAt: new Date('2026-08-15T17:30:00.000Z') }),
       tenant: makeTenant({ timezone: 'Asia/Makassar' }),
     });
-    expect(vm.order.date).toBe('2026-08-16');
+    expect(vm.order.date).toBe('16/08/2026');
     expect(vm.order.time).toBe('01:30');
   });
 
@@ -123,8 +123,21 @@ describe('ReceiptAssembler', () => {
     expect(vm.items[1].isFreeItem).toBe(true);
   });
 
+  it('marks zero-price modifiers as GRATIS', async () => {
+    const vm = await assembler.build({
+      order: makeOrder({
+        items: [
+          makeItem({ productName: 'Nasi Goreng', quantity: 1, totalPrice: 15000, modifiers: [{ name: 'Telur', price: 5000 }, { name: 'Saos', price: 0 }] }),
+        ],
+      }),
+      tenant: makeTenant(),
+    });
+    expect(vm.items[0].modifierLines).toContain('+ Telur +Rp 5.000');
+    expect(vm.items[0].modifierLines).toContain('+ Saos  GRATIS');
+  });
+
   it('computes change only from cash payments', async () => {
-    const order = makeOrder({ total: 22143, roundedPayable: 0 });
+    const order = makeOrder({ total: 22143, roundedPayable: 0, invoiceNumber: 'INV-ORD-001' });
     const vm = await assembler.build({
       order,
       tenant: makeTenant(),
@@ -135,7 +148,7 @@ describe('ReceiptAssembler', () => {
     });
     expect(vm.payments[0].methodLabel).toBe('QRIS');
     expect(vm.payments[0].referenceLine).toBe('Ref: QRIS-ABC123');
-    expect(vm.order.referenceNumber).toBe('Ref: QRIS-ABC123');
+    expect(vm.order.referenceNumber).toBe('INV-ORD-001');
     expect(vm.payments[1].methodLabel).toBe('Tunai');
     expect(vm.summary.change).toBeGreaterThan(0);
   });
@@ -157,7 +170,7 @@ describe('ReceiptAssembler', () => {
     ];
     const vm = await assembler.build({ order: makeOrder({ taxDetails: taxes }), tenant: makeTenant() });
     expect(vm.summary.taxes[0].label).toBe('Uang Muka 12% (DPP 11/12)');
-    expect(vm.summary.dppLabel).toBe('Uang Muka (11/12)');
+    expect(vm.summary.dppLabel).toBe('DPP Uang Muka (11/12)');
   });
 
   it('uses default footer with outlet name when receiptFooter empty', async () => {

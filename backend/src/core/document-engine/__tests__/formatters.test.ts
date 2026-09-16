@@ -33,6 +33,17 @@ describe('defaultFormatters', () => {
     expect(result).toContain('2026');
   });
 
+  it('formats idr with symbol', () => {
+    expect(defaultFormatters.idr(50000)).toBe('Rp 50.000');
+    expect(defaultFormatters.idr(0)).toBe('Rp 0');
+  });
+
+  it('formats idrSigned with sign before symbol', () => {
+    expect(defaultFormatters.idrSigned(-16)).toBe('-Rp 16');
+    expect(defaultFormatters.idrSigned(16000)).toBe('Rp 16.000');
+    expect(defaultFormatters.idrSigned(0)).toBe('Rp 0');
+  });
+
   it('handles uppercase', () => {
     expect(defaultFormatters.uppercase('hello world')).toBe('HELLO WORLD');
   });

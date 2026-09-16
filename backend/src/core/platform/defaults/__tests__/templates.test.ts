@@ -29,6 +29,7 @@ describe('DEFAULT_TEMPLATES receipt contract', () => {
       'store.address',
       'store.phone',
       'order.documentNumber',
+      'order.referenceNumber',
       'order.date',
       'order.time',
       'order.cashier',
@@ -57,5 +58,14 @@ describe('DEFAULT_TEMPLATES receipt contract', () => {
     const text = JSON.stringify(main.sections);
     expect(text).toContain('"columns"');
     expect(text).toContain('"align":"right"');
+  });
+
+  it('renders Pesanan #, header Ref, and signed rounding formatter', () => {
+    const main = DEFAULT_TEMPLATES.find((t) => t.documentType === 'receipt' && t.isDefault)!;
+    const text = JSON.stringify(main.sections);
+    expect(text).toContain('Pesanan #{{ order.documentNumber }}');
+    expect(text).toContain('Ref: {{ order.referenceNumber }}');
+    expect(text).toContain('{{ summary.rounding | idrSigned }}');
+    expect(text).toContain('{{ promotion.name }}');
   });
 });

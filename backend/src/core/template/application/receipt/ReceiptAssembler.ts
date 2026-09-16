@@ -23,12 +23,12 @@ function formatDateParts(date: Date, timezone: string, locale: string): { date: 
     }
     const hour = parts.hour === '24' ? '00' : parts.hour ?? '00';
     return {
-      date: `${parts.year}-${parts.month}-${parts.day}`,
+      date: `${parts.day}/${parts.month}/${parts.year}`,
       time: `${hour}:${parts.minute ?? '00'}`,
     };
   } catch {
     return {
-      date: `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
+      date: `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()}`,
       time: `${pad(date.getHours())}:${pad(date.getMinutes())}`,
     };
   }
@@ -43,7 +43,7 @@ function taxLabel(tax: ITaxDetail, fallbackName: string): string {
 function dppLabel(taxes: ITaxDetail[], fallbackName: string): string {
   const fraction = taxes.find((t) => t.fraction)?.fraction;
   const baseName = taxes.find((t) => t.name && t.name !== 'tax')?.name ?? fallbackName;
-  return fraction ? `${baseName} (${fraction})` : 'DPP';
+  return fraction ? `DPP ${baseName} (${fraction})` : 'DPP';
 }
 
 function buildItems(order: IOrder): VMItem[] {
@@ -55,7 +55,7 @@ function buildItems(order: IOrder): VMItem[] {
     isFreeItem: item.isFreeItem || false,
     modifiers: item.modifiers.map((m) => ({ name: m.name, qty: 1, price: m.price })),
     modifierLines: item.modifiers
-      .map((m) => `+ ${m.name}${m.price > 0 ? ` +Rp ${new Intl.NumberFormat('id-ID').format(m.price)}` : ''}`)
+      .map((m) => m.price > 0 ? `+ ${m.name} +Rp ${new Intl.NumberFormat('id-ID').format(m.price)}` : `+ ${m.name}  GRATIS`)
       .join('\n'),
   }));
 }
@@ -121,7 +121,6 @@ export class ReceiptAssembler {
 
     const taxes = order.taxDetails ?? [];
     const fallbackName = tenant.config?.taxName || 'PPN';
-    const nonCashRef = payments.find((p) => p.referenceLine)?.referenceLine;
 
     return {
       store: {
@@ -134,7 +133,7 @@ export class ReceiptAssembler {
       },
       order: {
         documentNumber: `${orderNumber}${splitSuffix}`,
-        referenceNumber: nonCashRef,
+        referenceNumber: order.invoiceNumber ?? undefined,
         type: (order.transactionType ?? 'dine_in') as string,
         table: order.tableNumber ?? undefined,
         cashier: order.cashierName || order.cashierId,

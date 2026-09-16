@@ -8,7 +8,7 @@ const template = DEFAULT_TEMPLATES.find((t) => t.documentType === 'receipt' && t
 const doc: DocumentData = {
   schemaVersion: 1,
   store: { name: 'Warung Kopi', outlet: 'Outlet Senopati', address: 'Jl. Merdeka No. 1', phone: '021-123', logo: '' },
-  order: { documentNumber: 'ORD-001', referenceNumber: 'QRIS-ABC123', type: 'dine_in', cashier: 'Budi', date: '2026-08-15', time: '09:30' },
+  order: { documentNumber: 'ORD-001', referenceNumber: 'INV-ORD-001', type: 'dine_in', cashier: 'Budi', date: '16/08/2026', time: '09:30' },
   customer: undefined,
   items: [
     { name: 'Nasi Goreng Es Kopi', qty: 2, unitPrice: 15000, totalPrice: 30000, isFreeItem: false, modifiers: [], modifierLines: '+ Telur +Rp 5.000' },
@@ -35,6 +35,7 @@ describe('default receipt template rendering', () => {
     expect(cols.some((n) => (n.columns[0].text as string).includes('Nasi Goreng'))).toBe(true);
     expect(cols.some((n) => n.columns[1].text.includes('Rp 30.000'))).toBe(true);
     expect(nodes.some((n) => (n.content ?? '' as string).includes('(GRATIS)'))).toBe(true);
+    expect(nodes.some((n) => (n.content ?? '' as string).includes('Pesanan #ORD-001'))).toBe(true);
   });
 
   it('renders thermal with no leftover template expressions', () => {
@@ -42,6 +43,8 @@ describe('default receipt template rendering', () => {
     const thermal = engine.renderThermal(template as any, doc).toString('utf8');
     expect(thermal).not.toContain('{{');
     expect(thermal).toContain('Nasi Goreng');
+    expect(thermal).toContain('Pesanan #ORD-001');
+    expect(thermal).toContain('Ref: INV-ORD-001');
     expect(thermal).toContain('Ref: QRIS-ABC123');
     expect(thermal).toContain('Terima kasih');
   });
@@ -60,6 +63,8 @@ describe('default receipt template rendering', () => {
     const small = DEFAULT_TEMPLATES.find((t) => t.name === 'Standard Receipt 58mm')!;
     const thermal = engine.renderThermal(small as any, doc).toString('utf8');
     expect(thermal).toContain('Nasi Goreng');
+    expect(thermal).toContain('Pesanan #ORD-001');
+    expect(thermal).toContain('Ref: INV-ORD-001');
     expect(thermal).toContain('Ref: QRIS-ABC123');
     const layout = engine.resolve(small as any, doc);
     expect(layout.paper.width).toBe(58);

@@ -82,6 +82,13 @@ export const defaultFormatters: Record<string, FormatterFn> = {
     if (isNaN(n)) return String(value ?? '');
     return `Rp ${new Intl.NumberFormat('id-ID').format(n)}`;
   },
+
+  idrSigned: (value) => {
+    const n = Number(value);
+    if (isNaN(n)) return String(value ?? '');
+    const sign = n < 0 ? '-' : '';
+    return `${sign}Rp ${new Intl.NumberFormat('id-ID').format(Math.abs(n))}`;
+  },
 };
 
 export function parsePipeFormat(format: string): { name: string; args: string[] }[] {

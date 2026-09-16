@@ -9,7 +9,8 @@ const receiptSections: DocumentSection[] = [
     { id: 'r5', type: 'text', text: '{{ store.phone }}', style: { font: { size: 9, align: 'center' } }, visibility: { operator: 'AND', rules: [{ field: 'store.phone', operator: 'exists' }] } },
   ]},
   { id: 'sec-order', type: 'order_info', enabled: true, order: 2, nodes: [
-    { id: 'r6', type: 'text', text: 'Pesanan {{ order.documentNumber }}', style: { font: { size: 11, weight: 'bold', align: 'center' } } },
+    { id: 'r6', type: 'text', text: 'Pesanan #{{ order.documentNumber }}', style: { font: { size: 11, weight: 'bold', align: 'center' } } },
+    { id: 'r6b', type: 'text', text: 'Ref: {{ order.referenceNumber }}', style: { font: { size: 9, align: 'center' } }, visibility: { operator: 'AND', rules: [{ field: 'order.referenceNumber', operator: 'exists' }] } },
     { id: 'r7', type: 'text', text: '{{ order.date }} {{ order.time }}', style: { font: { size: 9, align: 'center' } } },
     { id: 'r8', type: 'text', text: 'Kasir: {{ order.cashier }}', style: { font: { size: 9, align: 'center' } } },
     { id: 'r9', type: 'divider', style: {} },
@@ -26,7 +27,7 @@ const receiptSections: DocumentSection[] = [
   ]},
   { id: 'sec-promo', type: 'summary', enabled: true, order: 4, nodes: [
     { id: 'r14', type: 'repeater', dataSource: 'promotions', template: [
-      { id: 'r15', type: 'text', text: '{{ promotion.name }} ({{ promotion.code }})', style: { font: { size: 9 } } },
+      { id: 'r15', type: 'text', text: '{{ promotion.name }}', style: { font: { size: 9 } } },
     ], visibility: { operator: 'AND', rules: [{ field: 'summary.orderDiscount', operator: 'greater_than', value: 0 }] } },
     { id: 'r16', type: 'text', text: 'Diskon  -{{ summary.orderDiscount | idr }}', style: { font: { size: 9 } }, visibility: { operator: 'AND', rules: [{ field: 'summary.orderDiscount', operator: 'greater_than', value: 0 }] } },
   ]},
@@ -37,11 +38,11 @@ const receiptSections: DocumentSection[] = [
       { text: '{{ summary.subtotal | idr }}', align: 'right' },
     ], style: {} },
     { id: 'r19', type: 'text', text: 'Service Charge {{ summary.serviceChargeRate | number(0) }}%  {{ summary.serviceCharge | idr }}', style: {}, visibility: { operator: 'AND', rules: [{ field: 'summary.serviceCharge', operator: 'greater_than', value: 0 }] } },
+    { id: 'r22', type: 'text', text: '{{ summary.dppLabel }}  {{ summary.dpp | idr }}', style: {}, visibility: { operator: 'AND', rules: [{ field: 'summary.dpp', operator: 'greater_than', value: 0 }] } },
     { id: 'r20', type: 'repeater', dataSource: 'taxes', template: [
       { id: 'r21', type: 'text', text: '{{ taxe.label }}  {{ taxe.amount | idr }}', style: {} },
     ]},
-    { id: 'r22', type: 'text', text: '{{ summary.dppLabel }}  {{ summary.dpp | idr }}', style: {}, visibility: { operator: 'AND', rules: [{ field: 'summary.dpp', operator: 'greater_than', value: 0 }] } },
-    { id: 'r23', type: 'text', text: 'Pembulatan  {{ summary.rounding | idr }}', style: {}, visibility: { operator: 'AND', rules: [{ field: 'summary.rounding', operator: 'not_equals', value: 0 }] } },
+    { id: 'r23', type: 'text', text: 'Pembulatan  {{ summary.rounding | idrSigned }}', style: {}, visibility: { operator: 'AND', rules: [{ field: 'summary.rounding', operator: 'not_equals', value: 0 }] } },
     { id: 'r24', type: 'divider', style: {} },
     { id: 'r25', type: 'text', text: 'TOTAL  {{ summary.grandTotal | idr }}', style: { font: { size: 12, weight: 'bold' } } },
     { id: 'r26', type: 'repeater', dataSource: 'payments', template: [

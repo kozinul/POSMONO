@@ -222,7 +222,7 @@ export class Order extends AggregateRoot<OrderId> {
       ...props,
       id: new OrderId().toValue(),
       orderNumber,
-      invoiceNumber: null,
+      invoiceNumber: `INV-${orderNumber.replace(/^ORD-/, '')}`,
       status: 'draft',
       paymentStatus: 'pending',
       taxDetails: props.taxDetails ?? [],
