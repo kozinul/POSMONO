@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ReceiptRenderService } from '../ReceiptRenderService';
+import { ReceiptAssembler } from '../../receipt/ReceiptAssembler';
 import { TemplateService } from '../TemplateService';
 import { IOrder } from '../../../../ordering/domain/Order';
 import { IPayment } from '../../../../payment/domain/Payment';
@@ -93,39 +94,39 @@ const tenant = {
 } as unknown as ITenant;
 
 describe('ReceiptRenderService.buildDocumentData', () => {
-  const service = new ReceiptRenderService({} as TemplateService);
+  const service = new ReceiptRenderService({} as TemplateService, new ReceiptAssembler(null));
 
-  it('maps tenant config receiptLogo into store.logo', () => {
-    const data = service.buildDocumentData({ order, payment, tenant });
+  it('maps tenant config receiptLogo into store.logo', async () => {
+    const data = await service.buildDocumentData({ order, payment, tenant });
     expect(data.store.logo).toBe('https://cdn.example.com/logo.png');
     expect(data.store.name).toBe('Toko ABC');
   });
 
-  it('falls back to empty logo when config is missing', () => {
+  it('falls back to empty logo when config is missing', async () => {
     const noConfigTenant = {
       ...tenant,
       config: { ...tenant.config, receiptLogo: undefined },
     } as unknown as ITenant;
-    const data = service.buildDocumentData({ order, payment, tenant: noConfigTenant });
+    const data = await service.buildDocumentData({ order, payment, tenant: noConfigTenant });
     expect(data.store.logo).toBe('');
   });
 
-  it('computes cash change from payment amount minus order total', () => {
-    const data = service.buildDocumentData({ order, payment, tenant });
+  it('computes cash change from payment amount minus order total', async () => {
+    const data = await service.buildDocumentData({ order, payment, tenant });
     expect(data.payments[0].change).toBe(30000);
   });
 
-  it('sets change to 0 for non-cash payments', () => {
+  it('sets change to 0 for non-cash payments', async () => {
     const cardPayment = {
       ...payment,
       method: 'card',
       amount: 20000,
     } as unknown as IPayment;
-    const data = service.buildDocumentData({ order, payment: cardPayment, tenant });
+    const data = await service.buildDocumentData({ order, payment: cardPayment, tenant });
     expect(data.payments[0].change).toBe(0);
   });
 
-  it('computes cash change against rounded payable when order is rounded', () => {
+  it('computes cash change against rounded payable when order is rounded', async () => {
     const roundedOrder = {
       ...order,
       total: 36630,
@@ -136,18 +137,18 @@ describe('ReceiptRenderService.buildDocumentData', () => {
       ...payment,
       amount: 37000,
     } as unknown as IPayment;
-    const data = service.buildDocumentData({ order: roundedOrder, payment: exactPayment, tenant });
+    const data = await service.buildDocumentData({ order: roundedOrder, payment: exactPayment, tenant });
     expect(data.payments[0].change).toBe(0);
   });
 
-  it('falls back to order total when order has no rounding', () => {
+  it('falls back to order total when order has no rounding', async () => {
     const noRounding = {
       ...order,
       total: 36630,
       roundedPayable: 0,
       roundingAdjustment: 0,
     } as unknown as IOrder;
-    const data = service.buildDocumentData({ order: noRounding, payment, tenant });
+    const data = await service.buildDocumentData({ order: noRounding, payment, tenant });
     expect(data.payments[0].change).toBe(13370);
   });
 });

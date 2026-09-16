@@ -14,6 +14,7 @@ export interface DocumentPrintResult extends PrintResult {
     paper: unknown;
     templateId: string | null;
     templateName: string | null;
+    viewModel?: unknown;
   };
 }
 
@@ -78,6 +79,7 @@ export class DocumentPrintService {
         paper: receipt.paper,
         templateId: receipt.templateId,
         templateName: receipt.templateName,
+        viewModel: receipt.viewModel,
       },
     };
   }

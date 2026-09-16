@@ -70,6 +70,7 @@ const TaxDetailSchema = new Schema(
     rate: { type: Number, required: true },
     amount: { type: Number, required: true },
     baseAmount: { type: Number, required: true },
+    fraction: { type: String },
   },
   { _id: false },
 );

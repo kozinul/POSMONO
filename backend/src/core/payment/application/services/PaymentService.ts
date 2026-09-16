@@ -211,6 +211,20 @@ export class PaymentService {
     const dppTotal = roundMoney(taxResult.taxBase);
     const tax = roundMoney(taxResult.taxAmount);
 
+    const taxResultAdjustments = taxResult.adjustments ?? [];
+    const taxDetails = taxResultAdjustments
+      .filter((a: { type: string }) => a.type === 'TAX')
+      .map((a: { id: string; name: string; rate?: number; amount: number; base: number; metadata?: { modifier?: string } }) => ({
+        ruleId: a.id,
+        name: a.name,
+        taxType: 'sales_tax',
+        rate: a.rate ?? 0,
+        amount: a.amount,
+        baseAmount: a.base,
+        fraction: a.metadata?.modifier && a.metadata.modifier.includes('/') ? a.metadata.modifier : undefined,
+      }));
+    const scRateAdjustment = taxResultAdjustments.find((a: { type: string }) => a.type === 'CHARGE');
+
     const cashierName = await this.resolveCashierName(input.cashierId, input.tenantId, input.cashierName);
 
     const order = Order.create({
@@ -222,14 +236,14 @@ export class PaymentService {
       discountTotal: discount,
       dppTotal,
       tax,
-      taxDetails: [],
+      taxDetails,
       total,
       roundingAdjustment,
       roundedPayable,
       roundingMethod,
       roundingDenomination: isCash && roundingConfig.enabled ? roundingConfig.denomination : 0,
       serviceCharge: serviceChargeTotal,
-      serviceChargeRate: 0,
+      serviceChargeRate: scRateAdjustment?.rate ?? 0,
       paymentBreakdown: [],
       promotions: promotionBreakdown,
       discountBreakdown: discountBreakdownList,
@@ -353,6 +367,7 @@ export class PaymentService {
         splitIndex,
         totalSplits,
         splitBaseOrderNumber,
+        payments: order.serialize().paymentBreakdown,
       });
     } catch {
       return null;

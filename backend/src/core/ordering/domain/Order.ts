@@ -60,6 +60,7 @@ export interface ITaxDetail {
   rate: number;
   amount: number;
   baseAmount: number;
+  fraction?: string;
 }
 
 export interface IPromotionBreakdown {

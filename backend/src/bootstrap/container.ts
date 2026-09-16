@@ -117,6 +117,7 @@ import { MongoTemplateRepository } from '../core/template/infrastructure/persist
 import { TemplateService } from '../core/template/application/services/TemplateService';
 import { RenderService } from '../core/template/application/services/RenderService';
 import { ReceiptRenderService } from '../core/template/application/services/ReceiptRenderService';
+import { ReceiptAssembler } from '../core/template/application/receipt/ReceiptAssembler';
 import { InvoiceRenderService } from '../core/template/application/services/InvoiceRenderService';
 import { TemplateController } from '../core/template/interfaces/http/controllers/TemplateController';
 import { OnboardingService } from '../core/platform/application/services/OnboardingService';
@@ -927,10 +928,17 @@ export function buildContainer() {
         templateService: container.resolve('templateService'),
       }),
     }),
+    receiptAssembler: asClass(ReceiptAssembler, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        outletRepository: container.resolve('outletRepository'),
+      }),
+    }),
     receiptRenderService: asClass(ReceiptRenderService, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
         templateService: container.resolve('templateService'),
+        assembler: container.resolve('receiptAssembler'),
       }),
     }),
     invoiceRenderService: asClass(InvoiceRenderService, {

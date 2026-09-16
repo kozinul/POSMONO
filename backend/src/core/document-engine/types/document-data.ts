@@ -1,4 +1,4 @@
-interface LineItem {
+export interface LineItem {
   name: string;
   sku?: string;
   barcode?: string;
@@ -7,34 +7,44 @@ interface LineItem {
   totalPrice: number;
   note?: string;
   modifiers?: ItemModifier[];
+  modifierLines?: string;
   adjustments?: LineAdjustment[];
   isFreeItem?: boolean;
 }
 
-interface ItemModifier {
+export interface ItemModifier {
   name: string;
   price: number;
 }
 
-interface LineAdjustment {
+export interface LineAdjustment {
   name: string;
   type: 'promotion' | 'discount' | 'charge';
   amount: number;
 }
 
-interface AppliedPromotion {
+export interface AppliedPromotion {
   name: string;
   code?: string;
   discount: number;
 }
 
-interface PaymentInfo {
+export interface PaymentInfo {
   method: string;
   paidAmount: number;
   change: number;
   approvalCode?: string;
   qrReference?: string;
   cardNumber?: string;
+  referenceLine?: string;
+}
+
+export interface TaxLine {
+  name: string;
+  label: string;
+  rate: number;
+  amount: number;
+  baseAmount: number;
 }
 
 export interface DocumentData {
@@ -48,6 +58,7 @@ export interface DocumentData {
     website?: string;
     taxNumber?: string;
     merchantId?: string;
+    outlet?: string;
   };
   order: {
     documentNumber: string;
@@ -77,13 +88,20 @@ export interface DocumentData {
     coupon?: number;
     membershipDiscount?: number;
     serviceCharge?: number;
+    serviceChargeRate?: number;
     deliveryCharge?: number;
     packagingFee?: number;
+    dpp?: number;
+    dppLabel?: string;
     tax: number;
+    taxLabel?: string;
     rounding: number;
     grandTotal: number;
+    change?: number;
   };
   payments: PaymentInfo[];
+  taxes?: TaxLine[];
   adjustments?: LineAdjustment[];
   promotions?: AppliedPromotion[];
+  footer?: string;
 }

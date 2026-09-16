@@ -16,6 +16,7 @@ function serializeReceipt(receipt: ReceiptRenderResult | null | undefined): Reco
     templateId: receipt.templateId,
     templateName: receipt.templateName,
     paper: receipt.paper,
+    viewModel: receipt.viewModel,
   };
 }
 
