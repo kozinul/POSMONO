@@ -1,4 +1,5 @@
 import { RenderDocument, RenderNode, RenderPage } from '../../types/layout';
+import { justifyColumns } from './justifyColumns';
 
 const ESC = 0x1B;
 const GS = 0x1D;
@@ -98,7 +99,9 @@ export class ThermalRenderer {
       cmd.push(GS, 0x21, sizeCode);
     }
 
-    const lines = this.wrapText(node.content, maxChars);
+    const lines = node.columns && node.columns.length > 0
+      ? justifyColumns(node.columns[0]?.text ?? '', node.columns[1]?.text ?? '', maxChars)
+      : this.wrapText(node.content, maxChars);
     for (const line of lines) {
       for (let i = 0; i < line.length; i++) cmd.push(line.charCodeAt(i));
       cmd.push(LF);

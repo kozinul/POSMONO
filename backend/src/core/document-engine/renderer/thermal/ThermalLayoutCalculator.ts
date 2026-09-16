@@ -3,6 +3,11 @@ import { DocumentData } from '../../types/document-data';
 import { RenderPage, RenderNode } from '../../types/layout';
 import { DocumentNode, FieldNode, TextNode } from '../../types/template';
 import { ResolvedNode } from '../../engine/VariableResolver';
+import { justifyColumns } from './justifyColumns';
+
+export function thermalMaxChars(paper: PaperPreset): number {
+  return paper.type === 'thermal58' ? 32 : 48;
+}
 
 export class ThermalLayoutCalculator {
   calculate(
@@ -57,8 +62,8 @@ export class ThermalLayoutCalculator {
       return;
     }
 
-    const content = this.resolveContent(resolved, paper);
-    if (content === '' && resolved.node.type === 'spacer') {
+    const rawContent = this.resolveContent(resolved, paper);
+    if (rawContent === '' && resolved.node.type === 'spacer') {
       const spacerHeight = (resolved.node as any).height ?? 4;
       nodes.push({
         type: resolved.node.type,
@@ -76,7 +81,7 @@ export class ThermalLayoutCalculator {
       const imgHeight = (resolved.node as any).maxHeight ?? 12;
       nodes.push({
         type: resolved.node.type,
-        content,
+        content: rawContent,
         style: (resolved.node.style || {}) as Record<string, unknown>,
         x: paper.margin.left,
         y,
@@ -88,9 +93,25 @@ export class ThermalLayoutCalculator {
 
     const charWidth = this.getCharWidth(paper);
     const lineHeight = this.getLineHeight(resolved.node);
-    const maxChars = Math.floor(printableWidth / charWidth);
-    const lines = this.wrapText(content, maxChars);
-    const height = lines.length * lineHeight;
+    const maxChars = resolved.columns && resolved.columns.length > 0
+      ? thermalMaxChars(paper)
+      : Math.floor(printableWidth / charWidth);
+
+    let content = this.resolveContent(resolved, paper);
+    let height = 0;
+    let columns: { text: string; align?: 'left' | 'right' }[] | undefined;
+
+    if (resolved.columns && resolved.columns.length > 0) {
+      const left = resolved.columns[0]?.text ?? '';
+      const right = resolved.columns[1]?.text ?? '';
+      const lines = justifyColumns(left, right, maxChars);
+      columns = resolved.columns.map((c) => ({ text: c.text, align: c.align }));
+      content = lines.join('\n');
+      height = lines.length * lineHeight;
+    } else {
+      const lines = this.wrapText(content, maxChars);
+      height = lines.length * lineHeight;
+    }
 
     nodes.push({
       type: resolved.node.type,
@@ -100,6 +121,7 @@ export class ThermalLayoutCalculator {
       y,
       width: printableWidth,
       height,
+      columns,
     });
   }
   private resolveContent(resolved: ResolvedNode, paper: PaperPreset): string {

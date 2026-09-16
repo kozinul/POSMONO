@@ -5,6 +5,7 @@ export interface RenderNode {
   content: string;
   style: Record<string, unknown>;
   children?: RenderNode[];
+  columns?: { text: string; align?: 'left' | 'right' }[];
   x?: number;
   y?: number;
   width?: number;

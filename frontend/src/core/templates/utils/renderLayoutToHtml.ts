@@ -17,6 +17,16 @@ export function renderLayoutToHtml(layout: any): string {
         ${src ? `<img src="${src}" style="max-width:120px;max-height:40px;" />` : '<span style="color:#bbb;">(logo kosong)</span>'}
       </div>`;
     }
+    if (c.columns?.length) {
+      const toHtml = (t: string) => String(t ?? '').replace(/\n/g, '<br/>');
+      return `
+        <div style="display:flex;justify-content:space-between;font-size:${font.size ?? 12}px;font-weight:${font.weight ?? 'normal'};color:${font.color ?? '#000'};">
+          ${c.columns.map((col: any) =>
+            `<span style="text-align:${col.align === 'right' ? 'right' : 'left'};white-space:pre-wrap;">${toHtml(col.text)}</span>`
+          ).join('')}
+        </div>
+      `;
+    }
     const content = String(c.content ?? '').replace(/\n/g, '<br/>');
     return `
       <div style="text-align:${font.align ?? 'left'};font-size:${font.size ?? 12}px;font-weight:${font.weight ?? 'normal'};color:${font.color ?? '#000'};">

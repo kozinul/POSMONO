@@ -9,6 +9,7 @@ export interface ResolvedNode {
   content: string;
   isVisible: boolean;
   children?: ResolvedNode[];
+  columns?: { text: string; align?: 'left' | 'right' }[];
 }
 
 const EXPR_RE = /^expr\((.+)\)$/;
@@ -103,8 +104,8 @@ export class VariableResolver {
     return { node, content, isVisible: true };
   }
 
-  private resolveTextNode(node: TextNode, data: DocumentData, unresolvedFields: string[]): ResolvedNode {
-    const content = node.text.replace(PIPE_RE, (_match, expr: string) => {
+  private resolveTemplateText(text: string, data: DocumentData, unresolvedFields: string[]): string {
+    return text.replace(PIPE_RE, (_match, expr: string) => {
       const trimmed = expr.trim();
       const pipeIdx = trimmed.lastIndexOf('|');
       let path: string;
@@ -147,6 +148,23 @@ export class VariableResolver {
       }
       return String(value);
     });
+  }
+
+  private resolveTextNode(node: TextNode, data: DocumentData, unresolvedFields: string[]): ResolvedNode {
+    if (node.columns && node.columns.length > 0) {
+      const columns = node.columns.map((col) => ({
+        text: this.resolveTemplateText(col.text, data, unresolvedFields),
+        align: col.align ?? 'left',
+      }));
+      return {
+        node,
+        content: columns.map((c) => c.text).join(' '),
+        isVisible: true,
+        columns,
+      };
+    }
+
+    const content = this.resolveTemplateText(node.text ?? '', data, unresolvedFields);
     return { node, content, isVisible: true };
   }
 
