@@ -932,8 +932,11 @@ families.view, families.edit
 - Print via `window.print()` (`ReportPrintModal.tsx`, `.report-print` CSS); PDF via `html2pdf.js` (client-side, dep `html2pdf.js`)
 
 #### J. Receipt Printing
-- Print receipt (CSS print media)
-- Receipt format with store info, items, totals, payment details
+- Print receipt (CSS print media + ESC/POS thermal + PDF A4/A5)
+- Receipt format from template engine (single source of truth)
+- **Receipt Contract Kuire (2026-08-29)**: semua render struk (bayar, print ulang, split, QRIS) memakai satu jalur: `ReceiptAssembler` (backend) → `ReceiptViewModel` → `toDocumentData` → document-engine (layout/thermal/pdf) → `viewModel` ikut dikirim ke frontend. Header = logo→tenant→outlet→alamat→telp; `Ref:` hanya ditampilkan untuk metode non-cash (QRIS-/TRX-); tax label dari nama rule + rate (`PPN 12%`, `PPN 12% (DPP 11/12)` utk Nilai Lain); footer default "Terima kasih telah berbelanja di {outlet}"; datetime dalam timezone tenant.
+- **Template pesanan/kasir terpadu**: template `receipt` default "Struk Kasir Default" (80mm) & "Standard Receipt 58mm" (sections identik) — baris item pakai fitur engine baru **text node `columns`** (kiri qty×nama, kanan total rupiah, justify otomatis per lebar kertas; dipakai juga di baris pembayaran & subtotal). Template lama yang `sections: []` di-rescue otomatis saat render (guard fallback) dan bisa dibetulkan permanen via `pnpm reseed:templates` (idempotent, hanya menyentuh template bernama default).
+- **Frontend tanpa logika bisnis**: `ReceiptDisplay` hanya merender `layout` (HTM L) atau `viewModel` (fallback minimal) — perhitungan diskon/pajak/pembulatan/kembalian tidak lagi dihitung ulang di client; `PosPage` "Print Ulang" & `PaymentModal` meneruskan `receipt.viewModel` dari payload `/print/receipt` / hasil `pay-cash`.
 
 ---
 

@@ -701,6 +701,8 @@ Process a cash payment with optional promo code and manual discount.
 }
 ```
 
+> Response juga menyertakan `receipt` dengan `layout`/`thermal`/`pdf`/`templateName`/`viewModel` (sama seperti `POST /api/print/receipt`).
+
 **Discount flow:**
 1. `discount` is the cashier's **manual** discount only. Do **not** send `promotionDiscount` from `/pricing/calculate` in this field — the backend recomputes it.
 2. Backend calls `DiscountServiceAdapter.apply()` which evaluates all active auto-apply rules + `promoCode` exactly once → `promoDiscount`
@@ -849,10 +851,20 @@ Jika `paymentId` tidak diberikan, backend memakai payment `status:'completed'` p
     "clientPrint": true,
     "printer": { "id": "...", "connectionType": "usb", "...": "..." },
     "buffer": "<base64 thermal buffer>",
-    "payload": { "layout": "...", "thermal": "<base64>", "pdf": "<base64>", "paper": "thermal58", "templateId": "...", "templateName": "..." }
+    "payload": {
+      "layout": "...",
+      "thermal": "<base64>",
+      "pdf": "<base64>",
+      "paper": "thermal58",
+      "templateId": "...",
+      "templateName": "...",
+      "viewModel": { "store": { "name": "...", "outlet": "...", "address": "...", "phone": "..." }, "order": { "documentNumber": "ORD-...", "referenceNumber": "QRIS-..." }, "items": [...], "summary": { "subtotal": 0, "serviceCharge": 0, "serviceChargeRate": 0, "dpp": 0, "dppLabel": "DPP", "taxes": [...], "rounding": 0, "grandTotal": 0, "change": 0 }, "payments": [{ "method": "cash", "methodLabel": "Tunai", "amount": 0, "referenceLine": "Ref: ..." }], "promotions": [...], "footer": "..." }
+    }
   }
 }
 ```
+
+> **Receipt Contract Kuire (2026-08-29):** `payload.layout`/`thermal`/`pdf`/`viewModel` kini dihasilkan dari satu sumber kebenaran — `ReceiptAssembler` (rounding-aware: `roundedPayable || total`; pajak berlabel `PPN 12%` / `PPN 12% (DPP 11/12)` untuk Nilai Lain; reference hanya untuk metode non-cash; timezone tenant; outlet dari `OutletRepository`; footer default `Terima kasih telah berbelanja di {outlet}`). `viewModel` dikirim agar frontend dapat merekonstruksi struk tanpa logika bisnis. Skema yang sama dipakai `POST /api/payments/pay-cash` (response `receipt.viewModel`).
 
 ### `POST /api/print/kot/:orderId`
 
