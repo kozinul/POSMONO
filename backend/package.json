@@ -16,6 +16,7 @@
     "backfill:cashier": "ts-node src/scripts/backfillCashierName.ts",
     "backfill:payment": "ts-node src/scripts/backfillPaymentBreakdown.ts",
     "backfill:cost": "ts-node src/scripts/backfillStockCost.ts",
+    "reseed:templates": "ts-node src/scripts/reseedDefaultTemplates.ts",
     "loadtest": "k6 run loadtest/scenarios/money-loop.js",
     "loadtest-sweep": "k6 run -e VUS=10 -e DURATION=60s loadtest/scenarios/money-loop.js && k6 run -e VUS=25 -e DURATION=60s loadtest/scenarios/money-loop.js && k6 run -e VUS=50 -e DURATION=60s loadtest/scenarios/money-loop.js",
     "clean": "rm -rf dist"

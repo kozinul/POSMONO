@@ -1,39 +1,61 @@
 import { DocumentSection, PaperPreset, DocumentType } from '../../document-engine/types/index';
 
 const receiptSections: DocumentSection[] = [
-  { id: 'sec-header', type: 'header', enabled: true, order: 1, nodes: [
+  { id: 'sec-store', type: 'header', enabled: true, order: 1, nodes: [
     { id: 'r1', type: 'image', field: 'store.logo', maxHeight: 12, style: { font: { align: 'center' } }, visibility: { operator: 'AND', rules: [{ field: 'store.logo', operator: 'exists' }] } },
     { id: 'r2', type: 'field', field: 'store.name', style: { font: { size: 14, weight: 'bold', align: 'center' } } },
-    { id: 'r3', type: 'text', text: 'Pesanan {{ order.documentNumber }}', style: { font: { align: 'center' } } },
-    { id: 'r4', type: 'text', text: '{{ order.date }} {{ order.time }}', style: { font: { align: 'center' } } },
-    { id: 'r4b', type: 'text', text: 'Kasir: {{ order.cashier }}', style: { font: { align: 'center' } } },
-    { id: 'r5', type: 'divider', style: {} },
+    { id: 'r3', type: 'text', text: '{{ store.outlet }}', style: { font: { size: 10, align: 'center' } }, visibility: { operator: 'AND', rules: [{ field: 'store.outlet', operator: 'exists' }] } },
+    { id: 'r4', type: 'text', text: '{{ store.address }}', style: { font: { size: 9, align: 'center' } }, visibility: { operator: 'AND', rules: [{ field: 'store.address', operator: 'exists' }] } },
+    { id: 'r5', type: 'text', text: '{{ store.phone }}', style: { font: { size: 9, align: 'center' } }, visibility: { operator: 'AND', rules: [{ field: 'store.phone', operator: 'exists' }] } },
   ]},
-  { id: 'sec-items', type: 'items', enabled: true, order: 2, nodes: [
-    { id: 'r6', type: 'repeater', dataSource: 'items', template: [
-      { id: 'r7', type: 'text', text: '{{ item.qty }}x {{ item.name }} ... Rp {{ item.totalPrice | number(0) }}', style: { font: { size: 10 } } },
+  { id: 'sec-order', type: 'order_info', enabled: true, order: 2, nodes: [
+    { id: 'r6', type: 'text', text: 'Pesanan {{ order.documentNumber }}', style: { font: { size: 11, weight: 'bold', align: 'center' } } },
+    { id: 'r7', type: 'text', text: '{{ order.date }} {{ order.time }}', style: { font: { size: 9, align: 'center' } } },
+    { id: 'r8', type: 'text', text: 'Kasir: {{ order.cashier }}', style: { font: { size: 9, align: 'center' } } },
+    { id: 'r9', type: 'divider', style: {} },
+  ]},
+  { id: 'sec-items', type: 'items', enabled: true, order: 3, nodes: [
+    { id: 'r10', type: 'repeater', dataSource: 'items', template: [
+      { id: 'r11', type: 'text', text: '{{ item.qty }}x {{ item.name }} (GRATIS)', style: { font: { size: 10 } }, visibility: { operator: 'AND', rules: [{ field: 'item.isFreeItem', operator: 'equals', value: true }] } },
+      { id: 'r12', type: 'text', columns: [
+        { text: '{{ item.qty }}x {{ item.name }}', align: 'left' },
+        { text: '{{ item.totalPrice | idr }}', align: 'right' },
+      ], style: { font: { size: 10 } }, visibility: { operator: 'AND', rules: [{ field: 'item.isFreeItem', operator: 'not_equals', value: true }] } },
+      { id: 'r13', type: 'text', text: '{{ item.modifierLines }}', style: { font: { size: 9 } }, visibility: { operator: 'AND', rules: [{ field: 'item.modifierLines', operator: 'exists' }] } },
     ]},
   ]},
-  { id: 'sec-promo', type: 'summary', enabled: true, order: 3, nodes: [
-    { id: 'r8', type: 'repeater', dataSource: 'promotions', template: [
-      { id: 'r9', type: 'text', text: '{{ item.name }} ({{ item.code }})', style: { font: { size: 10 } } },
+  { id: 'sec-promo', type: 'summary', enabled: true, order: 4, nodes: [
+    { id: 'r14', type: 'repeater', dataSource: 'promotions', template: [
+      { id: 'r15', type: 'text', text: '{{ promotion.name }} ({{ promotion.code }})', style: { font: { size: 9 } } },
     ], visibility: { operator: 'AND', rules: [{ field: 'summary.orderDiscount', operator: 'greater_than', value: 0 }] } },
-    { id: 'r10', type: 'text', text: 'Total Diskon  -Rp {{ summary.orderDiscount | number(0) }}', style: { font: { size: 10 } }, visibility: { operator: 'AND', rules: [{ field: 'summary.orderDiscount', operator: 'greater_than', value: 0 }] } },
+    { id: 'r16', type: 'text', text: 'Diskon  -{{ summary.orderDiscount | idr }}', style: { font: { size: 9 } }, visibility: { operator: 'AND', rules: [{ field: 'summary.orderDiscount', operator: 'greater_than', value: 0 }] } },
   ]},
-  { id: 'sec-summary', type: 'summary', enabled: true, order: 4, nodes: [
-    { id: 'r11', type: 'divider', style: {} },
-    { id: 'r12', type: 'text', text: 'Subtotal  Rp {{ summary.subtotal | number(0) }}', style: {} },
-    { id: 'r13', type: 'text', text: 'Service Charge  Rp {{ summary.serviceCharge | number(0) }}', style: {}, visibility: { operator: 'AND', rules: [{ field: 'summary.serviceCharge', operator: 'greater_than', value: 0 }] } },
-    { id: 'r14', type: 'text', text: 'Tax  Rp {{ summary.tax | number(0) }}', style: {}, visibility: { operator: 'AND', rules: [{ field: 'summary.tax', operator: 'greater_than', value: 0 }] } },
-    { id: 'r15', type: 'text', text: 'Pembulatan  Rp {{ summary.rounding | number(0) }}', style: {}, visibility: { operator: 'AND', rules: [{ field: 'summary.rounding', operator: 'not_equals', value: 0 }] } },
-    { id: 'r16', type: 'divider', style: {} },
-    { id: 'r17', type: 'text', text: 'TOTAL  Rp {{ summary.grandTotal | number(0) }}', style: { font: { size: 12, weight: 'bold' } } },
-    { id: 'r18', type: 'text', text: 'Tunai  Rp {{ payments.0.paidAmount | number(0) }}', style: {} },
-    { id: 'r19', type: 'text', text: 'Kembalian  Rp {{ payments.0.change | number(0) }}', style: {} },
+  { id: 'sec-summary', type: 'summary', enabled: true, order: 5, nodes: [
+    { id: 'r17', type: 'divider', style: {} },
+    { id: 'r18', type: 'text', columns: [
+      { text: 'Subtotal', align: 'left' },
+      { text: '{{ summary.subtotal | idr }}', align: 'right' },
+    ], style: {} },
+    { id: 'r19', type: 'text', text: 'Service Charge {{ summary.serviceChargeRate | number(0) }}%  {{ summary.serviceCharge | idr }}', style: {}, visibility: { operator: 'AND', rules: [{ field: 'summary.serviceCharge', operator: 'greater_than', value: 0 }] } },
+    { id: 'r20', type: 'repeater', dataSource: 'taxes', template: [
+      { id: 'r21', type: 'text', text: '{{ taxe.label }}  {{ taxe.amount | idr }}', style: {} },
+    ]},
+    { id: 'r22', type: 'text', text: '{{ summary.dppLabel }}  {{ summary.dpp | idr }}', style: {}, visibility: { operator: 'AND', rules: [{ field: 'summary.dpp', operator: 'greater_than', value: 0 }] } },
+    { id: 'r23', type: 'text', text: 'Pembulatan  {{ summary.rounding | idr }}', style: {}, visibility: { operator: 'AND', rules: [{ field: 'summary.rounding', operator: 'not_equals', value: 0 }] } },
+    { id: 'r24', type: 'divider', style: {} },
+    { id: 'r25', type: 'text', text: 'TOTAL  {{ summary.grandTotal | idr }}', style: { font: { size: 12, weight: 'bold' } } },
+    { id: 'r26', type: 'repeater', dataSource: 'payments', template: [
+      { id: 'r27', type: 'text', columns: [
+        { text: '{{ payment.methodLabel }}', align: 'left' },
+        { text: '{{ payment.paidAmount | idr }}', align: 'right' },
+      ], style: {} },
+      { id: 'r28', type: 'text', text: '{{ payment.referenceLine }}', style: { font: { size: 9 } }, visibility: { operator: 'AND', rules: [{ field: 'payment.referenceLine', operator: 'exists' }] } },
+    ]},
+    { id: 'r29', type: 'text', text: 'Kembalian  {{ summary.change | idr }}', style: {}, visibility: { operator: 'AND', rules: [{ field: 'summary.change', operator: 'greater_than', value: 0 }] } },
   ]},
-  { id: 'sec-footer', type: 'footer', enabled: true, order: 5, nodes: [
-    { id: 'r20', type: 'divider', style: {} },
-    { id: 'r21', type: 'text', text: 'Terima kasih telah berbelanja', style: { font: { align: 'center' } } },
+  { id: 'sec-footer', type: 'footer', enabled: true, order: 6, nodes: [
+    { id: 'r30', type: 'divider', style: {} },
+    { id: 'r31', type: 'text', text: '{{ footer }}', style: { font: { size: 9, align: 'center' } } },
   ]},
 ];
 
@@ -101,7 +123,7 @@ export interface DefaultTemplateDef {
 export const DEFAULT_TEMPLATES: DefaultTemplateDef[] = [
   {
     name: 'Struk Kasir Default',
-    description: 'Struk kasir default (mirror tampilan print receipt POS)',
+    description: 'Struk kasir default - kontrak Receipt terpadu (80mm)',
     documentType: 'receipt',
     paper: { type: 'thermal80', width: 80, height: 'auto', margin: { top: 2, right: 3, bottom: 2, left: 3 } },
     sections: receiptSections,
@@ -109,18 +131,10 @@ export const DEFAULT_TEMPLATES: DefaultTemplateDef[] = [
   },
   {
     name: 'Standard Receipt 58mm',
-    description: 'Standard thermal receipt for 58mm paper (2-inch)',
+    description: 'Struk kasir 58mm - section identik dengan Struk Kasir Default',
     documentType: 'receipt',
     paper: { type: 'thermal58', width: 58, height: 'auto', margin: { top: 2, right: 3, bottom: 2, left: 3 } },
-    sections: [],
-    isDefault: false,
-  },
-  {
-    name: 'Standard Receipt 80mm',
-    description: 'Standard thermal receipt for 80mm paper (3-inch)',
-    documentType: 'receipt',
-    paper: { type: 'thermal80', width: 80, height: 'auto', margin: { top: 2, right: 3, bottom: 2, left: 3 } },
-    sections: [],
+    sections: receiptSections,
     isDefault: false,
   },
   {
