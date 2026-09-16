@@ -668,6 +668,30 @@ export default function PosPage() {
                           dispatched = true;
                         }
                         if (result.error) serverError = result.error;
+                        if (result.payload) {
+                          usePOSStore.getState().setReceipt({
+                            orderNumber: viewTransaction.orderNumber,
+                            displayOrderNumber: viewTransaction.orderNumber,
+                            paid: 0,
+                            change: 0,
+                            grandTotal: viewTransaction.total,
+                            paidItems: (viewTransaction.items ?? []).map((i: any) => ({
+                              productId: i.productId,
+                              name: i.productName,
+                              price: i.unitPrice,
+                              quantity: i.quantity,
+                              isFreeItem: false,
+                            })),
+                            hasRemaining: false,
+                            createdAt: viewTransaction.createdAt,
+                            layout: (result.payload.layout ?? null) as any,
+                            thermal: result.payload.thermal ?? null,
+                            pdf: result.payload.pdf ?? null,
+                            templateName: result.payload.templateName ?? null,
+                            pricing: null,
+                            viewModel: (result.payload.viewModel ?? null) as any,
+                          });
+                        }
                       } catch {
                         serverError = 'Gagal mencetak ulang';
                       }

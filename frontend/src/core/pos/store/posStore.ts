@@ -54,6 +54,7 @@ interface Receipt {
   pdf?: string | null;
   templateName?: string | null;
   pricing?: PricingResult | null;
+  viewModel?: Record<string, unknown> | null;
 }
 
 export interface ShiftPaymentBreakdownEntry {

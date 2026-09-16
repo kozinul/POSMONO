@@ -217,6 +217,7 @@ export function PaymentModal() {
       pdf: receiptData?.pdf ?? null,
       templateName: receiptData?.templateName ?? null,
       pricing: splitMode ? (portionPricing.data ?? null) : (pricing ?? null),
+      viewModel: receiptData?.viewModel ?? null,
     });
     usePOSStore.getState().registerShiftPayment({ total: payable, method: selectedMethod?.code ?? '', isCash: cashMethod });
 

@@ -1,20 +1,8 @@
 import { usePOSStore } from '../store/posStore';
 import { formatIDR } from '../utils/money';
 import { renderLayoutToHtml } from '../../templates/utils/renderLayoutToHtml';
-import type { PricingResult } from '../../../@shared/hooks/usePricing';
 import { useQueryClient } from '@tanstack/react-query';
 import { reprintReceipt } from '../../printing/utils/autoPrint';
-import { useActiveOutlet } from '../../../@shared/hooks/useOutlets';
-
-function getChargeRate(adjustments: PricingResult['adjustments']): number {
-  const charge = adjustments.find((a) => a.type === 'CHARGE');
-  return charge?.rate ?? 0;
-}
-
-function getTaxRate(adjustments: PricingResult['adjustments']): number {
-  const tax = adjustments.find((a) => a.type === 'TAX');
-  return tax?.rate ?? 0;
-}
 
 function downloadBase64(base64: string, filename: string, mime: string): void {
   const binary = atob(base64);
@@ -29,18 +17,135 @@ function downloadBase64(base64: string, filename: string, mime: string): void {
   URL.revokeObjectURL(url);
 }
 
+function FallbackFromViewModel({ receipt }: { receipt: Record<string, unknown> }) {
+  const vm = receipt.viewModel as any | undefined | null;
+  if (!vm) {
+    return (
+      <div className="p-6 border-b border-gray-100 text-center text-sm text-gray-500">
+        Struk tidak tersedia untuk pesanan ini.
+      </div>
+    );
+  }
+  const store = vm.store as any;
+  const order = vm.order as any;
+  const items = (vm.items ?? []) as any[];
+  const totals = vm.totals as any;
+  const taxes = (vm.taxes ?? []) as any[];
+  const payments = (vm.payments ?? []) as any[];
+  const promotions = (vm.promotions ?? []) as any[];
+  const footer = typeof vm.footer === 'string' ? vm.footer : null;
+
+  return (
+    <>
+      <div className="p-6 border-b border-gray-100 text-center">
+        {store?.logo && (
+          <img src={store.logo} alt="Logo" className="h-12 mx-auto mb-2 object-contain" />
+        )}
+        <h2 className="text-lg font-bold text-gray-800">{store?.name ?? 'Toko'}</h2>
+        {store?.outlet && (
+          <p className="text-xs text-gray-500 mt-0.5">{store.outlet}</p>
+        )}
+        {store?.address && (
+          <p className="text-xs text-gray-500 mt-0.5">{store.address}</p>
+        )}
+        {store?.phone && (
+          <p className="text-xs text-gray-500 mt-0.5">{store.phone}</p>
+        )}
+        <div className="my-2 border-t border-gray-100" />
+        <p className="text-sm font-semibold text-gray-800">Pesanan {order?.number}</p>
+        {order?.date && (
+          <p className="text-xs text-gray-400 mt-0.5">{order.date} {order.time ?? ''}</p>
+        )}
+        {order?.cashier && (
+          <p className="text-xs text-gray-400 mt-0.5">Kasir: {order.cashier}</p>
+        )}
+      </div>
+
+      <div className="p-6 space-y-3 text-sm">
+        {items.map((item, idx) => {
+          const isFree = item.isFreeItem === true;
+          return (
+            <div key={idx} className="flex justify-between">
+              <span className="text-gray-700">
+                {item.qty}x {item.name}
+                {isFree && <span className="ml-1 text-green-600 font-bold">(GRATIS)</span>}
+                {item.modifierLines && <span className="block text-xs text-gray-400">{item.modifierLines}</span>}
+              </span>
+              <span className="font-medium text-gray-800">
+                {isFree ? 'GRATIS' : `Rp ${formatIDR(item.totalPrice)}`}
+              </span>
+            </div>
+          );
+        })}
+
+        {promotions.length > 0 && (
+          <div className="pt-2 border-t border-gray-100 space-y-1">
+            {promotions.map((promo, i) => (
+              <div key={i} className="flex justify-between text-xs text-green-700">
+                <span>{promo.name} {promo.code ? `(${promo.code})` : ''}</span>
+                <span>-Rp {formatIDR(promo.discountAmount)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="border-t border-gray-100 pt-3 space-y-1">
+          <div className="flex justify-between text-sm text-gray-700">
+            <span>Subtotal</span>
+            <span>Rp {formatIDR(totals?.subtotal ?? 0)}</span>
+          </div>
+          {totals && totals.serviceCharge > 0 && (
+            <div className="flex justify-between text-sm text-gray-500">
+              <span>Service Charge</span>
+              <span>Rp {formatIDR(totals.serviceCharge)}</span>
+            </div>
+          )}
+          {totals?.dppLabel && totals.dpp > 0 && (
+            <div className="flex justify-between text-sm text-gray-500">
+              <span>{totals.dppLabel}</span>
+              <span>Rp {formatIDR(totals.dpp)}</span>
+            </div>
+          )}
+          {taxes.map((tax, i) => (
+            <div key={i} className="flex justify-between text-sm text-gray-500">
+              <span>{tax.label}</span>
+              <span>Rp {formatIDR(tax.amount)}</span>
+            </div>
+          ))}
+          {totals && totals.rounding !== 0 && (
+            <div className="flex justify-between text-sm text-gray-400">
+              <span>Pembulatan</span>
+              <span>{totals.rounding > 0 ? '+' : ''}Rp {formatIDR(totals.rounding)}</span>
+            </div>
+          )}
+          <div className="flex justify-between text-lg font-bold text-gray-800 pt-2 border-t">
+            <span>Total</span>
+            <span>Rp {formatIDR(totals?.grandTotal ?? (receipt.grandTotal as number) ?? 0)}</span>
+          </div>
+          {payments.map((pay, i) => (
+            <div key={i} className="flex justify-between text-sm text-gray-600">
+              <span>{pay.methodLabel}</span>
+              <span>Rp {formatIDR(pay.paidAmount ?? pay.amount ?? 0)}</span>
+            </div>
+          ))}
+          {totals && totals.change > 0 && (
+            <div className="flex justify-between text-sm font-medium text-green-600">
+              <span>Kembalian</span>
+              <span>Rp {formatIDR(totals.change)}</span>
+            </div>
+          )}
+        </div>
+        {footer && <p className="text-center text-xs text-gray-400 mt-3 pt-3 border-t border-gray-100">{footer}</p>}
+      </div>
+    </>
+  );
+}
+
 export function ReceiptDisplay() {
-  const { receipt, clearCart, openPaymentModal, clearReceipt, pricing } = usePOSStore();
+  const { receipt, clearCart, openPaymentModal, clearReceipt } = usePOSStore();
   const queryClient = useQueryClient();
-  const activeOutlet = useActiveOutlet();
 
   if (!receipt) return null;
-
-  const p = receipt.pricing ?? pricing;
-  const isInclusive = receipt.paidItems.some((i) => i.pricingMode === 'inclusive');
-
-  const scRate = p ? getChargeRate(p.adjustments) : 0;
-  const txRate = p ? getTaxRate(p.adjustments) : 0;
 
   const layoutHtml = receipt.layout ? renderLayoutToHtml(receipt.layout) : null;
 
@@ -69,107 +174,7 @@ export function ReceiptDisplay() {
             )}
           </div>
         ) : (
-          <>
-            <div className="p-6 border-b border-gray-100 text-center">
-              <h2 className="text-lg font-bold text-gray-800">POSMono</h2>
-              <p className="text-sm text-gray-500 mt-1">Pesanan {receipt.displayOrderNumber}</p>
-              <p className="text-xs text-gray-400 mt-0.5">
-                Kasir: {receipt.cashierName || 'Kasir'}
-              </p>
-              <p className="text-xs text-gray-400 mt-0.5">
-                {new Date(receipt.createdAt).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-              </p>
-              {activeOutlet && (
-                <p className="text-xs text-gray-400 mt-0.5">Outlet: {activeOutlet.name}</p>
-              )}
-              {receipt.hasRemaining && (
-                <p className="text-xs text-amber-600 font-medium mt-1">
-                  Item tersisa di keranjang
-                </p>
-              )}
-            </div>
-
-            <div className="p-6 space-y-3">
-              {(receipt.paidItems || []).map((item) => (
-                <div key={item.productId} className="flex justify-between text-sm">
-                  <span className="text-gray-700">
-                    {item.name} x{item.quantity}
-                    {item.isFreeItem && <span className="ml-1 text-green-600 font-bold">(GRATIS)</span>}
-                  </span>
-                  <span className="font-medium text-gray-800">
-                    {item.isFreeItem ? 'GRATIS' : `Rp ${formatIDR(item.price * item.quantity)}`}
-                  </span>
-                </div>
-              ))}
-
-              <div className="border-t pt-3 space-y-1">
-                {p ? (
-                  <>
-                    {p.promotionDiscount > 0 && (
-                      <div className="bg-green-50 rounded-lg p-2 border border-green-200 space-y-0.5 mb-2">
-                        {p.appliedRules.map((r) => (
-                          <div key={r.ruleId} className="flex justify-between text-xs">
-                            <span className="text-green-700">{r.ruleName}</span>
-                            <span className="text-green-700 font-medium">{r.description}</span>
-                          </div>
-                        ))}
-                        <div className="flex justify-between text-xs pt-0.5 border-t border-green-200 font-medium">
-                          <span className="text-green-700">Total Diskon</span>
-                          <span className="text-green-700">- Rp {formatIDR(p.promotionDiscount)}</span>
-                        </div>
-                      </div>
-                    )}
-
-                    {isInclusive && (scRate > 0 || txRate > 0) && (
-                      <p className="text-[11px] text-gray-400 text-center -mb-1">
-                        Harga sudah termasuk pajak &amp; service ({txRate > 0 ? `${txRate}%` : ''}{txRate > 0 && scRate > 0 ? ' + ' : ''}{scRate > 0 ? `${scRate}%` : ''}{txRate > 0 || scRate > 0 ? ` = ${txRate + scRate}%` : ''})
-                      </p>
-                    )}
-
-                    <div className="flex justify-between text-sm text-gray-700 font-medium">
-                      <span>Subtotal</span>
-                      <span>Rp {formatIDR(p.originalSubtotal - p.promotionDiscount)}</span>
-                    </div>
-                    {p.serviceCharge > 0 && (
-                      <div className="flex justify-between text-sm text-gray-500">
-                        <span>{p.serviceChargeName}{scRate > 0 ? ` (${scRate}%)` : ''}</span>
-                        <span>Rp {formatIDR(p.serviceCharge)}</span>
-                      </div>
-                    )}
-                    {p.tax > 0 && (
-                      <div className="flex justify-between text-sm text-gray-500">
-                        <span>{p.taxName}{txRate > 0 ? ` (${txRate}%)` : ''}</span>
-                        <span>Rp {formatIDR(p.tax)}</span>
-                      </div>
-                    )}
-                    {p.rounding !== 0 && (
-                      <div className="flex justify-between text-sm text-gray-400">
-                        <span>Pembulatan</span>
-                        <span>{p.rounding > 0 ? '+' : ''}Rp {formatIDR(p.rounding)}</span>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="flex justify-between text-sm text-gray-500">
-                    <span>Subtotal</span>
-                    <span>Rp {formatIDR(receipt.grandTotal)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-lg font-bold text-gray-800 pt-2 border-t">
-                  <span>Total</span>
-                  <span>Rp {formatIDR(receipt.grandTotal)}</span>
-                </div>
-                <div className="flex justify-between text-sm text-gray-600 pt-1">
-                  <span>Tunai</span>
-                  <span>Rp {formatIDR(receipt.paid)}</span>
-                </div>
-                <div className="flex justify-between text-sm font-medium text-green-600">
-                  <span>Kembalian</span>
-                  <span>Rp {formatIDR(receipt.change)}</span>
-                </div>
-              </div>
-            </div>
-          </>
+          <FallbackFromViewModel receipt={receipt as unknown as Record<string, unknown>} />
         )}
 
         <div className="p-6 pt-0 flex gap-3 receipt-actions">

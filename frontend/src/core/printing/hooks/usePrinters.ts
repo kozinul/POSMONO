@@ -15,6 +15,7 @@ export interface PrintResult {
     paper: unknown;
     templateId: string | null;
     templateName: string | null;
+    viewModel?: unknown;
   };
 }
 
