@@ -28,6 +28,14 @@ import { InvoiceRenderService } from '../../../../template/application/services/
 import { z } from 'zod';
 import { ValidationError } from '../../../../../@shared/infrastructure/error/AppError';
 
+const orderModifierSchema = z.object({
+  groupId: z.string().min(1),
+  groupName: z.string().min(1),
+  optionId: z.string().min(1),
+  optionName: z.string().min(1),
+  priceAdjustment: z.number(),
+});
+
 const createOrderSchema = z.object({
   items: z.array(z.object({
     productId: z.string().min(1),
@@ -36,7 +44,7 @@ const createOrderSchema = z.object({
     quantity: z.number().int().positive(),
     unitPrice: z.number().nonnegative(),
     totalPrice: z.number().nonnegative(),
-    modifiers: z.array(z.object({ name: z.string(), price: z.number() })).optional().default([]),
+    modifiers: z.array(orderModifierSchema).optional().default([]),
     tax: z.object({ rate: z.number(), amount: z.number() }).optional().default({ rate: 0, amount: 0 }),
   })).min(1),
   customerId: z.string().nullable().optional(),
@@ -57,7 +65,7 @@ const updateOrderSchema = z.object({
     quantity: z.number().int().positive(),
     unitPrice: z.number().nonnegative(),
     totalPrice: z.number().nonnegative(),
-    modifiers: z.array(z.object({ name: z.string(), price: z.number() })).optional().default([]),
+    modifiers: z.array(orderModifierSchema).optional().default([]),
     tax: z.object({ rate: z.number(), amount: z.number() }).optional().default({ rate: 0, amount: 0 }),
   })).optional(),
   customerId: z.string().nullable().optional(),
@@ -77,7 +85,7 @@ const replaceOrderItemsSchema = z.object({
     quantity: z.number().int().positive(),
     unitPrice: z.number().nonnegative(),
     totalPrice: z.number().nonnegative(),
-    modifiers: z.array(z.object({ name: z.string(), price: z.number() })).optional().default([]),
+    modifiers: z.array(orderModifierSchema).optional().default([]),
     tax: z.object({ rate: z.number(), amount: z.number() }).optional().default({ rate: 0, amount: 0 }),
   })).min(1),
   tableNumber: z.string().nullable().optional(),

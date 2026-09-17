@@ -17,6 +17,7 @@ interface CreateProductInput {
   pricingProfileId?: string;
   imageUrls?: string[];
   tags?: string[];
+  modifierGroupIds?: string[];
   country?: string;
   region?: string;
   currency?: string;
@@ -35,6 +36,7 @@ interface UpdateProductInput {
   tags?: string[];
   imageUrls?: string[];
   isActive?: boolean;
+  modifierGroupIds?: string[];
   country?: string;
   region?: string;
   currency?: string;
@@ -76,6 +78,7 @@ export class ProductService {
       pricingProfileId: input.pricingProfileId,
       imageUrls: input.imageUrls || [],
       tags: input.tags || [],
+      modifierGroupIds: input.modifierGroupIds || [],
       country: input.country || '',
       region: input.region || '',
       currency: input.currency || '',

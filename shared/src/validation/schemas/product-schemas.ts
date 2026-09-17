@@ -12,6 +12,7 @@ export const createProductSchema = z.object({
   pricingProfileId: z.string().optional(),
   imageUrls: z.array(z.string()).optional().default([]),
   tags: z.array(z.string()).optional().default([]),
+  modifierGroupIds: z.array(z.string()).optional().default([]),
   country: z.string().optional().default(''),
   region: z.string().optional().default(''),
   currency: z.string().optional().default(''),

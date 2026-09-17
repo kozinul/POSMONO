@@ -15,7 +15,7 @@ export interface IOrderItem {
   quantity: number;
   unitPrice: number;
   totalPrice: number;
-  modifiers: Array<{ name: string; price: number }>;
+  modifiers: Array<{ groupId: string; groupName: string; optionId: string; optionName: string; priceAdjustment: number }>;
   tax: { rate: number; amount: number };
   serviceCharge?: number;
   dpp?: number;

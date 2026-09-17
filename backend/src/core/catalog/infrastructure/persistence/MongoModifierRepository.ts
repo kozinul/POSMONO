@@ -1,5 +1,5 @@
 import { Model, Document } from 'mongoose';
-import { Modifier, IModifier, IModifierOption } from '../../domain/Modifier';
+import { Modifier, IModifier, IModifierOption, ModifierDisplayType } from '../../domain/Modifier';
 
 interface ModifierDoc extends Document<string> {
   _id: string;
@@ -7,7 +7,10 @@ interface ModifierDoc extends Document<string> {
   productId: string | null;
   familyId: string | null;
   name: string;
-  options: Array<{ name: string; price: number }>;
+  displayType: ModifierDisplayType;
+  minSelections: number;
+  maxSelections: number;
+  options: Array<{ id: string; name: string; priceAdjustment: number; isActive: boolean }>;
   required: boolean;
   isActive: boolean;
   createdAt: Date;
@@ -24,7 +27,15 @@ export class MongoModifierRepository {
       productId: doc.productId,
       familyId: doc.familyId,
       name: doc.name,
-      options: doc.options.map((o) => ({ name: o.name, price: o.price })) as IModifierOption[],
+      displayType: doc.displayType || 'radio',
+      minSelections: doc.minSelections ?? 0,
+      maxSelections: doc.maxSelections ?? 1,
+      options: (doc.options || []).map((o) => ({
+        id: o.id || '',
+        name: o.name,
+        priceAdjustment: o.priceAdjustment ?? (o as any).price ?? 0,
+        isActive: o.isActive ?? true,
+      })) as IModifierOption[],
       required: doc.required,
       isActive: doc.isActive,
       createdAt: doc.createdAt,
@@ -40,6 +51,9 @@ export class MongoModifierRepository {
       productId: data.productId,
       familyId: data.familyId,
       name: data.name,
+      displayType: data.displayType,
+      minSelections: data.minSelections,
+      maxSelections: data.maxSelections,
       options: data.options,
       required: data.required,
       isActive: data.isActive,
@@ -77,6 +91,11 @@ export class MongoModifierRepository {
 
   async findGlobal(tenantId: string): Promise<Modifier[]> {
     const docs = await this.model.find({ tenantId, productId: null }).exec();
+    return docs.map((d: ModifierDoc) => this.toDomain(d));
+  }
+
+  async findByIds(tenantId: string, ids: string[]): Promise<Modifier[]> {
+    const docs = await this.model.find({ _id: { $in: ids }, tenantId }).exec();
     return docs.map((d: ModifierDoc) => this.toDomain(d));
   }
 

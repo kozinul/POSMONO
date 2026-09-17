@@ -13,6 +13,7 @@ interface ProductDoc extends Document<string> {
   basePrice: number;
   imageUrls: string[];
   tags: string[];
+  modifierGroupIds: string[];
   country: string;
   region: string;
   currency: string;
@@ -38,8 +39,9 @@ export class MongoProductRepository {
       description: doc.description,
       categoryId: doc.categoryId,
       basePrice: doc.basePrice,
-      imageUrls: doc.imageUrls,
-      tags: doc.tags,
+      imageUrls: doc.imageUrls || [],
+      tags: doc.tags || [],
+      modifierGroupIds: doc.modifierGroupIds || [],
       country: doc.country ?? '',
       region: doc.region ?? '',
       currency: doc.currency ?? '',
@@ -66,6 +68,7 @@ export class MongoProductRepository {
       basePrice: data.basePrice,
       imageUrls: data.imageUrls,
       tags: data.tags,
+      modifierGroupIds: data.modifierGroupIds,
       country: data.country,
       region: data.region,
       currency: data.currency,
@@ -106,25 +109,30 @@ export class MongoProductRepository {
 
   async findByTenant(tenantId: string, options?: { page?: number; limit?: number; categoryId?: string; search?: string }): Promise<{ products: Product[]; total: number }> {
     const filter: any = { tenantId };
-    if (options?.categoryId) filter.categoryId = options.categoryId;
+    if (options?.categoryId) {
+      filter.categoryId = options.categoryId;
+    }
     if (options?.search) {
       filter.$or = [
         { name: { $regex: options.search, $options: 'i' } },
         { sku: { $regex: options.search, $options: 'i' } },
-        { barcode: options.search },
+        { barcode: { $regex: options.search, $options: 'i' } },
       ];
     }
 
     const page = options?.page || 1;
-    const limit = Math.min(options?.limit || 50, 100);
+    const limit = options?.limit || 50;
     const skip = (page - 1) * limit;
 
     const [docs, total] = await Promise.all([
-      this.model.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).exec(),
-      this.model.countDocuments(filter),
+      this.model.find(filter).skip(skip).limit(limit).sort({ createdAt: -1 }).exec(),
+      this.model.countDocuments(filter).exec(),
     ]);
 
-    return { products: docs.map((d: ProductDoc) => this.toDomain(d)), total };
+    return {
+      products: docs.map((d: ProductDoc) => this.toDomain(d)),
+      total,
+    };
   }
 
   async delete(id: string): Promise<void> {

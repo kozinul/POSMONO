@@ -17,7 +17,7 @@ function makeItem(partial: Partial<IOrderItem> = {}): IOrderItem {
     quantity: 1,
     unitPrice: 15000,
     totalPrice: 15000,
-    modifiers: [{ name: 'Telur', price: 5000 }],
+    modifiers: [{ groupId: 'g1', groupName: 'Tambahan', optionId: 'o1', optionName: 'Telur', priceAdjustment: 5000 }],
     tax: { rate: 12, amount: 0 },
     ...partial,
   };
@@ -113,7 +113,7 @@ describe('ReceiptAssembler', () => {
     const vm = await assembler.build({
       order: makeOrder({
         items: [
-          makeItem({ productName: 'Nasi Goreng', quantity: 2, totalPrice: 30000, modifiers: [{ name: 'Telur', price: 5000 }] }),
+          makeItem({ productName: 'Nasi Goreng', quantity: 2, totalPrice: 30000, modifiers: [{ groupId: 'g1', groupName: 'Tambahan', optionId: 'o1', optionName: 'Telur', priceAdjustment: 5000 }] }),
           makeItem({ productId: 'prod-2', productName: 'Es Teh', quantity: 1, totalPrice: 0, isFreeItem: true, modifiers: [] }),
         ],
       }),
@@ -127,7 +127,7 @@ describe('ReceiptAssembler', () => {
     const vm = await assembler.build({
       order: makeOrder({
         items: [
-          makeItem({ productName: 'Nasi Goreng', quantity: 1, totalPrice: 15000, modifiers: [{ name: 'Telur', price: 5000 }, { name: 'Saos', price: 0 }] }),
+          makeItem({ productName: 'Nasi Goreng', quantity: 1, totalPrice: 15000, modifiers: [{ groupId: 'g1', groupName: 'Tambahan', optionId: 'o1', optionName: 'Telur', priceAdjustment: 5000 }, { groupId: 'g2', groupName: 'Saus', optionId: 'o2', optionName: 'Saos', priceAdjustment: 0 }] }),
         ],
       }),
       tenant: makeTenant(),

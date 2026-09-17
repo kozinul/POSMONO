@@ -15,6 +15,7 @@ export const ProductSchema = new Schema(
     pricingProfileId: { type: String },
     imageUrls: { type: [String], default: [] },
     tags: { type: [String], default: [] },
+    modifierGroupIds: { type: [String], default: [] },
     country: { type: String, default: '' },
     region: { type: String, default: '' },
     currency: { type: String, default: '' },

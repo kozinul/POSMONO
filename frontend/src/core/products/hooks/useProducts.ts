@@ -15,6 +15,7 @@ export interface Product {
   pricingProfileId?: string;
   imageUrls: string[];
   tags: string[];
+  modifierGroupIds: string[];
   country: string;
   region: string;
   currency: string;

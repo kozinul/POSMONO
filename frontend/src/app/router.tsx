@@ -31,6 +31,7 @@ const TemplateListPage = lazy(() => import('../core/templates/pages/TemplateList
 const DesignerPage = lazy(() => import('../core/templates/pages/DesignerPage'));
 const DatabasePage = lazy(() => import('../core/database/pages/DatabasePage'));
 const RefundPage = lazy(() => import('../core/refunds/pages/RefundPage'));
+const ModifierListPage = lazy(() => import('../core/modifiers/pages/ModifierListPage'));
 const TerminalCenterPage = lazy(() => import('../core/platform/pages/TerminalCenterPage'));
 
 const Loading = () => (
@@ -58,6 +59,7 @@ export function AppRouter() {
               <Route path="/products" element={<ProductListPage />} />
               <Route path="/families" element={<FamilyListPage />} />
               <Route path="/categories" element={<CategoryListPage />} />
+              <Route path="/modifiers" element={<ModifierListPage />} />
               <Route path="/inventory" element={<StockListPage />} />
               <Route path="/inventory/warehouses" element={<WarehouseListPage />} />
               <Route path="/outlets" element={<OutletListPage />} />

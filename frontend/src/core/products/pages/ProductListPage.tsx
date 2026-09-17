@@ -10,6 +10,7 @@ import {
   Product,
 } from '../hooks/useProducts';
 import { usePricingProfiles } from '../../../@shared/hooks/usePricingProfile';
+import { useModifiers } from '../../modifiers/hooks/useModifiers';
 
 const PAGE_SIZE = 20;
 
@@ -39,6 +40,7 @@ export default function ProductListPage() {
     isActive: true,
     pricingMode: '' as '' | 'inclusive' | 'exclusive',
     pricingProfileId: '',
+    modifierGroupIds: [] as string[],
   });
 
   const { data, isLoading } = useProductList({
@@ -51,6 +53,7 @@ export default function ProductListPage() {
   const { data: categories = [] } = useCategoryList();
   const { data: families = [] } = useFamilyList();
   const { data: pricingProfiles = [] } = usePricingProfiles();
+  const { modifiers } = useModifiers();
 
   const createMutation = useCreateProduct();
   const updateMutation = useUpdateProduct();
@@ -85,6 +88,7 @@ export default function ProductListPage() {
       isActive: true,
       pricingMode: '',
       pricingProfileId: '',
+      modifierGroupIds: [],
     });
     setSelectedFormFamily('');
     setTagInput('');
@@ -112,6 +116,7 @@ export default function ProductListPage() {
       isActive: product.isActive,
       pricingMode: product.pricingMode || '',
       pricingProfileId: product.pricingProfileId || '',
+      modifierGroupIds: [...(product.modifierGroupIds || [])],
     });
     setTagInput('');
     setShowModal(true);
@@ -692,6 +697,57 @@ export default function ProductListPage() {
                     Tambah
                   </button>
                 </div>
+              </div>
+
+              {/* Modifier Groups */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Grup Opsi Produk
+                  <span className="ml-1 text-xs text-gray-400">(pilihan seperti ukuran, rasa, tambahan)</span>
+                </label>
+                {modifiers.length === 0 ? (
+                  <p className="text-sm text-gray-500">
+                    Belum ada grup opsi.{' '}
+                    <a href="#/modifiers" className="text-blue-600 hover:underline">
+                      Buat di menu Opsi Produk →
+                    </a>
+                  </p>
+                ) : (
+                  <div className="border border-gray-200 rounded-lg p-3 max-h-48 overflow-y-auto space-y-2">
+                    {modifiers.map((mod) => (
+                      <label key={mod.id} className="flex items-start gap-3 p-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formData.modifierGroupIds.includes(mod.id)}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setFormData((prev) => ({
+                              ...prev,
+                              modifierGroupIds: checked
+                                ? [...prev.modifierGroupIds, mod.id]
+                                : prev.modifierGroupIds.filter((id) => id !== mod.id),
+                            }));
+                          }}
+                          className="h-4 w-4 mt-0.5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-gray-800">{mod.name}</span>
+                            {mod.required && (
+                              <span className="text-[10px] font-semibold uppercase tracking-wide bg-red-50 text-red-600 px-1.5 py-0.5 rounded">
+                                Wajib
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {mod.options.length} pilihan
+                            {mod.maxSelections > 0 ? ` · pilih ${mod.minSelections}-${mod.maxSelections}` : ''}
+                          </div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Active */}

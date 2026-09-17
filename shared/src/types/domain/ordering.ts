@@ -42,8 +42,11 @@ export interface OrderItem {
 }
 
 export interface OrderItemModifier {
-  name: string;
-  price: number;
+  groupId: string;
+  groupName: string;
+  optionId: string;
+  optionName: string;
+  priceAdjustment: number;
 }
 
 export interface Cart {

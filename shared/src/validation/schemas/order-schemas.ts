@@ -1,13 +1,18 @@
 import { z } from 'zod';
 
+export const orderModifierSchema = z.object({
+  groupId: z.string().min(1),
+  groupName: z.string().min(1),
+  optionId: z.string().min(1),
+  optionName: z.string().min(1),
+  priceAdjustment: z.number(),
+});
+
 export const orderItemSchema = z.object({
   productId: z.string().min(1),
   variantId: z.string().nullable(),
   quantity: z.number().int().positive(),
-  modifiers: z.array(z.object({
-    name: z.string(),
-    price: z.number(),
-  })).optional().default([]),
+  modifiers: z.array(orderModifierSchema).optional().default([]),
 });
 
 export const createOrderSchema = z.object({

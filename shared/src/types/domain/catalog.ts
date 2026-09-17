@@ -11,6 +11,7 @@ export interface Product {
   pricingProfileId?: string;
   imageUrls: string[];
   tags: string[];
+  modifierGroupIds: string[];
   isActive: boolean;
   metadata: Record<string, unknown>;
   createdAt: Date;
@@ -48,18 +49,29 @@ export interface Variant {
   isActive: boolean;
 }
 
-export interface Modifier {
-  id: string;
-  productId: string;
-  name: string;
-  type: 'select' | 'multi';
-  options: ModifierOption[];
-  min: number;
-  max: number;
-  isRequired: boolean;
-}
+export type ModifierDisplayType = 'radio' | 'checkbox' | 'stepper';
 
 export interface ModifierOption {
+  id: string;
   name: string;
-  price: number;
+  priceAdjustment: number;
+  isActive: boolean;
 }
+
+export interface Modifier {
+  id: string;
+  tenantId: string;
+  productId: string | null;
+  familyId: string | null;
+  name: string;
+  displayType: ModifierDisplayType;
+  minSelections: number;
+  maxSelections: number;
+  options: ModifierOption[];
+  required: boolean;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export type ModifierGroup = Modifier;

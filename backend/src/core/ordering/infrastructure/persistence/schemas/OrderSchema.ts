@@ -10,8 +10,11 @@ const OrderItemSchema = new Schema(
     totalPrice: { type: Number, required: true },
     modifiers: [
       {
-        name: String,
-        price: Number,
+        groupId: { type: String, default: '' },
+        groupName: { type: String, default: '' },
+        optionId: { type: String, default: '' },
+        optionName: { type: String, default: '' },
+        priceAdjustment: { type: Number, default: 0 },
       },
     ],
     tax: {

@@ -21,6 +21,7 @@ const navigation: NavItem[] = [
   { name: 'Products', href: '/products' },
   { name: 'Families', href: '/families' },
   { name: 'Categories', href: '/categories' },
+  { name: 'Modifiers', href: '/modifiers', permission: 'products:write' },
   { name: 'Members', href: '/members' },
   { name: 'Promotions', href: '/promotions' },
   { name: 'Payment', href: '/payment-methods' },

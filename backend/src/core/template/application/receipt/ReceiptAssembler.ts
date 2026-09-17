@@ -53,9 +53,9 @@ function buildItems(order: IOrder): VMItem[] {
     unitPrice: item.unitPrice,
     totalPrice: item.totalPrice,
     isFreeItem: item.isFreeItem || false,
-    modifiers: item.modifiers.map((m) => ({ name: m.name, qty: 1, price: m.price })),
+    modifiers: item.modifiers.map((m) => ({ name: m.optionName, qty: 1, price: m.priceAdjustment })),
     modifierLines: item.modifiers
-      .map((m) => m.price > 0 ? `+ ${m.name} +Rp ${new Intl.NumberFormat('id-ID').format(m.price)}` : `+ ${m.name}  GRATIS`)
+      .map((m) => m.priceAdjustment > 0 ? `+ ${m.optionName} +Rp ${new Intl.NumberFormat('id-ID').format(m.priceAdjustment)}` : `+ ${m.optionName}  GRATIS`)
       .join('\n'),
   }));
 }

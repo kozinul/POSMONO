@@ -14,6 +14,7 @@ import {
   VOID_ORDER_PERMISSION,
   VOID_PAYMENT_PERMISSION,
 } from './VoidApprovalService';
+import { ModifierValidationService } from '../../../catalog/application/services/ModifierValidationService';
 
 async function resolveCashierName(
   userRepository: any,
@@ -250,6 +251,8 @@ export class CreateOrderService implements UseCase<CreateOrderInput, Order> {
     private readonly eventBus: any,
     private readonly userRepository?: any,
     private readonly shiftRepository?: any,
+    private readonly productRepository?: any,
+    private readonly modifierRepository?: any,
   ) {}
 
   async execute(input: CreateOrderInput): Promise<Order> {
@@ -262,8 +265,14 @@ export class CreateOrderService implements UseCase<CreateOrderInput, Order> {
       shiftOutletId = shift.serialize().outletId ?? null;
     }
     const outletId = input.outletId ?? shiftOutletId ?? null;
-    const subtotal = input.items.reduce((sum, item) => sum + item.totalPrice, 0);
-    const tax = input.items.reduce((sum, item) => sum + (item.tax?.amount || 0), 0);
+
+    let items = input.items;
+    if (this.productRepository && this.modifierRepository) {
+      items = await this.resolveItemsFromServer(input, items);
+    }
+
+    const subtotal = items.reduce((sum, item) => sum + item.totalPrice, 0);
+    const tax = items.reduce((sum, item) => sum + (item.tax?.amount || 0), 0);
     const discount = 0;
     const serviceCharge = 0;
     const dppTotal = subtotal - discount;
@@ -273,13 +282,13 @@ export class CreateOrderService implements UseCase<CreateOrderInput, Order> {
     const order = Order.create({
       tenantId: input.tenantId,
       outletId,
-      items: input.items,
+      items,
       subtotal,
       discount,
       discountTotal: discount,
       dppTotal,
       tax,
-      taxDetails: input.items.map(item => {
+      taxDetails: items.map(item => {
         if (!item.tax || item.tax.rate === 0) return null;
         return {
           ruleId: '',
@@ -320,6 +329,43 @@ export class CreateOrderService implements UseCase<CreateOrderInput, Order> {
     }
 
     return order;
+  }
+
+  private async resolveItemsFromServer(input: CreateOrderInput, items: IOrderItem[]): Promise<IOrderItem[]> {
+    const validator = new ModifierValidationService(this.modifierRepository);
+
+    const products = new Map<string, any>();
+    for (const item of items) {
+      if (products.has(item.productId)) continue;
+      const product = await this.productRepository.findById(item.productId);
+      if (!product) {
+        throw new ValidationError(`Produk tidak ditemukan: ${item.productId}`);
+      }
+      products.set(item.productId, product.serialize());
+    }
+
+    const resolvedItems: IOrderItem[] = [];
+    for (const item of items) {
+      const product = products.get(item.productId);
+      if (!product) continue;
+
+      const productModifierGroupIds: string[] = product.modifierGroupIds || [];
+      const { resolvedModifiers, totalAdjustment } = await validator.validateAndResolve(
+        input.tenantId,
+        productModifierGroupIds,
+        item.modifiers || [],
+      );
+
+      const unitPrice = item.unitPrice + totalAdjustment;
+      resolvedItems.push({
+        ...item,
+        unitPrice,
+        totalPrice: Math.round(unitPrice * item.quantity * 100) / 100,
+        modifiers: resolvedModifiers,
+      });
+    }
+
+    return resolvedItems;
   }
 }
 

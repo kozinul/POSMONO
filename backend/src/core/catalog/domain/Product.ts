@@ -16,6 +16,7 @@ export interface IProduct {
   pricingProfileId?: string;
   imageUrls: string[];
   tags: string[];
+  modifierGroupIds: string[];
   country: string;
   region: string;
   currency: string;
@@ -38,6 +39,7 @@ export class Product extends AggregateRoot<ProductId> {
   private pricingProfileId?: string;
   private imageUrls: string[];
   private tags: string[];
+  private modifierGroupIds: string[];
   private country: string;
   private region: string;
   private currency: string;
@@ -60,6 +62,7 @@ export class Product extends AggregateRoot<ProductId> {
     this.pricingProfileId = props.pricingProfileId;
     this.imageUrls = [...props.imageUrls];
     this.tags = [...props.tags];
+    this.modifierGroupIds = [...(props.modifierGroupIds || [])];
     this.country = props.country ?? '';
     this.region = props.region ?? '';
     this.currency = props.currency ?? '';
@@ -98,7 +101,7 @@ export class Product extends AggregateRoot<ProductId> {
     return new Product(props);
   }
 
-  update(data: Partial<Pick<IProduct, 'name' | 'description' | 'categoryId' | 'basePrice' | 'barcode' | 'sku' | 'tags' | 'imageUrls' | 'isActive' | 'pricingProfileId' | 'pricingMode' | 'bc' | 'country' | 'region' | 'currency'>>): void {
+  update(data: Partial<Pick<IProduct, 'name' | 'description' | 'categoryId' | 'basePrice' | 'barcode' | 'sku' | 'tags' | 'modifierGroupIds' | 'imageUrls' | 'isActive' | 'pricingProfileId' | 'pricingMode' | 'bc' | 'country' | 'region' | 'currency'>>): void {
     if (data.name !== undefined) this.name = data.name;
     if (data.description !== undefined) this.description = data.description;
     if (data.categoryId !== undefined) this.categoryId = data.categoryId;
@@ -106,6 +109,7 @@ export class Product extends AggregateRoot<ProductId> {
     if (data.barcode !== undefined) this.barcode = data.barcode;
     if (data.sku !== undefined) this.sku = data.sku;
     if (data.tags !== undefined) this.tags = [...data.tags];
+    if (data.modifierGroupIds !== undefined) this.modifierGroupIds = [...data.modifierGroupIds];
     if (data.imageUrls !== undefined) this.imageUrls = [...data.imageUrls];
     if (data.isActive !== undefined) this.isActive = data.isActive;
     if (data.pricingProfileId !== undefined) this.pricingProfileId = data.pricingProfileId;
@@ -132,6 +136,7 @@ export class Product extends AggregateRoot<ProductId> {
       pricingProfileId: this.pricingProfileId,
       imageUrls: [...this.imageUrls],
       tags: [...this.tags],
+      modifierGroupIds: [...this.modifierGroupIds],
       country: this.country,
       region: this.region,
       currency: this.currency,

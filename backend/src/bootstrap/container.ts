@@ -408,6 +408,7 @@ export function buildContainer() {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
         modifierRepository: container.resolve('modifierRepository'),
+        productRepository: container.resolve('productRepository'),
       }),
     }),
     familyController: asClass(FamilyController, {
@@ -480,6 +481,8 @@ export function buildContainer() {
         eventBus: container.resolve('eventBus'),
         userRepository: container.resolve('userRepository'),
         shiftRepository: container.resolve('shiftRepository'),
+        productRepository: container.resolve('productRepository'),
+        modifierRepository: container.resolve('modifierRepository'),
       }),
     }),
     updateOrderService: asClass(UpdateOrderService, {

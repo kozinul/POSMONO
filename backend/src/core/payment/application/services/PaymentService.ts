@@ -6,6 +6,19 @@ import { Refund } from '../../domain/Refund';
 import { Order, IOrderItem, IPromotionBreakdown, IDiscountBreakdown } from '../../../ordering/domain/Order';
 import { roundToDenomination, TotalRoundingMode } from '../../../tax/domain/RoundingEngine';
 import { ReceiptRenderResult } from '../../../template/application/services/ReceiptRenderService';
+import { ModifierValidationService, ModifierSelection } from '../../../catalog/application/services/ModifierValidationService';
+
+export interface PaymentItemInput {
+  productId: string;
+  productName?: string;
+  categoryId?: string;
+  variantId?: string | null;
+  quantity: number;
+  unitPrice: number;
+  pricingMode?: 'inclusive' | 'exclusive';
+  isFreeItem?: boolean;
+  modifiers?: ModifierSelection[];
+}
 
 export class PaymentService {
   constructor(
@@ -22,6 +35,8 @@ export class PaymentService {
     private readonly shiftRepository?: any,
     private readonly printService?: any,
     private readonly qrisGatewayService?: any,
+    private readonly productRepository?: any,
+    private readonly modifierRepository?: any,
   ) {}
 
   private async assertOpenShift(tenantId: string, cashierId: string, providedShiftId?: string | null): Promise<{ shiftId: string; outletId: string | null }> {
@@ -53,6 +68,44 @@ export class PaymentService {
     const cfg = tenant?.serialize().config;
     if (!cfg?.roundingEnabled || !cfg.roundingDenomination) return { enabled: false, mode: 'nearest', denomination: 0 };
     return { enabled: true, mode: (cfg.roundingMode || 'nearest') as TotalRoundingMode, denomination: cfg.roundingDenomination };
+  }
+
+  private async resolveModifierPrices(
+    tenantId: string,
+    items: PaymentItemInput[],
+  ): Promise<PaymentItemInput[]> {
+    if (!this.productRepository || this.modifierRepository === null) return items;
+    const validator = new ModifierValidationService(this.modifierRepository);
+    const productCache = new Map<string, any>();
+    const resolvedItems: PaymentItemInput[] = [];
+
+    for (const item of items) {
+      if (!item.modifiers || item.modifiers.length === 0) {
+        resolvedItems.push(item);
+        continue;
+      }
+      let product = productCache.get(item.productId);
+      if (!product) {
+        product = await this.productRepository.findById(item.productId);
+        if (!product) {
+          resolvedItems.push(item);
+          continue;
+        }
+        productCache.set(item.productId, product);
+      }
+      const groupIds = product.serialize().modifierGroupIds || [];
+      const { resolvedModifiers, totalAdjustment } = await validator.validateAndResolve(
+        tenantId,
+        groupIds,
+        item.modifiers,
+      );
+      resolvedItems.push({
+        ...item,
+        unitPrice: item.unitPrice + totalAdjustment,
+        modifiers: resolvedModifiers,
+      });
+    }
+    return resolvedItems;
   }
 
   private async applyStockDeductions(order: Order, tenantId: string, userId: string): Promise<void> {
@@ -88,7 +141,7 @@ export class PaymentService {
   async payCash(input: {
     tenantId: string;
     cashierId: string;
-    items: Array<{ productId: string; productName?: string; categoryId?: string; quantity: number; unitPrice: number; pricingMode?: 'inclusive' | 'exclusive'; isFreeItem?: boolean }>;
+    items: PaymentItemInput[];
     amountPaid: number;
     method?: PaymentMethod;
     discount?: number;
@@ -105,7 +158,8 @@ export class PaymentService {
     const { shiftId, outletId: shiftOutletId } = await this.assertOpenShift(input.tenantId, input.cashierId, input.shiftId);
     const outletId = input.outletId ?? shiftOutletId ?? null;
     const roundMoney = (value: number) => Math.round(value);
-    const rawSubtotal = input.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+    const inputItems = await this.resolveModifierPrices(input.tenantId, input.items);
+    const rawSubtotal = inputItems.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
     const manualDiscountInput = input.discount ?? 0;
     const manualDiscountValue = input.discountType === 'percentage'
       ? roundMoney(rawSubtotal * (Math.min(manualDiscountInput, 100) / 100))
@@ -190,12 +244,12 @@ export class PaymentService {
         : 0;
       return {
         productId: item.productId,
-        variantId: null,
+        variantId: item.variantId ?? null,
         productName: item.productName || '',
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         totalPrice: item.unitPrice * item.quantity,
-        modifiers: [],
+        modifiers: item.modifiers || [],
         tax: {
           rate: taxRate,
           amount: Math.round(itemTaxAmount),
