@@ -31,6 +31,7 @@ export interface AppliedPromotion {
 
 export interface PaymentInfo {
   method: string;
+  methodLabel?: string;
   paidAmount: number;
   change: number;
   approvalCode?: string;

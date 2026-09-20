@@ -65,6 +65,7 @@ function toDocumentData(vm: ReceiptViewModel, adjustments: { name: string; type:
     },
     payments: vm.payments.map((p): PaymentInfo => ({
       method: p.method,
+      methodLabel: p.methodLabel,
       paidAmount: p.amount,
       change: p.method === 'cash' && vm.payments.length === 1 ? vm.summary.change : 0,
       referenceLine: p.referenceLine,
