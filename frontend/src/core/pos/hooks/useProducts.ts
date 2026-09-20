@@ -16,6 +16,7 @@ interface Product {
   tags: string[];
   pricingProfileId?: string;
   pricingMode?: 'inclusive' | 'exclusive';
+  modifierGroupIds?: string[];
 }
 
 interface Category {

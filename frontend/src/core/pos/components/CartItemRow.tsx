@@ -72,7 +72,7 @@ export function CartItemRow({ item, lineItem }: CartItemRowProps) {
             {!isFree && (
               <>
                 <button
-                  onClick={() => updateQuantity(item.productId, -1)}
+                  onClick={() => updateQuantity(item.productId, -1, item.modifiers)}
                   className="w-6 h-6 flex items-center justify-center rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors text-sm font-bold"
                 >
                   −
@@ -81,7 +81,7 @@ export function CartItemRow({ item, lineItem }: CartItemRowProps) {
                   {item.quantity}
                 </span>
                 <button
-                  onClick={() => updateQuantity(item.productId, 1)}
+                  onClick={() => updateQuantity(item.productId, 1, item.modifiers)}
                   className="w-6 h-6 flex items-center justify-center rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors text-sm font-bold"
                 >
                   +
@@ -90,7 +90,7 @@ export function CartItemRow({ item, lineItem }: CartItemRowProps) {
             )}
           </div>
           <button
-            onClick={() => removeItem(item.productId)}
+            onClick={() => removeItem(item.productId, item.modifiers)}
             className="text-gray-300 hover:text-red-500 transition-colors"
             title="Hapus dari keranjang"
           >

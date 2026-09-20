@@ -187,9 +187,8 @@ export default function PosPage() {
   const handleProductClick = (product: any) => {
     const applicableGroups = modifierGroups.filter((g: any) => {
       if (!g.isActive) return false;
-      if (!g.productId && !g.familyId) return true; // global
-      if (g.productId === product.id) return true;
       if (product.modifierGroupIds && product.modifierGroupIds.includes(g.id)) return true;
+      if (g.productId && g.productId === product.id) return true;
       const cat = categories.find((c: any) => c.id === product.categoryId);
       if (g.familyId && cat?.familyId === g.familyId) return true;
       return false;
@@ -610,7 +609,7 @@ export default function PosPage() {
                 (li) => li.productId === item.productId && li.isFreeItem === !!item.isFreeItem,
               );
               return (
-                <div key={`${item.productId}_${item.isFreeItem ? 'free' : 'paid'}`}>
+                <div key={`${item.productId}_${JSON.stringify(item.modifiers || [])}_${item.isFreeItem ? 'free' : 'paid'}`}>
                   <CartItemRow item={item} lineItem={lineItem} />
                   <div className="border-t border-gray-100 mt-6" />
                 </div>

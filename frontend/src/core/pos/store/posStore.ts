@@ -119,8 +119,8 @@ interface POSState {
   splitBaseOrderNumber: string | null;
 
   addItem: (item: Omit<CartItem, 'quantity'> & { quantity?: number }) => void;
-  removeItem: (productId: string) => void;
-  updateQuantity: (productId: string, delta: number) => void;
+  removeItem: (productId: string, modifiers?: CartItem['modifiers']) => void;
+  updateQuantity: (productId: string, delta: number, modifiers?: CartItem['modifiers']) => void;
   setItemNotes: (productId: string, notes: string) => void;
   setManualDiscount: (value: number, type: 'percentage' | 'nominal') => void;
   setPromoCode: (code: string) => void;
@@ -236,25 +236,38 @@ export const usePOSStore = create<POSState>((set, get) => ({
     scheduleRecalculation(get, set);
   },
 
-  removeItem: (productId) => {
-    set((state) => ({
-      items: state.items.filter((i) => i.productId !== productId),
-    }));
+  removeItem: (productId, modifiers) => {
+    set((state) => {
+      const modKey = modifiers !== undefined ? JSON.stringify(modifiers || []) : null;
+      return {
+        items: state.items.filter((i) => {
+          if (i.productId !== productId) return true;
+          if (modKey !== null) {
+            return JSON.stringify(i.modifiers || []) !== modKey;
+          }
+          return false;
+        }),
+      };
+    });
     scheduleRecalculation(get, set);
   },
 
-  updateQuantity: (productId, delta) => {
-    set((state) => ({
-      items: state.items
-        .map((i) => {
-          if (i.productId !== productId || i.isFreeItem) return i;
-          if (!i.isFreeItem && i.stock !== undefined && i.stock > 0) {
-            return { ...i, quantity: Math.min(Math.max(0, i.quantity + delta), i.stock) };
-          }
-          return { ...i, quantity: Math.max(0, i.quantity + delta) };
-        })
-        .filter((i) => i.quantity > 0),
-    }));
+  updateQuantity: (productId, delta, modifiers) => {
+    set((state) => {
+      const modKey = modifiers !== undefined ? JSON.stringify(modifiers || []) : null;
+      return {
+        items: state.items
+          .map((i) => {
+            if (i.productId !== productId || i.isFreeItem) return i;
+            if (modKey !== null && JSON.stringify(i.modifiers || []) !== modKey) return i;
+            if (!i.isFreeItem && i.stock !== undefined && i.stock > 0) {
+              return { ...i, quantity: Math.min(Math.max(0, i.quantity + delta), i.stock) };
+            }
+            return { ...i, quantity: Math.max(0, i.quantity + delta) };
+          })
+          .filter((i) => i.quantity > 0),
+      };
+    });
     scheduleRecalculation(get, set);
   },
 
