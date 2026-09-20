@@ -60,6 +60,7 @@ export class DocumentPrintService {
       tenantId,
       order: order.serialize(),
       payment: paymentDoc.serialize(),
+      payments: order.serialize().paymentBreakdown,
       tenant: tenant.serialize(),
     });
 

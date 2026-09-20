@@ -100,12 +100,6 @@ function FallbackFromViewModel({ receipt }: { receipt: Record<string, unknown> }
               <span>Rp {formatIDR(summary.serviceCharge)}</span>
             </div>
           )}
-          {summary?.dppLabel && summary.dpp > 0 && (
-            <div className="flex justify-between text-sm text-gray-500">
-              <span>{summary.dppLabel}</span>
-              <span>Rp {formatIDR(summary.dpp)}</span>
-            </div>
-          )}
           {taxes.map((tax: any, i: number) => (
             <div key={i} className="flex justify-between text-sm text-gray-500">
               <span>{tax.label}</span>
