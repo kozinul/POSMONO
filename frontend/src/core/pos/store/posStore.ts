@@ -352,22 +352,26 @@ export const usePOSStore = create<POSState>((set, get) => ({
         unitPrice: number;
         quantity: number;
         pricingMode?: 'inclusive' | 'exclusive';
+        modifiers?: Array<{ groupId: string; groupName: string; optionId: string; optionName: string; priceAdjustment: number }>;
         paidItem: CartItem | undefined;
       }
     >();
     for (const item of state.items) {
       if (item.isFreeItem) continue;
-      const existing = cartAgg.get(item.productId);
+      const modKey = JSON.stringify(item.modifiers || []);
+      const aggKey = `${item.productId}_${modKey}`;
+      const existing = cartAgg.get(aggKey);
       if (existing) {
         existing.quantity += item.quantity;
       } else {
-        cartAgg.set(item.productId, {
+        cartAgg.set(aggKey, {
           productId: item.productId,
           productName: item.name,
           categoryId: item.categoryId || '',
           unitPrice: item.price,
           quantity: item.quantity + (freeQtyByProduct.get(item.productId) ?? 0),
           pricingMode: item.pricingMode,
+          modifiers: item.modifiers || [],
           paidItem: item,
         });
       }
@@ -390,6 +394,7 @@ export const usePOSStore = create<POSState>((set, get) => ({
           quantity: a.quantity,
           unitPrice: a.unitPrice,
           pricingMode: a.pricingMode,
+          modifiers: a.modifiers || [],
         })),
         promoCode: state.promoCode || undefined,
         manualDiscount: state.manualDiscount || undefined,

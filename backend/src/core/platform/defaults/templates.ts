@@ -2,7 +2,7 @@ import { DocumentSection, PaperPreset, DocumentType } from '../../document-engin
 
 const receiptSections: DocumentSection[] = [
   { id: 'sec-store', type: 'header', enabled: true, order: 1, nodes: [
-    { id: 'r1', type: 'image', field: 'store.logo', maxHeight: 12, style: { font: { align: 'center' } }, visibility: { operator: 'AND', rules: [{ field: 'store.logo', operator: 'exists' }] } },
+    { id: 'r1', type: 'image', field: 'store.logo', maxHeight: 24, style: { font: { align: 'center' } }, visibility: { operator: 'AND', rules: [{ field: 'store.logo', operator: 'exists' }] } },
     { id: 'r2', type: 'field', field: 'store.name', style: { font: { size: 14, weight: 'bold', align: 'center' } } },
     { id: 'r3', type: 'text', text: '{{ store.outlet }}', style: { font: { size: 10, align: 'center' } }, visibility: { operator: 'AND', rules: [{ field: 'store.outlet', operator: 'exists' }] } },
     { id: 'r4', type: 'text', text: '{{ store.address }}', style: { font: { size: 9, align: 'center' } }, visibility: { operator: 'AND', rules: [{ field: 'store.address', operator: 'exists' }] } },

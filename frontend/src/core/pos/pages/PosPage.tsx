@@ -606,7 +606,10 @@ export default function PosPage() {
           ) : (
             items.map((item) => {
               const lineItem = pricing?.lineItems?.find(
-                (li) => li.productId === item.productId && li.isFreeItem === !!item.isFreeItem,
+                (li) =>
+                  li.productId === item.productId &&
+                  li.isFreeItem === !!item.isFreeItem &&
+                  JSON.stringify((li as any).modifiers || []) === JSON.stringify(item.modifiers || []),
               );
               return (
                 <div key={`${item.productId}_${JSON.stringify(item.modifiers || [])}_${item.isFreeItem ? 'free' : 'paid'}`}>

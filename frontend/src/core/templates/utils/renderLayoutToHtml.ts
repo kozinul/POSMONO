@@ -14,7 +14,7 @@ export function renderLayoutToHtml(layout: any): string {
     if (c.type === 'image') {
       const src = c.content || '';
       return `<div style="text-align:${font.align ?? 'center'};padding:2px 0;">
-        ${src ? `<img src="${src}" style="max-width:120px;max-height:40px;" />` : '<span style="color:#bbb;">(logo kosong)</span>'}
+        ${src ? `<img src="${src}" style="max-width:180px;max-height:70px;" />` : '<span style="color:#bbb;">(logo kosong)</span>'}
       </div>`;
     }
     if (c.columns?.length) {

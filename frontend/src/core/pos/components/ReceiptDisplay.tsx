@@ -39,7 +39,7 @@ function FallbackFromViewModel({ receipt }: { receipt: Record<string, unknown> }
     <>
       <div className="p-6 border-b border-gray-100 text-center">
         {store?.logo && (
-          <img src={store.logo} alt="Logo" className="h-12 mx-auto mb-2 object-contain" />
+          <img src={store.logo} alt="Logo" className="h-20 mx-auto mb-2 object-contain" />
         )}
         <h2 className="text-lg font-bold text-gray-800">{store?.name ?? 'Toko'}</h2>
         {store?.outlet && (

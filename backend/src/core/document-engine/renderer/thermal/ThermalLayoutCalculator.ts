@@ -78,7 +78,7 @@ export class ThermalLayoutCalculator {
     }
 
     if (resolved.node.type === 'image') {
-      const imgHeight = (resolved.node as any).maxHeight ?? 12;
+      const imgHeight = (resolved.node as any).maxHeight ?? 24;
       nodes.push({
         type: resolved.node.type,
         content: rawContent,
