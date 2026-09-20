@@ -69,7 +69,7 @@ function FallbackFromViewModel({ receipt }: { receipt: Record<string, unknown> }
               <span className="text-gray-700">
                 {item.qty}x {item.name}
                 {isFree && <span className="ml-1 text-green-600 font-bold">(GRATIS)</span>}
-                {item.modifierLines && <span className="block text-xs text-gray-400">{item.modifierLines}</span>}
+                {item.modifierLines && <div className="block text-xs text-gray-500 font-medium mt-0.5 whitespace-pre-line">{item.modifierLines}</div>}
               </span>
               <span className="font-medium text-gray-800">
                 {isFree ? 'GRATIS' : `Rp ${formatIDR(item.totalPrice)}`}
@@ -119,16 +119,17 @@ function FallbackFromViewModel({ receipt }: { receipt: Record<string, unknown> }
             </div>
           )}
           <div className="flex justify-between text-lg font-bold text-gray-800 pt-2 border-t">
-            <span>Total</span>
+            <span>TOTAL</span>
             <span>Rp {formatIDR(summary?.grandTotal ?? 0)}</span>
           </div>
-          {payments.map((pay, i) => (
-            <div key={i} className="flex justify-between text-sm text-gray-600">
-              <span>{pay.methodLabel} {pay.referenceLine ? `(${pay.referenceLine})` : ''}</span>
-              <span>Rp {formatIDR(pay.amount)}</span>
-            </div>
-          ))}
-        </div>
+          <div className="pt-2 border-t border-dashed">
+            {payments.map((pay, i) => (
+              <div key={i} className="flex justify-between text-sm text-gray-700 font-medium">
+                <span>Bayar ({pay.methodLabel}) {pay.referenceLine ? `(${pay.referenceLine})` : ''}</span>
+                <span>Rp {formatIDR(pay.amount)}</span>
+              </div>
+            ))}
+          </div>
         {footer && <p className="text-center text-xs text-gray-400 pt-4">{footer}</p>}
       </div>
     </>
