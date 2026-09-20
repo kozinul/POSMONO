@@ -83,6 +83,8 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   ewallet: 'E-Wallet',
 };
 
-export function methodLabel(method: string): string {
-  return PAYMENT_METHOD_LABELS[method] ?? method.toUpperCase();
+export function methodLabel(method?: string): string {
+  if (!method) return 'Tunai';
+  const m = method.toLowerCase();
+  return PAYMENT_METHOD_LABELS[m] ?? method.toUpperCase();
 }

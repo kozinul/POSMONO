@@ -13,8 +13,8 @@ export function renderLayoutToHtml(layout: any): string {
     }
     if (c.type === 'image') {
       const src = c.content || '';
-      return `<div style="text-align:${font.align ?? 'center'};padding:2px 0;">
-        ${src ? `<img src="${src}" style="max-width:180px;max-height:70px;" />` : '<span style="color:#bbb;">(logo kosong)</span>'}
+      return `<div style="display:flex;justify-content:center;align-items:center;padding:4px 0;width:100%;">
+        ${src ? `<img src="${src}" style="max-width:180px;max-height:70px;object-fit:contain;" />` : '<span style="color:#bbb;">(logo kosong)</span>'}
       </div>`;
     }
     if (c.columns?.length) {

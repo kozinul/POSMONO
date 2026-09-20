@@ -60,14 +60,18 @@ function buildItems(order: IOrder): VMItem[] {
   }));
 }
 
-function buildPayments(payments: IPaymentBreakdownEntry[]): VMPayment[] {
+function buildPayments(payments: IPaymentBreakdownEntry[], defaultAmount: number): VMPayment[] {
+  if (!payments || payments.length === 0) {
+    return [{ method: 'cash', methodLabel: 'Tunai', amount: defaultAmount }];
+  }
   return payments.map((p) => {
+    const m = p.method || 'cash';
     const entry: VMPayment = {
-      method: p.method,
-      methodLabel: methodLabel(p.method),
+      method: m,
+      methodLabel: methodLabel(m),
       amount: p.amount,
     };
-    if (p.method !== 'cash' && p.code) {
+    if (m !== 'cash' && p.code) {
       entry.referenceLine = `Ref: ${p.code}`;
     }
     return entry;
@@ -113,7 +117,8 @@ export class ReceiptAssembler {
           ? order.paymentBreakdown
           : input.payment
             ? [{ method: input.payment.method, code: input.payment.referenceNumber, amount: input.payment.amount, change: 0 }]
-            : [{ method: 'cash', code: '', amount: order.roundedPayable || order.total, change: 0 }],
+            : [],
+      order.roundedPayable || order.total,
     );
     const totalTendered = payments.reduce((sum, p) => sum + p.amount, 0);
     const grandTotal = order.roundedPayable || order.total;
