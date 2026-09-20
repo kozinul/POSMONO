@@ -175,7 +175,7 @@ List products. Accepts `page`, `limit`, `categoryId`, `search` query params.
 ```json
 {
   "success": true,
-  "data": [{ "id": "uuid", "tenantId": "...", "sku": "SKU-001", "barcode": "...", "name": "Kopi Gula Aren", "description": "...", "categoryId": "...", "basePrice": 25000, "imageUrls": [], "tags": ["kopi"], "isActive": true, "createdAt": "...", "updatedAt": "..." }],
+  "data": [{ "id": "uuid", "tenantId": "...", "sku": "SKU-001", "barcode": "...", "name": "Kopi Gula Aren", "description": "...", "categoryId": "...", "basePrice": 25000, "modifierGroupIds": ["mod-size"], "imageUrls": [], "tags": ["kopi"], "isActive": true, "createdAt": "...", "updatedAt": "..." }],
   "meta": { "total": 10, "page": 1, "limit": 50 }
 }
 ```
@@ -186,7 +186,7 @@ Create a product.
 
 **Body:**
 ```json
-{ "sku": "SKU-001", "name": "Kopi Gula Aren", "categoryId": "cat-id", "basePrice": 25000, "barcode": "...", "description": "...", "imageUrls": ["https://..."], "tags": ["kopi"], "country": "ID", "region": "Bali", "currency": "IDR" }
+{ "sku": "SKU-001", "name": "Kopi Gula Aren", "categoryId": "cat-id", "basePrice": 25000, "barcode": "...", "description": "...", "imageUrls": ["https://..."], "tags": ["kopi"], "modifierGroupIds": ["mod-size"], "country": "ID", "region": "Bali", "currency": "IDR" }
 ```
 
 **Response 201:** Full product object.
@@ -266,6 +266,47 @@ List all families for current tenant.
 ### `DELETE /api/families/:id`
 
 **Response:** `204 No Content`
+
+---
+
+## Modifiers / Modifier Groups (`/api/modifiers`)
+
+Modifier adalah **group opsi produk**. Group bisa global (`productId=null`, `familyId=null`), terikat family, terikat produk tertentu, atau di-attach eksplisit ke produk lewat `Product.modifierGroupIds`.
+
+### Endpoints
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/modifiers` | authenticate | List semua modifier group tenant |
+| GET | `/api/modifiers/global` | authenticate | List group global |
+| GET | `/api/modifiers/product/:productId` | authenticate | List group yang berlaku untuk produk (product/family/global/attached group) |
+| GET | `/api/modifiers/family/:familyId` | authenticate | List group family |
+| POST | `/api/modifiers` | `products:write` | Create modifier group |
+| PUT | `/api/modifiers/:id` | `products:write` | Update modifier group |
+| DELETE | `/api/modifiers/:id` | `products:write` | Delete modifier group |
+
+**Shape:**
+
+```json
+{
+  "id": "mod-size",
+  "tenantId": "tenant-id",
+  "productId": null,
+  "familyId": null,
+  "name": "Ukuran",
+  "displayType": "radio",
+  "minSelections": 1,
+  "maxSelections": 1,
+  "required": true,
+  "isActive": true,
+  "options": [
+    { "id": "small", "name": "Small", "priceAdjustment": 0, "isActive": true },
+    { "id": "large", "name": "Large", "priceAdjustment": 5000, "isActive": true }
+  ]
+}
+```
+
+`displayType`: `radio | checkbox | stepper`. Backend `ModifierValidationService` memvalidasi required/min/max, opsi aktif, dan group availability saat create order/payment. Field lama `options[].price` masih diterima sebagai alias input, tetapi output canonical memakai `priceAdjustment`.
 
 ---
 
@@ -758,7 +799,7 @@ Pembayaran **QRIS dinamis** (QR berisi nominal) melalui gateway pihak ketiga. Se
 
 ### `GET /api/printers`
 
-List printers untuk tenant. Permission: `printers:read`.
+List printers untuk tenant. Permission: cukup `authenticate` (kasir perlu membaca daftar printer untuk WebUSB/Bluetooth); mutasi tetap `printers:write`.
 
 **Response 200:**
 ```json
@@ -770,7 +811,7 @@ List printers untuk tenant. Permission: `printers:read`.
 
 ### `GET /api/printers/:id`
 
-Get printer by ID. Permission: `printers:read`.
+Get printer by ID. Permission: cukup `authenticate`.
 
 **Response 200:** Single printer object.
 
@@ -858,13 +899,13 @@ Jika `paymentId` tidak diberikan, backend memakai payment `status:'completed'` p
       "paper": "thermal58",
       "templateId": "...",
       "templateName": "...",
-      "viewModel": { "store": { "name": "...", "outlet": "...", "address": "...", "phone": "..." }, "order": { "documentNumber": "ORD-...", "referenceNumber": "QRIS-..." }, "items": [...], "summary": { "subtotal": 0, "serviceCharge": 0, "serviceChargeRate": 0, "dpp": 0, "dppLabel": "DPP", "taxes": [...], "rounding": 0, "grandTotal": 0, "change": 0 }, "payments": [{ "method": "cash", "methodLabel": "Tunai", "amount": 0, "referenceLine": "Ref: ..." }], "promotions": [...], "footer": "..." }
+      "viewModel": { "store": { "name": "...", "outlet": "...", "address": "...", "phone": "..." }, "order": { "documentNumber": "ORD-...", "referenceNumber": "INV-ORD-..." }, "items": [...], "summary": { "subtotal": 0, "serviceCharge": 0, "serviceChargeRate": 0, "dpp": 0, "dppLabel": "DPP", "taxes": [...], "rounding": 0, "grandTotal": 0, "change": 0 }, "payments": [{ "method": "qris", "methodLabel": "QRIS", "amount": 0, "referenceLine": "Ref: QRIS-..." }], "promotions": [...], "footer": "..." }
     }
   }
 }
 ```
 
-> **Receipt Contract Kuire (2026-08-29):** `payload.layout`/`thermal`/`pdf`/`viewModel` kini dihasilkan dari satu sumber kebenaran — `ReceiptAssembler` (rounding-aware: `roundedPayable || total`; pajak berlabel `PPN 12%` / `PPN 12% (DPP 11/12)` untuk Nilai Lain; reference hanya untuk metode non-cash; timezone tenant; outlet dari `OutletRepository`; footer default `Terima kasih telah berbelanja di {outlet}`). `viewModel` dikirim agar frontend dapat merekonstruksi struk tanpa logika bisnis. Skema yang sama dipakai `POST /api/payments/pay-cash` (response `receipt.viewModel`).
+> **Receipt Contract Kuire (2026-08-29; final 2026-09-16):** `payload.layout`/`thermal`/`pdf`/`viewModel` kini dihasilkan dari satu sumber kebenaran — `ReceiptAssembler` (rounding-aware: `roundedPayable || total`; pajak berlabel `PPN 12%` / `PPN 12% (DPP 11/12)` untuk Nilai Lain; header `Ref:` = `order.invoiceNumber` bila ada; baris pembayaran non-cash punya `payment.referenceLine` seperti `Ref: QRIS-...`; date/time `dd/MM/yyyy HH:mm` sesuai timezone tenant; modifier harga 0 tampil `GRATIS`; outlet dari `OutletRepository`; footer default `Terima kasih telah berbelanja di {outlet}`). `viewModel` dikirim agar frontend dapat merekonstruksi struk tanpa logika bisnis. Skema yang sama dipakai `POST /api/payments/pay-cash` (response `receipt.viewModel`).
 
 ### `POST /api/print/kot/:orderId`
 
@@ -1181,6 +1222,8 @@ id, tenantId, email, displayName, roleId, isActive, lastLoginAt, createdAt, upda
 ---
 
 ## Route Summary
+
+> Catatan 2026-09-20: tabel ini adalah index ringkas manual, bukan sumber kontrak lengkap. Detail per-section di atas dan file route backend tetap authoritative; endpoint baru harus ditambahkan di sini saat docs sync berikutnya.
 
 | # | Method | Path | Auth |
 |---|--------|------|------|

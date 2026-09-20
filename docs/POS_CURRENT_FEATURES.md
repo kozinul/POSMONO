@@ -257,25 +257,35 @@ families.view, families.edit
 ## 8. Domain: Modifier
 
 ### Models
-- **Modifier** (`Modifier.ts`)
+- **Modifier / Modifier Group** (`Modifier.ts`)
   - `name` (string)
-  - `options` (IModifierOption[]) — `{ name, price }`
-  - `productId` (ObjectId → Product) — optional, per produk
-  - `family` (ObjectId → Family) — optional, per family
+  - `displayType` (`radio | checkbox | stepper`)
+  - `minSelections` / `maxSelections` — batas pilihan per group
+  - `options` (IModifierOption[]) — `{ id, name, priceAdjustment, isActive }`
+  - `productId` (ObjectId → Product) — optional, group khusus produk
+  - `familyId` (ObjectId → Family) — optional, group khusus family
   - `required` (boolean)
+  - `isActive` (boolean)
+- **Product** (`Product.ts`)
+  - `modifierGroupIds` — daftar modifier group eksplisit yang di-attach ke produk selain group global/family/product
 
 ### API Endpoints
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| GET | `/api/modifiers` | ❌ | List modifiers |
-| POST | `/api/modifiers` | ✅ admin | Create modifier |
-| PUT | `/api/modifiers/:id` | ✅ admin | Update modifier |
-| DELETE | `/api/modifiers/:id` | ✅ admin | Delete modifier |
+| GET | `/api/modifiers` | ✅ authenticate | List semua modifier group |
+| GET | `/api/modifiers/global` | ✅ authenticate | List group global |
+| GET | `/api/modifiers/product/:productId` | ✅ authenticate | List group yang berlaku untuk produk |
+| GET | `/api/modifiers/family/:familyId` | ✅ authenticate | List group family |
+| POST | `/api/modifiers` | ✅ `products:write` | Create modifier group |
+| PUT | `/api/modifiers/:id` | ✅ `products:write` | Update modifier group |
+| DELETE | `/api/modifiers/:id` | ✅ `products:write` | Delete modifier group |
 
 ### Business Logic
 - Contoh: "Ukuran" → [Small +0, Medium +2000, Large +5000]
 - Contoh: "Topping" → [Keju +3000, Saus +1000]
-- Price modifier: ditambahkan ke harga item
+- Price modifier (`priceAdjustment`) ditambahkan ke harga item
+- `ModifierValidationService` memvalidasi required group, min/max selections, option aktif, dan group availability saat order/payment dibuat
+- UI `/modifiers` untuk CRUD group; halaman Products bisa attach `modifierGroupIds` ke produk
 
 ---
 
@@ -934,7 +944,7 @@ families.view, families.edit
 #### J. Receipt Printing
 - Print receipt (CSS print media + ESC/POS thermal + PDF A4/A5)
 - Receipt format from template engine (single source of truth)
-- **Receipt Contract Kuire (2026-08-29)**: semua render struk (bayar, print ulang, split, QRIS) memakai satu jalur: `ReceiptAssembler` (backend) → `ReceiptViewModel` → `toDocumentData` → document-engine (layout/thermal/pdf) → `viewModel` ikut dikirim ke frontend. Header = logo→tenant→outlet→alamat→telp; `Ref:` hanya ditampilkan untuk metode non-cash (QRIS-/TRX-); tax label dari nama rule + rate (`PPN 12%`, `PPN 12% (DPP 11/12)` utk Nilai Lain); footer default "Terima kasih telah berbelanja di {outlet}"; datetime dalam timezone tenant.
+- **Receipt Contract Kuire (2026-08-29; final 2026-09-16)**: semua render struk (bayar, print ulang, split, QRIS) memakai satu jalur: `ReceiptAssembler` (backend) → `ReceiptViewModel` → `toDocumentData` → document-engine (layout/thermal/pdf) → `viewModel` ikut dikirim ke frontend. Header = logo→tenant→outlet→alamat→telp; header `Ref:` menampilkan `order.invoiceNumber` bila ada; baris pembayaran non-cash menampilkan `payment.referenceLine` (`Ref: QRIS-...`/`TRX-...`); tax label dari nama rule + rate (`PPN 12%`, `PPN 12% (DPP 11/12)` utk Nilai Lain); DPP tampil sebelum tax repeater; modifier harga 0 tampil `GRATIS`; footer default "Terima kasih telah berbelanja di {outlet}"; datetime `dd/MM/yyyy HH:mm` dalam timezone tenant.
 - **Template pesanan/kasir terpadu**: template `receipt` default "Struk Kasir Default" (80mm) & "Standard Receipt 58mm" (sections identik) — baris item pakai fitur engine baru **text node `columns`** (kiri qty×nama, kanan total rupiah, justify otomatis per lebar kertas; dipakai juga di baris pembayaran & subtotal). Template lama yang `sections: []` di-rescue otomatis saat render (guard fallback) dan bisa dibetulkan permanen via `pnpm reseed:templates` (idempotent, hanya menyentuh template bernama default).
 - **Frontend tanpa logika bisnis**: `ReceiptDisplay` hanya merender `layout` (HTM L) atau `viewModel` (fallback minimal) — perhitungan diskon/pajak/pembulatan/kembalian tidak lagi dihitung ulang di client; `PosPage` "Print Ulang" & `PaymentModal` meneruskan `receipt.viewModel` dari payload `/print/receipt` / hasil `pay-cash`.
 

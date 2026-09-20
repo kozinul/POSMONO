@@ -1,8 +1,9 @@
 # Test Progress
 
-> **Updated:** 2026-09-14
-> **Total Tests:** Backend vitest: **1073 passing** (88 files) · Frontend vitest: **85 passing** (12 files)
+> **Updated:** 2026-09-20
+> **Total Tests (static audit):** Backend vitest: **~1108 test cases** (93 files) · Frontend vitest: **85 test cases** (12 files)
 > **Test infra:** Backend suite runs **full-stack without Docker** via `mongodb-memory-server` (arm64 mongod 7.3.4 from `~/.cache/mongodb-binaries`). Gate: `pnpm test` = `vitest run` (2× full runs green ~24s, `pool: 'forks'`, `maxForks: 1`).
+> **Note:** angka 2026-09-20 adalah static scan pasca modifier groups (`rg "\b(it|test)\("`), bukan full suite run baru.
 
 ---
 
@@ -43,7 +44,7 @@
 | Tax | `tax/domain/__tests__/TaxScope.test.ts` | 17 | ✅ |
 | Tenant | `tenant/domain/__tests__/Tenant.test.ts` | 17 | ✅ |
 
-## Layer 2 — Application Services (256 tests) ✅
+## Layer 2 — Application Services (264 tests) ✅
 
 | Module | Test File | Tests | Status |
 |--------|-----------|-------|--------|
@@ -51,6 +52,7 @@
 | Identity | `UserService.test.ts` | 6 | ✅ |
 | Tenant | `TenantService.test.ts` | 10 | ✅ |
 | Catalog | `ProductService.test.ts` | 18 | ✅ |
+| Catalog | `ModifierValidationService.test.ts` | 8 | ✅ |
 | Inventory | `InventoryService.test.ts` | 40 | ✅ |
 | Inventory | `WarehouseService.test.ts` | 11 | ✅ |
 | Promotion | `PromotionService.test.ts` | 16 | ✅ |
@@ -161,7 +163,7 @@ Real HTTP flows through the actual Express stack (`buildIntegrationApp({ enforce
 | `useInventorySummaryReport.test.tsx` | 2 | ✅ |
 | `useProfitLossReport.test.tsx` | 2 | ✅ |
 | `useQrisPayment.test.ts` | 6 | ✅ |
-| `useAuth.test.ts` (+outlet handling) | 7 | ✅ |
+| `useAuth.test.ts` (+outlet handling) | 9 | ✅ |
 
 ## Terminal Center / Platform Layer (backend, added 2026-09-12)
 
@@ -173,6 +175,12 @@ Real HTTP flows through the actual Express stack (`buildIntegrationApp({ enforce
 | `MongoShiftRepository.test.ts` `findByTenantIds` | 2 | ✅ |
 | `MongoPaymentRepository.test.ts` `findCompletedByTenantIds` | 2 | ✅ |
 | `tests/integration/billing-plans.test.ts` (Plan CRUD, subscription assign/change/cancel, entitlement, RBAC platform) | 25 | ✅ |
+
+## Catalog Modifier Groups (backend, added 2026-09-17)
+
+| Test File | Tests | Status |
+|-----------|-------|--------|
+| `tests/services/ModifierValidationService.test.ts` (required/min/max, inactive option, product/family/global/attached group validation, price adjustment) | 8 | ✅ |
 
 ## Test Infrastructure (2026-08-30)
 

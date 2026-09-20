@@ -213,9 +213,10 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | Terminal Center `+ New Tenant` UI (`CreateTenantModal` + `usePlatformProvisionTenant`) | `[x]` |
 | **Outlet Platform-Only** (Fase 12): owner TIDAK bisa tambah outlet — `OutletService.createWithWarehouse` + `POST /api/platform/outlets`, route tenant `POST`/`DELETE /api/outlets` dihapus, UI `+ Tambah Outlet` Terminal Center, banner tenant | `[x]` |
 | **Billing & Plan Management** (Fase 14): modul `core/billing` (Plan/Subscription/Entitlement, `Tenant.planId`), default plans Trial/Starter/Pro/Enterprise, tab **Plans** Terminal Center (`PlansSection` CRUD) + assign/ganti/batalkan di `TenantDetailModal`, API platform + merchant entitlement, RBAC `platform.plans.*` | `[x]` |
+| **Product Modifier Groups** (2026-09-17): modifier group `radio|checkbox|stepper`, min/max/required, `priceAdjustment`, attach ke Product via `modifierGroupIds`, validasi order/payment via `ModifierValidationService`, UI `/modifiers` | `[x]` |
 | Uji Fase 10: unit/regresi tenant standalone + sync ROLE_ACCESS_PLAN/ARCHITECTURE | `[x]` |
 
-**Completion:** ~100% (Fase 1–9 + Fase 11 ProvisionTenantService + Fase 12 Outlet Platform-Only + Fase 14 Billing & Plan Management selesai & terverifikasi 2026-09-14; HubMembership, session lintas-tenant, Hub Consolidated Report, halaman Terminal Center frontend, Create Tenant API/UI, kontrol outlet platform-only, dan Sistem Plan (create/edit plan, assign/ganti/batalkan per tenant, entitlement API) rampung — backend 1073/1073, frontend 85/85)
+**Completion:** ~100% (Fase 1–9 + Fase 11 ProvisionTenantService + Fase 12 Outlet Platform-Only + Fase 14 Billing & Plan Management selesai & terverifikasi 2026-09-14; Product Modifier Groups selesai 2026-09-17; HubMembership, session lintas-tenant, Hub Consolidated Report, halaman Terminal Center frontend, Create Tenant API/UI, kontrol outlet platform-only, dan Sistem Plan rampung — static audit 2026-09-20: backend ~1108 test cases/93 files, frontend 85/85)
 
 ---
 

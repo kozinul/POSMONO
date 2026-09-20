@@ -36,6 +36,30 @@ Copy this block for each new day:
 
 ## Entries
 
+### DATE: 2026-09-17 — Product Modifier Groups
+
+**Today I worked on:**
+
+- Catalog modifier diperluas menjadi modifier groups: `displayType` (`radio|checkbox|stepper`), `minSelections`, `maxSelections`, `options[].priceAdjustment`, `required`, `isActive`, scope global/family/product, dan `Product.modifierGroupIds` untuk attach eksplisit.
+- Backend menambah `ModifierValidationService` untuk validasi pilihan modifier saat create order/payment: required group, min/max selections, option aktif, group tersedia untuk produk, dan kalkulasi price adjustment.
+- API `/api/modifiers` kini punya list global/product/family plus CRUD guarded `products:write`.
+- Frontend menambah halaman `/modifiers` (`ModifierListPage.tsx`) dan field attach `modifierGroupIds` di product form.
+
+**What I completed:**
+
+- Commit `81f96c02 feat(catalog): add product modifier groups`.
+- Static docs audit 2026-09-20 mencatat backend sekitar 1108 test cases / 93 files; frontend tetap 85 tests.
+
+**Tomorrow priority:**
+
+- Sinkronisasi dokumentasi utama (API reference, POS features, testing docs, roadmap) agar tidak lagi memakai model modifier lama dan angka test 1073/1096.
+
+**Productivity score:** 8
+
+**Notes:**
+
+- Field lama `options[].price` masih diterima sebagai alias input di controller/domain, tetapi output canonical memakai `priceAdjustment`.
+
 ### DATE: 2026-09-14 — Modular SaaS Plan Management (Billing: Plan/Subscription/Entitlement)
 
 **Today I worked on:**

@@ -4,7 +4,7 @@
 > **Stack:** Node.js · Express · MongoDB · Docker · Redis
 > **Architecture:** Multi-tenant · Modular Monolith · DDD · Repository Pattern · Event Driven
 > **Testing Stack:** Vitest · Supertest · mongodb-memory-server · k6
-> **Status:** Active Development — MVP Phase (2026-08-30: 950 backend + 76 frontend passing, no-Docker backend suite)
+> **Status:** Active Development — MVP Phase (2026-09-20 static audit: ~1108 backend test cases / 93 files + 85 frontend test cases / 12 files; backend suite runs without Docker via `mongodb-memory-server`)
 
 ---
 
@@ -35,7 +35,7 @@
 Domain entities and application services contain the rules that make money. If they break, the business breaks. These are tested before anything else.
 
 **Frontend testing is utility-level.**
-The frontend is a presentation layer; business rules live on the backend. Backend tests are the priority, but critical frontend logic (POS cart store, tax calculator, void modals, QRIS payment hook, report hooks) is covered by Vitest — **76 tests** today.
+The frontend is a presentation layer; business rules live on the backend. Backend tests are the priority, but critical frontend logic (POS cart store, tax calculator, void modals, QRIS payment hook, report hooks, auth/outlet handling) is covered by Vitest — **85 tests** today.
 
 **Automated testing is preferred over manual.**
 Manual testing does not scale. Every critical flow must have an automated test that can run in CI in under 60 seconds.
