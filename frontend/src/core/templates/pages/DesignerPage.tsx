@@ -82,6 +82,7 @@ function DesignerContent() {
   const [loading, setLoading] = useState(!!id);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewHtml, setPreviewHtml] = useState('');
+  const [showHelp, setShowHelp] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load template if ID present
@@ -324,6 +325,10 @@ function DesignerContent() {
 
         <div className="flex-1" />
 
+        <button onClick={() => setShowHelp(true)} className="px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-200 rounded text-xs font-medium hover:bg-amber-100 flex items-center gap-1.5">
+          💡 Bantuan
+        </button>
+
         {/* Save status */}
         <span className="text-xs text-gray-500 font-medium">
           {state.saveStatus === 'saving' && '💾 Menyimpan...'}
@@ -391,6 +396,75 @@ function DesignerContent() {
           </div>
         </div>
       )}
+
+      {showHelp && <TemplateHelpModal onClose={() => setShowHelp(false)} />}
+    </div>
+  );
+}
+
+function TemplateHelpModal({ onClose }: { onClose: () => void }) {
+  const [tab, setTab] = useState<'variables' | 'columns' | 'formatters'>('variables');
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-2xl w-full max-w-2xl mx-4 overflow-hidden shadow-2xl max-h-[85vh] flex flex-col">
+        <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+          <div>
+            <h2 className="text-lg font-bold text-gray-800">💡 Panduan & Bantuan Template Struk</h2>
+            <p className="text-xs text-gray-500">Referensi variabel, format kolom, dan formatter untuk kustomisasi.</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl font-bold">×</button>
+        </div>
+        <div className="flex border-b px-6 bg-gray-50">
+          <button onClick={() => setTab('variables')} className={`py-3 px-4 text-sm font-semibold border-b-2 -mb-px ${tab === 'variables' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500'}`}>Variabel</button>
+          <button onClick={() => setTab('columns')} className={`py-3 px-4 text-sm font-semibold border-b-2 -mb-px ${tab === 'columns' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500'}`}>Kolom Rata Kanan-Kiri</button>
+          <button onClick={() => setTab('formatters')} className={`py-3 px-4 text-sm font-semibold border-b-2 -mb-px ${tab === 'formatters' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500'}`}>Formatter (Pipes)</button>
+        </div>
+        <div className="p-6 overflow-y-auto space-y-4 flex-1 text-sm text-gray-700">
+          {tab === 'variables' && (
+            <div className="space-y-3">
+              <p className="font-semibold text-gray-900">Daftar Variabel Utama:</p>
+              <ul className="list-disc pl-5 space-y-1.5 text-xs font-mono">
+                <li><b>store.name</b> — Nama Toko</li>
+                <li><b>store.outlet</b> — Nama Cabang/Outlet</li>
+                <li><b>store.address</b> — Alamat Outlet</li>
+                <li><b>store.phone</b> — No. Telepon</li>
+                <li><b>order.documentNumber</b> — Nomor Pesanan (No: ORD-...)</li>
+                <li><b>order.referenceNumber</b> — Nomor Referensi / Invoice</li>
+                <li><b>order.date</b> & <b>order.time</b> — Tanggal & Jam Transaksi</li>
+                <li><b>order.cashier</b> — Nama Kasir</li>
+                <li><b>summary.subtotal</b> — Subtotal</li>
+                <li><b>summary.grandTotal</b> — Total Tagihan Akhir</li>
+                <li><b>summary.rounding</b> — Nilai Pembulatan Tunai</li>
+                <li><b>summary.change</b> — Kembalian Tunai</li>
+              </ul>
+            </div>
+          )}
+          {tab === 'columns' && (
+            <div className="space-y-3">
+              <p className="font-semibold text-gray-900">Cara Membuat Baris Rata Kiri-Kanan:</p>
+              <p className="text-xs text-gray-600">Gunakan komponen tipe <b>Text</b> dengan opsi <b>Columns</b> (Kolom Kiri & Kolom Kanan):</p>
+              <div className="bg-gray-900 text-green-400 p-3 rounded-xl font-mono text-xs overflow-x-auto whitespace-pre-wrap">
+                {`Kolom 1 (Align: Left)  → "TOTAL"\nKolom 2 (Align: Right) → "{{ summary.grandTotal | idr }}"`}
+              </div>
+              <p className="text-xs text-gray-600">Engine thermal akan secara otomatis mengatur spasi dan menyelaraskan sisi kanan pada kertas 58mm atau 80mm.</p>
+            </div>
+          )}
+          {tab === 'formatters' && (
+            <div className="space-y-3">
+              <p className="font-semibold text-gray-900">Daftar Formatter / Pipe:</p>
+              <ul className="list-disc pl-5 space-y-1.5 text-xs font-mono">
+                <li><b>| idr</b> — Format mata uang Rupiah (Rp 15.000)</li>
+                <li><b>| idrSigned</b> — Format Rupiah bertanda untuk pembulatan (+Rp 184 / -Rp 50)</li>
+                <li><b>| number(0)</b> — Format angka bulat</li>
+                <li><b>| uppercase</b> — Huruf kapital semua</li>
+              </ul>
+            </div>
+          )}
+        </div>
+        <div className="p-4 border-t border-gray-100 flex justify-end bg-gray-50">
+          <button onClick={onClose} className="px-5 py-2 rounded-xl bg-gray-800 text-white text-sm font-semibold hover:bg-gray-700">Tutup</button>
+        </div>
+      </div>
     </div>
   );
 }
