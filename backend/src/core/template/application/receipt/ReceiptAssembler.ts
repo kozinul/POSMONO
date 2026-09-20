@@ -113,7 +113,7 @@ export class ReceiptAssembler {
           ? order.paymentBreakdown
           : input.payment
             ? [{ method: input.payment.method, code: input.payment.referenceNumber, amount: input.payment.amount, change: 0 }]
-            : [],
+            : [{ method: 'cash', code: '', amount: order.roundedPayable || order.total, change: 0 }],
     );
     const totalTendered = payments.reduce((sum, p) => sum + p.amount, 0);
     const grandTotal = order.roundedPayable || order.total;

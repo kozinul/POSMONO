@@ -157,9 +157,16 @@ export class ThermalLayoutCalculator {
 
   private wrapText(text: string, maxChars: number): string[] {
     if (maxChars <= 0) return [text];
+    const paragraphs = String(text ?? '').split('\n');
     const lines: string[] = [];
-    for (let i = 0; i < text.length; i += maxChars) {
-      lines.push(text.slice(i, i + maxChars));
+    for (const para of paragraphs) {
+      if (para.length === 0) {
+        lines.push('');
+        continue;
+      }
+      for (let i = 0; i < para.length; i += maxChars) {
+        lines.push(para.slice(i, i + maxChars));
+      }
     }
     return lines.length === 0 ? [''] : lines;
   }
