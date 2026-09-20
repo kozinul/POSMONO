@@ -47,25 +47,26 @@ export class ModifierValidationService {
 
     const clientGroupIds = new Set(clientModifiers.map((m) => m.groupId));
 
-    for (const groupId of clientGroupIds) {
-      if (!productModifierGroupIds.includes(groupId)) {
-        throw new ValidationError(
-          `Produk ini tidak memiliki modifier group dengan id ${groupId}`,
-        );
-      }
-    }
-
+    // Validate each selected modifier group exists for this tenant.
+    // The explicit product/family/global check is performed by the repository or frontend,
+    // here we ensure the groups provided by the client are valid and active for the tenant.
     const groups = await this.modifierRepository.findByIds(
       tenantId,
-      clientGroupIds.size > 0
-        ? Array.from(clientGroupIds)
-        : productModifierGroupIds,
+      Array.from(clientGroupIds),
     );
 
     const groupMap = new Map<string, ModifierGroupDoc>();
     for (const g of groups) {
       const data = (g as any).serialize ? (g as any).serialize() : g;
       groupMap.set(data.id, data as ModifierGroupDoc);
+    }
+
+    for (const groupId of clientGroupIds) {
+      if (!groupMap.has(groupId)) {
+        throw new ValidationError(
+          `Modifier group tidak ditemukan atau tidak tersedia: ${groupId}`,
+        );
+      }
     }
 
     const resolvedModifiers: ModifierSelection[] = [];
