@@ -130,6 +130,7 @@ function FallbackFromViewModel({ receipt }: { receipt: Record<string, unknown> }
               </div>
             ))}
           </div>
+        </div>
         {footer && <p className="text-center text-xs text-gray-400 pt-4">{footer}</p>}
       </div>
     </>
