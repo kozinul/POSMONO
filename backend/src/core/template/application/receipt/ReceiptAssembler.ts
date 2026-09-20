@@ -154,13 +154,32 @@ export class ReceiptAssembler {
         serviceChargeRate: order.serviceChargeRate,
         dpp: order.dppTotal,
         dppLabel: dppLabel(taxes, fallbackName),
-        taxes: taxes.map((t) => ({
-          name: t.name && t.name !== 'tax' ? t.name : fallbackName,
-          label: taxLabel(t, fallbackName),
-          rate: t.rate,
-          amount: t.amount,
-          baseAmount: t.baseAmount,
-        })),
+        taxes: (() => {
+          const taxMap = new Map<string, { name: string; rate: number; amount: number; baseAmount: number; fraction?: string }>();
+          for (const t of taxes) {
+            const key = `${t.name || 'tax'}_${t.rate}`;
+            const existing = taxMap.get(key);
+            if (existing) {
+              existing.amount += t.amount;
+              existing.baseAmount += t.baseAmount;
+            } else {
+              taxMap.set(key, {
+                name: t.name && t.name !== 'tax' ? t.name : fallbackName,
+                rate: t.rate,
+                amount: t.amount,
+                baseAmount: t.baseAmount,
+                fraction: t.fraction,
+              });
+            }
+          }
+          return Array.from(taxMap.values()).map((t) => ({
+            name: t.name,
+            label: taxLabel(t as ITaxDetail, fallbackName),
+            rate: t.rate,
+            amount: Math.round(t.amount),
+            baseAmount: Math.round(t.baseAmount),
+          }));
+        })(),
         tax: order.tax,
         rounding: order.roundingAdjustment,
         grandTotal,
