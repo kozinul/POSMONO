@@ -12,6 +12,8 @@ import { ProductCard } from '../components/ProductCard';
 import { CartItemRow } from '../components/CartItemRow';
 import { PaymentModal } from '../components/PaymentModal';
 import { ReceiptDisplay } from '../components/ReceiptDisplay';
+import { ModifierSelectionModal } from '../components/ModifierSelectionModal';
+import { useModifiers } from '../../modifiers/hooks/useModifiers';
 import { toast } from '../../../@shared/hooks/useToast';
 import { formatIDR } from '../utils/money';
 import { useHeldOrders } from '../hooks/useHeldOrders';
@@ -179,6 +181,36 @@ export default function PosPage() {
   const { data: bestSellerIds = [] } = useBestSellers(7);
   const { data: categories = [], isError: categoriesError } = useCategories();
   const { data: families = [] } = useFamilies();
+  const { data: modifierGroups = [] } = useModifiers();
+  const [selectedProductForModifiers, setSelectedProductForModifiers] = useState<any | null>(null);
+
+  const handleProductClick = (product: any) => {
+    const applicableGroups = modifierGroups.filter((g: any) => {
+      if (!g.isActive) return false;
+      if (!g.productId && !g.familyId) return true; // global
+      if (g.productId === product.id) return true;
+      if (product.modifierGroupIds && product.modifierGroupIds.includes(g.id)) return true;
+      const cat = categories.find((c: any) => c.id === product.categoryId);
+      if (g.familyId && cat?.familyId === g.familyId) return true;
+      return false;
+    });
+
+    const stock = getAvailableStock(product.id);
+    if (applicableGroups.length > 0) {
+      setSelectedProductForModifiers({ product, modifierGroups: applicableGroups });
+    } else {
+      addItem({
+        productId: product.id,
+        name: product.name,
+        price: product.basePrice,
+        imageUrl: product.imageUrls?.[0] || '',
+        categoryId: product.categoryId,
+        pricingProfileId: product.pricingProfileId,
+        pricingMode: product.pricingMode,
+        stock,
+      });
+    }
+  };
 
   useEffect(() => {
     if (products.length > 0) {
@@ -445,6 +477,7 @@ export default function PosPage() {
                   discountPercent={discount?.discountPercent}
                   stock={stock}
                   remaining={remaining}
+                  onClick={() => handleProductClick(product)}
                 />
               );
             })}
@@ -840,6 +873,31 @@ export default function PosPage() {
           }
           onSubmit={submitVoidOrder}
           onClose={() => setVoidOrderTarget(null)}
+        />
+      )}
+
+      {selectedProductForModifiers && (
+        <ModifierSelectionModal
+          productName={selectedProductForModifiers.product.name}
+          basePrice={selectedProductForModifiers.product.basePrice}
+          modifierGroups={selectedProductForModifiers.modifierGroups}
+          onClose={() => setSelectedProductForModifiers(null)}
+          onConfirm={(modifiers, unitPrice) => {
+            const product = selectedProductForModifiers.product;
+            const stock = getAvailableStock(product.id);
+            addItem({
+              productId: product.id,
+              name: product.name,
+              price: unitPrice,
+              imageUrl: product.imageUrls?.[0] || '',
+              categoryId: product.categoryId,
+              pricingProfileId: product.pricingProfileId,
+              pricingMode: product.pricingMode,
+              stock,
+              modifiers,
+            });
+            setSelectedProductForModifiers(null);
+          }}
         />
       )}
     </div>

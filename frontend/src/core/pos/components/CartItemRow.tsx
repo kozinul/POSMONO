@@ -45,6 +45,15 @@ export function CartItemRow({ item, lineItem }: CartItemRowProps) {
           {item.notes && (
             <p className="text-sm text-gray-400 truncate">{item.notes}</p>
           )}
+          {item.modifiers && item.modifiers.length > 0 && (
+            <div className="text-xs text-gray-500 space-y-0.5 mt-1">
+              {item.modifiers.map((m, idx) => (
+                <div key={idx}>
+                  + {m.optionName} {m.priceAdjustment > 0 ? `(+Rp ${m.priceAdjustment.toLocaleString('id-ID')})` : ''}
+                </div>
+              ))}
+            </div>
+          )}
           <p className="text-gray-500 text-sm mt-0.5">
             Rp {item.price.toLocaleString('id-ID')} × {item.quantity}
           </p>

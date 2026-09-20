@@ -29,7 +29,10 @@ const receiptSections: DocumentSection[] = [
     { id: 'r14', type: 'repeater', dataSource: 'promotions', template: [
       { id: 'r15', type: 'text', text: '{{ promotion.name }}', style: { font: { size: 9 } } },
     ], visibility: { operator: 'AND', rules: [{ field: 'summary.orderDiscount', operator: 'greater_than', value: 0 }] } },
-    { id: 'r16', type: 'text', text: 'Diskon  -{{ summary.orderDiscount | idr }}', style: { font: { size: 9 } }, visibility: { operator: 'AND', rules: [{ field: 'summary.orderDiscount', operator: 'greater_than', value: 0 }] } },
+    { id: 'r16', type: 'text', columns: [
+      { text: 'Diskon', align: 'left' },
+      { text: '-{{ summary.orderDiscount | idr }}', align: 'right' },
+    ], style: { font: { size: 9 } }, visibility: { operator: 'AND', rules: [{ field: 'summary.orderDiscount', operator: 'greater_than', value: 0 }] } },
   ]},
   { id: 'sec-summary', type: 'summary', enabled: true, order: 5, nodes: [
     { id: 'r17', type: 'divider', style: {} },
@@ -37,14 +40,29 @@ const receiptSections: DocumentSection[] = [
       { text: 'Subtotal', align: 'left' },
       { text: '{{ summary.subtotal | idr }}', align: 'right' },
     ], style: {} },
-    { id: 'r19', type: 'text', text: 'Service Charge {{ summary.serviceChargeRate | number(0) }}%  {{ summary.serviceCharge | idr }}', style: {}, visibility: { operator: 'AND', rules: [{ field: 'summary.serviceCharge', operator: 'greater_than', value: 0 }] } },
-    { id: 'r22', type: 'text', text: '{{ summary.dppLabel }}  {{ summary.dpp | idr }}', style: {}, visibility: { operator: 'AND', rules: [{ field: 'summary.dpp', operator: 'greater_than', value: 0 }] } },
+    { id: 'r19', type: 'text', columns: [
+      { text: 'Service Charge ({{ summary.serviceChargeRate | number(0) }}%)', align: 'left' },
+      { text: '{{ summary.serviceCharge | idr }}', align: 'right' },
+    ], style: {}, visibility: { operator: 'AND', rules: [{ field: 'summary.serviceCharge', operator: 'greater_than', value: 0 }] } },
+    { id: 'r22', type: 'text', columns: [
+      { text: '{{ summary.dppLabel }}', align: 'left' },
+      { text: '{{ summary.dpp | idr }}', align: 'right' },
+    ], style: {}, visibility: { operator: 'AND', rules: [{ field: 'summary.dpp', operator: 'greater_than', value: 0 }] } },
     { id: 'r20', type: 'repeater', dataSource: 'taxes', template: [
-      { id: 'r21', type: 'text', text: '{{ taxe.label }}  {{ taxe.amount | idr }}', style: {} },
+      { id: 'r21', type: 'text', columns: [
+        { text: '{{ taxe.label }}', align: 'left' },
+        { text: '{{ taxe.amount | idr }}', align: 'right' },
+      ], style: {} },
     ]},
-    { id: 'r23', type: 'text', text: 'Pembulatan  {{ summary.rounding | idrSigned }}', style: {}, visibility: { operator: 'AND', rules: [{ field: 'summary.rounding', operator: 'not_equals', value: 0 }] } },
+    { id: 'r23', type: 'text', columns: [
+      { text: 'Pembulatan', align: 'left' },
+      { text: '{{ summary.rounding | idrSigned }}', align: 'right' },
+    ], style: {}, visibility: { operator: 'AND', rules: [{ field: 'summary.rounding', operator: 'not_equals', value: 0 }] } },
     { id: 'r24', type: 'divider', style: {} },
-    { id: 'r25', type: 'text', text: 'TOTAL  {{ summary.grandTotal | idr }}', style: { font: { size: 12, weight: 'bold' } } },
+    { id: 'r25', type: 'text', columns: [
+      { text: 'TOTAL', align: 'left' },
+      { text: '{{ summary.grandTotal | idr }}', align: 'right' },
+    ], style: { font: { size: 12, weight: 'bold' } } },
     { id: 'r26', type: 'repeater', dataSource: 'payments', template: [
       { id: 'r27', type: 'text', columns: [
         { text: '{{ payment.methodLabel }}', align: 'left' },
@@ -52,7 +70,10 @@ const receiptSections: DocumentSection[] = [
       ], style: {} },
       { id: 'r28', type: 'text', text: '{{ payment.referenceLine }}', style: { font: { size: 9 } }, visibility: { operator: 'AND', rules: [{ field: 'payment.referenceLine', operator: 'exists' }] } },
     ]},
-    { id: 'r29', type: 'text', text: 'Kembalian  {{ summary.change | idr }}', style: {}, visibility: { operator: 'AND', rules: [{ field: 'summary.change', operator: 'greater_than', value: 0 }] } },
+    { id: 'r29', type: 'text', columns: [
+      { text: 'Kembalian', align: 'left' },
+      { text: '{{ summary.change | idr }}', align: 'right' },
+    ], style: {}, visibility: { operator: 'AND', rules: [{ field: 'summary.change', operator: 'greater_than', value: 0 }] } },
   ]},
   { id: 'sec-footer', type: 'footer', enabled: true, order: 6, nodes: [
     { id: 'r30', type: 'divider', style: {} },

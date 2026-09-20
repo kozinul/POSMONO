@@ -11,9 +11,10 @@ interface ProductCardProps {
   stock?: number;
   remaining?: number;
   discountPercent?: number;
+  onClick?: () => void;
 }
 
-export function ProductCard({ id, name, price, imageUrl, categoryId, pricingProfileId, pricingMode, stock, remaining, discountPercent }: ProductCardProps) {
+export function ProductCard({ id, name, price, imageUrl, categoryId, pricingProfileId, pricingMode, stock, remaining, discountPercent, onClick }: ProductCardProps) {
   const addItem = usePOSStore((s) => s.addItem);
   const hasDiscount = discountPercent && discountPercent > 0;
   const isTracked = stock !== undefined && stock > 0;
@@ -21,7 +22,11 @@ export function ProductCard({ id, name, price, imageUrl, categoryId, pricingProf
 
   const addToCart = () => {
     if (isSoldOut) return;
-    addItem({ productId: id, name, price, imageUrl, categoryId, pricingProfileId, pricingMode, stock });
+    if (onClick) {
+      onClick();
+    } else {
+      addItem({ productId: id, name, price, imageUrl, categoryId, pricingProfileId, pricingMode, stock });
+    }
   };
 
   return (

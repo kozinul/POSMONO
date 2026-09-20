@@ -114,6 +114,7 @@ export function PaymentModal() {
         quantity: payQty(i.productId),
         unitPrice: i.price,
         pricingMode: i.pricingMode,
+        modifiers: i.modifiers || [],
       })),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -249,6 +250,7 @@ export function PaymentModal() {
           unitPrice: i.price,
           pricingMode: i.pricingMode || undefined,
           isFreeItem: i.isFreeItem || undefined,
+          modifiers: i.modifiers || [],
         })),
         ...(usePOSStore.getState().openShiftId ? { shiftId: usePOSStore.getState().openShiftId } : {}),
       };
@@ -306,6 +308,7 @@ export function PaymentModal() {
           unitPrice: i.price,
           pricingMode: i.pricingMode || undefined,
           isFreeItem: i.isFreeItem || undefined,
+          modifiers: i.modifiers || [],
         })),
         amountPaid: isCash ? paid : rawTotal,
         method: selectedMethod.code,

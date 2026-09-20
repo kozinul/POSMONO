@@ -29,8 +29,8 @@ function FallbackFromViewModel({ receipt }: { receipt: Record<string, unknown> }
   const store = vm.store as any;
   const order = vm.order as any;
   const items = (vm.items ?? []) as any[];
-  const totals = vm.totals as any;
-  const taxes = (vm.taxes ?? []) as any[];
+  const summary = vm.summary as any;
+  const taxes = (summary.taxes ?? []) as any[];
   const payments = (vm.payments ?? []) as any[];
   const promotions = (vm.promotions ?? []) as any[];
   const footer = typeof vm.footer === 'string' ? vm.footer : null;
@@ -52,7 +52,7 @@ function FallbackFromViewModel({ receipt }: { receipt: Record<string, unknown> }
           <p className="text-xs text-gray-500 mt-0.5">{store.phone}</p>
         )}
         <div className="my-2 border-t border-gray-100" />
-        <p className="text-sm font-semibold text-gray-800">Pesanan {order?.number}</p>
+        <p className="text-sm font-semibold text-gray-800">Pesanan {order?.documentNumber}</p>
         {order?.date && (
           <p className="text-xs text-gray-400 mt-0.5">{order.date} {order.time ?? ''}</p>
         )}
@@ -83,7 +83,7 @@ function FallbackFromViewModel({ receipt }: { receipt: Record<string, unknown> }
             {promotions.map((promo, i) => (
               <div key={i} className="flex justify-between text-xs text-green-700">
                 <span>{promo.name} {promo.code ? `(${promo.code})` : ''}</span>
-                <span>-Rp {formatIDR(promo.discountAmount)}</span>
+                <span>-Rp {formatIDR(promo.discount)}</span>
               </div>
             ))}
           </div>
@@ -92,52 +92,47 @@ function FallbackFromViewModel({ receipt }: { receipt: Record<string, unknown> }
         <div className="border-t border-gray-100 pt-3 space-y-1">
           <div className="flex justify-between text-sm text-gray-700">
             <span>Subtotal</span>
-            <span>Rp {formatIDR(totals?.subtotal ?? 0)}</span>
+            <span>Rp {formatIDR(summary?.subtotal ?? 0)}</span>
           </div>
-          {totals && totals.serviceCharge > 0 && (
+          {summary && summary.serviceCharge > 0 && (
             <div className="flex justify-between text-sm text-gray-500">
-              <span>Service Charge</span>
-              <span>Rp {formatIDR(totals.serviceCharge)}</span>
+              <span>Service Charge ({summary.serviceChargeRate}%)</span>
+              <span>Rp {formatIDR(summary.serviceCharge)}</span>
             </div>
           )}
-          {totals?.dppLabel && totals.dpp > 0 && (
+          {summary?.dppLabel && summary.dpp > 0 && (
             <div className="flex justify-between text-sm text-gray-500">
-              <span>{totals.dppLabel}</span>
-              <span>Rp {formatIDR(totals.dpp)}</span>
+              <span>{summary.dppLabel}</span>
+              <span>Rp {formatIDR(summary.dpp)}</span>
             </div>
           )}
-          {taxes.map((tax, i) => (
+          {taxes.map((tax: any, i: number) => (
             <div key={i} className="flex justify-between text-sm text-gray-500">
               <span>{tax.label}</span>
               <span>Rp {formatIDR(tax.amount)}</span>
             </div>
           ))}
-          {totals && totals.rounding !== 0 && (
+          {summary && summary.rounding !== 0 && (
             <div className="flex justify-between text-sm text-gray-400">
               <span>Pembulatan</span>
-              <span>{totals.rounding > 0 ? '+' : ''}Rp {formatIDR(totals.rounding)}</span>
+              <span>{summary.rounding > 0 ? '+' : ''}Rp {formatIDR(summary.rounding)}</span>
             </div>
           )}
           <div className="flex justify-between text-lg font-bold text-gray-800 pt-2 border-t">
             <span>Total</span>
-            <span>Rp {formatIDR(totals?.grandTotal ?? (receipt.grandTotal as number) ?? 0)}</span>
+            <span>Rp {formatIDR(summary?.grandTotal ?? 0)}</span>
           </div>
           {payments.map((pay, i) => (
             <div key={i} className="flex justify-between text-sm text-gray-600">
-              <span>{pay.methodLabel}</span>
-              <span>Rp {formatIDR(pay.paidAmount ?? pay.amount ?? 0)}</span>
+              <span>{pay.methodLabel} {pay.referenceLine ? `(${pay.referenceLine})` : ''}</span>
+              <span>Rp {formatIDR(pay.amount)}</span>
             </div>
           ))}
-          {totals && totals.change > 0 && (
-            <div className="flex justify-between text-sm font-medium text-green-600">
-              <span>Kembalian</span>
-              <span>Rp {formatIDR(totals.change)}</span>
-            </div>
-          )}
         </div>
-        {footer && <p className="text-center text-xs text-gray-400 mt-3 pt-3 border-t border-gray-100">{footer}</p>}
+        {footer && <p className="text-center text-xs text-gray-400 pt-4">{footer}</p>}
       </div>
     </>
+
   );
 }
 

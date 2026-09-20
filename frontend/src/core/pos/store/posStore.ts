@@ -17,6 +17,7 @@ export interface CartItem {
   isFreeItem?: boolean;
   freeByRuleId?: string;
   stock?: number;
+  modifiers?: Array<{ groupId: string; groupName: string; optionId: string; optionName: string; priceAdjustment: number }>;
 }
 
 type PaymentState = 'idle' | 'processing' | 'success' | 'error';
@@ -211,7 +212,10 @@ export const usePOSStore = create<POSState>((set, get) => ({
 
   addItem: (item) => {
     set((state) => {
-      const existing = state.items.find((i) => i.productId === item.productId && !i.isFreeItem);
+      const modKey = JSON.stringify(item.modifiers || []);
+      const existing = state.items.find(
+        (i) => i.productId === item.productId && !i.isFreeItem && JSON.stringify(i.modifiers || []) === modKey
+      );
       const currentQty = existing?.quantity ?? 0;
       if (item.stock !== undefined && item.stock > 0 && currentQty >= item.stock) {
         return state;
@@ -219,8 +223,8 @@ export const usePOSStore = create<POSState>((set, get) => ({
       if (existing) {
         return {
           items: state.items.map((i) =>
-            i.productId === item.productId && !i.isFreeItem
-              ? { ...i, quantity: i.quantity + 1, stock: item.stock ?? i.stock }
+            i.productId === item.productId && !i.isFreeItem && JSON.stringify(i.modifiers || []) === modKey
+              ? { ...i, quantity: i.quantity + (item.quantity ?? 1), stock: item.stock ?? i.stock }
               : i,
           ),
         };
@@ -510,7 +514,7 @@ export const usePOSStore = create<POSState>((set, get) => ({
             quantity: i.quantity,
             unitPrice: i.price,
             totalPrice: i.price * i.quantity,
-            modifiers: [],
+            modifiers: i.modifiers || [],
             tax: { rate: 0, amount: 0 },
           })),
         customerName: snapshotCustomerName || null,
@@ -575,7 +579,7 @@ export const usePOSStore = create<POSState>((set, get) => ({
           quantity: i.quantity,
           unitPrice: i.price,
           totalPrice: Math.round(i.price * i.quantity * 100) / 100,
-          modifiers: [],
+          modifiers: i.modifiers || [],
           tax: { rate: 0, amount: 0 },
         })),
         tableNumber: state.tableNumber || null,
