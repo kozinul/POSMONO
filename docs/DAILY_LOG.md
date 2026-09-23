@@ -65,6 +65,33 @@ Copy this block for each new day:
 
 **Productivity score:** 8
 
+### DATE: 2026-09-23 — Login Tenant Hasil Provisioning: Email Global Fallback
+
+**Today I worked on:**
+
+- **Gejala**: tenant baru dibuat via Terminal Center (`POST /api/platform/provision/tenant`), owner tak bisa login di `/login` — selalu "Invalid credentials".
+- **Root cause**: `LoginPage` tidak mengirim `X-Tenant-Id`; `tenantContext` fallback ke `dev-tenant` (dev) / `''` (produksi), padahal owner tenant baru punya `tenantId` acak → `AuthService.execute` mencari di tenant salah.
+- **Fix** (`AuthService.execute` + `AuthController.login`): login **tanpa konteks tenant eksplisit** (`resolveByEmailGlobal` = tidak ada header `x-tenant-id` & tidak ada query `tenant`) kini fallback ke `findByEmailGlobal(email)` — provisioning menjamin email owner unik global → `tenantId` diambil dari user; token/session memakai `tenantId` hasil resolve.
+
+**Problems:**
+
+- Platform login harus tetap scoped (`X-Tenant-Id: platform` header → fallback nonaktif) agar super admin tidak terseret ke tenant lain lewat lookup global. `resolveByEmailGlobal` hanya diaktifkan saat tidak ada header/query tenant.
+
+**What I completed:**
+
+- Backend tsc bersih; **1129/1129 (97 files)** pass — `AuthService.test.ts` +3 (resolve-by-global, global tak ketemu → UnauthorizedError, fallback nonaktif → tak panggil global lookup).
+- Docs sync: AGENTS.md entry + DAILY_LOG ini.
+
+**What I learned:**
+
+- Tenant resolution saat login multi-tenant butuh "ada/absence" konteks yang eksplisit; server HTML/inject header dari reverse-proxy (per subdomain) tetap jadi mekanisme utama untuk multi-tenant produksi penuh, fallback by-email mencakup skenario owner tenant hasil provisioning di deployment domain tunggal.
+
+**Tomorrow priority:**
+
+- MVP deployment (VPS/SSL/monitoring/backup) — menunggu akses VPS.
+
+**Productivity score:** 8
+
 ### DATE: 2026-09-22 — Terminal Center Logging + Control Plane (Batch P0)
 
 **Today I worked on:**

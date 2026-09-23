@@ -153,6 +153,49 @@ describe('AuthService', () => {
         }),
       );
     });
+
+    it('resolves tenant from the globally unique email when tenant-scoped lookup misses', async () => {
+      const user = createUser({ tenantId: 'tenant-acme' });
+      userRepo.findByEmail.mockResolvedValue(null);
+      userRepo.findByEmailGlobal = vi.fn().mockResolvedValue(user);
+      passwordService.compare.mockResolvedValue(true);
+
+      const result = await service.execute({
+        email: 'user@test.com',
+        password: 'pw',
+        tenantId: 'dev-tenant',
+        resolveByEmailGlobal: true,
+      });
+
+      expect(result.user.serialize().tenantId).toBe('tenant-acme');
+      expect(sessionService.create).toHaveBeenCalledWith(
+        expect.objectContaining({ tenantId: 'tenant-acme' }),
+      );
+    });
+
+    it('still throws UnauthorizedError when global fallback finds no user', async () => {
+      userRepo.findByEmail.mockResolvedValue(null);
+      userRepo.findByEmailGlobal = vi.fn().mockResolvedValue(null);
+
+      await expect(
+        service.execute({
+          email: 'unknown@test.com',
+          password: 'pw',
+          tenantId: 'dev-tenant',
+          resolveByEmailGlobal: true,
+        }),
+      ).rejects.toThrow(UnauthorizedError);
+    });
+
+    it('does not use global fallback when flagged off', async () => {
+      userRepo.findByEmail.mockResolvedValue(null);
+      userRepo.findByEmailGlobal = vi.fn();
+
+      await expect(
+        service.execute({ email: 'user@test.com', password: 'pw', tenantId: TENANT_ID }),
+      ).rejects.toThrow(UnauthorizedError);
+      expect(userRepo.findByEmailGlobal).not.toHaveBeenCalled();
+    });
   });
 
   describe('register', () => {

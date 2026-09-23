@@ -10,6 +10,9 @@ interface LoginInput {
   tenantId: string;
   userAgent?: string;
   ipAddress?: string;
+  /** When true and the tenant-scoped lookup misses, resolve the tenant by
+   *  the (globally unique on provisioning) email instead of failing. */
+  resolveByEmailGlobal?: boolean;
 }
 
 interface LoginOutput {
@@ -32,7 +35,17 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
   ) {}
 
   async execute(input: LoginInput): Promise<LoginOutput> {
-    const user = await this.userRepository.findByEmail(input.email, input.tenantId);
+    let tenantId = input.tenantId;
+    let user = await this.userRepository.findByEmail(input.email, input.tenantId);
+
+    if (!user && input.resolveByEmailGlobal && this.userRepository.findByEmailGlobal) {
+      const globalUser = await this.userRepository.findByEmailGlobal(input.email);
+      if (globalUser) {
+        user = globalUser;
+        tenantId = globalUser.serialize().tenantId;
+      }
+    }
+
     if (!user) {
       throw new UnauthorizedError('Invalid credentials');
     }
@@ -55,7 +68,7 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
 
     const refreshToken = this.tokenService.generateRefreshToken({
       sub: user.id.toValue(),
-      tenant: input.tenantId,
+      tenant: tenantId,
       role: user.roleIdValue,
       roleName: roleName ?? undefined,
       permissions,
@@ -65,7 +78,7 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
 
     await this.sessionService.create({
       userId: user.id.toValue(),
-      tenantId: input.tenantId,
+      tenantId,
       refreshToken,
       userAgent: input.userAgent || '',
       ipAddress: input.ipAddress || '',
@@ -73,7 +86,7 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
 
     const accessToken = this.tokenService.generateToken({
       sub: user.id.toValue(),
-      tenant: input.tenantId,
+      tenant: tenantId,
       role: user.roleIdValue,
       roleName: roleName ?? undefined,
       permissions,

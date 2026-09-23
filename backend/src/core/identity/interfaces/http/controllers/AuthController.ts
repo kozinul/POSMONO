@@ -29,6 +29,7 @@ export class AuthController extends BaseController {
       tenantId: req.tenantId,
       userAgent: req.headers['user-agent'],
       ipAddress: req.ip,
+      resolveByEmailGlobal: !req.headers['x-tenant-id'] && !req.query.tenant,
     });
 
     this.ok(res, {
