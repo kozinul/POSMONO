@@ -10,6 +10,7 @@ interface PlatformJwtPayload {
   roleName?: string;
   permissions?: string[];
   outletIds?: string[];
+  email?: string;
 }
 
 declare global {
@@ -19,6 +20,7 @@ declare global {
       platformUserRole: string;
       platformUserRoleName: string;
       platformUserPermissions: string[];
+      platformUserEmail: string;
     }
   }
 }
@@ -43,6 +45,7 @@ export function platformAuthenticate(req: Request, _res: Response, next: NextFun
     req.platformUserRole = decoded.role;
     req.platformUserRoleName = decoded.roleName ?? '';
     req.platformUserPermissions = decoded.permissions ?? [];
+    req.platformUserEmail = decoded.email ?? '';
     next();
   } catch {
     throw new UnauthorizedError('Invalid or expired platform token');

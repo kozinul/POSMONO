@@ -153,6 +153,13 @@ import { SubscriptionService } from '../core/billing/application/services/Subscr
 import { EntitlementService } from '../core/billing/application/services/EntitlementService';
 import { PlanController } from '../core/billing/interfaces/http/controllers/PlanController';
 import { SubscriptionController } from '../core/billing/interfaces/http/controllers/SubscriptionController';
+import { PlatformAuditLogSchema } from '../core/platform/audit/infrastructure/persistence/schemas/PlatformAuditLogSchema';
+import { MongoPlatformAuditLogRepository } from '../core/platform/audit/infrastructure/persistence/MongoPlatformAuditLogRepository';
+import { PlatformAuditService } from '../core/platform/audit/application/services/PlatformAuditService';
+import { ProvisioningRunSchema } from '../core/platform/provisioning/infrastructure/persistence/schemas/ProvisioningRunSchema';
+import { MongoProvisioningRunRepository } from '../core/platform/provisioning/infrastructure/persistence/MongoProvisioningRunRepository';
+import { SubscriptionHistorySchema } from '../core/billing/infrastructure/persistence/schemas/SubscriptionHistorySchema';
+import { MongoSubscriptionHistoryRepository } from '../core/billing/infrastructure/persistence/MongoSubscriptionHistoryRepository';
 
 export type DIContainer = ReturnType<typeof buildContainer>;
 
@@ -201,6 +208,9 @@ export function buildContainer() {
   const PlanModel = systemConnection.model('Plan', PlanSchema);
   PlanModel.syncIndexes().catch(() => {});
   const SubscriptionModel = systemConnection.model('Subscription', SubscriptionSchema);
+  const PlatformAuditLogModel = systemConnection.model('PlatformAuditLog', PlatformAuditLogSchema);
+  const ProvisioningRunModel = systemConnection.model('ProvisioningRun', ProvisioningRunSchema);
+  const SubscriptionHistoryModel = systemConnection.model('SubscriptionHistory', SubscriptionHistorySchema);
   SubscriptionModel.syncIndexes().catch(() => {});
 
   const eventBus = new EventBus();
@@ -709,6 +719,9 @@ export function buildContainer() {
         shiftRepository: container.resolve('shiftRepository'),
         printService: container.resolve('printService'),
         qrisGatewayService: container.resolve('qrisGatewayService'),
+        productRepository: container.resolve('productRepository'),
+        modifierRepository: container.resolve('modifierRepository'),
+        categoryRepository: container.resolve('categoryRepository'),
       }),
     }),
     paymentController: asClass(PaymentController, {
@@ -1036,6 +1049,7 @@ export function buildContainer() {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
         hubService: container.resolve('hubService'),
+        auditService: container.resolve('platformAuditService'),
       }),
     }),
     hubMembershipRepository: asClass(MongoHubMembershipRepository, {
@@ -1059,6 +1073,7 @@ export function buildContainer() {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
         hubMembershipService: container.resolve('hubMembershipService'),
+        auditService: container.resolve('platformAuditService'),
       }),
     }),
     outletRepository: asClass(MongoOutletRepository, {
@@ -1089,6 +1104,7 @@ export function buildContainer() {
           roleRepository: container.resolve('roleRepository'),
           hubRepository: container.resolve('hubRepository'),
           outletService: container.resolve('outletService'),
+          provisioningRunRepository: container.resolve('provisioningRunRepository'),
         },
       }),
     }),
@@ -1104,8 +1120,28 @@ export function buildContainer() {
           tenantRepository: container.resolve('tenantRepository'),
           hubRepository: container.resolve('hubRepository'),
           provisionTenantService: container.resolve('provisionTenantService'),
+          auditService: container.resolve('platformAuditService'),
+          subscriptionService: container.resolve('subscriptionService'),
+          provisioningRunRepository: container.resolve('provisioningRunRepository'),
+          userRepository: container.resolve('userRepository'),
+          roleRepository: container.resolve('roleRepository'),
+          warehouseRepository: container.resolve('warehouseRepository'),
         },
       }),
+    }),
+    platformAuditLogRepository: asClass(MongoPlatformAuditLogRepository, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({ model: PlatformAuditLogModel }),
+    }),
+    platformAuditService: asClass(PlatformAuditService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        repository: container.resolve('platformAuditLogRepository'),
+      }),
+    }),
+    provisioningRunRepository: asClass(MongoProvisioningRunRepository, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({ model: ProvisioningRunModel }),
     }),
     planRepository: asClass(MongoPlanRepository, {
       lifetime: Lifetime.SINGLETON,
@@ -1127,7 +1163,12 @@ export function buildContainer() {
         subscriptionRepository: container.resolve('subscriptionRepository'),
         planRepository: container.resolve('planRepository'),
         tenantRepository: container.resolve('tenantRepository'),
+        historyRepository: container.resolve('subscriptionHistoryRepository'),
       }),
+    }),
+    subscriptionHistoryRepository: asClass(MongoSubscriptionHistoryRepository, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({ model: SubscriptionHistoryModel }),
     }),
     entitlementService: asClass(EntitlementService, {
       lifetime: Lifetime.SINGLETON,
@@ -1148,6 +1189,7 @@ export function buildContainer() {
       injector: () => ({
         subscriptionService: container.resolve('subscriptionService'),
         entitlementService: container.resolve('entitlementService'),
+        auditService: container.resolve('platformAuditService'),
       }),
     }),
   });

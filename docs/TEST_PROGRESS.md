@@ -1,9 +1,9 @@
 # Test Progress
 
-> **Updated:** 2026-09-20
-> **Total Tests (static audit):** Backend vitest: **~1108 test cases** (93 files) · Frontend vitest: **85 test cases** (12 files)
+> **Updated:** 2026-09-22
+> **Total Tests (full suite run):** Backend vitest: **1126 test cases** (97 files) · Frontend vitest: **90 test cases** (13 files)
 > **Test infra:** Backend suite runs **full-stack without Docker** via `mongodb-memory-server` (arm64 mongod 7.3.4 from `~/.cache/mongodb-binaries`). Gate: `pnpm test` = `vitest run` (2× full runs green ~24s, `pool: 'forks'`, `maxForks: 1`).
-> **Note:** angka 2026-09-20 adalah static scan pasca modifier groups (`rg "\b(it|test)\("`), bukan full suite run baru.
+> **Note:** angka 2026-09-22 berasal dari full suite run `pnpm test` backend (97 files / 1126 tests, +8 dari `PlatformAuditService.test.ts` +3 & `SubscriptionService.test.ts` +5) dan frontend (90/90, 13 files).
 
 ---
 
@@ -164,6 +164,7 @@ Real HTTP flows through the actual Express stack (`buildIntegrationApp({ enforce
 | `useProfitLossReport.test.tsx` | 2 | ✅ |
 | `useQrisPayment.test.ts` | 6 | ✅ |
 | `useAuth.test.ts` (+outlet handling) | 9 | ✅ |
+| `usePlatform.test.tsx` (audit, subscription history, provisioning runs, extend days hooks) | 5 | ✅ |
 
 ## Terminal Center / Platform Layer (backend, added 2026-09-12)
 
@@ -175,6 +176,13 @@ Real HTTP flows through the actual Express stack (`buildIntegrationApp({ enforce
 | `MongoShiftRepository.test.ts` `findByTenantIds` | 2 | ✅ |
 | `MongoPaymentRepository.test.ts` `findCompletedByTenantIds` | 2 | ✅ |
 | `tests/integration/billing-plans.test.ts` (Plan CRUD, subscription assign/change/cancel, entitlement, RBAC platform) | 25 | ✅ |
+
+## Terminal Center Logging (backend, added 2026-09-22)
+
+| Test File | Tests | Status |
+|-----------|-------|--------|
+| `tests/services/PlatformAuditService.test.ts` (recordFromRequest + system fallback + list filter/pagination/date range) | 3 | ✅ |
+| `tests/services/SubscriptionService.test.ts` (ledger assigned/changed/extended/cancelled, history `[]` tanpa repo, cancel reason ke ledger) | 5 | ✅ |
 
 ## Catalog Modifier Groups (backend, added 2026-09-17)
 

@@ -31,6 +31,8 @@ import { OutletService } from '../../src/core/outlet/application/services/Outlet
 import { ShiftService } from '../../src/core/pos/application/services/ShiftService';
 import { PaymentService } from '../../src/core/payment/application/services/PaymentService';
 import { ProvisionTenantService } from '../../src/core/platform/application/services/ProvisionTenantService';
+import { ProvisioningRunSchema } from '../../src/core/platform/provisioning/infrastructure/persistence/schemas/ProvisioningRunSchema';
+import { MongoProvisioningRunRepository } from '../../src/core/platform/provisioning/infrastructure/persistence/MongoProvisioningRunRepository';
 import { PlatformController } from '../../src/core/platform/interfaces/http/controllers/PlatformController';
 import { createPlatformRoutes } from '../../src/core/platform/interfaces/http/routes/platform.routes';
 import { errorHandler } from '../../src/@shared/interfaces/middleware/errorHandler';
@@ -60,6 +62,9 @@ beforeAll(async () => {
   const paymentModel = mongoose.models.Payment || mongoose.model('Payment', PaymentSchema);
   const userModel = mongoose.models.User || mongoose.model('User', UserSchema);
   const roleModel = mongoose.models.Role || mongoose.model('Role', RoleSchema);
+  const provisioningRunModel =
+    mongoose.models.ProvisioningRun ||
+    mongoose.model('ProvisioningRun', ProvisioningRunSchema);
 
   const tenantRepo = new MongoTenantRepository(tenantModel);
   const hubRepo = new MongoHubRepository(hubModel);
@@ -96,6 +101,7 @@ beforeAll(async () => {
     roleRepository: roleRepo,
     hubRepository: hubRepo,
     outletService,
+    provisioningRunRepository: new MongoProvisioningRunRepository(provisioningRunModel),
   });
 
   const platformController = new PlatformController({

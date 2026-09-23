@@ -15,7 +15,12 @@ export const SubscriptionSchema = new Schema(
     billingCycle: { type: String, enum: ['monthly', 'annual', 'custom'], required: true, default: 'monthly' },
     currentPeriodStart: { type: Date, required: true, default: Date.now },
     currentPeriodEnd: { type: Date, required: true },
+    startedAt: { type: Date, default: null },
+    trialEndsAt: { type: Date, default: null },
+    autoRenew: { type: Boolean, default: false },
+    assignedAt: { type: Date, default: null },
     cancelledAt: { type: Date, default: null },
+    cancellationReason: { type: String, default: null },
   },
   {
     timestamps: true,

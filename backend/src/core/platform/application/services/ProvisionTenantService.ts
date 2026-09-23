@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { v4 as uuidv4 } from 'uuid';
 import { ConflictError, NotFoundError, ValidationError } from '../../../../@shared/infrastructure/error/AppError';
 import { UserId } from '../../../../@shared/domain/Identifier';
 import { Tenant } from '../../../tenant/domain/Tenant';
@@ -7,6 +8,11 @@ import { Role } from '../../../identity/domain/Role';
 import { DEFAULT_ROLES } from '../../defaults';
 import { PasswordService } from '../../../identity/domain/services/PasswordService';
 import { OutletService } from '../../../outlet/application/services/OutletService';
+import {
+  ProvisioningRun,
+  IProvisioningStep,
+} from '../../provisioning/domain/ProvisioningRun';
+import { MongoProvisioningRunRepository } from '../../provisioning/infrastructure/persistence/MongoProvisioningRunRepository';
 
 export interface ProvisionTenantInput {
   tenant: {
@@ -42,19 +48,21 @@ interface ProvisionTenantServiceDeps {
   roleRepository: any;
   hubRepository: any;
   outletService: OutletService;
+  provisioningRunRepository?: MongoProvisioningRunRepository;
 }
 
 export class ProvisionTenantService {
-  private readonly idempotencyCache = new Map<string, ProvisionTenantResult>();
-
   constructor(
     private readonly deps: ProvisionTenantServiceDeps,
     private readonly passwordService: PasswordService = new PasswordService(),
   ) {}
 
   async execute(input: ProvisionTenantInput): Promise<ProvisionTenantResult> {
-    if (input.idempotencyKey && this.idempotencyCache.has(input.idempotencyKey)) {
-      return this.idempotencyCache.get(input.idempotencyKey)!;
+    if (input.idempotencyKey) {
+      const existing = await this.deps.provisioningRunRepository?.findByIdempotencyKey(input.idempotencyKey);
+      if (existing && existing.serialize().result) {
+        return existing.serialize().result as unknown as ProvisionTenantResult;
+      }
     }
 
     if (!input.tenant?.name || !input.tenant.name.trim()) {
@@ -91,11 +99,32 @@ export class ProvisionTenantService {
       throw new ConflictError('OWNER_EMAIL_ALREADY_EXISTS');
     }
 
+    const requestId = uuidv4();
+    const steps: IProvisioningStep[] = [];
+    const startedAt = Date.now();
+
     const session = mongoose.connection.readyState === 1
       ? await mongoose.startSession().catch(() => null)
       : null;
 
+    const run = ProvisioningRun.create({
+      requestId,
+      idempotencyKey: input.idempotencyKey ?? null,
+      tenantName: input.tenant.name.trim(),
+      ownerEmail: email,
+      hubId: input.hubId ?? null,
+      mode: input.hubId ? 'hub' : 'standalone',
+      steps,
+      overallStatus: 'failed',
+      durationMs: 0,
+      rolledBack: false,
+      tenantId: null,
+      result: null,
+      error: null,
+    });
+
     const executeProvisioning = async (sess?: any): Promise<ProvisionTenantResult> => {
+      steps.length = 0;
       const ownerId = new UserId().toValue();
       const tenantName = input.tenant.name.trim();
       const tenantSlug =
@@ -143,9 +172,14 @@ export class ProvisionTenantService {
         tenant.assignHub(input.hubId);
       }
 
+      run.addStep('tenant', 'success', `Tenant "${tenantName}" dibuat`);
+      const t0 = Date.now();
       await this.deps.tenantRepository.save(tenant, { session: sess });
+      run.markStepDuration(steps.length - 1, Date.now() - t0);
 
       let ownerRoleId = '';
+      run.addStep('roles', 'success', 'Role sistem dibuat (Owner/Manager/Cashier)');
+      const t1 = Date.now();
       for (const def of DEFAULT_ROLES) {
         const role = Role.create({
           tenantId,
@@ -157,6 +191,7 @@ export class ProvisionTenantService {
         await this.deps.roleRepository.save(role, { session: sess });
         if (def.name === 'Owner') ownerRoleId = role.id.toValue();
       }
+      run.markStepDuration(steps.length - 1, Date.now() - t1);
 
       const rawPassword = input.owner.password || 'temporary-password';
       const passwordHash = await this.passwordService.hash(rawPassword);
@@ -177,8 +212,13 @@ export class ProvisionTenantService {
         updatedAt: new Date(),
       });
 
+      run.addStep('owner', 'success', `Owner "${input.owner.name.trim()}" dibuat`);
+      const t2 = Date.now();
       await this.deps.userRepository.save(owner, { session: sess });
+      run.markStepDuration(steps.length - 1, Date.now() - t2);
 
+      run.addStep('outlet', 'success', `Outlet "${input.outlet.name.trim()}" dibuat`);
+      const t3 = Date.now();
       const outlet = await this.deps.outletService.ensureDefault(
         tenantId,
         {
@@ -188,8 +228,16 @@ export class ProvisionTenantService {
         },
         sess,
       );
+      run.markStepDuration(steps.length - 1, Date.now() - t3);
 
       const warehouseId = outlet.serialize().warehouseId;
+      if (warehouseId) {
+        run.addStep('warehouse', 'success', 'Warehouse Utama dibuat');
+      }
+
+      run.addStep('subscription', 'skipped', 'Trial — assign plan via Terminal Center');
+
+      run.setTenantId(tenantId);
 
       return {
         success: true,
@@ -213,38 +261,50 @@ export class ProvisionTenantService {
       };
     };
 
-    if (session) {
+    const persistResult = async (result: ProvisionTenantResult): Promise<void> => {
+      run.markCompleted(false);
+      run.setDurationMs(Date.now() - startedAt);
+      run.setResult(result as unknown as Record<string, unknown>);
+      await this.deps.provisioningRunRepository?.save(run);
+    };
+
+    const persistFailure = async (error: unknown): Promise<void> => {
+      const message = error instanceof Error ? error.message : String(error);
+      run.setDurationMs(Date.now() - startedAt);
+      run.markFailed(message, true);
+      await this.deps.provisioningRunRepository?.save(run);
+    };
+
+    try {
+      let result: ProvisionTenantResult | undefined;
       try {
-        let result: ProvisionTenantResult | undefined;
-        try {
+        if (session) {
           await session.withTransaction(async () => {
             result = await executeProvisioning(session);
           });
-        } catch (err: any) {
-          if (
-            err?.message?.includes('replica set') ||
-            err?.message?.includes('Transaction numbers')
-          ) {
-            result = await executeProvisioning();
-          } else {
-            throw err;
-          }
+        } else {
+          result = await executeProvisioning();
         }
-
-        if (input.idempotencyKey && result) {
-          this.idempotencyCache.set(input.idempotencyKey, result);
+      } catch (err: any) {
+        if (
+          err?.message?.includes('replica set') ||
+          err?.message?.includes('Transaction numbers')
+        ) {
+          result = await executeProvisioning();
+        } else {
+          throw err;
         }
+      }
 
-        return result!;
-      } finally {
-        await session.endSession();
+      await persistResult(result!);
+      return result!;
+    } catch (err) {
+      await persistFailure(err);
+      throw err;
+    } finally {
+      if (session) {
+        await session.endSession().catch(() => undefined);
       }
-    } else {
-      const result = await executeProvisioning();
-      if (input.idempotencyKey && result) {
-        this.idempotencyCache.set(input.idempotencyKey, result);
-      }
-      return result;
     }
   }
 }

@@ -38,6 +38,14 @@ export interface PlatformTenantDetail extends PlatformTenantRow {
   modules: string[];
   createdAt: string;
   outlets: PlatformOutletRow[];
+  owner: { id: string; name: string; email: string } | null;
+  userCount: number;
+  usersSummary: Array<{ id: string; name: string; email: string; roleName: string | null; isActive: boolean }>;
+  warehouseCount: number;
+  outletCount: number;
+  subscription: PlatformTenantSubscription | null;
+  recentActivity: PlatformAuditEntry[];
+  provisioningRuns: PlatformProvisioningRun[];
 }
 
 export interface PlatformOutletRow {
@@ -154,6 +162,11 @@ export interface PlatformSubscription {
   currentPeriodStart: string;
   currentPeriodEnd: string;
   cancelledAt: string | null;
+  startedAt?: string | null;
+  trialEndsAt?: string | null;
+  autoRenew?: boolean;
+  assignedAt?: string | null;
+  cancellationReason?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -513,6 +526,158 @@ export function usePlatformCancelSubscription() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['platform-tenants'] });
       queryClient.invalidateQueries({ queryKey: ['platform-tenant-subscription'] });
+    },
+  });
+}
+
+export interface PlatformAuditEntry {
+  id: string;
+  action: string;
+  actorId: string;
+  actorEmail: string;
+  actorRole: string;
+  tenantId: string | null;
+  description: string;
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+  reason: string | null;
+  ip: string | null;
+  requestId: string | null;
+  occurredAt: string;
+  createdAt: string;
+}
+
+export interface PlatformAuditList {
+  items: PlatformAuditEntry[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export function usePlatformAudit(filters: {
+  tenantId?: string;
+  action?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  limit?: number;
+  enabled?: boolean;
+}) {
+  return useQuery({
+    queryKey: ['platform-audit', filters],
+    queryFn: async () => {
+      const p = new URLSearchParams();
+      if (filters.tenantId) p.set('tenantId', filters.tenantId);
+      if (filters.action) p.set('action', filters.action);
+      if (filters.from) p.set('from', filters.from);
+      if (filters.to) p.set('to', filters.to);
+      if (filters.page) p.set('page', String(filters.page));
+      if (filters.limit) p.set('limit', String(filters.limit));
+      const res = await api.get<{ success: boolean; data: PlatformAuditList }>(
+        `${BASE}/audit${p.toString() ? `?${p.toString()}` : ''}`,
+      );
+      return res.data.data;
+    },
+    enabled: filters.enabled ?? true,
+  });
+}
+
+export interface PlatformSubscriptionHistoryEntry {
+  id: string;
+  tenantId: string;
+  subscriptionId: string | null;
+  action: 'assigned' | 'changed' | 'extended' | 'cancelled';
+  planId: string | null;
+  planName: string | null;
+  statusBefore: string | null;
+  statusAfter: string | null;
+  periodStartBefore: string | null;
+  periodEndBefore: string | null;
+  periodStartAfter: string | null;
+  periodEndAfter: string | null;
+  actorEmail: string | null;
+  reason: string | null;
+  at: string;
+  createdAt: string;
+}
+
+export function usePlatformSubscriptionHistory(tenantId: string | null, limit = 50) {
+  return useQuery({
+    queryKey: ['platform-tenant-subscription-history', tenantId],
+    queryFn: async () => {
+      const res = await api.get<{ success: boolean; data: { items: PlatformSubscriptionHistoryEntry[]; total: number } }>(
+        `${BASE}/tenants/${tenantId}/subscription/history?limit=${limit}`,
+      );
+      return res.data.data;
+    },
+    enabled: !!tenantId,
+    staleTime: 30_000,
+  });
+}
+
+export interface PlatformProvisioningStep {
+  step: string;
+  status: 'success' | 'failed' | 'skipped';
+  detail: string | null;
+  durationMs: number | null;
+}
+
+export interface PlatformProvisioningRun {
+  id: string;
+  requestId: string;
+  idempotencyKey: string | null;
+  tenantName: string;
+  ownerEmail: string;
+  hubId: string | null;
+  mode: 'standalone' | 'hub';
+  steps: PlatformProvisioningStep[];
+  overallStatus: 'success' | 'failed';
+  durationMs: number;
+  rolledBack: boolean;
+  tenantId: string | null;
+  result: Record<string, unknown> | null;
+  error: string | null;
+  createdAt: string;
+}
+
+export function usePlatformProvisioningRuns(filters: {
+  tenantName?: string;
+  tenantId?: string;
+  overallStatus?: 'success' | 'failed';
+  page?: number;
+  limit?: number;
+  enabled?: boolean;
+}) {
+  return useQuery({
+    queryKey: ['platform-provisioning-runs', filters],
+    queryFn: async () => {
+      const p = new URLSearchParams();
+      if (filters.tenantName) p.set('tenantName', filters.tenantName);
+      if (filters.tenantId) p.set('tenantId', filters.tenantId);
+      if (filters.overallStatus) p.set('overallStatus', filters.overallStatus);
+      if (filters.page) p.set('page', String(filters.page));
+      if (filters.limit) p.set('limit', String(filters.limit));
+      const res = await api.get<{ success: boolean; data: { data: PlatformProvisioningRun[]; total: number; page: number; limit: number } }>(
+        `${BASE}/provisioning-runs${p.toString() ? `?${p.toString()}` : ''}`,
+      );
+      return res.data.data;
+    },
+    enabled: filters.enabled ?? true,
+  });
+}
+
+export function usePlatformExtendSubscriptionDays() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ tenantId, days }: { tenantId: string; days: number }) => {
+      const res = await api.post(`${BASE}/tenants/${tenantId}/subscription/extend`, { days });
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['platform-tenants'] });
+      queryClient.invalidateQueries({ queryKey: ['platform-tenant-subscription'] });
+      queryClient.invalidateQueries({ queryKey: ['platform-tenant-subscription-history'] });
+      queryClient.invalidateQueries({ queryKey: ['platform-audit'] });
     },
   });
 }

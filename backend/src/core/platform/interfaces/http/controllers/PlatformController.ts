@@ -6,6 +6,8 @@ import { OutletService } from '../../../../outlet/application/services/OutletSer
 import { ShiftService } from '../../../../pos/application/services/ShiftService';
 import { PaymentService } from '../../../../payment/application/services/PaymentService';
 import { ProvisionTenantService } from '../../../application/services/ProvisionTenantService';
+import { PlatformAuditService } from '../../../audit/application/services/PlatformAuditService';
+import { SubscriptionService } from '../../../../billing/application/services/SubscriptionService';
 import { ValidationError, NotFoundError } from '../../../../../@shared/infrastructure/error/AppError';
 import { resolvePlatformScope } from '../../../application/helpers/resolvePlatformScope';
 
@@ -18,6 +20,12 @@ interface PlatformControllerDeps {
   tenantRepository: any;
   hubRepository?: any;
   provisionTenantService?: ProvisionTenantService;
+  auditService?: PlatformAuditService;
+  subscriptionService?: SubscriptionService;
+  provisioningRunRepository?: any;
+  userRepository?: any;
+  roleRepository?: any;
+  warehouseRepository?: any;
 }
 
 export class PlatformController extends BaseController {
@@ -33,6 +41,20 @@ export class PlatformController extends BaseController {
     const result = await this.deps.provisionTenantService.execute({
       ...req.body,
       idempotencyKey,
+    });
+    await this.audit(req, {
+      action: 'TENANT_CREATED',
+      tenantId: result.tenant.id,
+      description: `Tenant "${result.tenant.name}" dibuat`,
+      after: {
+        tenantId: result.tenant.id,
+        tenantName: result.tenant.name,
+        ownerEmail: result.owner.email,
+        outletId: result.outlet.id,
+        warehouseId: result.outlet.warehouseId,
+        hubId: result.tenant.hubId,
+      },
+      reason: req.body.reason,
     });
     this.created(res, result);
   }
@@ -83,11 +105,78 @@ export class PlatformController extends BaseController {
 
     const outlets = await this.deps.outletService.listAllForPlatform([data.id]);
 
+    let owner = null;
+    let usersSummary: any[] = [];
+    let userCount = 0;
+    if (this.deps.userRepository) {
+      const users = await this.deps.userRepository.findByTenant(data.id);
+      userCount = users.length;
+      usersSummary = await Promise.all(
+        users.slice(0, 20).map(async (u: any) => {
+          const role = this.deps.roleRepository ? await this.deps.roleRepository.findById(u.roleIdValue) : null;
+          return {
+            id: u.id.toValue(),
+            name: u.serialize().displayName,
+            email: u.serialize().email,
+            roleName: role?.serialize().name ?? null,
+            isActive: u.serialize().isActive,
+          };
+        }),
+      );
+      const ownerUser = users.find((u: any) => u.id.toValue() === data.ownerId);
+      if (ownerUser) {
+        owner = {
+          id: ownerUser.id.toValue(),
+          name: ownerUser.serialize().displayName,
+          email: ownerUser.serialize().email,
+        };
+      }
+    }
+
+    let warehouseCount = 0;
+    if (this.deps.warehouseRepository) {
+      const warehouses = await this.deps.warehouseRepository.findByTenant(data.id);
+      warehouseCount = warehouses.length;
+    }
+
+    let subscription: { subscription: any; plan: any } | null = null;
+    if (this.deps.subscriptionService) {
+      try {
+        subscription = await this.deps.subscriptionService.getTenantSubscription(data.id);
+      } catch {
+        subscription = null;
+      }
+    }
+
+    let recentActivity: any[] = [];
+    if (this.deps.auditService) {
+      const logs = await this.deps.auditService.list({
+        tenantId: data.id,
+        limit: 10,
+        skip: 0,
+      });
+      recentActivity = logs.items;
+    }
+
+    let provisioningRuns: any[] = [];
+    if (this.deps.provisioningRunRepository) {
+      const runs = await this.deps.provisioningRunRepository.findByTenantId(data.id, 3);
+      provisioningRuns = runs.map((r: any) => r.serialize());
+    }
+
     this.ok(res, {
       ...data,
       hubId: data.hubId,
       hubName,
+      owner,
+      userCount,
+      usersSummary,
+      warehouseCount,
+      outletCount: outlets.length,
       outlets: outlets.map((o) => o.serialize()),
+      subscription,
+      recentActivity,
+      provisioningRuns,
     });
   }
 
@@ -134,6 +223,17 @@ export class PlatformController extends BaseController {
     });
 
     const data = outlet.serialize();
+    await this.audit(req, {
+      action: 'OUTLET_CREATED',
+      tenantId: tenantId.trim(),
+      description: `Outlet "${name.trim()}" dibuat untuk tenant "${tenant.serialize().name}"`,
+      after: {
+        outletId: data.id,
+        outletName: data.name,
+        warehouseId: data.warehouseId ?? null,
+        tenantId: tenantId.trim(),
+      },
+    });
     this.created(res, {
       ...data,
       tenantName: tenant.serialize().name,
@@ -328,6 +428,25 @@ export class PlatformController extends BaseController {
       throw new ValidationError('Invalid status');
     }
     const tenant = await this.deps.tenantService.updateStatus(tenantId, status, reason);
+    const previous = await this.deps.tenantRepository.findById(tenantId);
+
+    const action =
+      status === 'frozen'
+        ? 'TENANT_FROZEN'
+        : status === 'suspended'
+          ? 'TENANT_SUSPENDED'
+          : status === 'deactivated'
+            ? 'TENANT_DEACTIVATED'
+            : 'TENANT_STATUS_CHANGED';
+
+    await this.audit(req, {
+      action,
+      tenantId,
+      description: `Status tenant "${tenant.serialize().name}" diubah menjadi ${status}`,
+      before: { status: previous?.serialize().status ?? null },
+      after: { status },
+      reason,
+    });
     this.ok(res, tenant.serialize());
   }
 
@@ -338,8 +457,104 @@ export class PlatformController extends BaseController {
     if (isNaN(numDays) || numDays <= 0) {
       throw new ValidationError('Valid positive number of days is required');
     }
-    const tenant = await this.deps.tenantService.extendSubscription(tenantId, numDays);
+    const previous = await this.deps.tenantRepository.findById(tenantId);
+    const sub = await this.deps.subscriptionService?.extendSubscription(tenantId, numDays, {
+      actorEmail: (req as any).platformUserEmail || 'system',
+      reason: req.body.reason,
+    });
+    const tenant = await this.deps.tenantService.getById(tenantId);
+    const beforeExp = previous?.serialize().subscriptionExpiresAt ?? null;
+    const afterExp = tenant.serialize().subscriptionExpiresAt ?? null;
+
+    await this.audit(req, {
+      action: 'SUBSCRIPTION_EXTENDED',
+      tenantId,
+      description: `Subscription tenant "${tenant.serialize().name}" diperpanjang ${numDays} hari`,
+      before: { subscriptionExpiresAt: beforeExp },
+      after: {
+        days: numDays,
+        subscriptionExpiresAt: afterExp,
+        subscriptionId: sub?.serialize().id ?? null,
+        periodEnd: sub?.serialize().currentPeriodEnd ?? null,
+      },
+      reason: req.body.reason,
+    });
     this.ok(res, tenant.serialize());
+  }
+
+  async listProvisioningRuns(req: Request, res: Response): Promise<void> {
+    if (!this.deps.provisioningRunRepository) {
+      throw new ValidationError('ProvisioningRunRepository not configured');
+    }
+    const { tenantName, tenantId, overallStatus, page = '1', limit = '50' } = req.query;
+    const pageNum = parseInt(page as string, 10) || 1;
+    const limitNum = parseInt(limit as string, 10) || 50;
+
+    const { items, total } = await this.deps.provisioningRunRepository.find({
+      tenantName: tenantName as string | undefined,
+      tenantId: tenantId as string | undefined,
+      overallStatus: overallStatus as 'success' | 'failed' | undefined,
+      skip: (pageNum - 1) * limitNum,
+      limit: limitNum,
+    });
+    this.ok(res, {
+      data: items.map((r: any) => r.serialize()),
+      total,
+      page: pageNum,
+      limit: limitNum,
+    });
+  }
+
+  async listAudit(req: Request, res: Response): Promise<void> {
+    if (!this.deps.auditService) {
+      throw new ValidationError('AuditService not configured');
+    }
+    const { action, tenantId, actorEmail, from, to, page = '1', limit = '50' } = req.query;
+    const pageNum = parseInt(page as string, 10) || 1;
+    const limitNum = parseInt(limit as string, 10) || 50;
+
+    const fromDate = from ? new Date(from as string) : undefined;
+    const toDate = to ? new Date(to as string) : undefined;
+    if ((fromDate && isNaN(fromDate.getTime())) || (toDate && isNaN(toDate.getTime()))) {
+      throw new ValidationError('Invalid from/to — expected date string');
+    }
+
+    const result = await this.deps.auditService.list({
+      action: action as string | undefined,
+      tenantId: tenantId as string | undefined,
+      actorEmail: actorEmail as string | undefined,
+      from: fromDate,
+      to: toDate,
+      skip: (pageNum - 1) * limitNum,
+      limit: limitNum,
+    });
+    this.ok(res, result);
+  }
+
+  private async audit(
+    req: Request,
+    payload: {
+      action: any;
+      tenantId?: string | null;
+      description: string;
+      before?: Record<string, unknown> | null;
+      after?: Record<string, unknown> | null;
+      reason?: string | null;
+    },
+  ): Promise<void> {
+    if (!this.deps.auditService) return;
+    try {
+      await this.deps.auditService.recordFromRequest(req, {
+        action: payload.action,
+        tenantId: payload.tenantId ?? null,
+        description: payload.description,
+        before: payload.before ?? null,
+        after: payload.after ?? null,
+        reason: payload.reason ?? null,
+      });
+    } catch {
+      // Audit recording must never break the primary operation.
+    }
   }
 
   private resolveDateRange(dateFrom?: string, dateTo?: string): [Date, Date] {

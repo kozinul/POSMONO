@@ -16,9 +16,14 @@ import {
   usePlatformTenantSubscription,
   usePlatformAssignPlan,
   usePlatformCancelSubscription,
+  usePlatformAudit,
+  usePlatformSubscriptionHistory,
+  usePlatformProvisioningRuns,
+  usePlatformExtendSubscriptionDays,
   PLAN_MODULE_LABELS,
   type PlatformHub,
   type PlatformTenantRow,
+  type PlatformSubscriptionHistoryEntry,
 } from '../../../@shared/hooks/usePlatform';
 import {
   useHubMembers,
@@ -536,11 +541,17 @@ function TenantDetailModal({ tenantId, onClose }: { tenantId: string; onClose: (
   const { data: tenant, isLoading } = usePlatformTenant(tenantId);
   const { data: plans = [] } = usePlatformPlans(true);
   const { data: tenantSub } = usePlatformTenantSubscription(tenantId);
+  const { data: subHistory } = usePlatformSubscriptionHistory(tenantId);
   const assignPlan = usePlatformAssignPlan();
   const cancelSub = usePlatformCancelSubscription();
+  const extendSub = usePlatformExtendSubscriptionDays();
+  const [detailTab, setDetailTab] = useState('overview');
   const [selectedPlanId, setSelectedPlanId] = useState('');
   const [assignMsg, setAssignMsg] = useState('');
   const [assigning, setAssigning] = useState(false);
+  const [extendDays, setExtendDays] = useState(30);
+  const [extendMsg, setExtendMsg] = useState('');
+  const [extending, setExtending] = useState(false);
 
   const expiresAt = tenant?.subscriptionExpiresAt ? new Date(tenant.subscriptionExpiresAt) : null;
   const daysRemaining = expiresAt
@@ -571,9 +582,37 @@ function TenantDetailModal({ tenantId, onClose }: { tenantId: string; onClose: (
     }
   };
 
+  const handleExtend = async () => {
+    setExtendMsg('');
+    setExtending(true);
+    try {
+      await extendSub.mutateAsync({ tenantId, days: extendDays });
+      setExtendMsg('Periode berhasil diperpanjang');
+    } catch (e: any) {
+      setExtendMsg(e?.response?.data?.error?.message || 'Gagal memperpanjang');
+    } finally {
+      setExtending(false);
+    }
+  };
+
+  const tabBtn = (id: string, label: string) => (
+    <button
+      key={id}
+      onClick={() => setDetailTab(id)}
+      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
+        detailTab === id ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'
+      }`}
+    >
+      {label}
+    </button>
+  );
+
+  const fmtDate = (d?: string | null) => (d ? new Date(d).toLocaleString('id-ID') : '-');
+  const fmtDay = (d?: string | null) => (d ? new Date(d).toLocaleDateString('id-ID') : '-');
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between border-b px-6 py-4 sticky top-0 bg-white z-10">
           <h3 className="text-lg font-bold text-gray-900">
             {isLoading ? 'Memuat...' : tenant?.name ?? 'Detail Tenant'}
@@ -584,181 +623,374 @@ function TenantDetailModal({ tenantId, onClose }: { tenantId: string; onClose: (
         {isLoading || !tenant ? (
           <div className="p-8"><Loading /></div>
         ) : (
-          <div className="p-6 space-y-6">
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Nama Bisnis</p>
-                <p className="font-medium text-gray-900">{tenant.name}</p>
-              </div>
-              <div>
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Slug</p>
-                <p className="font-medium text-gray-900">{tenant.slug}</p>
-              </div>
-              <div>
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Status</p>
-                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                  tenant.status === 'active' ? 'bg-green-100 text-green-700' :
-                  tenant.status === 'frozen' ? 'bg-blue-100 text-blue-700' :
-                  tenant.status === 'suspended' ? 'bg-red-100 text-red-700' :
-                  'bg-amber-100 text-amber-700'
-                }`}>{tenant.status}</span>
-              </div>
-              <div>
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Plan</p>
-                <p className="font-medium text-gray-900">{tenant.plan}</p>
-              </div>
-              <div>
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Tipe Bisnis</p>
-                <p className="font-medium text-gray-900">{tenant.businessType ?? '-'}</p>
-              </div>
-              <div>
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Hub</p>
-                <p className="font-medium text-gray-900">{tenant.hubName ?? tenant.hubId ?? 'Standalone'}</p>
-              </div>
-              <div>
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Masa Aktif</p>
-                <p className="font-medium text-gray-900">
-                  {expiresAt ? expiresAt.toLocaleDateString('id-ID') : '-'}
-                  {daysRemaining !== null && (
-                    <span className={`ml-2 text-xs ${daysRemaining <= 7 ? 'text-red-600' : 'text-gray-500'}`}>
-                      ({daysRemaining} hari)
-                    </span>
-                  )}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Email Billing</p>
-                <p className="font-medium text-gray-900">{tenant.billingEmail || '-'}</p>
-              </div>
-              <div>
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Telepon</p>
-                <p className="font-medium text-gray-900">{tenant.phone || '-'}</p>
-              </div>
-              <div>
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Alamat</p>
-                <p className="font-medium text-gray-900">{tenant.address || '-'}</p>
-              </div>
+          <div className="p-6">
+            <div className="flex gap-2 mb-5 border-b border-gray-200 pb-3 overflow-x-auto">
+              {tabBtn('overview', 'Overview')}
+              {tabBtn('outlets', 'Outlet')}
+              {tabBtn('users', 'Users')}
+              {tabBtn('subscription', 'Plan & Langganan')}
+              {tabBtn('activity', 'Activity')}
             </div>
 
-            <div className="border-t pt-4">
-              <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-3">
-                Outlet ({tenant.outlets?.length ?? 0})
-              </h4>
-              {!tenant.outlets || tenant.outlets.length === 0 ? (
-                <p className="text-sm text-gray-500">Belum ada outlet.</p>
-              ) : (
-                <div className="border rounded-lg overflow-hidden">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Nama</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Alamat</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Telepon</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-100">
-                      {tenant.outlets.map((o) => (
-                        <tr key={o.id} className="hover:bg-gray-50">
-                          <td className="px-3 py-2 text-sm font-medium text-gray-900">{o.name}</td>
-                          <td className="px-3 py-2 text-sm text-gray-500">{o.address || '-'}</td>
-                          <td className="px-3 py-2 text-sm text-gray-500">{o.phone || '-'}</td>
-                          <td className="px-3 py-2 text-sm">
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${o.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                              {o.isActive ? 'Aktif' : 'Nonaktif'}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            <div className="border-t pt-4">
-              <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-3">Plan & Langganan</h4>
-
-              <div className="grid grid-cols-2 gap-4 text-sm mb-4">
-                <div>
-                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Plan Aktif</p>
-                  <p className="font-medium text-gray-900">{tenantSub?.plan?.name ?? tenant.plan ?? 'Trial'}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Status Langganan</p>
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                    tenantSub?.subscription.status === 'active' ? 'bg-green-100 text-green-700' :
-                    tenantSub?.subscription.status === 'trialing' ? 'bg-blue-100 text-blue-700' :
-                    tenantSub?.subscription.status === 'past_due' ? 'bg-amber-100 text-amber-700' :
-                    'bg-gray-100 text-gray-500'
-                  }`}>
-                    {tenantSub?.subscription.status ?? 'Tidak ada'}
-                  </span>
-                </div>
-                {tenantSub?.subscription && (
-                  <>
+            <div className="space-y-6">
+              {detailTab === 'overview' && (
+                <>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
-                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Siklus</p>
-                      <p className="font-medium text-gray-900">{tenantSub.subscription.billingCycle}</p>
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Nama Bisnis</p>
+                      <p className="font-medium text-gray-900">{tenant.name}</p>
                     </div>
                     <div>
-                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Periode Berjalan</p>
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Slug</p>
+                      <p className="font-medium text-gray-900">{tenant.slug}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Status</p>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                        tenant.status === 'active' ? 'bg-green-100 text-green-700' :
+                        tenant.status === 'frozen' ? 'bg-blue-100 text-blue-700' :
+                        tenant.status === 'suspended' ? 'bg-red-100 text-red-700' :
+                        'bg-amber-100 text-amber-700'
+                      }`}>{tenant.status}</span>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Plan</p>
+                      <p className="font-medium text-gray-900">{tenant.plan}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Tipe Bisnis</p>
+                      <p className="font-medium text-gray-900">{tenant.businessType ?? '-'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Hub</p>
+                      <p className="font-medium text-gray-900">{tenant.hubName ?? tenant.hubId ?? 'Standalone'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Masa Aktif</p>
                       <p className="font-medium text-gray-900">
-                        {tenantSub.subscription.currentPeriodStart
-                          ? new Date(tenantSub.subscription.currentPeriodStart).toLocaleDateString('id-ID')
-                          : '-'}{' '}
-                        s/d{' '}
-                        {tenantSub.subscription.currentPeriodEnd
-                          ? new Date(tenantSub.subscription.currentPeriodEnd).toLocaleDateString('id-ID')
-                          : '-'}
+                        {expiresAt ? expiresAt.toLocaleDateString('id-ID') : '-'}
+                        {daysRemaining !== null && (
+                          <span className={`ml-2 text-xs ${daysRemaining <= 7 ? 'text-red-600' : 'text-gray-500'}`}>
+                            ({daysRemaining} hari)
+                          </span>
+                        )}
                       </p>
                     </div>
-                  </>
-                )}
-              </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Email Billing</p>
+                      <p className="font-medium text-gray-900">{tenant.billingEmail || '-'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Telepon</p>
+                      <p className="font-medium text-gray-900">{tenant.phone || '-'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Alamat</p>
+                      <p className="font-medium text-gray-900">{tenant.address || '-'}</p>
+                    </div>
+                  </div>
 
-              {tenantSub?.plan && (
-                <div className="mb-4 bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-gray-500 mb-2">Modul aktif ({tenantSub.plan.modules.length}):</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {tenantSub.plan.modules.map((mod) => (
-                      <span key={mod} className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-[10px] font-medium">
-                        {PLAN_MODULE_LABELS?.[mod] ?? mod}
+                  <div className="border-t pt-4 grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Owner</p>
+                      <p className="font-medium text-gray-900">
+                        {tenant.owner ? `${tenant.owner.name} (${tenant.owner.email})` : '-'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Gudang</p>
+                      <p className="font-medium text-gray-900">{tenant.warehouseCount ?? '-'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">User</p>
+                      <p className="font-medium text-gray-900">{tenant.userCount ?? 0} user</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Outlet</p>
+                      <p className="font-medium text-gray-900">{tenant.outletCount ?? 0}</p>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {detailTab === 'outlets' && (
+                <div>
+                  <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-3">
+                    Outlet ({tenant.outlets?.length ?? 0})
+                  </h4>
+                  {!tenant.outlets || tenant.outlets.length === 0 ? (
+                    <p className="text-sm text-gray-500">Belum ada outlet.</p>
+                  ) : (
+                    <div className="border rounded-lg overflow-hidden">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Nama</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Alamat</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Telepon</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-100">
+                          {tenant.outlets.map((o) => (
+                            <tr key={o.id} className="hover:bg-gray-50">
+                              <td className="px-3 py-2 text-sm font-medium text-gray-900">{o.name}</td>
+                              <td className="px-3 py-2 text-sm text-gray-500">{o.address || '-'}</td>
+                              <td className="px-3 py-2 text-sm text-gray-500">{o.phone || '-'}</td>
+                              <td className="px-3 py-2 text-sm">
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${o.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                                  {o.isActive ? 'Aktif' : 'Nonaktif'}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {detailTab === 'users' && (
+                <div>
+                  <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-3">
+                    Users ({tenant.userCount ?? 0})
+                  </h4>
+                  {!tenant.usersSummary || tenant.usersSummary.length === 0 ? (
+                    <p className="text-sm text-gray-500">Belum ada user.</p>
+                  ) : (
+                    <div className="border rounded-lg overflow-hidden">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Nama</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
+                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-100">
+                          {tenant.usersSummary.map((u) => (
+                            <tr key={u.id} className="hover:bg-gray-50">
+                              <td className="px-3 py-2 text-sm font-medium text-gray-900">{u.name}</td>
+                              <td className="px-3 py-2 text-sm text-gray-500">{u.email}</td>
+                              <td className="px-3 py-2 text-sm text-gray-500">{u.roleName ?? '-'}</td>
+                              <td className="px-3 py-2 text-sm">
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${u.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                                  {u.isActive ? 'Aktif' : 'Nonaktif'}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {detailTab === 'subscription' && (
+                <div>
+                  <div className="grid grid-cols-2 gap-4 text-sm mb-4">
+                    <div>
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Plan Aktif</p>
+                      <p className="font-medium text-gray-900">{tenantSub?.plan?.name ?? tenant.plan ?? 'Trial'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Status Langganan</p>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                        tenantSub?.subscription.status === 'active' ? 'bg-green-100 text-green-700' :
+                        tenantSub?.subscription.status === 'trialing' ? 'bg-blue-100 text-blue-700' :
+                        tenantSub?.subscription.status === 'past_due' ? 'bg-amber-100 text-amber-700' :
+                        'bg-gray-100 text-gray-500'
+                      }`}>
+                        {tenantSub?.subscription.status ?? 'Tidak ada'}
                       </span>
-                    ))}
+                    </div>
+                    {tenantSub?.subscription && (
+                      <>
+                        <div>
+                          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Siklus</p>
+                          <p className="font-medium text-gray-900">{tenantSub.subscription.billingCycle}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Periode Berjalan</p>
+                          <p className="font-medium text-gray-900">
+                            {fmtDay(tenantSub.subscription.currentPeriodStart)} s/d {fmtDay(tenantSub.subscription.currentPeriodEnd)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Mulai</p>
+                          <p className="font-medium text-gray-900">{fmtDay(tenantSub.subscription.startedAt)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Auto Renew</p>
+                          <p className="font-medium text-gray-900">{tenantSub.subscription.autoRenew ? 'Ya' : 'Tidak'}</p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {tenantSub?.plan && (
+                    <div className="mb-4 bg-gray-50 rounded-lg p-3">
+                      <p className="text-xs text-gray-500 mb-2">Modul aktif ({tenantSub.plan.modules.length}):</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {tenantSub.plan.modules.map((mod) => (
+                          <span key={mod} className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-[10px] font-medium">
+                            {PLAN_MODULE_LABELS?.[mod] ?? mod}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex gap-3 items-end mb-4">
+                    <div className="flex-1">
+                      <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Assign / Ganti Plan</label>
+                      <select className={inputCls} value={selectedPlanId} onChange={(e) => setSelectedPlanId(e.target.value)}>
+                        <option value="">— Pilih Plan —</option>
+                        {plans.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} ({p.basePrice === 0 ? 'Gratis' : formatCurrency(p.basePrice)}/{p.billingCycle === 'annual' ? 'tahun' : 'bulan'})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <button
+                      onClick={handleAssign}
+                      disabled={assigning}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium disabled:opacity-50"
+                    >
+                      {assigning ? 'Assign...' : 'Assign Plan'}
+                    </button>
+                    {tenantSub?.subscription && tenantSub.subscription.status !== 'cancelled' && (
+                      <button
+                        onClick={handleCancelSub}
+                        className="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded border border-red-200"
+                      >
+                        Batalkan
+                      </button>
+                    )}
+                  </div>
+                  {assignMsg && <p className={`mb-4 text-xs ${assignMsg.startsWith('Plan berhasil') ? 'text-green-600' : 'text-red-600'}`}>{assignMsg}</p>}
+
+                  <div className="flex gap-3 items-end mb-4 border-t pt-4">
+                    <div className="w-40">
+                      <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Perpanjang (hari)</label>
+                      <input type="number" min={1} value={extendDays} onChange={(e) => setExtendDays(Math.max(1, Number(e.target.value) || 1))} className={inputCls} />
+                    </div>
+                    <button
+                      onClick={handleExtend}
+                      disabled={extending}
+                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium disabled:opacity-50"
+                    >
+                      {extending ? 'Memperpanjang...' : 'Perpanjang'}
+                    </button>
+                    {extendMsg && <p className={`text-xs ${extendMsg.startsWith('Periode berhasil') ? 'text-green-600' : 'text-red-600'}`}>{extendMsg}</p>}
+                  </div>
+
+                  <div className="border-t pt-4">
+                    <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-3">Riwayat Langganan</h4>
+                    {!subHistory || subHistory.items.length === 0 ? (
+                      <p className="text-sm text-gray-500">Belum ada riwayat.</p>
+                    ) : (
+                      <div className="border rounded-lg overflow-hidden">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Aksi</th>
+                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Plan</th>
+                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Periode s/d</th>
+                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Oleh</th>
+                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Waktu</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-100">
+                            {subHistory.items.map((h: PlatformSubscriptionHistoryEntry) => (
+                              <tr key={h.id} className="hover:bg-gray-50">
+                                <td className="px-3 py-2 text-sm">
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                                    h.action === 'assigned' ? 'bg-green-100 text-green-700' :
+                                    h.action === 'changed' ? 'bg-blue-100 text-blue-700' :
+                                    h.action === 'extended' ? 'bg-violet-100 text-violet-700' :
+                                    'bg-red-100 text-red-700'
+                                  }`}>{h.action}</span>
+                                </td>
+                                <td className="px-3 py-2 text-sm text-gray-700">{h.planName ?? '-'}</td>
+                                <td className="px-3 py-2 text-sm text-gray-500">{h.statusBefore === h.statusAfter ? `→ ${h.statusAfter ?? '-'}` : `${h.statusBefore ?? '-'} → ${h.statusAfter ?? '-'}`}</td>
+                                <td className="px-3 py-2 text-sm text-gray-500">{fmtDay(h.periodEndAfter)}</td>
+                                <td className="px-3 py-2 text-sm text-gray-500">{h.actorEmail ?? 'system'}</td>
+                                <td className="px-3 py-2 text-sm text-gray-500">{fmtDate(h.at)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
 
-              <div className="flex gap-3 items-end">
-                <div className="flex-1">
-                  <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Assign / Ganti Plan</label>
-                  <select className={inputCls} value={selectedPlanId} onChange={(e) => setSelectedPlanId(e.target.value)}>
-                    <option value="">— Pilih Plan —</option>
-                    {plans.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} ({p.basePrice === 0 ? 'Gratis' : formatCurrency(p.basePrice)}/{p.billingCycle === 'annual' ? 'tahun' : 'bulan'})
-                      </option>
-                    ))}
-                  </select>
+              {detailTab === 'activity' && (
+                <div className="space-y-6">
+                  <div>
+                    <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-3">Aktivitas Terbaru</h4>
+                    {!tenant.recentActivity || tenant.recentActivity.length === 0 ? (
+                      <p className="text-sm text-gray-500">Belum ada aktivitas tercatat.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {tenant.recentActivity.map((log) => (
+                          <div key={log.id} className="border rounded-lg px-3 py-2 flex items-start justify-between gap-3">
+                            <div>
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-700 mr-2">{log.action}</span>
+                              <span className="text-sm text-gray-700">{log.description}</span>
+                              {log.reason && <p className="text-xs text-gray-400 mt-1">Alasan: {log.reason}</p>}
+                            </div>
+                            <div className="text-right shrink-0">
+                              <p className="text-xs text-gray-500">{log.actorEmail || log.actorRole}</p>
+                              <p className="text-xs text-gray-400">{fmtDate(log.occurredAt)}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="border-t pt-4">
+                    <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-3">Provisioning (Provisi Tenant)</h4>
+                    {!tenant.provisioningRuns || tenant.provisioningRuns.length === 0 ? (
+                      <p className="text-sm text-gray-500">Belum ada riwayat provisioning.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {tenant.provisioningRuns.map((run) => (
+                          <div key={run.id} className="border rounded-lg px-3 py-2">
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="flex items-center gap-2">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${run.overallStatus === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                  {run.overallStatus}
+                                </span>
+                                <span className="text-sm text-gray-700">{run.ownerEmail}</span>
+                                <span className="text-xs text-gray-400">(~{(run.durationMs / 1000).toFixed(1)}s)</span>
+                              </div>
+                              <span className="text-xs text-gray-400">{fmtDate(run.createdAt)}</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {run.steps.map((s, i) => (
+                                <span key={i} className={`px-2 py-0.5 rounded text-[10px] font-medium ${
+                                  s.status === 'success' ? 'bg-green-50 text-green-700' :
+                                  s.status === 'failed' ? 'bg-red-50 text-red-700' : 'bg-gray-50 text-gray-500'
+                                }`}>{s.step}</span>
+                              ))}
+                            </div>
+                            {run.error && <p className="text-xs text-red-600 mt-1">{run.error}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <button
-                  onClick={handleAssign}
-                  disabled={assigning}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium disabled:opacity-50"
-                >
-                  {assigning ? 'Assign...' : 'Assign Plan'}
-                </button>
-                {tenantSub?.subscription && tenantSub.subscription.status !== 'cancelled' && (
-                  <button
-                    onClick={handleCancelSub}
-                    className="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded border border-red-200"
-                  >
-                    Batalkan
-                  </button>
-                )}
-              </div>
-              {assignMsg && <p className={`mt-2 text-xs ${assignMsg.startsWith('Plan berhasil') ? 'text-green-600' : 'text-red-600'}`}>{assignMsg}</p>}
+              )}
             </div>
           </div>
         )}
@@ -1363,7 +1595,163 @@ const TABS = [
   { id: 'outlets', label: 'Outlet' },
   { id: 'summary', label: 'Ringkasan' },
   { id: 'consolidated', label: 'Konsolidasi' },
+  { id: 'audit', label: 'Audit Log' },
 ];
+
+const AUDIT_ACTION_LABELS: Record<string, string> = {
+  TENANT_CREATED: 'Tenant Dibuat',
+  TENANT_UPDATED: 'Tenant Diperbarui',
+  TENANT_STATUS_CHANGED: 'Status Tenant Diubah',
+  TENANT_FROZEN: 'Tenant Dibekukan',
+  TENANT_SUSPENDED: 'Tenant Di-Suspend',
+  TENANT_DEACTIVATED: 'Tenant Dinonaktifkan',
+  SUBSCRIPTION_EXTENDED: 'Langganan Diperpanjang',
+  PLAN_ASSIGNED: 'Plan Di-assign',
+  PLAN_CHANGED: 'Plan Diubah',
+  PLAN_CANCELLED: 'Plan Dibatalkan',
+  OUTLET_CREATED: 'Outlet Dibuat',
+  OUTLET_UPDATED: 'Outlet Diperbarui',
+  HUB_CREATED: 'Hub Dibuat',
+  HUB_UPDATED: 'Hub Diperbarui',
+  HUB_DELETED: 'Hub Dihapus',
+  TENANT_ASSIGNED_TO_HUB: 'Tenant Masuk Hub',
+  TENANT_REMOVED_FROM_HUB: 'Tenant Keluar Hub',
+  MEMBER_ADDED: 'Anggota Ditambahkan',
+  MEMBER_ROLE_CHANGED: 'Role Anggota Diubah',
+  MEMBER_REMOVED: 'Anggota Dihapus',
+};
+
+const AUDIT_ACTION_BADGE: Record<string, string> = {
+  TENANT_CREATED: 'bg-green-100 text-green-700',
+  TENANT_FROZEN: 'bg-blue-100 text-blue-700',
+  TENANT_SUSPENDED: 'bg-red-100 text-red-700',
+  TENANT_DEACTIVATED: 'bg-red-100 text-red-700',
+  PLAN_CANCELLED: 'bg-red-100 text-red-700',
+  HUB_DELETED: 'bg-red-100 text-red-700',
+  MEMBER_REMOVED: 'bg-red-100 text-red-700',
+};
+
+function AuditSection() {
+  const [action, setAction] = useState('');
+  const [page, setPage] = useState(1);
+  const { data, isLoading } = usePlatformAudit({ action: action || undefined, page, limit: 30, enabled: true });
+  const { data: runs } = usePlatformProvisioningRuns({ limit: 5, enabled: true });
+
+  const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / (data?.limit ?? 30)));
+
+  return (
+    <div className="space-y-6">
+      <div className="flex gap-2 items-center">
+        <select className={inputCls + ' w-64'} value={action} onChange={(e) => { setAction(e.target.value); setPage(1); }}>
+          <option value="">— Semua Aksi —</option>
+          {Object.entries(AUDIT_ACTION_LABELS).map(([k, v]) => (
+            <option key={k} value={k}>{v}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className={cardCls}>
+        {isLoading ? (
+          <Loading />
+        ) : !data || data.items.length === 0 ? (
+          <p className="text-sm text-gray-500 py-6 text-center">Belum ada aktivitas tercatat.</p>
+        ) : (
+          <div className="border rounded-lg overflow-hidden overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Waktu</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Aksi</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Deskripsi</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Aktor</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Tenant</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-100">
+                {data.items.map((log) => (
+                  <tr key={log.id} className="hover:bg-gray-50 align-top">
+                    <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">
+                      {new Date(log.occurredAt).toLocaleString('id-ID')}
+                    </td>
+                    <td className="px-3 py-2 text-xs">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${AUDIT_ACTION_BADGE[log.action] ?? 'bg-gray-100 text-gray-700'}`}>
+                        {AUDIT_ACTION_LABELS[log.action] ?? log.action}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-sm text-gray-700 max-w-md">{log.description}</td>
+                    <td className="px-3 py-2 text-xs text-gray-600">
+                      {log.actorEmail || log.actorRole}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-gray-500">
+                      {log.tenantId ? <span className="font-mono text-[10px]">{log.tenantId.slice(0, 8)}…</span> : '-'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {data && data.total > 0 && (
+          <div className="flex items-center justify-between mt-3 text-sm">
+            <span className="text-gray-500">Total {data.total} aktivitas</span>
+            <div className="flex gap-2">
+              <button
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="px-3 py-1 border border-gray-300 rounded-lg text-xs disabled:opacity-40 hover:bg-gray-50"
+              >
+                ← Sebelumnya
+              </button>
+              <span className="px-2 py-1 text-xs text-gray-500">{page} / {totalPages}</span>
+              <button
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                className="px-3 py-1 border border-gray-300 rounded-lg text-xs disabled:opacity-40 hover:bg-gray-50"
+              >
+                Berikutnya →
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="cardCls">
+        <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-3">Provisi Tenant Terbaru</h3>
+        {!runs || runs.data.length === 0 ? (
+          <p className="text-sm text-gray-500">Belum ada riwayat provisioning.</p>
+        ) : (
+          <div className="space-y-2">
+            {runs.data.map((run) => (
+              <div key={run.id} className="border rounded-lg px-3 py-2">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${run.overallStatus === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                      {run.overallStatus}
+                    </span>
+                    <span className="text-sm text-gray-700">{run.tenantName}</span>
+                    <span className="text-xs text-gray-400">{run.ownerEmail}</span>
+                    <span className="text-xs text-gray-400">(~{(run.durationMs / 1000).toFixed(1)}s)</span>
+                  </div>
+                  <span className="text-xs text-gray-400">{new Date(run.createdAt).toLocaleString('id-ID')}</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {run.steps.map((s, i) => (
+                    <span key={i} className={`px-2 py-0.5 rounded text-[10px] font-medium ${
+                      s.status === 'success' ? 'bg-green-50 text-green-700' :
+                      s.status === 'failed' ? 'bg-red-50 text-red-700' : 'bg-gray-50 text-gray-500'
+                    }`}>{s.step}</span>
+                  ))}
+                </div>
+                {run.error && <p className="text-xs text-red-600 mt-1">{run.error}</p>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function TerminalCenterPage() {
   const [tab, setTab] = useState('hubs');
@@ -1395,6 +1783,7 @@ export default function TerminalCenterPage() {
       {tab === 'outlets' && <OutletsSection />}
       {tab === 'summary' && <SummarySection />}
       {tab === 'consolidated' && <ConsolidatedSection />}
+      {tab === 'audit' && <AuditSection />}
     </div>
   );
 }

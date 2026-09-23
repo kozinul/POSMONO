@@ -9,7 +9,12 @@ interface SubscriptionDoc extends Document<string> {
   billingCycle: 'monthly' | 'annual' | 'custom';
   currentPeriodStart: Date;
   currentPeriodEnd: Date;
+  startedAt: Date | null;
+  trialEndsAt: Date | null;
+  autoRenew: boolean;
+  assignedAt: Date | null;
   cancelledAt: Date | null;
+  cancellationReason: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -26,7 +31,12 @@ export class MongoSubscriptionRepository {
       billingCycle: doc.billingCycle,
       currentPeriodStart: doc.currentPeriodStart,
       currentPeriodEnd: doc.currentPeriodEnd,
+      startedAt: doc.startedAt ?? null,
+      trialEndsAt: doc.trialEndsAt ?? null,
+      autoRenew: doc.autoRenew ?? false,
+      assignedAt: doc.assignedAt ?? null,
       cancelledAt: doc.cancelledAt || null,
+      cancellationReason: doc.cancellationReason ?? null,
       createdAt: doc.createdAt,
       updatedAt: doc.updatedAt,
     } as ISubscription);
@@ -42,7 +52,12 @@ export class MongoSubscriptionRepository {
       billingCycle: data.billingCycle,
       currentPeriodStart: data.currentPeriodStart,
       currentPeriodEnd: data.currentPeriodEnd,
+      startedAt: data.startedAt,
+      trialEndsAt: data.trialEndsAt,
+      autoRenew: data.autoRenew,
+      assignedAt: data.assignedAt,
       cancelledAt: data.cancelledAt,
+      cancellationReason: data.cancellationReason,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
     };

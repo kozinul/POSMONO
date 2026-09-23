@@ -55,6 +55,7 @@ export const PLATFORM_ROLE_PERMS = [
   'platform.plans.manage',
   'platform.reports.read',
   'platform.support.access',
+  'platform.audit.read',
 ];
 
 export const DEFAULT_PLATFORM_ROLE: DefaultRoleDef = {

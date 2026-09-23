@@ -11,7 +11,12 @@ export interface ISubscription {
   billingCycle: 'monthly' | 'annual' | 'custom';
   currentPeriodStart: Date;
   currentPeriodEnd: Date;
+  startedAt: Date | null;
+  trialEndsAt: Date | null;
+  autoRenew: boolean;
+  assignedAt: Date | null;
   cancelledAt: Date | null;
+  cancellationReason: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -23,7 +28,12 @@ export class Subscription extends AggregateRoot<SubscriptionId> {
   private billingCycle: 'monthly' | 'annual' | 'custom';
   private currentPeriodStart: Date;
   private currentPeriodEnd: Date;
+  private startedAt: Date | null;
+  private trialEndsAt: Date | null;
+  private autoRenew: boolean;
+  private assignedAt: Date | null;
   private cancelledAt: Date | null;
+  private cancellationReason: string | null;
   private createdAt: Date;
   private updatedAt: Date;
 
@@ -35,18 +45,31 @@ export class Subscription extends AggregateRoot<SubscriptionId> {
     this.billingCycle = props.billingCycle;
     this.currentPeriodStart = props.currentPeriodStart;
     this.currentPeriodEnd = props.currentPeriodEnd;
+    this.startedAt = props.startedAt;
+    this.trialEndsAt = props.trialEndsAt;
+    this.autoRenew = props.autoRenew;
+    this.assignedAt = props.assignedAt;
     this.cancelledAt = props.cancelledAt;
+    this.cancellationReason = props.cancellationReason;
     this.createdAt = props.createdAt;
     this.updatedAt = props.updatedAt;
   }
 
-  static create(props: Omit<ISubscription, 'id' | 'createdAt' | 'updatedAt' | 'cancelledAt'>): Subscription {
+  static create(
+    props: Omit<ISubscription, 'id' | 'createdAt' | 'updatedAt' | 'cancelledAt' | 'startedAt' | 'trialEndsAt' | 'autoRenew' | 'assignedAt' | 'cancellationReason'>,
+  ): Subscription {
+    const now = new Date();
     return new Subscription({
       ...props,
       id: new SubscriptionId().toValue(),
+      startedAt: now,
+      trialEndsAt: null,
+      autoRenew: false,
+      assignedAt: now,
       cancelledAt: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      cancellationReason: null,
+      createdAt: now,
+      updatedAt: now,
     });
   }
 
@@ -63,7 +86,12 @@ export class Subscription extends AggregateRoot<SubscriptionId> {
       billingCycle: this.billingCycle,
       currentPeriodStart: this.currentPeriodStart,
       currentPeriodEnd: this.currentPeriodEnd,
+      startedAt: this.startedAt,
+      trialEndsAt: this.trialEndsAt,
+      autoRenew: this.autoRenew,
+      assignedAt: this.assignedAt,
       cancelledAt: this.cancelledAt,
+      cancellationReason: this.cancellationReason,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
     };
@@ -89,9 +117,16 @@ export class Subscription extends AggregateRoot<SubscriptionId> {
     this.updatedAt = new Date();
   }
 
-  cancel(): void {
+  extend(days: number): void {
+    const base = this.currentPeriodEnd > new Date() ? this.currentPeriodEnd : new Date();
+    this.currentPeriodEnd = new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
+    this.updatedAt = new Date();
+  }
+
+  cancel(reason?: string): void {
     this.status = 'cancelled';
     this.cancelledAt = new Date();
+    this.cancellationReason = reason ?? null;
     this.updatedAt = new Date();
   }
 

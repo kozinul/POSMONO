@@ -9,6 +9,9 @@ export function createPlatformRoutes(platformController: PlatformController): Ro
 
   router.get('/health', platformAuthenticate, asyncHandler(platformController.health.bind(platformController)));
 
+  router.get('/audit', platformAuthenticate, platformAuthorize('platform.audit.read'), asyncHandler(platformController.listAudit.bind(platformController)));
+  router.get('/provisioning-runs', platformAuthenticate, platformAuthorize('platform.tenants.read'), asyncHandler(platformController.listProvisioningRuns.bind(platformController)));
+
   router.get('/hubs', platformAuthenticate, platformAuthorize('hub:manage'), asyncHandler(platformController.listHubs.bind(platformController)));
   router.get('/hubs/:hubId', platformAuthenticate, platformAuthorize('hub:manage'), asyncHandler(platformController.getHub.bind(platformController)));
   router.get('/hubs/:hubId/consolidated', platformAuthenticate, platformAuthorize('platform.reports.read'), asyncHandler(platformController.consolidated.bind(platformController)));

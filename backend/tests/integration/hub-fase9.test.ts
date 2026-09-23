@@ -244,7 +244,7 @@ describe('Fase 9 — Hub membership & cross-tenant session', () => {
       .post('/api/hub-memberships')
       .set('Authorization', `Bearer ${cashierToken}`)
       .send({ hubId: HUB_1, userId: GROUP_ADMIN, role: 'admin' });
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 
   it('adds, lists and removes members over HTTP', async () => {

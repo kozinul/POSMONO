@@ -36,6 +36,42 @@ Copy this block for each new day:
 
 ## Entries
 
+### DATE: 2026-09-22 — Terminal Center Logging + Control Plane (Batch P0)
+
+**Today I worked on:**
+
+- **Logging dulu** (produk): device = registrasi manual; audit **eksplisit** di service/controllers (bukan event-outbox); rekam audit **tidak pernah** menggagalkan operasi utama (`audit()` dibungkus try/catch diam).
+- **Audit Log trx** — modul `core/platform/audit/`: domain `PlatformAuditLog` (action `PLATFORM_*|TENANT_*|HUB_*|OUTLET_*|SUBSCRIPTION_*`, actor/ip/requestId) + `PlatformAuditLogSchema` + `MongoPlatformAuditLogRepository` (filter action/tenantId/actorEmail/from/to + skip/limit). `PlatformAuditService.recordFromRequest` baca `req.platformUserId/...` dari `platformAuthenticate`; fallback actor `system`.
+- **Route + RBAC** `GET /api/platform/audit-logs` (`platformAuthenticate` + **`platform.audit.read`** — super admin harus re-login agar JWT memuat permission baru). Rekaman di: provision tenant, list/create venue tenant, hub create/update/delete, hub member add/remove, outlet platform create, tenant pause/resume, subscription assign/cancel/extend.
+- **Subscription History ledger** — domain `SubscriptionHistory` + schema `subscription_histories` + `MongoSubscriptionHistoryRepository`; `SubscriptionService.recordHistory` (historyRepository **opsional**, 4-arg — `billing-plans.test.ts` tetap 3-arg). Semua mutasi (assign/change/extend/cancel) menulis ledger best-effort. **`extendSubscription` ter-unifikasi**: `PlatformController.extendTenantSubscription` mendelegasikan ke service (hapus duplikat logika), route `POST /api/platform/subscriptions/:tenantId/extend`.
+- **Provisioning History + idempotency DB** — `ProvisioningRunSchema` (collection `provisioning_runs`, index unique sparse `idempotencyKey`; **jangan** `index:true` di field → duplicate index warning) + `MongoProvisioningRunRepository`. `ProvisioningRun` pakai **setter publik** (`markStepDuration`, `setTenantId`, `setDurationMs`, `setResult`). `ProvisionTenantService` refactor: step tracking + timing, **idempotency kini DB** (cek `findByIdempotencyKey` lalu replay `existing.serialize().result`), simpan result/error dalam session txn (fallback standalone).
+- **Tenant 360°** — `GET /api/platform/tenants/:id` kini +`hubName`, `owner`, `userCount`, `usersSummary` (20), `warehouseCount`, `outletCount`, `subscription`, `recentActivity` (audit limit 10), `provisioningRuns` (3). Deps `platformController` +`userRepository`/`roleRepository`/`warehouseRepository`/`provisioningRunRepository`.
+- **Frontend** — hooks `usePlatformAudit` / `usePlatformSubscriptionHistory` / `usePlatformProvisioningRuns` / `usePlatformExtendSubscriptionDays` di `usePlatform.ts`; `TerminalCenterPage` jadi **TABS** (incl. `'audit'` → `AuditSection`: filter aksi, tabel, pagination, daftar "Provisi Tenant Terbaru"); `TenantDetailModal` di-tab `Overview`/`Outlet`/`Users`/`Plan & Langganan` (extend days baru + riwayat langganan)/`Activity` (recentActivity + provisioningRuns).
+- **Route hub 401** — mutasi hub & hub-membership kini `platformAuthenticate` + `platformAuthorize('hub:manage')` → token tenant biasa **401** (test `hub-fase9` disesuaikan).
+
+**Problems encountered:**
+
+- Duplicate index warning Mongoose saat `index:true` + `schema.index` di field `idempotencyKey` → hapus `index: true`, pertahankan `schema.index` unique sparse.
+
+**What I completed:**
+
+- Backend **1126/1126 (97 files)**, frontend **90/90 (13 files)**, tsc frontend/backend bersih, vite build OK.
+- Docs sync: TEST_PROGRESS (1126/97 + tabel per-layer), TESTING_STRATEGY (status line), PROJECT_ROADMAP (row baru + completion), HUB_ARCHITECTURE (refresh), DAILY_LOG ini, AGENTS.md (entry Terminal Center 2026-09-22).
+
+**What I learned:**
+
+- Ledger history + audit rekam **best-effort**: jangan pernah membiarkan observability memutus operasi inti (billing/provisioning).
+
+**Tomorrow priority:**
+
+- Verifikasi nyata di env dev (kalau Docker tersedia): jalankan `platform login` super admin, provision tenant, lihat audit log & history subscription ter-record end-to-end.
+
+**Productivity score:** 9
+
+**Notes:**
+
+- Permission `platform.audit.read` ditambah ke `PLATFORM_ROLE_PERMS` — super admin yang sudah login **harus re-login** agar JWT memuatnya.
+
 ### DATE: 2026-09-17 — Product Modifier Groups
 
 **Today I worked on:**

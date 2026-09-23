@@ -13,7 +13,10 @@ describe('ProvisionTenantService', () => {
   let hubRepo: any;
   let outletService: any;
   let passwordService: any;
+  let provisioningRunRepo: any;
   let service: ProvisionTenantService;
+
+  const inMemoryRuns = new Map<string, any>();
 
   const sampleInput: ProvisionTenantInput = {
     tenant: {
@@ -67,6 +70,20 @@ describe('ProvisionTenantService', () => {
       compare: vi.fn().mockResolvedValue(true),
     };
 
+    inMemoryRuns.clear();
+    provisioningRunRepo = {
+      save: vi.fn().mockImplementation(async (run: any) => {
+        const data = run.serialize();
+        inMemoryRuns.set(data.idempotencyKey, data);
+      }),
+      findByIdempotencyKey: vi.fn().mockImplementation(async (key: string) => {
+        const data = inMemoryRuns.get(key);
+        return data ? { serialize: () => data } : null;
+      }),
+      findByTenantId: vi.fn().mockResolvedValue([]),
+      find: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+    };
+
     service = new ProvisionTenantService(
       {
         tenantRepository: tenantRepo,
@@ -74,6 +91,7 @@ describe('ProvisionTenantService', () => {
         roleRepository: roleRepo,
         hubRepository: hubRepo,
         outletService,
+        provisioningRunRepository: provisioningRunRepo,
       },
       passwordService,
     );

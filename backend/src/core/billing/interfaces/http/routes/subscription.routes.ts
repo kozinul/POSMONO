@@ -10,6 +10,8 @@ export function createPlatformSubscriptionRoutes(subscriptionController: Subscri
   router.get('/tenants/:tenantId/subscription', platformAuthenticate, platformAuthorize('platform.tenants.read'), asyncHandler(subscriptionController.getTenantSubscription.bind(subscriptionController)));
   router.post('/tenants/:tenantId/subscription', platformAuthenticate, platformAuthorize('platform.tenants.manage'), asyncHandler(subscriptionController.assignPlan.bind(subscriptionController)));
   router.post('/tenants/:tenantId/subscription/cancel', platformAuthenticate, platformAuthorize('platform.tenants.manage'), asyncHandler(subscriptionController.cancelSubscription.bind(subscriptionController)));
+  router.post('/tenants/:tenantId/subscription/extend', platformAuthenticate, platformAuthorize('platform.tenants.manage'), asyncHandler(subscriptionController.extendSubscription.bind(subscriptionController)));
+  router.get('/tenants/:tenantId/subscription/history', platformAuthenticate, platformAuthorize('platform.plans.read'), asyncHandler(subscriptionController.getSubscriptionHistory.bind(subscriptionController)));
   router.get('/tenants/:tenantId/entitlement', platformAuthenticate, platformAuthorize('platform.tenants.read'), asyncHandler(subscriptionController.getTenantEntitlement.bind(subscriptionController)));
 
   return router;
