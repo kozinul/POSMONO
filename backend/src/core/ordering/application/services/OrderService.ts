@@ -350,17 +350,15 @@ export class CreateOrderService implements UseCase<CreateOrderInput, Order> {
       if (!product) continue;
 
       const productModifierGroupIds: string[] = product.modifierGroupIds || [];
-      const { resolvedModifiers, totalAdjustment } = await validator.validateAndResolve(
+      const { resolvedModifiers } = await validator.validateAndResolve(
         input.tenantId,
         productModifierGroupIds,
         item.modifiers || [],
       );
 
-      const unitPrice = item.unitPrice + totalAdjustment;
       resolvedItems.push({
         ...item,
-        unitPrice,
-        totalPrice: Math.round(unitPrice * item.quantity * 100) / 100,
+        totalPrice: Math.round(item.unitPrice * item.quantity * 100) / 100,
         modifiers: resolvedModifiers,
       });
     }

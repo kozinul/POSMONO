@@ -4,6 +4,7 @@ import { DocumentData } from '../../../document-engine/types/document-data';
 import { RenderDocument } from '../../../document-engine/types/layout';
 import { ITenant } from '../../../tenant/domain/Tenant';
 import { IOrder } from '../../../ordering/domain/Order';
+import { buildModifierLines } from '../receipt/modifierLines';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
@@ -59,6 +60,8 @@ export class KotRenderService {
         unitPrice: item.unitPrice,
         totalPrice: item.totalPrice,
         isFreeItem: item.isFreeItem || false,
+        modifiers: (item.modifiers ?? []).map((m) => ({ name: m.optionName, price: m.priceAdjustment })),
+        modifierLines: buildModifierLines(item.modifiers),
       })),
       summary: {
         subtotal: order.subtotal - order.discount,

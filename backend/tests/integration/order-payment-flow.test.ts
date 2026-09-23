@@ -110,6 +110,60 @@ describe('Integration: Order-to-Payment Flow', () => {
     });
   });
 
+  describe('Modifiers', () => {
+    it('persists modifiers, resolves their prices, and does not double-count into unitPrice', async () => {
+      await ctx.productModel.create({
+        _id: 'prod-mod',
+        tenantId: ctx.tenantId,
+        sku: 'SKU-MOD',
+        name: 'Kopi Hitam',
+        categoryId: 'cat-1',
+        basePrice: 16000,
+        modifierGroupIds: ['grp-1'],
+      });
+      await ctx.modifierModel.create({
+        _id: 'grp-1',
+        tenantId: ctx.tenantId,
+        name: 'Custom',
+        displayType: 'checkbox',
+        minSelections: 0,
+        maxSelections: 5,
+        required: false,
+        options: [
+          { id: 'opt-sugar', name: 'Extra Gula', priceAdjustment: 2000, isActive: true },
+          { id: 'opt-large', name: 'Ukuran Besar', priceAdjustment: 3000, isActive: true },
+        ],
+      });
+
+      const res = await request(ctx.app)
+        .post('/api/payments/pay-cash')
+        .set('Authorization', `Bearer ${ctx.token}`)
+        .send({
+          items: [{
+            productId: 'prod-mod',
+            productName: 'Kopi Hitam',
+            categoryId: 'cat-1',
+            quantity: 1,
+            unitPrice: 21000,
+            modifiers: [
+              { groupId: 'grp-1', groupName: 'Custom', optionId: 'opt-large', optionName: 'Ukuran Besar', priceAdjustment: 999 },
+              { groupId: 'grp-1', groupName: 'Custom', optionId: 'opt-sugar', optionName: 'Extra Gula', priceAdjustment: 999 },
+            ],
+          }],
+          amountPaid: 100000,
+        });
+
+      expect(res.status).toBe(200);
+      const order = res.body.data.order;
+      expect(order.items[0].modifiers).toEqual([
+        { groupId: 'grp-1', groupName: 'Custom', optionId: 'opt-large', optionName: 'Ukuran Besar', priceAdjustment: 3000 },
+        { groupId: 'grp-1', groupName: 'Custom', optionId: 'opt-sugar', optionName: 'Extra Gula', priceAdjustment: 2000 },
+      ]);
+      expect(order.items[0].unitPrice).toBe(21000);
+      expect(order.items[0].totalPrice).toBe(21000);
+    });
+  });
+
   describe('Validation & auth', () => {
     it('should reject pay cash without auth', async () => {
       const res = await request(ctx.app)

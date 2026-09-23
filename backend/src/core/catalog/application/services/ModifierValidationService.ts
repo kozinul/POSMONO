@@ -47,6 +47,17 @@ export class ModifierValidationService {
 
     const clientGroupIds = new Set(clientModifiers.map((m) => m.groupId));
 
+    // Each client-selected group must belong to the product's effective modifier
+    // groups (product/family/global are resolved before calling this service).
+    const productAllowed = new Set(productModifierGroupIds);
+    for (const groupId of clientGroupIds) {
+      if (!productAllowed.has(groupId)) {
+        throw new ValidationError(
+          `Modifier group "${groupId}" tidak memiliki modifier group untuk produk ini`,
+        );
+      }
+    }
+
     // Validate each selected modifier group exists for this tenant.
     // The explicit product/family/global check is performed by the repository or frontend,
     // here we ensure the groups provided by the client are valid and active for the tenant.

@@ -15,8 +15,9 @@ export function ModifierSelectionModal({ productName, basePrice, modifierGroups,
     const initial: Record<string, Record<string, number>> = {};
     for (const g of modifierGroups) {
       initial[g.id] = {};
-      if (g.displayType === 'radio' && g.options.length > 0 && g.required) {
-        initial[g.id][g.options[0].id] = 1;
+      const activeOpts = g.options.filter((o) => o.isActive);
+      if (g.displayType === 'radio' && activeOpts.length > 0) {
+        initial[g.id][activeOpts[0].id] = 1;
       }
     }
     return initial;

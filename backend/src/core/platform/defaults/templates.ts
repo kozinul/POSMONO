@@ -44,6 +44,10 @@ const receiptSections: DocumentSection[] = [
       { text: 'Service Charge ({{ summary.serviceChargeRate | number(0) }}%)', align: 'left' },
       { text: '{{ summary.serviceCharge | idr }}', align: 'right' },
     ], style: {}, visibility: { operator: 'AND', rules: [{ field: 'summary.serviceCharge', operator: 'greater_than', value: 0 }] } },
+    { id: 'r19b', type: 'text', columns: [
+      { text: '{{ summary.dppLabel }}', align: 'left' },
+      { text: '{{ summary.dpp | idr }}', align: 'right' },
+    ], style: {}, visibility: { operator: 'AND', rules: [{ field: 'summary.dpp', operator: 'greater_than', value: 0 }] } },
     { id: 'r20', type: 'repeater', dataSource: 'taxes', template: [
       { id: 'r21', type: 'text', columns: [
         { text: '{{ taxe.label }}', align: 'left' },
@@ -89,6 +93,7 @@ const kotSections: DocumentSection[] = [
   { id: 'sec-items', type: 'items', enabled: true, order: 3, nodes: [
     { id: 'n5', type: 'repeater', dataSource: 'items', template: [
       { id: 'n6', type: 'text', text: '{{ item.qty }}x {{ item.name }}', style: { font: { size: 10 } } },
+      { id: 'n6b', type: 'text', text: '{{ item.modifierLines }}', style: { font: { size: 9 } }, visibility: { operator: 'AND', rules: [{ field: 'item.modifierLines', operator: 'exists' }] } },
     ]},
   ]},
   { id: 'sec-footer', type: 'footer', enabled: true, order: 4, nodes: [

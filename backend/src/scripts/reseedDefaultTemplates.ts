@@ -27,20 +27,20 @@ async function main() {
 
   const KNOWN_DEFAULT_NAMES = DEFAULT_TEMPLATES.map((t) => t.name);
 
-  const allReceiptTemplates = await Template.find({ documentType: 'receipt' })
-    .select({ tenantId: 1, name: 1 })
+  const allTemplates = await Template.find({ documentType: { $in: ['receipt', 'kot'] } })
+    .select({ tenantId: 1, name: 1, documentType: 1 })
     .lean()
     .exec();
 
-  const tenantIds = [...new Set((allReceiptTemplates as any[]).map((t) => t.tenantId))];
-  console.log(`[reseed-templates] Receipt templates found across ${tenantIds.length} tenant(s).`);
+  const tenantIds = [...new Set((allTemplates as any[]).map((t) => t.tenantId))];
+  console.log(`[reseed-templates] Default document templates found across ${tenantIds.length} tenant(s).`);
 
   // Templates with legacy/canonical default names are ours; safe to repair in place.
   const repairNames = [...KNOWN_DEFAULT_NAMES, 'Standard Receipt 80mm'];
 
   const ops: any[] = [];
   for (const tenantId of tenantIds) {
-    const tenantTemplates = (allReceiptTemplates as any[]).filter((t) => t.tenantId === tenantId);
+    const tenantTemplates = (allTemplates as any[]).filter((t) => t.tenantId === tenantId);
     const byName = new Map(tenantTemplates.map((t) => [t.name, t]));
 
     const touched = new Set<string>();
@@ -59,7 +59,8 @@ async function main() {
       touched.add(name);
     }
 
-    const needsReceiptDefault = !tenantTemplates.some((t) => t.isDefault && t.documentType === 'receipt');
+    const receiptTemplates = tenantTemplates.filter((t) => t.documentType === 'receipt');
+    const needsReceiptDefault = !receiptTemplates.some((t) => t.isDefault);
     const hasMain = byName.has('Struk Kasir Default');
     if (!hasMain) {
       const { sections, paper, description } = receiptSectionsFor('Struk Kasir Default');
@@ -77,7 +78,7 @@ async function main() {
             sections,
             metadata: {},
             isActive: true,
-            isDefault: needsReceiptDefault || tenantTemplates.length === 0,
+            isDefault: needsReceiptDefault || receiptTemplates.length === 0,
           },
         },
       });
@@ -91,7 +92,7 @@ async function main() {
   } else {
     const res = await Template.bulkWrite(ops, { ordered: false });
     console.log(
-      `[reseed-templates] Upserted receipt default templates: ${res.modifiedCount} modified, ${res.upsertedCount} inserted.`,
+      `[reseed-templates] Upserted default document templates: ${res.modifiedCount} modified, ${res.upsertedCount} inserted.`,
     );
   }
 

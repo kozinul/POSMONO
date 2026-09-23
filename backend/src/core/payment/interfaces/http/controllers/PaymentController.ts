@@ -20,16 +20,27 @@ function serializeReceipt(receipt: ReceiptRenderResult | null | undefined): Reco
   };
 }
 
+const paymentItemModifierSchema = z.object({
+  groupId: z.string().min(1),
+  groupName: z.string().min(1),
+  optionId: z.string().min(1),
+  optionName: z.string().min(1),
+  priceAdjustment: z.number(),
+});
+
+const paymentItemSchema = z.object({
+  productId: z.string().min(1),
+  productName: z.string().optional().default(''),
+  categoryId: z.string().optional().default(''),
+  quantity: z.number().int().positive(),
+  unitPrice: z.number().nonnegative(),
+  pricingMode: z.enum(['inclusive', 'exclusive']).optional().nullable(),
+  isFreeItem: z.boolean().optional(),
+  modifiers: z.array(paymentItemModifierSchema).optional().default([]),
+});
+
 const payCashSchema = z.object({
-  items: z.array(z.object({
-    productId: z.string().min(1),
-    productName: z.string().optional().default(''),
-    categoryId: z.string().optional().default(''),
-    quantity: z.number().int().positive(),
-    unitPrice: z.number().nonnegative(),
-    pricingMode: z.enum(['inclusive', 'exclusive']).optional().nullable(),
-    isFreeItem: z.boolean().optional(),
-  })).min(1),
+  items: z.array(paymentItemSchema).min(1),
   amountPaid: z.number().positive(),
   method: z.enum(['cash', 'qris', 'transfer', 'card', 'debit', 'credit', 'ewallet']).default('cash'),
   discount: z.number().nonnegative().default(0),
@@ -79,15 +90,7 @@ const qrisConfirmSchema = z.object({
   referenceNumber: z.string().min(1, 'Nomor referensi QRIS wajib diisi'),
   amount: z.number().int('Nominal harus bilangan bulat').positive('Nominal harus lebih dari 0'),
   orderId: z.string().optional(),
-  items: z.array(z.object({
-    productId: z.string().min(1),
-    productName: z.string().optional().default(''),
-    categoryId: z.string().optional().default(''),
-    quantity: z.number().int().positive(),
-    unitPrice: z.number().nonnegative(),
-    pricingMode: z.enum(['inclusive', 'exclusive']).optional().nullable(),
-    isFreeItem: z.boolean().optional(),
-  })).optional(),
+  items: z.array(paymentItemSchema).optional(),
   discount: z.number().nonnegative().default(0),
   discountType: z.enum(['percentage', 'nominal']).optional(),
   promoCode: z.string().optional(),

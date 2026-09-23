@@ -3,6 +3,7 @@ import { ITaxDetail, IOrder, IPaymentBreakdownEntry } from '../../../ordering/do
 import { IPayment } from '../../../payment/domain/Payment';
 import { OutletRepository } from '../../../outlet/domain/OutletRepository';
 import { ReceiptViewModel, VMItem, VMPayment, methodLabel } from './ReceiptViewModel';
+import { buildModifierLines } from './modifierLines';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
@@ -53,16 +54,14 @@ function buildItems(order: IOrder): VMItem[] {
     unitPrice: item.unitPrice,
     totalPrice: item.totalPrice,
     isFreeItem: item.isFreeItem || false,
-    modifiers: item.modifiers.map((m) => ({ name: m.optionName, qty: 1, price: m.priceAdjustment })),
-    modifierLines: item.modifiers
-      .map((m) => m.priceAdjustment > 0 ? `+ ${m.optionName} +Rp ${new Intl.NumberFormat('id-ID').format(m.priceAdjustment)}` : `+ ${m.optionName}  GRATIS`)
-      .join('\n'),
+    modifiers: (item.modifiers ?? []).map((m) => ({ name: m.optionName, qty: 1, price: m.priceAdjustment })),
+    modifierLines: buildModifierLines(item.modifiers),
   }));
 }
 
-function buildPayments(payments: IPaymentBreakdownEntry[], defaultAmount: number): VMPayment[] {
+function buildPayments(payments: IPaymentBreakdownEntry[]): VMPayment[] {
   if (!payments || payments.length === 0) {
-    return [{ method: 'cash', methodLabel: 'Tunai', amount: defaultAmount }];
+    return [];
   }
   return payments.map((p) => {
     const m = p.method || 'cash';
@@ -118,7 +117,6 @@ export class ReceiptAssembler {
           : input.payment
             ? [{ method: input.payment.method, code: input.payment.referenceNumber, amount: input.payment.amount, change: 0 }]
             : [],
-      order.roundedPayable || order.total,
     );
     const totalTendered = payments.reduce((sum, p) => sum + p.amount, 0);
     const grandTotal = order.roundedPayable || order.total;

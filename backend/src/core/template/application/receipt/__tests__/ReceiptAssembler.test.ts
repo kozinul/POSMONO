@@ -123,7 +123,7 @@ describe('ReceiptAssembler', () => {
     expect(vm.items[1].isFreeItem).toBe(true);
   });
 
-  it('marks zero-price modifiers as GRATIS', async () => {
+  it('renders zero-price modifiers without GRATIS text', async () => {
     const vm = await assembler.build({
       order: makeOrder({
         items: [
@@ -133,7 +133,8 @@ describe('ReceiptAssembler', () => {
       tenant: makeTenant(),
     });
     expect(vm.items[0].modifierLines).toContain('+ Telur +Rp 5.000');
-    expect(vm.items[0].modifierLines).toContain('+ Saos  GRATIS');
+    expect(vm.items[0].modifierLines).toContain('+ Saos +Rp 0');
+    expect(vm.items[0].modifierLines).not.toContain('GRATIS');
   });
 
   it('computes change only from cash payments', async () => {

@@ -37,6 +37,7 @@ export class PaymentService {
     private readonly qrisGatewayService?: any,
     private readonly productRepository?: any,
     private readonly modifierRepository?: any,
+    private readonly categoryRepository?: any,
   ) {}
 
   private async assertOpenShift(tenantId: string, cashierId: string, providedShiftId?: string | null): Promise<{ shiftId: string; outletId: string | null }> {
@@ -74,10 +75,17 @@ export class PaymentService {
     tenantId: string,
     items: PaymentItemInput[],
   ): Promise<PaymentItemInput[]> {
-    if (!this.productRepository || this.modifierRepository === null) return items;
+    if (!this.productRepository || !this.modifierRepository) return items;
     const validator = new ModifierValidationService(this.modifierRepository);
     const productCache = new Map<string, any>();
     const resolvedItems: PaymentItemInput[] = [];
+
+    const groupIdOf = (g: any): string => {
+      if (!g) return '';
+      if (typeof g.id === 'object' && g.id && typeof g.id.toValue === 'function') return g.id.toValue();
+      if (typeof g.serialize === 'function') { const d = g.serialize(); return d.id || ''; }
+      return g.id || g._id || '';
+    };
 
     for (const item of items) {
       if (!item.modifiers || item.modifiers.length === 0) {
@@ -93,15 +101,35 @@ export class PaymentService {
         }
         productCache.set(item.productId, product);
       }
-      const groupIds = product.serialize().modifierGroupIds || [];
-      const { resolvedModifiers, totalAdjustment } = await validator.validateAndResolve(
+      const productData = product.serialize();
+      const applicableGroupIds = new Set<string>(productData.modifierGroupIds || []);
+      try {
+        const productGroups = await this.modifierRepository.findByProduct(item.productId);
+        for (const g of productGroups) {
+          const gid = groupIdOf(g);
+          if (gid) applicableGroupIds.add(gid);
+        }
+      } catch { /* best-effort */ }
+      if (this.categoryRepository && productData.categoryId) {
+        try {
+          const category = await this.categoryRepository.findById(productData.categoryId);
+          const familyId = category?.serialize().familyId;
+          if (familyId) {
+            const familyGroups = await this.modifierRepository.findByFamily(familyId);
+            for (const g of familyGroups) {
+              const gid = groupIdOf(g);
+              if (gid) applicableGroupIds.add(gid);
+            }
+          }
+        } catch { /* best-effort */ }
+      }
+      const { resolvedModifiers } = await validator.validateAndResolve(
         tenantId,
-        groupIds,
+        Array.from(applicableGroupIds),
         item.modifiers,
       );
       resolvedItems.push({
         ...item,
-        unitPrice: item.unitPrice + totalAdjustment,
         modifiers: resolvedModifiers,
       });
     }
@@ -172,7 +200,7 @@ export class PaymentService {
     if (this.discountService) {
       const discountResult = await this.discountService.apply({
         tenantId: input.tenantId,
-        items: input.items.map((item) => ({
+        items: inputItems.map((item) => ({
           productId: item.productId,
           categoryId: item.categoryId ?? '',
           quantity: item.quantity,
@@ -204,7 +232,7 @@ export class PaymentService {
 
     const taxResult = await this.taxService.calculate({
       tenantId: input.tenantId,
-      items: input.items.map((item) => ({
+      items: inputItems.map((item) => ({
         productId: item.productId,
         productName: item.productName || '',
         quantity: item.quantity,
@@ -231,7 +259,7 @@ export class PaymentService {
     const serviceChargeTotal = roundMoney(taxResult.charges.reduce((sum: number, c: { amount: number }) => sum + c.amount, 0));
     const taxRate = taxResult.taxes.length > 0 ? taxResult.taxes[0].rate : 0;
 
-    const orderItems: IOrderItem[] = input.items.map((item) => {
+    const orderItems: IOrderItem[] = inputItems.map((item) => {
       const itemSubtotal = item.quantity * item.unitPrice;
       const itemTaxAmount = taxResult.subtotal > 0
         ? (itemSubtotal / taxResult.subtotal) * taxResult.taxAmount
@@ -679,7 +707,7 @@ export class PaymentService {
     referenceNumber: string;
     amount: number;
     orderId?: string;
-    items?: Array<{ productId: string; productName?: string; categoryId?: string; quantity: number; unitPrice: number; pricingMode?: 'inclusive' | 'exclusive'; isFreeItem?: boolean }>;
+    items?: Array<{ productId: string; productName?: string; categoryId?: string; quantity: number; unitPrice: number; pricingMode?: 'inclusive' | 'exclusive'; isFreeItem?: boolean; modifiers?: ModifierSelection[] }>;
     discount?: number;
     discountType?: 'percentage' | 'nominal';
     promoCode?: string;

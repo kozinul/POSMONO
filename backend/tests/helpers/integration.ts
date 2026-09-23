@@ -9,6 +9,8 @@ import { OrderSchema } from '../../src/core/ordering/infrastructure/persistence/
 import { PaymentSchema } from '../../src/core/payment/infrastructure/persistence/schemas/PaymentSchema';
 import { ShiftSchema } from '../../src/core/pos/infrastructure/persistence/schemas/ShiftSchema';
 import { ProductSchema } from '../../src/core/catalog/infrastructure/persistence/schemas/ProductSchema';
+import { ModifierSchema } from '../../src/core/catalog/infrastructure/persistence/schemas/ModifierSchema';
+import { CategorySchema } from '../../src/core/catalog/infrastructure/persistence/schemas/CategorySchema';
 import { StockSchema } from '../../src/core/inventory/infrastructure/persistence/schemas/StockSchema';
 import { StockMovementSchema } from '../../src/core/inventory/infrastructure/persistence/schemas/StockMovementSchema';
 import { WarehouseSchema } from '../../src/core/inventory/infrastructure/persistence/schemas/WarehouseSchema';
@@ -19,6 +21,8 @@ import { MongoOrderRepository } from '../../src/core/ordering/infrastructure/per
 import { MongoPaymentRepository } from '../../src/core/payment/infrastructure/persistence/MongoPaymentRepository';
 import { MongoShiftRepository } from '../../src/core/pos/infrastructure/persistence/MongoShiftRepository';
 import { MongoProductRepository } from '../../src/core/catalog/infrastructure/persistence/MongoProductRepository';
+import { MongoModifierRepository } from '../../src/core/catalog/infrastructure/persistence/MongoModifierRepository';
+import { MongoCategoryRepository } from '../../src/core/catalog/infrastructure/persistence/MongoCategoryRepository';
 import { MongoStockRepository } from '../../src/core/inventory/infrastructure/persistence/MongoStockRepository';
 import { MongoStockMovementRepository } from '../../src/core/inventory/infrastructure/persistence/MongoStockMovementRepository';
 import { MongoWarehouseRepository } from '../../src/core/inventory/infrastructure/persistence/MongoWarehouseRepository';
@@ -66,6 +70,8 @@ export interface IntegrationTestContext {
   paymentRepo: MongoPaymentRepository;
   shiftRepo: MongoShiftRepository;
   productRepo: MongoProductRepository;
+  modifierRepo: MongoModifierRepository;
+  categoryRepo: MongoCategoryRepository;
   stockRepo: MongoStockRepository;
   stockMovementRepo: MongoStockMovementRepository;
   warehouseRepo: MongoWarehouseRepository;
@@ -75,6 +81,8 @@ export interface IntegrationTestContext {
   paymentModel: Model<any>;
   shiftModel: Model<any>;
   productModel: Model<any>;
+  modifierModel: Model<any>;
+  categoryModel: Model<any>;
   stockModel: Model<any>;
   stockMovementModel: Model<any>;
   warehouseModel: Model<any>;
@@ -129,6 +137,8 @@ export async function buildIntegrationApp(options: IntegrationAppOptions = {}): 
   const paymentModel = mongoose.model('Payment', PaymentSchema);
   const shiftModel = mongoose.model('Shift', ShiftSchema);
   const productModel = mongoose.model('Product', ProductSchema);
+  const modifierModel = mongoose.model('Modifier', ModifierSchema);
+  const categoryModel = mongoose.model('Category', CategorySchema);
   const stockModel = mongoose.model('StockItem', StockSchema);
   const stockMovementModel = mongoose.model('StockMovement', StockMovementSchema);
   const warehouseModel = mongoose.model('Warehouse', WarehouseSchema);
@@ -140,6 +150,8 @@ export async function buildIntegrationApp(options: IntegrationAppOptions = {}): 
   const paymentRepo = new MongoPaymentRepository(paymentModel);
   const shiftRepo = new MongoShiftRepository(shiftModel);
   const productRepo = new MongoProductRepository(productModel);
+  const modifierRepo = new MongoModifierRepository(modifierModel);
+  const categoryRepo = new MongoCategoryRepository(categoryModel);
   const stockRepo = new MongoStockRepository(stockModel);
   const stockMovementRepo = new MongoStockMovementRepository(stockMovementModel);
   const warehouseRepo = new MongoWarehouseRepository(warehouseModel);
@@ -189,6 +201,9 @@ export async function buildIntegrationApp(options: IntegrationAppOptions = {}): 
     shiftRepoForEnforcement,
     null as any,
     null as any,
+    productRepo,
+    modifierRepo,
+    categoryRepo,
   );
 
   const templateService = new TemplateService(templateRepo);
@@ -238,8 +253,8 @@ export async function buildIntegrationApp(options: IntegrationAppOptions = {}): 
 
   return {
     app,
-    orderRepo, paymentRepo, shiftRepo, productRepo, stockRepo, stockMovementRepo, warehouseRepo, tenantRepo, templateRepo,
-    orderModel, paymentModel, shiftModel, productModel, stockModel, stockMovementModel, warehouseModel, tenantModel, templateModel,
+    orderRepo, paymentRepo, shiftRepo, productRepo, modifierRepo, categoryRepo, stockRepo, stockMovementRepo, warehouseRepo, tenantRepo, templateRepo,
+    orderModel, paymentModel, shiftModel, productModel, modifierModel, categoryModel, stockModel, stockMovementModel, warehouseModel, tenantModel, templateModel,
     orderService: createOrderService,
     paymentService,
     shiftService,
