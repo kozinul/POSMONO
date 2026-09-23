@@ -36,6 +36,35 @@ Copy this block for each new day:
 
 ## Entries
 
+### DATE: 2026-09-23 — `req.outletId` dibaca service (deferred G2 rampung)
+
+**Today I worked on:**
+
+- Menutup item deferred terakhir Fase G2: `req.outletId` kini **dibaca service** dari `X-Outlet-Id`/`resolveOutlet`, bukan body/default shift.
+- `PaymentService.assertOpenShift(tenantId, cashierId, outletId?, providedShiftId?)` — jika `outletId` diberikan → `findOpenShift` per outlet; null/tanpa header → tanpa filter (backward-compatible). Forward di `payCash`/`processByOrderId`/`splitBill`/`confirmQrisPayment` (+`outletId` di input qris).
+- `PaymentController` (payCash/processPayment/splitBill/qrisConfirm) → `outletId: req.outletId`; `OrderController.create` → `outletId: req.outletId`; `CreateOrderService` cari shift per `input.outletId`; `SplitItemService` mewarisi `outletId` order sumber.
+- `ShiftController.open` — hapus `outletId` dari body `openSchema`, sumber resmi = header; `ShiftService.getCurrent` + route `GET /shifts/current` kini `resolveOutlet` + `req.outletId` (shift per outlet).
+- Frontend `OUTLET_SCOPE_KEYS` (DashboardLayout) +`open-shift`/`shift-report` agar ganti outlet me-refetch shift per outlet.
+
+**Problems:**
+
+- Inconsistency jika outletId di-forward `?? null` selalu ke findOpenShift → malah memfilter shift bernama `outletId: null`. Solusi: pola ternary `outletId ? findOpenShift(..., outletId) : findOpenShift(...)` (konsistensi dengan `assertOpenShift`).
+
+**What I completed:**
+
+- Backend tsc bersih, **1126/1126 (97 files)** pass; frontend tsc bersih + **90/90 (13 files)** pass.
+- Docs sync: PROJECT_ROADMAP (row G2 `[x]` + completion), HUB_ARCHITECTURE (status Fase 7), API_REFERENCE (Outlet header dijelaskan ulang), DAILY_LOG ini, AGENTS.md.
+
+**What I learned:**
+
+- Fallback `outletId = null` harus konsisten: header absen ≠ selalu filter null; simpan header-absent sebagai query tanpa filter outlet agar tenant standalone / kasir non-multi-outlet tidak terganggu.
+
+**Tomorrow priority:**
+
+- MVP deployment (VPS/SSL/monitoring/backup) — menunggu akses VPS; verifikasi E2E multi-outlet di env dev (kalau Docker tersedia).
+
+**Productivity score:** 8
+
 ### DATE: 2026-09-22 — Terminal Center Logging + Control Plane (Batch P0)
 
 **Today I worked on:**

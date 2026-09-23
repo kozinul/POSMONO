@@ -258,7 +258,9 @@ export class CreateOrderService implements UseCase<CreateOrderInput, Order> {
   async execute(input: CreateOrderInput): Promise<Order> {
     let shiftOutletId: string | null = null;
     if (input.source === 'pos' && this.shiftRepository) {
-      const shift = await this.shiftRepository.findOpenShift(input.tenantId, input.cashierId);
+      const shift = input.outletId
+        ? await this.shiftRepository.findOpenShift(input.tenantId, input.cashierId, input.outletId)
+        : await this.shiftRepository.findOpenShift(input.tenantId, input.cashierId);
       if (!shift) {
         throw new ValidationError('Buka shift terlebih dahulu sebelum bertransaksi');
       }
@@ -606,6 +608,7 @@ export class SplitItemService implements UseCase<SplitItemInput, Order> {
       };
       const newOrder = Order.create({
         tenantId: order.serialize().tenantId,
+        outletId: order.serialize().outletId ?? null,
         items: [splitItem],
         subtotal: splitItem.totalPrice,
         discount: 0,

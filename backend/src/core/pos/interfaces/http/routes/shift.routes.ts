@@ -9,7 +9,7 @@ export function createShiftRoutes(shiftController: ShiftController): Router {
 
   router.get('/', authenticate, asyncHandler(shiftController.list.bind(shiftController)));
   router.get('/active', authenticate, asyncHandler(shiftController.getActive.bind(shiftController)));
-  router.get('/current', authenticate, asyncHandler(shiftController.getCurrent.bind(shiftController)));
+  router.get('/current', authenticate, resolveOutlet, asyncHandler(shiftController.getCurrent.bind(shiftController)));
   router.get('/carried-bills', authenticate, asyncHandler(shiftController.carriedBills.bind(shiftController)));
   router.post('/open', authenticate, resolveOutlet, asyncHandler(shiftController.open.bind(shiftController)));
   router.post('/:id/close', authenticate, resolveOutlet, asyncHandler(shiftController.close.bind(shiftController)));

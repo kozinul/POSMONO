@@ -40,9 +40,11 @@ export class PaymentService {
     private readonly categoryRepository?: any,
   ) {}
 
-  private async assertOpenShift(tenantId: string, cashierId: string, providedShiftId?: string | null): Promise<{ shiftId: string; outletId: string | null }> {
+  private async assertOpenShift(tenantId: string, cashierId: string, outletId?: string | null, providedShiftId?: string | null): Promise<{ shiftId: string; outletId: string | null }> {
     if (!this.shiftRepository) return { shiftId: providedShiftId ?? '', outletId: null };
-    const shift = await this.shiftRepository.findOpenShift(tenantId, cashierId);
+    const shift = outletId
+      ? await this.shiftRepository.findOpenShift(tenantId, cashierId, outletId)
+      : await this.shiftRepository.findOpenShift(tenantId, cashierId);
     if (!shift) {
       throw new ValidationError('Buka shift terlebih dahulu sebelum bertransaksi');
     }
@@ -183,7 +185,7 @@ export class PaymentService {
     outletId?: string | null;
     cashierName?: string;
   }): Promise<{ payment: Payment; order: any; receipt: ReceiptRenderResult | null; pending?: boolean }> {
-    const { shiftId, outletId: shiftOutletId } = await this.assertOpenShift(input.tenantId, input.cashierId, input.shiftId);
+    const { shiftId, outletId: shiftOutletId } = await this.assertOpenShift(input.tenantId, input.cashierId, input.outletId, input.shiftId);
     const outletId = input.outletId ?? shiftOutletId ?? null;
     const roundMoney = (value: number) => Math.round(value);
     const inputItems = await this.resolveModifierPrices(input.tenantId, input.items);
@@ -471,7 +473,7 @@ export class PaymentService {
     shiftId?: string | null;
     outletId?: string | null;
   }): Promise<{ payment: Payment; order: Order; receipt: ReceiptRenderResult | null; pending?: boolean }> {
-    const { shiftId, outletId: shiftOutletId } = await this.assertOpenShift(input.tenantId, input.cashierId, input.shiftId);
+    const { shiftId, outletId: shiftOutletId } = await this.assertOpenShift(input.tenantId, input.cashierId, input.outletId, input.shiftId);
     const order = await this.orderRepository.findById(input.orderId);
     if (!order) throw new NotFoundError('Order not found');
 
@@ -714,6 +716,7 @@ export class PaymentService {
     cashierId: string;
     cashierName?: string;
     shiftId?: string | null;
+    outletId?: string | null;
   }): Promise<{ payment: Payment; order: Order; receipt: ReceiptRenderResult | null }> {
     const { referenceNumber, amount, orderId } = input;
     logger.info({ referenceNumber, amount, orderId, cashierId: input.cashierId, shiftId: input.shiftId }, '[QRIS] confirmQrisPayment started');
@@ -786,6 +789,7 @@ export class PaymentService {
         paymentTransactionId: input.referenceNumber,
         referenceNumber: input.referenceNumber,
         shiftId: input.shiftId,
+        outletId: input.outletId,
       });
     }
 
@@ -801,6 +805,7 @@ export class PaymentService {
       promoCode: input.promoCode,
       referenceNumber: input.referenceNumber,
       shiftId: input.shiftId,
+      outletId: input.outletId,
       cashierName: input.cashierName,
     });
   }
@@ -913,7 +918,7 @@ export class PaymentService {
     cashierId: string;
     shiftId?: string | null;
   }): Promise<{ payments: Payment[]; order: Order; receipts: (ReceiptRenderResult | null)[] }> {
-    const { shiftId, outletId: shiftOutletId } = await this.assertOpenShift(input.tenantId, input.cashierId, input.shiftId);
+    const { shiftId, outletId: shiftOutletId } = await this.assertOpenShift(input.tenantId, input.cashierId, input.outletId, input.shiftId);
     const order = await this.orderRepository.findById(input.orderId);
     if (!order) throw new NotFoundError('Order not found');
 

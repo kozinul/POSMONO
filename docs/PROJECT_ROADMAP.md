@@ -208,7 +208,7 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | Terminal Center frontend (`/terminal-center` di layout khusus + login `/terminal/login`; Hub & Anggota / Tenants / Outlet / Ringkasan / Konsolidasi) | `[x]` |
 | HubMembership `{userId, hubId, role}` + session lintas-tenant (`/auth/switch-tenant`, `activeTenantId`, tenant switcher) | `[x]` |
 | Hub Consolidated Report (Tenant→Outlet breakdown) | `[x]` |
-| `req.outletId` dibaca service (dari `X-Outlet-Id`/resolveOutlet, bukan body/default shift) | `[ ]` (deferred) |
+| `req.outletId` dibaca service (dari `X-Outlet-Id`/resolveOutlet, bukan body/default shift) | `[x]` (2026-09-23) |
 | Provision Tenant API: `ProvisionTenantService` + `POST /api/platform/provision/tenant` (Tenant + Owner + Outlet + Warehouse atomik, hub opsional, idempotency key) + `MongoUserRepository.findByEmailGlobal` + session support repos | `[x]` |
 | Terminal Center `+ New Tenant` UI (`CreateTenantModal` + `usePlatformProvisionTenant`) | `[x]` |
 | **Outlet Platform-Only** (Fase 12): owner TIDAK bisa tambah outlet — `OutletService.createWithWarehouse` + `POST /api/platform/outlets`, route tenant `POST`/`DELETE /api/outlets` dihapus, UI `+ Tambah Outlet` Terminal Center, banner tenant | `[x]` |
@@ -217,7 +217,7 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | **Terminal Center Logging + Control Plane** (2026-09-22): Audit Log trx (`PlatformAuditLog` + `platform.audit.read`, rekam eksplisit tanpa gagalkan operasi utama), Subscription History ledger (`SubscriptionHistory`, extend ter-unifikasi `SubscriptionService.extendSubscription`), Provisioning History + idempotency DB (`ProvisioningRun` di `provisioning_runs`), Tenant 360° `GET /platform/tenants/:id` (owner/users/outlets/warehouse/subscription/recentActivity/provisioningRuns), frontend tab Audit + `TenantDetailModal` tabbed | `[x]` |
 | Uji Fase 10: unit/regresi tenant standalone + sync ROLE_ACCESS_PLAN/ARCHITECTURE | `[x]` |
 
-**Completion:** ~100% (Fase 1–9 + Fase 11 ProvisionTenantService + Fase 12 Outlet Platform-Only + Fase 14 Billing & Plan Management selesai & terverifikasi 2026-09-14; Product Modifier Groups selesai 2026-09-17; HubMembership, session lintas-tenant, Hub Consolidated Report, halaman Terminal Center frontend, Create Tenant API/UI, kontrol outlet platform-only, dan Sistem Plan rampung; **Terminal Center Logging + Control Plane 2026-09-22**: Audit Log + Subscription History ledger + Provisioning History/idempotency + Tenant 360° — full suite run backend 1126/1126 (97 files), frontend 90/90 (13 files))
+**Completion:** ~100% (Fase 1–9 + Fase 11 ProvisionTenantService + Fase 12 Outlet Platform-Only + Fase 14 Billing & Plan Management selesai & terverifikasi 2026-09-14; Product Modifier Groups selesai 2026-09-17; HubMembership, session lintas-tenant, Hub Consolidated Report, halaman Terminal Center frontend, Create Tenant API/UI, kontrol outlet platform-only, dan Sistem Plan rampung; **Terminal Center Logging + Control Plane 2026-09-22**: Audit Log + Subscription History ledger + Provisioning History/idempotency + Tenant 360°; **`req.outletId` dibaca service 2026-09-23** — full suite run backend 1126/1126 (97 files), frontend 90/90 (13 files))
 
 ---
 

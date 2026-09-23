@@ -7,7 +7,6 @@ import { ValidationError } from '../../../../../@shared/infrastructure/error/App
 const openSchema = z.object({
   registerId: z.string().min(1).optional().default('register-default'),
   openingBalance: z.number().nonnegative().default(0),
-  outletId: z.string().nullable().optional(),
 });
 
 const closeSchema = z.object({
@@ -50,7 +49,7 @@ export class ShiftController extends BaseController {
   }
 
   async getCurrent(req: Request, res: Response): Promise<void> {
-    const shift = await this.shiftService.getCurrent(req.tenantId, req.userId);
+    const shift = await this.shiftService.getCurrent(req.tenantId, req.userId, req.outletId ?? null);
     if (!shift) {
       this.ok(res, null);
       return;
@@ -65,6 +64,7 @@ export class ShiftController extends BaseController {
     const shift = await this.shiftService.open({
       tenantId: req.tenantId,
       cashierId: req.userId,
+      outletId: req.outletId ?? null,
       ...parsed.data,
     });
 

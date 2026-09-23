@@ -129,6 +129,7 @@ export class PaymentController extends BaseController {
       splitIndex: parsed.data.splitIndex,
       splitBaseOrderNumber: parsed.data.splitBaseOrderNumber,
       shiftId: parsed.data.shiftId,
+      outletId: req.outletId ?? null,
       cashierName: parsed.data.cashierName,
     });
 
@@ -162,6 +163,7 @@ export class PaymentController extends BaseController {
       qrCodeUrl: parsed.data.qrCodeUrl,
       paymentTransactionId: parsed.data.paymentTransactionId,
       shiftId: parsed.data.shiftId,
+      outletId: req.outletId ?? null,
     });
 
     this.ok(res, {
@@ -210,6 +212,7 @@ export class PaymentController extends BaseController {
       splitBills: parsed.data.splitBills,
       cashierId: req.userId,
       shiftId: parsed.data.shiftId,
+      outletId: req.outletId ?? null,
     });
 
     this.ok(res, {
@@ -333,6 +336,7 @@ export class PaymentController extends BaseController {
       promoCode: parsed.data.promoCode,
       cashierName: parsed.data.cashierName,
       shiftId: parsed.data.shiftId,
+      outletId: req.outletId ?? null,
     });
 
     const orderData = result.order.serialize();

@@ -98,8 +98,10 @@ export class ShiftService {
     return shift;
   }
 
-  async getCurrent(tenantId: string, cashierId: string): Promise<Shift | null> {
-    const shift = await this.shiftRepository.findOpenShift(tenantId, cashierId);
+  async getCurrent(tenantId: string, cashierId: string, outletId?: string | null): Promise<Shift | null> {
+    const shift = outletId
+      ? await this.shiftRepository.findOpenShift(tenantId, cashierId, outletId)
+      : await this.shiftRepository.findOpenShift(tenantId, cashierId);
     if (shift) {
       await this.refreshSales(shift);
       await this.shiftRepository.save(shift);

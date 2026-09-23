@@ -42,6 +42,8 @@ const OUTLET_SCOPE_KEYS: ReadonlyArray<readonly string[]> = [
   ['products'],
   ['orders'],
   ['shifts'],
+  ['open-shift'],
+  ['shift-report'],
   ['daily-report'],
   ['sales-report'],
   ['best-sellers'],

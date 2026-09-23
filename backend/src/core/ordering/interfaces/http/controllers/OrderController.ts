@@ -221,6 +221,7 @@ export class OrderController extends BaseController {
       customerId: customerId ?? null,
       customerName: customerName ?? null,
       tableNumber: tableNumber ?? undefined,
+      outletId: req.outletId ?? null,
       ...rest,
     });
 
