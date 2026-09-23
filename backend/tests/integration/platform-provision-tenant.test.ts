@@ -23,6 +23,9 @@ import { ShiftSchema } from '../../src/core/pos/infrastructure/persistence/schem
 import { PaymentSchema } from '../../src/core/payment/infrastructure/persistence/schemas/PaymentSchema';
 import { UserSchema } from '../../src/core/identity/infrastructure/persistence/schemas/UserSchema';
 import { RoleSchema } from '../../src/core/identity/infrastructure/persistence/schemas/RoleSchema';
+import { TemplateSchema } from '../../src/core/template/infrastructure/persistence/schemas/TemplateSchema';
+import { MongoTemplateRepository } from '../../src/core/template/infrastructure/persistence/MongoTemplateRepository';
+import { TemplateService } from '../../src/core/template/application/services/TemplateService';
 
 import { Hub } from '../../src/core/hub/domain/Hub';
 import { HubService } from '../../src/core/hub/application/services/HubService';
@@ -45,6 +48,7 @@ let ctx: {
   warehouseRepo: MongoWarehouseRepository;
   userRepo: MongoUserRepository;
   roleRepo: MongoRoleRepository;
+  templateRepo: MongoTemplateRepository;
   platformToken: string;
   tenantToken: string;
 };
@@ -65,6 +69,8 @@ beforeAll(async () => {
   const provisioningRunModel =
     mongoose.models.ProvisioningRun ||
     mongoose.model('ProvisioningRun', ProvisioningRunSchema);
+  const templateModel =
+    mongoose.models.Template || mongoose.model('Template', TemplateSchema);
 
   const tenantRepo = new MongoTenantRepository(tenantModel);
   const hubRepo = new MongoHubRepository(hubModel);
@@ -74,6 +80,7 @@ beforeAll(async () => {
   const paymentRepo = new MongoPaymentRepository(paymentModel);
   const userRepo = new MongoUserRepository(userModel);
   const roleRepo = new MongoRoleRepository(roleModel);
+  const templateRepo = new MongoTemplateRepository(templateModel);
 
   const hubService = new HubService(hubRepo, tenantRepo);
   const tenantService = new TenantService(tenantRepo);
@@ -101,6 +108,7 @@ beforeAll(async () => {
     roleRepository: roleRepo,
     hubRepository: hubRepo,
     outletService,
+    templateService: new TemplateService(templateRepo),
     provisioningRunRepository: new MongoProvisioningRunRepository(provisioningRunModel),
   });
 
@@ -129,6 +137,7 @@ beforeAll(async () => {
     warehouseRepo,
     userRepo,
     roleRepo,
+    templateRepo,
     platformToken: generateTestToken({
       sub: 'platform-admin',
       tenant: 'platform',
@@ -222,6 +231,15 @@ describe('Platform Provisioning API (POST /api/platform/provision/tenant)', () =
 
     const roles = await ctx.roleRepo.findByTenant(tenantId);
     expect(roles.length).toBeGreaterThanOrEqual(3);
+
+    // Default document templates are provisioned (receipt/invoice/kot)
+    const templates = await ctx.templateRepo.findByTenant(tenantId);
+    expect(templates.templates.length).toBeGreaterThanOrEqual(3);
+    const docTypes = templates.templates.map((t) => t.documentType);
+    expect(docTypes).toContain('receipt');
+    expect(docTypes).toContain('invoice');
+    expect(docTypes).toContain('kot');
+    expect(res.body.data.templates).toBe(templates.templates.length);
   });
 
   it('provisions a tenant attached to a Hub when hubId is provided', async () => {

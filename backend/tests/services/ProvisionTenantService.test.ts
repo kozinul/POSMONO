@@ -12,6 +12,7 @@ describe('ProvisionTenantService', () => {
   let roleRepo: any;
   let hubRepo: any;
   let outletService: any;
+  let templateService: any;
   let passwordService: any;
   let provisioningRunRepo: any;
   let service: ProvisionTenantService;
@@ -65,6 +66,9 @@ describe('ProvisionTenantService', () => {
         return outlet;
       }),
     };
+    templateService = {
+      create: vi.fn().mockResolvedValue({ id: 'tpl-1' }),
+    };
     passwordService = {
       hash: vi.fn().mockResolvedValue('hashed-password'),
       compare: vi.fn().mockResolvedValue(true),
@@ -91,6 +95,7 @@ describe('ProvisionTenantService', () => {
         roleRepository: roleRepo,
         hubRepository: hubRepo,
         outletService,
+        templateService,
         provisioningRunRepository: provisioningRunRepo,
       },
       passwordService,
@@ -114,6 +119,8 @@ describe('ProvisionTenantService', () => {
     expect(roleRepo.save).toHaveBeenCalled();
     expect(userRepo.save).toHaveBeenCalledTimes(1);
     expect(outletService.ensureDefault).toHaveBeenCalledTimes(1);
+    expect(templateService.create).toHaveBeenCalled();
+    expect(result.templates).toBeGreaterThan(0);
 
     const savedOwner = userRepo.save.mock.calls[0][0];
     expect(savedOwner.serialize().outletIds).toEqual([]);

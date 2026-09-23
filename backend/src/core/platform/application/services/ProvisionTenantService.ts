@@ -5,7 +5,7 @@ import { UserId } from '../../../../@shared/domain/Identifier';
 import { Tenant } from '../../../tenant/domain/Tenant';
 import { User } from '../../../identity/domain/User';
 import { Role } from '../../../identity/domain/Role';
-import { DEFAULT_ROLES } from '../../defaults';
+import { DEFAULT_ROLES, DEFAULT_TEMPLATES } from '../../defaults';
 import { PasswordService } from '../../../identity/domain/services/PasswordService';
 import { OutletService } from '../../../outlet/application/services/OutletService';
 import {
@@ -39,6 +39,7 @@ export interface ProvisionTenantResult {
   owner: { id: string; name: string; email: string };
   outlet: { id: string; name: string; warehouseId: string | null };
   warehouse: { id: string; name: string } | null;
+  templates: number;
   status: 'ready';
 }
 
@@ -48,6 +49,7 @@ interface ProvisionTenantServiceDeps {
   roleRepository: any;
   hubRepository: any;
   outletService: OutletService;
+  templateService: any;
   provisioningRunRepository?: MongoProvisioningRunRepository;
 }
 
@@ -235,6 +237,25 @@ export class ProvisionTenantService {
         run.addStep('warehouse', 'success', 'Warehouse Utama dibuat');
       }
 
+      let templateCount = 0;
+      if (this.deps.templateService) {
+        run.addStep('templates', 'success', 'Template dokumen default disalin');
+        const t4 = Date.now();
+        for (const def of DEFAULT_TEMPLATES) {
+          await this.deps.templateService.create({
+            tenantId,
+            name: def.name,
+            description: def.description,
+            documentType: def.documentType,
+            paper: def.paper,
+            sections: def.sections,
+            isDefault: def.isDefault,
+          });
+          templateCount += 1;
+        }
+        run.markStepDuration(steps.length - 1, Date.now() - t4);
+      }
+
       run.addStep('subscription', 'skipped', 'Trial — assign plan via Terminal Center');
 
       run.setTenantId(tenantId);
@@ -257,6 +278,7 @@ export class ProvisionTenantService {
           warehouseId,
         },
         warehouse: warehouseId ? { id: warehouseId, name: 'Warehouse Utama' } : null,
+        templates: templateCount,
         status: 'ready',
       };
     };

@@ -320,6 +320,12 @@ Modular SaaS POS Platform (Node.js/Express + React/Tailwind). Multi-tenant, mult
   - **Frontend single-source**: `ReceiptDisplay` tidak lagi menghitung ulang diskon/pajak/pembulatan — render `layout` HTML atau fallback minimal dari `receipt.viewModel` (tanpa logika bisnis); `posStore.Receipt` + `viewModel?`; `PaymentModal.applyPaymentResult` & `PosPage` Print Ulang meneruskan `receipt.viewModel` (PosPage sekarang pakai `result.payload` dari `apiPrintReceipt`).
   - **Tests**: `ReceiptAssembler.test.ts` (invoice ref header, payment referenceLine non-cash, timezone Asia/Makassar, modifier `+Rp 0` non-GRATIS, Nilai Lain fraction, footer & grandTotal roundedPayable), `justifyColumns.test.ts`, `templates.test.ts`, `render-default-receipt.test.ts`. Belum dijalankan: `MONGO_URI=… pnpm reseed:templates` pada DB dev (baru unit test); E2E manual struk QRIS/cash.
 
+### Tenant Baru (Provisioning) Menyertakan Template Default — 2026-09-23
+- **Gejala**: tenant dibuat via Terminal Center (`POST /api/platform/provision/tenant`) tidak punya template struk/KOT/invoice → print gagal
+- **Root cause**: hanya `OnboardingService.provision` (via event `platform.tenant.created` dari `TenantService.create`) yang men-seed `DEFAULT_TEMPLATES`; `ProvisionTenantService` membuat roles/owner/outlet/warehouse langsung tanpa publish event
+- **Fix**: `ProvisionTenantService` dep opsional `templateService` → menyalin seluruh **`DEFAULT_TEMPLATES`** (Struk Kasir Default, Standard Receipt 58mm, Standard KOT 80mm, Standard Invoice A4) via `templateService.create`; step run `templates`; `ProvisionTenantResult.templates` = count. Wiring `container.ts` deps `provisionTenantService` + `templateService`; frontend interface `ProvisionTenantResult.templates?` di `usePlatform.ts`
+- **Tests**: `ProvisionTenantService.test.ts` assert create dipanggil; `platform-provision-tenant.test.ts` assert ≥3 template (receipt/invoice/kot) di Mongo + count hasil sesuai; backend 1129/1129 (97 files), frontend 90/90, tsc bersih
+
 ### Login Tenant Hasil Provisioning: Email Global Fallback — 2026-09-23
 - **Gejala**: tenant baru dibuat via Terminal Center (`POST /api/platform/provision/tenant`), owner tak bisa login di `/login` — "Invalid credentials"
 - **Root cause**: `LoginPage` tidak mengirim `X-Tenant-Id`; `tenantContext` fallback ke `dev-tenant` (dev) / `''` (produksi), padahal owner tenant baru punya `tenantId` acak → `AuthService.execute` mencari di tenant salah

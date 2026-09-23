@@ -36,6 +36,31 @@ Copy this block for each new day:
 
 ## Entries
 
+### DATE: 2026-09-23 — Provisioning Tenant Baru Menyalin Template Default (Struk/KOT/Invoice)
+
+**Spek user**: setiap tenant baru dibuat, template dokumen (terutama struk) harus ikut tersedia — "hanya yang default saja" (bukan template custom).
+
+**Today I worked on:**
+
+- **Gejala**: tenant dibuat via Terminal Center (`POST /api/platform/provision/tenant`) tidak mendapat template default apa pun → struk/KOT/invoice tidak bisa dirender.
+- **Root cause**: hanya jalur `TenantService.create` → event `platform.tenant.created` → `OnboardingService.provision` yang men-seed `DEFAULT_TEMPLATES`; `ProvisionTenantService` membuat roles/owner/outlet/warehouse langsung tanpa mem-publish event → tenant baru tanpa template.
+- **Fix**: `ProvisionTenantService` kini menerima dep opsional `templateService` dan saat provisioning menyalin **seluruh `DEFAULT_TEMPLATES`** (Struk Kasir Default, Standard Receipt 58mm, Standard KOT 80mm, Standard Invoice A4) via `templateService.create` — step `templates` ditambahkan; hasil `ProvisionTenantResult` + `templates` (count).
+- **Wiring DI**: `container.ts` deps `provisionTenantService` + `templateService: container.resolve('templateService')`.
+- **Frontend**: interface `ProvisionTenantResult.templates?` di `usePlatform.ts`.
+
+**What I completed:**
+
+- `ProvisionTenantService.test.ts` assertion template dibuat; `platform-provision-tenant.test.ts` +assert ≥3 template (receipt/invoice/kot) tersimpan di Mongo, `res.body.data.templates` cocok dengan count riil.
+- Backend **1129/1129 (97 files)** pass; tsc backend & frontend bersih; frontend **90/90**.
+
+**What I learned:**
+
+- Jalur provisioning Terminal Center mandiri dari Onboarding — template seed harus eksplisit di service, bukan bergantung event bus (roles sudah dibuat lebih dulu sehingga guard `hasInfrastructure` OnboardingService menolak re-seed).
+
+**Tomorrow priority:**
+
+- MVP deployment (VPS/SSL/monitoring/backup) — menunggu akses VPS; verifikasi E2E: provision tenant baru → login owner → struk tampil default.
+
 ### DATE: 2026-09-23 — `req.outletId` dibaca service (deferred G2 rampung)
 
 **Today I worked on:**

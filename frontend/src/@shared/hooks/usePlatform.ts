@@ -344,6 +344,7 @@ export interface ProvisionTenantResult {
   owner: { id: string; name: string; email: string };
   outlet: { id: string; name: string; warehouseId: string | null };
   warehouse: { id: string; name: string } | null;
+  templates?: number;
   status: 'ready';
 }
 

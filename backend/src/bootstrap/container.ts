@@ -1104,6 +1104,7 @@ export function buildContainer() {
           roleRepository: container.resolve('roleRepository'),
           hubRepository: container.resolve('hubRepository'),
           outletService: container.resolve('outletService'),
+          templateService: container.resolve('templateService'),
           provisioningRunRepository: container.resolve('provisioningRunRepository'),
         },
       }),
