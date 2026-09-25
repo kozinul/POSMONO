@@ -143,6 +143,7 @@ import { MongoOutletRepository } from '../core/outlet/infrastructure/persistence
 import { OutletService } from '../core/outlet/application/services/OutletService';
 import { OutletController } from '../core/outlet/interfaces/http/controllers/OutletController';
 import { PlatformController } from '../core/platform/interfaces/http/controllers/PlatformController';
+import { PlatformCleanupService } from '../core/platform/application/services/PlatformCleanupService';
 import { ProvisionTenantService } from '../core/platform/application/services/ProvisionTenantService';
 import { PlanSchema } from '../core/billing/infrastructure/persistence/schemas/PlanSchema';
 import { SubscriptionSchema } from '../core/billing/infrastructure/persistence/schemas/SubscriptionSchema';
@@ -1109,6 +1110,10 @@ export function buildContainer() {
         },
       }),
     }),
+    platformCleanupService: asClass(PlatformCleanupService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({ connection: systemConnection }),
+    }),
     platformController: asClass(PlatformController, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
@@ -1127,6 +1132,7 @@ export function buildContainer() {
           userRepository: container.resolve('userRepository'),
           roleRepository: container.resolve('roleRepository'),
           warehouseRepository: container.resolve('warehouseRepository'),
+          cleanupService: container.resolve('platformCleanupService'),
         },
       }),
     }),

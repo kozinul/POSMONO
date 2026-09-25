@@ -126,7 +126,35 @@ export class OutletService {
   }
 
   async ensureDefault(tenantId: string, data?: { name?: string; address?: string; phone?: string }, session?: any): Promise<Outlet> {
-    let outlet = await this.outletRepository.findDefault(tenantId);
+    // 1. Resolve the tenant's default warehouse.
+    //    Prefer a tenant-scoped name hit first; then adopt the legacy literal id
+    //    'utama' ONLY if the document actually belongs to this tenant (never to
+    //    another tenant — upserting on _id would overwrite foreign data).
+    let warehouse = await this.warehouseRepository.findByName(tenantId, DEFAULT_WAREHOUSE_NAME);
+    if (!warehouse) {
+      const legacy = await this.warehouseRepository.findById(DEFAULT_WAREHOUSE_ID);
+      if (legacy && legacy.serialize().tenantId === tenantId) warehouse = legacy;
+    }
+
+    const needCreateWarehouse = !warehouse;
+    const warehouseId = needCreateWarehouse
+      ? (await this.warehouseRepository.findById(DEFAULT_WAREHOUSE_ID))
+        ? `${DEFAULT_WAREHOUSE_ID}-${tenantId}`
+        : DEFAULT_WAREHOUSE_ID
+      : warehouse!.serialize().id;
+
+    // 2. Resolve the default outlet. The default outlet is the one linked 1:1 to
+    //    the default warehouse — NOT necessarily named 'Outlet Utama' (Terminal
+    //    Center provisioning may create it with a custom name). Looking it up via
+    //    the warehouse link prevents a duplicate "Outlet Utama" being created at
+    //    every boot.
+    let outlet = await this.outletRepository.findByWarehouse(warehouseId);
+    if (!outlet) outlet = await this.outletRepository.findByName(tenantId, DEFAULT_OUTLET_NAME);
+    if (!outlet) {
+      const outlets = await this.outletRepository.findByTenant(tenantId);
+      if (outlets.length === 1) outlet = outlets[0];
+    }
+
     if (!outlet) {
       outlet = Outlet.create({
         tenantId,
@@ -142,11 +170,7 @@ export class OutletService {
 
     const outletId = outlet.serialize().id;
 
-    let warehouse = await this.warehouseRepository.findById(DEFAULT_WAREHOUSE_ID);
-    if (warehouse && warehouse.serialize().tenantId !== tenantId) warehouse = null;
-    if (!warehouse) warehouse = await this.warehouseRepository.findByName(tenantId, DEFAULT_WAREHOUSE_NAME);
-
-    if (!warehouse) {
+    if (needCreateWarehouse) {
       warehouse = Warehouse.create(
         {
           tenantId,
@@ -155,18 +179,19 @@ export class OutletService {
           address: '',
           isActive: true,
         },
-        DEFAULT_WAREHOUSE_ID,
+        warehouseId,
       );
 
       await this.warehouseRepository.save(warehouse, { session });
-    } else if (warehouse.serialize().outletId !== outletId) {
-      warehouse.update({ outletId });
-      await this.warehouseRepository.save(warehouse, { session });
     }
 
-    if (outlet.serialize().warehouseId !== warehouse.serialize().id) {
-      outlet.assignWarehouse(warehouse.serialize().id);
+    if (outlet.serialize().warehouseId !== warehouseId) {
+      outlet.assignWarehouse(warehouseId);
       await this.outletRepository.save(outlet, { session });
+    }
+    if (warehouse!.serialize().outletId !== outletId) {
+      warehouse!.update({ outletId });
+      await this.warehouseRepository.save(warehouse!, { session });
     }
 
     return outlet;

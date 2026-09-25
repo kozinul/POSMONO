@@ -4,7 +4,7 @@ export const ProvisioningRunSchema = new Schema(
   {
     _id: { type: String },
     requestId: { type: String, required: true, index: true },
-    idempotencyKey: { type: String, default: null },
+    idempotencyKey: { type: String, default: undefined },
     tenantName: { type: String, required: true, index: true },
     ownerEmail: { type: String, required: true, index: true },
     hubId: { type: String, default: null },

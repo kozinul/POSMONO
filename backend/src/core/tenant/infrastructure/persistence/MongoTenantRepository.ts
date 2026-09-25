@@ -13,6 +13,9 @@ interface TenantDoc extends Document<string> {
   status: string;
   subscriptionExpiresAt: Date | null;
   businessType: string;
+  businessCategory: string;
+  address: string;
+  phone: string;
   modules: string[];
   databaseName: string;
   config: any;
@@ -37,6 +40,9 @@ export class MongoTenantRepository {
       status: doc.status as ITenant['status'],
       subscriptionExpiresAt: doc.subscriptionExpiresAt ?? null,
       businessType: doc.businessType as ITenant['businessType'],
+      businessCategory: doc.businessCategory ?? '',
+      address: doc.address ?? '',
+      phone: doc.phone ?? '',
       modules: doc.modules,
       databaseName: doc.databaseName,
       config: doc.config,
@@ -60,6 +66,9 @@ export class MongoTenantRepository {
       status: data.status,
       subscriptionExpiresAt: data.subscriptionExpiresAt,
       businessType: data.businessType,
+      businessCategory: data.businessCategory,
+      address: data.address,
+      phone: data.phone,
       modules: data.modules,
       databaseName: data.databaseName,
       config: data.config,
@@ -82,6 +91,11 @@ export class MongoTenantRepository {
     const doc = await this.model.findById(id).exec();
     if (!doc) return null;
     return this.toDomain(doc);
+  }
+
+  async delete(id: string): Promise<boolean> {
+    const res = await this.model.deleteOne({ _id: id }).exec();
+    return (res.deletedCount ?? 0) > 0;
   }
 
   async findAll(): Promise<Tenant[]> {

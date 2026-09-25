@@ -418,6 +418,102 @@ export function usePlatformExtendSubscription() {
   });
 }
 
+export interface PlatformUpdateTenantInput {
+  name?: string;
+  businessType?: string;
+  businessCategory?: string;
+  address?: string;
+  phone?: string;
+  hubId?: string | null;
+}
+
+export function usePlatformUpdateTenant() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ tenantId, ...data }: { tenantId: string } & PlatformUpdateTenantInput) => {
+      const res = await api.put<{ success: boolean; data: PlatformTenantRow }>(`${BASE}/tenants/${tenantId}`, data);
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['platform-tenants'] });
+      queryClient.invalidateQueries({ queryKey: ['platform-tenant'] });
+      queryClient.invalidateQueries({ queryKey: ['platform-hubs'] });
+    },
+  });
+}
+
+export interface PlatformDeleteTenantResult {
+  deleted: boolean;
+  tenantId: string;
+  totalDeleted: number;
+  perCollection: Record<string, number>;
+}
+
+export function usePlatformDeleteTenant() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ tenantId, reason }: { tenantId: string; reason?: string }) => {
+      const res = await api.delete<{ success: boolean; data: PlatformDeleteTenantResult }>(
+        `${BASE}/tenants/${tenantId}`,
+        { data: { reason } },
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['platform-tenants'] });
+      queryClient.invalidateQueries({ queryKey: ['platform-outlets'] });
+      queryClient.invalidateQueries({ queryKey: ['platform-hubs'] });
+    },
+  });
+}
+
+export interface PlatformUpdateOutletInput {
+  tenantId: string;
+  name?: string;
+  address?: string;
+  phone?: string;
+  isActive?: boolean;
+}
+
+export function usePlatformUpdateOutlet() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ outletId, ...data }: { outletId: string } & PlatformUpdateOutletInput) => {
+      const res = await api.put<{ success: boolean; data: PlatformOutletRow }>(`${BASE}/outlets/${outletId}`, data);
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['platform-outlets'] });
+      queryClient.invalidateQueries({ queryKey: ['platform-tenants'] });
+    },
+  });
+}
+
+export interface PlatformDeleteOutletResult {
+  deleted: boolean;
+  outletId: string;
+  tenantId: string;
+  warehouseDeleted: number;
+  usersUpdated: number;
+}
+
+export function usePlatformDeleteOutlet() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ outletId, tenantId, reason }: { outletId: string; tenantId: string; reason?: string }) => {
+      const res = await api.delete<{ success: boolean; data: PlatformDeleteOutletResult }>(
+        `${BASE}/outlets/${outletId}`,
+        { data: { tenantId, reason } },
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['platform-outlets'] });
+      queryClient.invalidateQueries({ queryKey: ['platform-tenants'] });
+    },
+  });
+}
+
 export function usePlatformPlans(activeOnly = false) {
   return useQuery({
     queryKey: ['platform-plans', activeOnly],

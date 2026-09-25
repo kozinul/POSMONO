@@ -118,9 +118,23 @@ export class TenantService {
     return tenant;
   }
 
-  async updateProfile(id: string, data: { name?: string; businessCategory?: string; address?: string; phone?: string }): Promise<Tenant> {
+  async updateProfile(id: string, data: { name?: string; businessCategory?: string; businessType?: ITenant['businessType']; address?: string; phone?: string }): Promise<Tenant> {
     const tenant = await this.getById(id);
     tenant.updateProfile(data);
+    await this.tenantRepository.save(tenant);
+    return tenant;
+  }
+
+  async assignHub(id: string, hubId: string): Promise<Tenant> {
+    const tenant = await this.getById(id);
+    tenant.assignHub(hubId);
+    await this.tenantRepository.save(tenant);
+    return tenant;
+  }
+
+  async unassignHub(id: string): Promise<Tenant> {
+    const tenant = await this.getById(id);
+    tenant.unassignHub();
     await this.tenantRepository.save(tenant);
     return tenant;
   }

@@ -44,10 +44,6 @@ const receiptSections: DocumentSection[] = [
       { text: 'Service Charge ({{ summary.serviceChargeRate | number(0) }}%)', align: 'left' },
       { text: '{{ summary.serviceCharge | idr }}', align: 'right' },
     ], style: {}, visibility: { operator: 'AND', rules: [{ field: 'summary.serviceCharge', operator: 'greater_than', value: 0 }] } },
-    { id: 'r19b', type: 'text', columns: [
-      { text: '{{ summary.dppLabel }}', align: 'left' },
-      { text: '{{ summary.dpp | idr }}', align: 'right' },
-    ], style: {}, visibility: { operator: 'AND', rules: [{ field: 'summary.dpp', operator: 'greater_than', value: 0 }] } },
     { id: 'r20', type: 'repeater', dataSource: 'taxes', template: [
       { id: 'r21', type: 'text', columns: [
         { text: '{{ taxe.label }}', align: 'left' },

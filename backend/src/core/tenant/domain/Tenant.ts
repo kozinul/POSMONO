@@ -165,9 +165,10 @@ export class Tenant extends AggregateRoot<TenantId> {
     this.updatedAt = new Date();
   }
 
-  updateProfile(data: { name?: string; businessCategory?: string; address?: string; phone?: string }): void {
+  updateProfile(data: { name?: string; businessCategory?: string; businessType?: BusinessType; address?: string; phone?: string }): void {
     if (data.name !== undefined) this.name = data.name;
     if (data.businessCategory !== undefined) this.businessCategory = data.businessCategory;
+    if (data.businessType !== undefined) this.businessType = data.businessType;
     if (data.address !== undefined) this.address = data.address;
     if (data.phone !== undefined) this.phone = data.phone;
     this.updatedAt = new Date();

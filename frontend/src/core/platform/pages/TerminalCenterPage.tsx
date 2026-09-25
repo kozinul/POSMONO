@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Swal from 'sweetalert2';
 import {
   usePlatformHubs,
   usePlatformHub,
@@ -9,6 +10,10 @@ import {
   usePlatformPaymentsSummary,
   usePlatformProvisionTenant,
   usePlatformCreateOutlet,
+  usePlatformUpdateTenant,
+  usePlatformDeleteTenant,
+  usePlatformUpdateOutlet,
+  usePlatformDeleteOutlet,
   usePlatformUpdateTenantStatus,
   usePlatformExtendSubscription,
   usePlatformTenant,
@@ -23,6 +28,7 @@ import {
   PLAN_MODULE_LABELS,
   type PlatformHub,
   type PlatformTenantRow,
+  type PlatformOutletRow,
   type PlatformSubscriptionHistoryEntry,
 } from '../../../@shared/hooks/usePlatform';
 import {
@@ -537,6 +543,189 @@ function CreateTenantModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
   );
 }
 
+function EditTenantModal({
+  tenant,
+  isOpen,
+  onClose,
+}: {
+  tenant: PlatformTenantRow;
+  isOpen: boolean;
+  onClose: () => void;
+}) {
+  const { data: hubs = [] } = usePlatformHubs();
+  const updateTenant = usePlatformUpdateTenant();
+
+  const [name, setName] = useState(tenant.name);
+  const [businessType, setBusinessType] = useState(tenant.businessType ?? 'restaurant');
+  const [address, setAddress] = useState('');
+  const [phone, setPhone] = useState('');
+  const [hubId, setHubId] = useState<string>(tenant.hubId ?? '');
+  const [error, setError] = useState('');
+  const [saved, setSaved] = useState(false);
+
+  const { data: detail } = usePlatformTenant(tenant.id);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    if (!name.trim()) return setError('Nama tenant wajib diisi');
+
+    try {
+      await updateTenant.mutateAsync({
+        tenantId: tenant.id,
+        name: name.trim(),
+        businessType,
+        address: address.trim() || undefined,
+        phone: phone.trim() || undefined,
+        hubId: hubId || null,
+      });
+      setSaved(true);
+    } catch (err: any) {
+      const msg =
+        err.response?.data?.error?.message ||
+        err.response?.data?.message ||
+        err.message ||
+        'Gagal memperbarui tenant';
+      setError(msg);
+    }
+  };
+
+  const handleClose = () => {
+    setSaved(false);
+    setError('');
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between border-b px-6 py-4">
+          <h3 className="text-lg font-bold text-gray-900">{saved ? 'Tenant Diperbarui' : `Edit Tenant: ${tenant.name}`}</h3>
+          <button
+            onClick={handleClose}
+            disabled={updateTenant.isPending}
+            className="text-gray-400 hover:text-gray-600 text-lg font-bold disabled:opacity-50"
+          >
+            ✕
+          </button>
+        </div>
+
+        {saved ? (
+          <div className="p-6 space-y-4">
+            <div className="p-4 bg-green-50 border border-green-200 rounded-xl">
+              <p className="font-semibold text-green-800">Data tenant berhasil diperbarui!</p>
+            </div>
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={handleClose}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+              >
+                Selesai
+              </button>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            {error && (
+              <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{error}</div>
+            )}
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Nama Tenant *</label>
+              <input
+                className={inputCls}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                disabled={updateTenant.isPending}
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Tipe Bisnis</label>
+              <select
+                className={inputCls}
+                value={businessType}
+                onChange={(e) => setBusinessType(e.target.value)}
+                disabled={updateTenant.isPending}
+              >
+                <option value="restaurant">Restaurant / F&B</option>
+                <option value="retail">Retail</option>
+                <option value="service">Jasa / Service</option>
+                <option value="cafe">Cafe / Coffee Shop</option>
+                <option value="bakery">Bakery</option>
+                <option value="mixed">Mixed</option>
+                <option value="hospitality">Hospitality</option>
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Alamat</label>
+                <input
+                  className={inputCls}
+                  placeholder={detail?.address || 'Jl. ...'}
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  disabled={updateTenant.isPending}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">No. Telepon</label>
+                <input
+                  className={inputCls}
+                  placeholder={detail?.phone || '08123456789'}
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  disabled={updateTenant.isPending}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Hub</label>
+              <select
+                className={inputCls}
+                value={hubId}
+                onChange={(e) => setHubId(e.target.value)}
+                disabled={updateTenant.isPending}
+              >
+                <option value="">Standalone (Tanpa Hub)</option>
+                {hubs.map((h) => (
+                  <option key={h.id} value={h.id}>
+                    {h.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t">
+              <button
+                type="button"
+                onClick={handleClose}
+                disabled={updateTenant.isPending}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                disabled={updateTenant.isPending}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium disabled:opacity-50 flex items-center gap-2"
+              >
+                {updateTenant.isPending ? 'Menyimpan...' : 'Simpan'}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function TenantDetailModal({ tenantId, onClose }: { tenantId: string; onClose: () => void }) {
   const { data: tenant, isLoading } = usePlatformTenant(tenantId);
   const { data: plans = [] } = usePlatformPlans(true);
@@ -799,12 +988,12 @@ function TenantDetailModal({ tenantId, onClose }: { tenantId: string; onClose: (
                     <div>
                       <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Status Langganan</p>
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                        tenantSub?.subscription.status === 'active' ? 'bg-green-100 text-green-700' :
-                        tenantSub?.subscription.status === 'trialing' ? 'bg-blue-100 text-blue-700' :
-                        tenantSub?.subscription.status === 'past_due' ? 'bg-amber-100 text-amber-700' :
+                        tenantSub?.subscription?.status === 'active' ? 'bg-green-100 text-green-700' :
+                        tenantSub?.subscription?.status === 'trialing' ? 'bg-blue-100 text-blue-700' :
+                        tenantSub?.subscription?.status === 'past_due' ? 'bg-amber-100 text-amber-700' :
                         'bg-gray-100 text-gray-500'
                       }`}>
-                        {tenantSub?.subscription.status ?? 'Tidak ada'}
+                        {tenantSub?.subscription?.status ?? 'Tidak ada'}
                       </span>
                     </div>
                     {tenantSub?.subscription && (
@@ -1005,9 +1194,45 @@ function TenantsSection() {
   const [page, setPage] = useState(1);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [detailTenantId, setDetailTenantId] = useState<string | null>(null);
+  const [editTenant, setEditTenant] = useState<PlatformTenantRow | null>(null);
   const { data, isLoading } = usePlatformTenants({ search: debounced || undefined, page, limit: 20 });
   const updateStatus = usePlatformUpdateTenantStatus();
   const extendSub = usePlatformExtendSubscription();
+  const deleteTenant = usePlatformDeleteTenant();
+
+  const handleDelete = async (tenant: PlatformTenantRow) => {
+    const { value: reason, isConfirmed } = await Swal.fire({
+      title: 'Hapus Tenant?',
+      html: `<p style="color:#991b1b;margin:0 0 8px"><b>${tenant.name}</b> akan dihapus PERMANEN.</p><p style="color:#6b7280;font-size:13px;text-align:left">Seluruh data tenant (produk, order, user, dll.) akan dihapus dan tidak dapat dikembalikan. Alasan penghapusan :</p>`,
+      icon: 'warning',
+      input: 'textarea',
+      inputPlaceholder: 'Alasan penghapusan (opsional)',
+      inputAttributes: { rows: '3' },
+      showCancelButton: true,
+      confirmButtonText: 'Ya, Hapus Permanen',
+      cancelButtonText: 'Batal',
+      confirmButtonColor: '#dc2626',
+      cancelButtonColor: '#6b7280',
+      showLoaderOnConfirm: true,
+      preConfirm: async (val: string) => {
+        try {
+          await deleteTenant.mutateAsync({ tenantId: tenant.id, reason: val?.trim() || 'Permintaan penghapusan akun' });
+          return true;
+        } catch (err: any) {
+          const msg =
+            err?.response?.data?.error?.message ||
+            err?.response?.data?.message ||
+            err?.message ||
+            'Gagal menghapus tenant';
+          Swal.showValidationMessage(msg);
+          return false;
+        }
+      },
+    });
+    if (isConfirmed) {
+      Swal.fire({ title: 'Tenant Dihapus', text: `Tenant "${tenant.name}" telah dihapus permanen.`, icon: 'success', timer: 2500, showConfirmButton: false });
+    }
+  };
 
   const handleStatusChange = async (tenantId: string, currentStatus: string) => {
     const nextStatus = currentStatus === 'active' ? 'frozen' : 'active';
@@ -1069,6 +1294,7 @@ function TenantsSection() {
       </div>
       <CreateTenantModal isOpen={createModalOpen} onClose={() => setCreateModalOpen(false)} />
       {detailTenantId && <TenantDetailModal tenantId={detailTenantId} onClose={() => setDetailTenantId(null)} />}
+      {editTenant && <EditTenantModal tenant={editTenant} isOpen onClose={() => setEditTenant(null)} />}
       <div className="overflow-x-auto border rounded-lg">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
@@ -1132,6 +1358,19 @@ function TenantsSection() {
                     className="px-2 py-1 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200"
                   >
                     + Extend
+                  </button>
+                  <button
+                    onClick={() => setEditTenant(t)}
+                    className="px-2 py-1 text-xs font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 rounded border border-gray-200"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDelete(t)}
+                    disabled={deleteTenant.isPending}
+                    className="px-2 py-1 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded border border-red-200 disabled:opacity-50"
+                  >
+                    Hapus
                   </button>
                 </td>
               </tr>
@@ -1328,11 +1567,126 @@ function CreateOutletModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
   );
 }
 
+function EditOutletModal({ outlet, onClose }: { outlet: PlatformOutletRow; onClose: () => void }) {
+  const updateOutlet = usePlatformUpdateOutlet();
+  const [name, setName] = useState(outlet.name);
+  const [address, setAddress] = useState(outlet.address ?? '');
+  const [phone, setPhone] = useState(outlet.phone ?? '');
+  const [isActive, setIsActive] = useState(outlet.isActive);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (!name.trim()) return setError('Nama outlet wajib diisi');
+
+    try {
+      await updateOutlet.mutateAsync({
+        outletId: outlet.id,
+        tenantId: outlet.tenantId,
+        name: name.trim(),
+        address: address.trim() || undefined,
+        phone: phone.trim() || undefined,
+        isActive,
+      });
+      onClose();
+    } catch (err: any) {
+      const msg =
+        err.response?.data?.error?.message ||
+        err.response?.data?.message ||
+        err.message ||
+        'Gagal memperbarui outlet';
+      setError(msg.includes('already exists') ? 'Nama outlet sudah dipakai di tenant ini.' : msg);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between border-b px-6 py-4">
+          <h3 className="text-lg font-bold text-gray-900">Edit Outlet: {outlet.name}</h3>
+          <button onClick={onClose} disabled={updateOutlet.isPending} className="text-gray-400 hover:text-gray-600 text-lg font-bold disabled:opacity-50">✕</button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {error && <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{error}</div>}
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Nama Outlet *</label>
+            <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} disabled={updateOutlet.isPending} required />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Alamat</label>
+              <input className={inputCls} value={address} onChange={(e) => setAddress(e.target.value)} disabled={updateOutlet.isPending} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">No. Telepon</label>
+              <input className={inputCls} value={phone} onChange={(e) => setPhone(e.target.value)} disabled={updateOutlet.isPending} />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Status</label>
+            <select className={inputCls} value={isActive ? 'active' : 'inactive'} onChange={(e) => setIsActive(e.target.value === 'active')} disabled={updateOutlet.isPending}>
+              <option value="active">Aktif</option>
+              <option value="inactive">Nonaktif</option>
+            </select>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t">
+            <button type="button" onClick={onClose} disabled={updateOutlet.isPending} className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">Batal</button>
+            <button type="submit" disabled={updateOutlet.isPending} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium disabled:opacity-50">
+              {updateOutlet.isPending ? 'Menyimpan...' : 'Simpan'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function OutletsSection() {
   const { data: hubs = [] } = usePlatformHubs();
   const [hubId, setHubId] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
+  const [editOutlet, setEditOutlet] = useState<PlatformOutletRow | null>(null);
+  const deleteOutlet = usePlatformDeleteOutlet();
   const { data: outlets = [], isLoading } = usePlatformOutlets({ hubId: hubId || undefined });
+
+  const handleDeleteOutlet = async (o: PlatformOutletRow) => {
+    const { value: reason, isConfirmed } = await Swal.fire({
+      title: 'Hapus Outlet?',
+      html: `<p style="color:#991b1b;margin:0 0 8px"><b>${o.name}</b> akan dihapus PERMANEN.</p><p style="color:#6b7280;font-size:13px;text-align:left">Warehouse terkait juga akan dihapus. Data order/pembayaran historis tetap tersimpan. Alasan penghapusan :</p>`,
+      icon: 'warning',
+      input: 'textarea',
+      inputPlaceholder: 'Alasan penghapusan (opsional)',
+      inputAttributes: { rows: '3' },
+      showCancelButton: true,
+      confirmButtonText: 'Ya, Hapus Permanen',
+      cancelButtonText: 'Batal',
+      confirmButtonColor: '#dc2626',
+      cancelButtonColor: '#6b7280',
+      showLoaderOnConfirm: true,
+      preConfirm: async (val: string) => {
+        try {
+          await deleteOutlet.mutateAsync({ outletId: o.id, tenantId: o.tenantId, reason: val?.trim() || 'Permintaan penghapusan outlet' });
+          return true;
+        } catch (err: any) {
+          const msg =
+            err?.response?.data?.error?.message ||
+            err?.response?.data?.message ||
+            err?.message ||
+            'Gagal menghapus outlet';
+          Swal.showValidationMessage(msg);
+          return false;
+        }
+      },
+    });
+    if (isConfirmed) {
+      Swal.fire({ title: 'Outlet Dihapus', text: `Outlet "${o.name}" telah dihapus permanen.`, icon: 'success', timer: 2500, showConfirmButton: false });
+    }
+  };
 
   return (
     <div className={`${cardCls} space-y-4`}>
@@ -1352,6 +1706,7 @@ function OutletsSection() {
         </div>
       </div>
       <CreateOutletModal isOpen={createOpen} onClose={() => setCreateOpen(false)} />
+      {editOutlet && <EditOutletModal outlet={editOutlet} onClose={() => setEditOutlet(null)} />}
       <div className="overflow-x-auto border rounded-lg">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
@@ -1360,13 +1715,14 @@ function OutletsSection() {
               <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">Tenant</th>
               <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">Telepon</th>
               <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+              <th className="px-4 py-2.5 text-right text-xs font-medium text-gray-500 uppercase">Aksi</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {isLoading ? (
-              <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-400 text-sm">Memuat...</td></tr>
+              <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400 text-sm">Memuat...</td></tr>
             ) : outlets.length === 0 ? (
-              <tr><td colSpan={4} className="px-4 py-8 text-center text-gray-400 text-sm">Tidak ada outlet.</td></tr>
+              <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400 text-sm">Tidak ada outlet.</td></tr>
             ) : outlets.map((o) => (
               <tr key={o.id} className="hover:bg-gray-50">
                 <td className="px-4 py-2.5 text-sm font-medium text-gray-900">{o.name}</td>
@@ -1374,6 +1730,21 @@ function OutletsSection() {
                 <td className="px-4 py-2.5 text-sm text-gray-500">{o.phone || '-'}</td>
                 <td className="px-4 py-2.5 text-sm">
                   <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${o.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{o.isActive ? 'Aktif' : 'Nonaktif'}</span>
+                </td>
+                <td className="px-4 py-2.5 text-sm text-right space-x-2 whitespace-nowrap">
+                  <button
+                    onClick={() => setEditOutlet(o)}
+                    className="px-2 py-1 text-xs font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 rounded border border-gray-200"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDeleteOutlet(o)}
+                    disabled={deleteOutlet.isPending}
+                    className="px-2 py-1 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded border border-red-200 disabled:opacity-50"
+                  >
+                    Hapus
+                  </button>
                 </td>
               </tr>
             ))}

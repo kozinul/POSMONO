@@ -9,12 +9,12 @@ function createMockOutletRepo() {
   return {
     save: vi.fn(async (o: Outlet) => o),
     findById: vi.fn(),
-    findByTenant: vi.fn(),
-    findActiveByTenant: vi.fn(),
-    findDefault: vi.fn(),
-    findByWarehouse: vi.fn(),
-    findByName: vi.fn(),
-    delete: vi.fn(),
+    findByTenant: vi.fn(async () => []),
+    findActiveByTenant: vi.fn(async () => []),
+    findDefault: vi.fn(async () => null),
+    findByWarehouse: vi.fn(async () => null),
+    findByName: vi.fn(async () => null),
+    delete: vi.fn(async () => true),
   };
 }
 
@@ -42,7 +42,6 @@ describe('OutletService.ensureDefault', () => {
   });
 
   it('creates default outlet + default warehouse (id "utama") and links them 1:1', async () => {
-    outletRepo.findDefault.mockResolvedValue(null);
     warehouseRepo.findById.mockResolvedValue(null);
     warehouseRepo.findByName.mockResolvedValue(null);
 
@@ -62,8 +61,8 @@ describe('OutletService.ensureDefault', () => {
   it('is idempotent when default outlet + linked warehouse already exist', async () => {
     const outlet = Outlet.create({ tenantId: TENANT_ID, name: DEFAULT_OUTLET_NAME, address: '', phone: '', warehouseId: DEFAULT_WAREHOUSE_ID, isActive: true });
     const warehouse = Warehouse.create({ tenantId: TENANT_ID, outletId: outlet.serialize().id, name: DEFAULT_WAREHOUSE_NAME, address: '', isActive: true }, DEFAULT_WAREHOUSE_ID);
-    outletRepo.findDefault.mockResolvedValue(outlet);
-    warehouseRepo.findById.mockResolvedValue(warehouse);
+    outletRepo.findByWarehouse.mockResolvedValue(outlet);
+    warehouseRepo.findByName.mockResolvedValue(warehouse);
 
     const result = await service.ensureDefault(TENANT_ID);
 
@@ -74,7 +73,7 @@ describe('OutletService.ensureDefault', () => {
 
   it('adopts an existing "utama" warehouse of the same tenant and links the outlet to it', async () => {
     const warehouse = Warehouse.create({ tenantId: TENANT_ID, outletId: null, name: 'Gudang Lama', address: '', isActive: true }, DEFAULT_WAREHOUSE_ID);
-    outletRepo.findDefault.mockResolvedValue(null);
+    warehouseRepo.findByName.mockResolvedValue(null);
     warehouseRepo.findById.mockResolvedValue(warehouse);
 
     const outlet = await service.ensureDefault(TENANT_ID);
@@ -85,20 +84,34 @@ describe('OutletService.ensureDefault', () => {
     expect(updated.serialize().outletId).toBe(out.id);
   });
 
-  it('creates a fresh default warehouse when "utama" belongs to another tenant', async () => {
+  it('creates a tenant-scoped default warehouse when "utama" belongs to another tenant', async () => {
     const foreign = Warehouse.create({ tenantId: 'other-tenant', outletId: null, name: DEFAULT_WAREHOUSE_NAME, address: '', isActive: true }, DEFAULT_WAREHOUSE_ID);
-    outletRepo.findDefault.mockResolvedValue(null);
     warehouseRepo.findById.mockResolvedValue(foreign);
     warehouseRepo.findByName.mockResolvedValue(null);
 
     const outlet = await service.ensureDefault(TENANT_ID);
 
     const out = outlet.serialize();
-    expect(out.warehouseId).toBe(DEFAULT_WAREHOUSE_ID);
+    expect(out.warehouseId).toBe(`${DEFAULT_WAREHOUSE_ID}-${TENANT_ID}`);
     const created = warehouseRepo.save.mock.calls[0][0] as Warehouse;
-    expect(created.serialize().id).toBe(DEFAULT_WAREHOUSE_ID);
+    expect(created.serialize().id).toBe(`${DEFAULT_WAREHOUSE_ID}-${TENANT_ID}`);
     expect(created.serialize().outletId).toBe(out.id);
     expect(warehouseRepo.findByName).toHaveBeenCalledWith(TENANT_ID, DEFAULT_WAREHOUSE_NAME);
+  });
+
+  it('reuses a custom-named default outlet linked to the default warehouse instead of creating a duplicate "Outlet Utama"', async () => {
+    const customOutlet = Outlet.create({ tenantId: TENANT_ID, name: 'TK Putri Utama', address: '', phone: '', warehouseId: `${DEFAULT_WAREHOUSE_ID}-${TENANT_ID}`, isActive: true });
+    const warehouse = Warehouse.create({ tenantId: TENANT_ID, outletId: customOutlet.serialize().id, name: DEFAULT_WAREHOUSE_NAME, address: '', isActive: true }, `${DEFAULT_WAREHOUSE_ID}-${TENANT_ID}`);
+    outletRepo.findByWarehouse.mockResolvedValue(customOutlet);
+    warehouseRepo.findByName.mockResolvedValue(warehouse);
+
+    const result = await service.ensureDefault(TENANT_ID);
+
+    const out = result.serialize();
+    expect(out.name).toBe('TK Putri Utama');
+    expect(out.id).toBe(customOutlet.serialize().id);
+    expect(outletRepo.save).not.toHaveBeenCalled();
+    expect(warehouseRepo.save).not.toHaveBeenCalled();
   });
 });
 

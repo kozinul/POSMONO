@@ -106,4 +106,110 @@ describe('provisionDefaults (Fase 5 — boot backfill)', () => {
     const outlet = await Outlet.findOne({ tenantId: TENANT_ID }).lean();
     expect(order.outletId).toBe(outlet._id);
   });
+
+  it('does not create a duplicate default outlet for a tenant whose default was provisioned with a custom name', async () => {
+    await clearCollections();
+
+    const Tenant = container.resolve('tenantModel') as any;
+    const Outlet = container.resolve('outletModel') as any;
+    const Warehouse = container.resolve('warehouseModel') as any;
+
+    await Tenant.create({
+      _id: 'custom-tenant',
+      name: 'TK Putri',
+      slug: 'tk-putri',
+      domain: null,
+      ownerId: 'owner-2',
+      plan: 'pro',
+      status: 'active',
+      businessType: 'retail',
+      modules: ['core'],
+      databaseName: 'posmono_custom-tenant',
+      config: { timezone: 'Asia/Jakarta', currency: 'IDR', locale: 'id' },
+      billingEmail: 'owner2@local',
+    });
+
+    // Simulate Terminal Center provisioning: default outlet created with a CUSTOM
+    // name and linked 1:1 to the default warehouse.
+    const warehouseId = `${DEFAULT_WAREHOUSE_ID}-custom-tenant`;
+    await Warehouse.create({
+      _id: warehouseId,
+      tenantId: 'custom-tenant',
+      outletId: 'out-custom-1',
+      name: DEFAULT_WAREHOUSE_NAME,
+      address: '',
+      isActive: true,
+    });
+    await Outlet.create({
+      _id: 'out-custom-1',
+      tenantId: 'custom-tenant',
+      name: 'TK Putri Utama',
+      address: '',
+      phone: '',
+      warehouseId,
+      isActive: true,
+    });
+
+    await provisionDefaults(container);
+
+    expect(await Outlet.countDocuments({ tenantId: 'custom-tenant' })).toBe(1);
+    const outlet = await Outlet.findOne({ tenantId: 'custom-tenant' }).lean() as any;
+    expect(outlet.name).toBe('TK Putri Utama');
+    expect(outlet.warehouseId).toBe(warehouseId);
+    expect(await Warehouse.countDocuments({ tenantId: 'custom-tenant' })).toBe(1);
+  });
+
+  it('gives a later tenant a tenant-scoped default warehouse id instead of overwriting the first tenant\'s "utama"', async () => {
+    await clearCollections();
+
+    const Tenant = container.resolve('tenantModel') as any;
+    const Outlet = container.resolve('outletModel') as any;
+    const Warehouse = container.resolve('warehouseModel') as any;
+
+    const newTenant = (id: string, name: string) =>
+      Tenant.create({
+        _id: id,
+        name,
+        slug: id,
+        domain: null,
+        ownerId: `owner-${id}`,
+        plan: 'pro',
+        status: 'active',
+        businessType: 'retail',
+        modules: ['core'],
+        databaseName: `posmono_${id}`,
+        config: { timezone: 'Asia/Jakarta', currency: 'IDR', locale: 'id' },
+        billingEmail: `${id}@local`,
+      });
+    await newTenant('first-tenant', 'Toko ABC');
+    await newTenant('second-tenant', 'TK Putri');
+
+    await provisionDefaults(container);
+
+    const warehouses = (await Warehouse.find().lean().exec()) as any[];
+    expect(warehouses.length).toBe(2);
+    expect(await Outlet.countDocuments({})).toBe(2);
+
+    const byTenant: Record<string, string> = {};
+    for (const w of warehouses) byTenant[w.tenantId] = w._id;
+    expect(byTenant['first-tenant']).toBeTruthy();
+    expect(byTenant['second-tenant']).toBeTruthy();
+    expect(byTenant['first-tenant']).not.toBe(byTenant['second-tenant']);
+
+    // the global literal id 'utama' ends up owned by exactly ONE tenant
+    const utamaOwners = warehouses.filter((w) => w._id === DEFAULT_WAREHOUSE_ID);
+    expect(utamaOwners.length).toBe(1);
+    expect(utamaOwners[0].tenantId).toBe(utamaOwners[0].tenantId);
+
+    // every other tenant gets a tenant-scoped id
+    const nonUtama = warehouses.filter((w) => w._id !== DEFAULT_WAREHOUSE_ID);
+    expect(nonUtama.length).toBe(1);
+    expect(nonUtama[0]._id).toBe(`${DEFAULT_WAREHOUSE_ID}-${nonUtama[0].tenantId}`);
+    expect(nonUtama[0].outletId).toBeTruthy();
+
+    // idempotent second run — still exactly one warehouse + outlet per tenant, no _id clobbering
+    await provisionDefaults(container);
+    expect(await Warehouse.countDocuments({})).toBe(2);
+    expect(await Outlet.countDocuments({})).toBe(2);
+  });
 });

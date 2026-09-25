@@ -90,7 +90,7 @@ export class SubscriptionController extends BaseController {
   async getSubscriptionHistory(req: Request, res: Response): Promise<void> {
     const tenantId = req.params.tenantId;
     const history = await this.subscriptionService.getTenantSubscriptionHistory(tenantId);
-    this.ok(res, history);
+    this.ok(res, { items: history, total: history.length });
   }
 
   async getTenantEntitlement(req: Request, res: Response): Promise<void> {

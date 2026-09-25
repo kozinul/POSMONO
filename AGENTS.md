@@ -20,6 +20,23 @@ Modular SaaS POS Platform (Node.js/Express + React/Tailwind). Multi-tenant, mult
 
 ## Recent Changes (2026-08)
 
+### Cross-Tenant Outlet Tipuan Fix: `OutletService.ensureDefault` Tenant-Scoped — 2026-09-23
+- **Gejala**: boot provisioning (asli + Terminal Center Fase 11) men-scan outlet default secara **globally-by-name** (`findByName` tanpa tenant) → outlet 'Outlet Utama' milik tenant A bisa di-"rasuk" oleh tenant B → tiap boot B membuat **Outlet Utama + Warehouse Utama duplikat** (bayangkan `OutletService` yang mendapatkan literal `'utama'` milik tenant lain), plus indeks E11000 ketika dua provision run tanpa idempotencyKey.
+- **Fix (tenant-scoped)**: `OutletService.ensureDefault(tenantId, …)` kini **hanya** berinteraksi dengan dokumen milik `tenantId`:
+  - `ensureDefault` pipeline (warehouse → outlet) memakai `findByName(tenantId, …)` + `findById` yang **mengecek `tenantId`**, tidak pernah mengadopsi `'utama'` literal milik tenant lain (skip → gunakan skema id. iterator tenant-scoped `'utama-${tenantId}'`).
+  - Penggabungan legacy literal id literal `'utama'` hanya dilakukan bila **document tenant sama** — mencegah penimpaan data lintas tenant.
+- **Tests**: `OutletService.test.ts` +4 (custom-named outlet dedup — reuse outlet linked-to-warehouse daripada buat 'Outlet Utama' baru; adopt-literal-hanya-jika-own-tenant; scoped-id untuk foreign 'utama'; idempotent boot kedua tanpa duplikat); `provisioning.test.ts` +106 (regresi HTTP dua tenant / custom name). Backend **1148/1148 (99 files)** + tsc bersih; frontend **90/90 (13 files)** + tsc bersih + vite build OK.
+
+### Terminal Center: Tenant & Outlet CRUD Lengkap (Hard Delete Permanen) — 2026-09-23
+- **Spek**: platform admin butuh mengelola tenant & outlet dari Terminal Center — edit profil tenant (termasuk ganti/lepas hub), hapus tenant permanen, edit & hapus outlet.
+- **Keputusan produk**: **hard delete permanen** (bukan soft-delete). `DELETE tenant` = hapus SEMUA data tenant (cascade penuh di 31 koleksi ber-`tenantId`); `platform_audit_logs` & `provisioning_runs` **sengaja dipertahankan** sebagai jejak operasional (bukan data tenant). `DELETE outlet` = hapus doc outlet + warehouse 1:1 + `$pull outletIds` dari users; orders/payments historis dipertahankan agar laporan tidak rusak.
+- **Backend `PlatformCleanupService`** (`core/platform/application/services/`): `deleteTenantData(tenantId)` → cascade deleteMany per koleksi dari `TENANT_SCOPED_COLLECTIONS` (31 koleksi), cek `listCollections` agar tidak membuat koleksi kosong; `deleteOutletData(tenantId, outletId)` → hapus warehouses (by tenantId+outletId), outlets (by _id+tenantId), `$pull outletIds` dari users. Hasil `{deleted, totalDeleted}` / `{warehouseDeleted, outletDeleted, usersUpdated}`.
+- **API baru** (`platform.routes.ts`, `platformAuthenticate` + `platformAuthorize`): `PUT /tenants/:tenantId` (`hub:manage`, dgn validasi hub exists saat assign), `DELETE /tenants/:tenantId` (`hub:manage`), `PUT /outlets/:outletId` (`outlet:manage`, body wajib `tenantId`), `DELETE /outlets/:outletId` (`outlet:manage`, body wajib `tenantId`). Audit: `TENANT_UPDATED`/`TENANT_DELETED`/`OUTLET_UPDATED`/`OUTLET_DELETED`.
+- **`TenantService`** + `assignHub(id, hubId)` / `unassignHub(id)`; `updateProfile` menerima `businessType`. **`MongoTenantRepository`**: `delete(id)` BARU + `toPersistence`/`toDomain` kini mem-persist `businessCategory`/`address`/`phone` (sebelumnya hilang! update profil tak tersimpan utk 3 field itu).
+- **404 langganan di-fix**: `SubscriptionService.getTenantSubscription` mengembalikan `{subscription: null, plan: null}` alih-alih melempar `NotFoundError` saat tenant tak punya subscription → frontend menampilkan "Tidak ada" bukan error.
+- **Frontend**: hooks di `usePlatform.ts` — `usePlatformUpdateTenant` (PUT), `usePlatformDeleteTenant` (DELETE dgn `{data:{reason}}`), `usePlatformUpdateOutlet` (PUT), `usePlatformDeleteOutlet` (DELETE dgn `{data:{tenantId, reason}}`); `TerminalCenterPage.tsx` + komponen `EditTenantModal` (name/businessType/hub/address/phone) & `EditOutletModal` (name/address/phone/isActive) + tombol Edit/Hapus di tab Tenants & Outlets (konfirmasi+alasan via `prompt`).
+- **Tests**: `platform-tenant-crud.test.ts` baru (14 integrasi HTTP penuh: update profil, assign/unassign hub, hub tak ada → 404, hard-delete cascade users+products + audit tray, 404 unknown tenant, update outlet, delete outlet + warehouse + usersUpdated, RBAC 401/403). Backend **1143/1143 (98 files)**; frontend **90/90 (13 files)**; tsc backend & frontend bersih.
+
 ### Void Transaksi Redesign
 - **Before**: Nested modals (list → item detail → void confirm) — clunky UX
 - **After**: Click order in list → transaction loads directly in cart sidebar with "Tutup" close button
@@ -320,6 +337,11 @@ Modular SaaS POS Platform (Node.js/Express + React/Tailwind). Multi-tenant, mult
   - **Frontend single-source**: `ReceiptDisplay` tidak lagi menghitung ulang diskon/pajak/pembulatan — render `layout` HTML atau fallback minimal dari `receipt.viewModel` (tanpa logika bisnis); `posStore.Receipt` + `viewModel?`; `PaymentModal.applyPaymentResult` & `PosPage` Print Ulang meneruskan `receipt.viewModel` (PosPage sekarang pakai `result.payload` dari `apiPrintReceipt`).
   - **Tests**: `ReceiptAssembler.test.ts` (invoice ref header, payment referenceLine non-cash, timezone Asia/Makassar, modifier `+Rp 0` non-GRATIS, Nilai Lain fraction, footer & grandTotal roundedPayable), `justifyColumns.test.ts`, `templates.test.ts`, `render-default-receipt.test.ts`. Belum dijalankan: `MONGO_URI=… pnpm reseed:templates` pada DB dev (baru unit test); E2E manual struk QRIS/cash.
 
+### Backfill Template Default per Tenant (2026-09-23)
+- **Kegunaan**: tenant lama yang dibuat sebelum `ProvisionTenantService` men-seed `DEFAULT_TEMPLATES` tidak punya template struk/KOT/invoice → print gagal
+- **Script**: `backend/src/scripts/copyDefaultTemplates.ts` (`pnpm copy:templates`) — menyisipkan `DEFAULT_TEMPLATES` yang **belum ada** (cek `{tenantId, name}`); template existing tidak disentuh; `isDefault` ikut di-set (+ clear default lain per documentType). Mode: `--tenant=<id>` / `--owner=<email>` (resolve tenantId dari user) / tanpa arg = semua tenant; `--dry-run` untuk report tanpa write
+- **Jebakan**: `MONGO_URI` harus dibawa eksplisit (dotenv tidak override env existing): `MONGO_URI=… pnpm copy:templates -- --owner=toni@…`
+
 ### Tenant Baru (Provisioning) Menyertakan Template Default — 2026-09-23
 - **Gejala**: tenant dibuat via Terminal Center (`POST /api/platform/provision/tenant`) tidak punya template struk/KOT/invoice → print gagal
 - **Root cause**: hanya `OnboardingService.provision` (via event `platform.tenant.created` dari `TenantService.create`) yang men-seed `DEFAULT_TEMPLATES`; `ProvisionTenantService` membuat roles/owner/outlet/warehouse langsung tanpa publish event
@@ -332,6 +354,14 @@ Modular SaaS POS Platform (Node.js/Express + React/Tailwind). Multi-tenant, mult
 - **Fix** (`AuthService.execute` + `AuthController.login`): login **tanpa konteks tenant eksplisit** (`resolveByEmailGlobal` = tidak ada header `x-tenant-id` & tidak ada query `tenant`) kini fallback ke `findByEmailGlobal(email)` (provisioning menjamin email owner unik global) → `tenantId` diambil dari user; token/session dipakai `tenantId` hasil resolve
 - **Keamanan**: platform login tetap scoped (`X-Tenant-Id: platform` header → fallback nonaktif); dev-tenant seed tetap ketemu langsung
 - **Tests**: `AuthService.test.ts` +3 (resolve-by-global, global tak ketemu → UnauthorizedError, fallback nonaktif → tak panggil global lookup); backend 1129/1129 (97 files), tsc bersih
+
+### E11000 Provisioning Double-Submit Fix — 2026-09-23
+- **Gejala**: `POST /api/platform/provision/tenant` — submit pertama balas error, submit ulang email yang sama → `ConflictError` "email sudah terdaftar", refresh browser → tenant baru muncul
+- **Root cause 1 (inti)**: index `{ idempotencyKey: 1 }` **unique + sparse** di `ProvisioningRunSchema` tetap meng-index dokumen bernilai `null` (null ≠ missing di Mongo) → dua run tanpa idempotencyKey (idempotencyKey `null`) memicu `E11000 duplicate key` pada submit kedua
+- **Root cause 2 (kenapa data tersimpan walau error)**: `ProvisionTenantService` menulis tenant/roles/owner/outlet dulu, lalu `persistResult` → `provisioningRunRepository.save(run)` yang melempar E11000; pada Mongo standalone `session.withTransaction` tidak tersedia → fallback berjalan *tanpa session* & semua write langsung commit (tak ada rollback)
+- **Fix**: `ProvisioningRunSchema.idempotencyKey` `default: null` → **`default: undefined`** (dokumen tanpa key = field **absent**, dilewati sparse index); `MongoProvisioningRunRepository.toPersistence` `data.idempotencyKey ?? undefined` (Mongoose meng-omit field undefined dari update). Catatan 2026-08-22 dari telu ternyata salah arah — `index:true` di field (bukan `schema.index`) memang warning duplikat, tapi `sparse:true` sendiri TIDAK menyelamatkan nilai null
+- **Regression test** `tests/integration/provision-idem-regression.test.ts` (koleksi unik `prov_reg_<timestamp>` agar tak bentrok worker lain): 2 run tanpa key → keduanya tersimpan, field `idempotencyKey` absent; `findByIdempotencyKey` tetap benar untuk key asli (hit) & key tak dikenal (miss)
+- **Verifikasi**: `platform-provision-tenant.test.ts` (8) + `provisioning.test.ts` (2) + `platform-tenant-crud.test.ts` (14) + regression (2) hijau; backend **1145/1145 (99 files)**, tsc backend bersih
 
 ### Terminal Center: Audit Log + Subscription History + Provisioning History — 2026-09-22
 > Batch P0 "Logging + Control Plane" Terminal Center. Produk: **Logging dulu**; device = registrasi manual (tanpa heartbeat); audit **eksplisit** di service/controllers (bukan event-outbox); rekam audit **tidak pernah** menggagalkan operasi utama (helper `audit()` dibungkus try/catch diam). Bahasa UI Indonesia.

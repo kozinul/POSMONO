@@ -40,8 +40,6 @@ describe('DEFAULT_TEMPLATES receipt contract', () => {
       'summary.orderDiscount',
       'summary.serviceCharge',
       'summary.serviceChargeRate',
-      'summary.dpp',
-      'summary.dppLabel',
       'summary.rounding',
       'summary.grandTotal',
       'payment.methodLabel',

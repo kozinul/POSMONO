@@ -60,7 +60,7 @@ export class MongoProvisioningRunRepository {
     return {
       _id: data.id,
       requestId: data.requestId,
-      idempotencyKey: data.idempotencyKey,
+      idempotencyKey: data.idempotencyKey ?? undefined,
       tenantName: data.tenantName,
       ownerEmail: data.ownerEmail,
       hubId: data.hubId,

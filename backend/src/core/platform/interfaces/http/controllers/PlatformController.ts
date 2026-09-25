@@ -8,6 +8,7 @@ import { PaymentService } from '../../../../payment/application/services/Payment
 import { ProvisionTenantService } from '../../../application/services/ProvisionTenantService';
 import { PlatformAuditService } from '../../../audit/application/services/PlatformAuditService';
 import { SubscriptionService } from '../../../../billing/application/services/SubscriptionService';
+import { PlatformCleanupService } from '../../../application/services/PlatformCleanupService';
 import { ValidationError, NotFoundError } from '../../../../../@shared/infrastructure/error/AppError';
 import { resolvePlatformScope } from '../../../application/helpers/resolvePlatformScope';
 
@@ -26,6 +27,7 @@ interface PlatformControllerDeps {
   userRepository?: any;
   roleRepository?: any;
   warehouseRepository?: any;
+  cleanupService?: PlatformCleanupService;
 }
 
 export class PlatformController extends BaseController {
@@ -237,6 +239,171 @@ export class PlatformController extends BaseController {
     this.created(res, {
       ...data,
       tenantName: tenant.serialize().name,
+    });
+  }
+
+  async updateTenant(req: Request, res: Response): Promise<void> {
+    const { tenantId } = req.params;
+    const { name, businessType, businessCategory, address, phone, hubId } = req.body;
+
+    const tenant = await this.deps.tenantService.getById(tenantId);
+    const before = tenant.serialize();
+
+    const profileData: { name?: string; businessCategory?: string; businessType?: any; address?: string; phone?: string } = {};
+    if (name !== undefined) profileData.name = name;
+    if (businessType !== undefined) profileData.businessType = businessType;
+    if (businessCategory !== undefined) profileData.businessCategory = businessCategory;
+    if (address !== undefined) profileData.address = address;
+    if (phone !== undefined) profileData.phone = phone;
+
+    if (Object.keys(profileData).length > 0) {
+      await this.deps.tenantService.updateProfile(tenantId, profileData);
+    }
+
+    if (hubId !== undefined) {
+      if (hubId === null || hubId === '') {
+        await this.deps.tenantService.unassignHub(tenantId);
+      } else if (typeof hubId === 'string' && hubId.trim()) {
+        const hub = this.deps.hubRepository ? await this.deps.hubRepository.findById(hubId.trim()) : null;
+        if (!hub) {
+          throw new NotFoundError('Hub', hubId);
+        }
+        await this.deps.tenantService.assignHub(tenantId, hubId.trim());
+      }
+    }
+
+    const updated = await this.deps.tenantService.getById(tenantId);
+    const after = updated.serialize();
+
+    await this.audit(req, {
+      action: 'TENANT_UPDATED',
+      tenantId,
+      description: `Profil tenant "${after.name}" diperbarui`,
+      before: {
+        name: before.name,
+        businessType: before.businessType,
+        address: before.address,
+        phone: before.phone,
+        hubId: before.hubId,
+      },
+      after: {
+        name: after.name,
+        businessType: after.businessType,
+        address: after.address,
+        phone: after.phone,
+        hubId: after.hubId,
+      },
+      reason: req.body.reason,
+    });
+    this.ok(res, after);
+  }
+
+  async deleteTenant(req: Request, res: Response): Promise<void> {
+    const { tenantId } = req.params;
+    if (!this.deps.cleanupService) {
+      throw new ValidationError('PlatformCleanupService not configured');
+    }
+
+    const tenant = await this.deps.tenantService.getById(tenantId);
+    const before = tenant.serialize();
+
+    const result = await this.deps.cleanupService.deleteTenantData(tenantId);
+    await this.deps.tenantRepository.delete(tenantId);
+
+    await this.audit(req, {
+      action: 'TENANT_DELETED',
+      tenantId,
+      description: `Tenant "${before.name}" dihapus permanen (total data terhapus: ${result.totalDeleted})`,
+      before: {
+        name: before.name,
+        slug: before.slug,
+        status: before.status,
+        hubId: before.hubId,
+      },
+      reason: req.body.reason,
+    });
+
+    this.ok(res, {
+      deleted: true,
+      tenantId,
+      totalDeleted: result.totalDeleted,
+      perCollection: result.deleted,
+    });
+  }
+
+  async updateOutlet(req: Request, res: Response): Promise<void> {
+    const { outletId } = req.params;
+    const { tenantId, name, address, phone, isActive } = req.body;
+    if (!tenantId || typeof tenantId !== 'string' || !tenantId.trim()) {
+      throw new ValidationError('Tenant ID is required');
+    }
+
+    const tenant = await this.deps.tenantRepository.findById(tenantId.trim());
+    if (!tenant) {
+      throw new NotFoundError('Tenant', tenantId);
+    }
+
+    const previous = await this.deps.outletService.getById(tenantId.trim(), outletId);
+    const outlet = await this.deps.outletService.update(tenantId.trim(), outletId, {
+      name: name?.trim(),
+      address: address?.trim(),
+      phone: phone?.trim(),
+      isActive,
+    });
+    const data = outlet.serialize();
+
+    await this.audit(req, {
+      action: 'OUTLET_UPDATED',
+      tenantId: tenantId.trim(),
+      description: `Outlet "${data.name}" diperbarui`,
+      before: {
+        outletId,
+        name: previous.serialize().name,
+        isActive: previous.serialize().isActive,
+      },
+      after: {
+        outletId: data.id,
+        outletName: data.name,
+        isActive: data.isActive,
+      },
+      reason: req.body.reason,
+    });
+    this.ok(res, data);
+  }
+
+  async deleteOutlet(req: Request, res: Response): Promise<void> {
+    const { outletId } = req.params;
+    const { tenantId } = req.body;
+    if (!tenantId || typeof tenantId !== 'string' || !tenantId.trim()) {
+      throw new ValidationError('Tenant ID is required');
+    }
+    if (!this.deps.cleanupService) {
+      throw new ValidationError('PlatformCleanupService not configured');
+    }
+
+    const outlet = await this.deps.outletService.getById(tenantId.trim(), outletId);
+    const before = outlet.serialize();
+
+    const result = await this.deps.cleanupService.deleteOutletData(tenantId.trim(), outletId);
+
+    await this.audit(req, {
+      action: 'OUTLET_DELETED',
+      tenantId: tenantId.trim(),
+      description: `Outlet "${before.name}" dihapus permanen${result.warehouseDeleted > 0 ? ' (termasuk warehouse terkait)' : ''}`,
+      before: {
+        outletId,
+        name: before.name,
+        warehouseId: before.warehouseId,
+      },
+      reason: req.body.reason,
+    });
+
+    this.ok(res, {
+      deleted: true,
+      outletId,
+      tenantId: tenantId.trim(),
+      warehouseDeleted: result.warehouseDeleted,
+      usersUpdated: result.usersUpdated,
     });
   }
 

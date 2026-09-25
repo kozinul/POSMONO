@@ -22,7 +22,7 @@ export class SubscriptionService {
   async getTenantSubscription(tenantId: string): Promise<{ subscription: any; plan: any }> {
     const sub = await this.subscriptionRepository.findByTenantId(tenantId);
     if (!sub) {
-      throw new NotFoundError('Subscription tidak ditemukan untuk tenant ini.');
+      return { subscription: null, plan: null };
     }
     const plan = await this.planRepository.findById(sub.serialize().planId);
     return {
