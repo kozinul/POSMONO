@@ -8,6 +8,7 @@ import { PaymentService } from '../../../../payment/application/services/Payment
 import { ProvisionTenantService } from '../../../application/services/ProvisionTenantService';
 import { PlatformAuditService } from '../../../audit/application/services/PlatformAuditService';
 import { SubscriptionService } from '../../../../billing/application/services/SubscriptionService';
+import { UserService } from '../../../../identity/application/services/UserService';
 import { PlatformCleanupService } from '../../../application/services/PlatformCleanupService';
 import { ValidationError, NotFoundError } from '../../../../../@shared/infrastructure/error/AppError';
 import { resolvePlatformScope } from '../../../application/helpers/resolvePlatformScope';
@@ -27,6 +28,7 @@ interface PlatformControllerDeps {
   userRepository?: any;
   roleRepository?: any;
   warehouseRepository?: any;
+  userService?: UserService;
   cleanupService?: PlatformCleanupService;
 }
 
@@ -121,6 +123,8 @@ export class PlatformController extends BaseController {
             name: u.serialize().displayName,
             email: u.serialize().email,
             roleName: role?.serialize().name ?? null,
+            roleId: u.serialize().roleId,
+            outletIds: u.serialize().outletIds,
             isActive: u.serialize().isActive,
           };
         }),
@@ -670,6 +674,47 @@ export class PlatformController extends BaseController {
       page: pageNum,
       limit: limitNum,
     });
+  }
+
+  async updateTenantUser(req: Request, res: Response): Promise<void> {
+    const { tenantId, userId } = req.params;
+    const { displayName, roleId, password, pin, isActive, outletIds } = req.body;
+    if (!this.deps.userService) {
+      throw new ValidationError('UserService not configured');
+    }
+
+    const updatedUser = await this.deps.userService.update(tenantId, userId, {
+      displayName,
+      roleId,
+      password,
+      pin,
+      isActive,
+      outletIds,
+    });
+
+    await this.audit(req, {
+      action: 'MEMBER_ROLE_CHANGED',
+      tenantId,
+      description: `User "${updatedUser.serialize().displayName}" di-update oleh admin platform`,
+    });
+
+    this.ok(res, updatedUser.serialize());
+  }
+
+  async deleteTenantUser(req: Request, res: Response): Promise<void> {
+    const { tenantId, userId } = req.params;
+    if (!this.deps.userService) {
+      throw new ValidationError('UserService not configured');
+    }
+    await this.deps.userService.delete(tenantId, userId);
+
+    await this.audit(req, {
+      action: 'MEMBER_REMOVED',
+      tenantId,
+      description: `User "${userId}" dihapus oleh admin platform`,
+    });
+
+    this.noContent(res);
   }
 
   async listAudit(req: Request, res: Response): Promise<void> {

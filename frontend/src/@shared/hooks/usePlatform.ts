@@ -40,7 +40,7 @@ export interface PlatformTenantDetail extends PlatformTenantRow {
   outlets: PlatformOutletRow[];
   owner: { id: string; name: string; email: string } | null;
   userCount: number;
-  usersSummary: Array<{ id: string; name: string; email: string; roleName: string | null; isActive: boolean }>;
+  usersSummary: Array<{ id: string; name: string; email: string; roleName: string | null; isActive: boolean; roleId?: string; outletIds?: string[] }>;
   warehouseCount: number;
   outletCount: number;
   subscription: PlatformTenantSubscription | null;
@@ -388,6 +388,7 @@ export function usePlatformCreateOutlet() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['platform-outlets'] });
       queryClient.invalidateQueries({ queryKey: ['platform-tenants'] });
+      queryClient.invalidateQueries({ queryKey: ['platform-tenant'] });
     },
   });
 }
@@ -401,6 +402,7 @@ export function usePlatformUpdateTenantStatus() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['platform-tenants'] });
+      queryClient.invalidateQueries({ queryKey: ['platform-tenant'] });
     },
   });
 }
@@ -414,6 +416,7 @@ export function usePlatformExtendSubscription() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['platform-tenants'] });
+      queryClient.invalidateQueries({ queryKey: ['platform-tenant'] });
     },
   });
 }
@@ -475,6 +478,47 @@ export interface PlatformUpdateOutletInput {
   isActive?: boolean;
 }
 
+export interface PlatformUpdateUserInput {
+  tenantId: string;
+  userId: string;
+  displayName?: string;
+  roleId?: string;
+  password?: string;
+  pin?: string | null;
+  isActive?: boolean;
+  outletIds?: string[];
+}
+
+export function usePlatformUpdateUser() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ tenantId, userId, ...data }: PlatformUpdateUserInput) => {
+      const res = await api.put<{ success: boolean; data: any }>(`${BASE}/tenants/${tenantId}/users/${userId}`, data);
+      return res.data.data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['platform-tenant', variables.tenantId] });
+      queryClient.invalidateQueries({ queryKey: ['platform-tenants'] });
+    },
+  });
+}
+
+export function usePlatformDeleteUser() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ tenantId, userId }: { tenantId: string; userId: string }) => {
+      const res = await api.delete<{ success: boolean; data: any }>(`${BASE}/tenants/${tenantId}/users/${userId}`);
+      return res.data.data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['platform-tenant', variables.tenantId] });
+      queryClient.invalidateQueries({ queryKey: ['platform-tenants'] });
+    },
+  });
+}
+
+
+
 export function usePlatformUpdateOutlet() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -485,6 +529,7 @@ export function usePlatformUpdateOutlet() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['platform-outlets'] });
       queryClient.invalidateQueries({ queryKey: ['platform-tenants'] });
+      queryClient.invalidateQueries({ queryKey: ['platform-tenant'] });
     },
   });
 }
@@ -510,6 +555,7 @@ export function usePlatformDeleteOutlet() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['platform-outlets'] });
       queryClient.invalidateQueries({ queryKey: ['platform-tenants'] });
+      queryClient.invalidateQueries({ queryKey: ['platform-tenant'] });
     },
   });
 }
@@ -606,6 +652,7 @@ export function usePlatformAssignPlan() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['platform-tenants'] });
+      queryClient.invalidateQueries({ queryKey: ['platform-tenant'] });
       queryClient.invalidateQueries({ queryKey: ['platform-tenant-subscription'] });
     },
   });
@@ -622,6 +669,7 @@ export function usePlatformCancelSubscription() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['platform-tenants'] });
+      queryClient.invalidateQueries({ queryKey: ['platform-tenant'] });
       queryClient.invalidateQueries({ queryKey: ['platform-tenant-subscription'] });
     },
   });
@@ -772,6 +820,7 @@ export function usePlatformExtendSubscriptionDays() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['platform-tenants'] });
+      queryClient.invalidateQueries({ queryKey: ['platform-tenant'] });
       queryClient.invalidateQueries({ queryKey: ['platform-tenant-subscription'] });
       queryClient.invalidateQueries({ queryKey: ['platform-tenant-subscription-history'] });
       queryClient.invalidateQueries({ queryKey: ['platform-audit'] });

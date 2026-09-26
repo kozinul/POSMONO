@@ -1132,6 +1132,7 @@ export function buildContainer() {
           userRepository: container.resolve('userRepository'),
           roleRepository: container.resolve('roleRepository'),
           warehouseRepository: container.resolve('warehouseRepository'),
+          userService: container.resolve('userService'),
           cleanupService: container.resolve('platformCleanupService'),
         },
       }),
