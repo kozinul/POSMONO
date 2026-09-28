@@ -10,8 +10,14 @@
 * Frontend Terminal Center: tab **Hub & Anggota** (Fase 15 backend plan, fase frontend) — perbaikan 9 temuan audit F1–F9
 * Endpoint baru `GET /api/platform/users` (pencarian user lintas-tenant) + picker anggota satu kolom
 * `userTenantName` di `HubMembershipService.listMembers`, link "Lihat di Audit", a11y dialog/list
+* E2E HTTP alur hub frontend terhadap dev stack sungguhan (backend :3000 + vite :5173, Mongo `mongodb:27017/posmono`) — 30 assertion
+* **Bug hunt hasil smoke test**: `GET /api/platform/users?hubId=<hub tanpa tenant>` mengembalikan **semua user lintas-tenant** (5 user) karena `searchAcrossTenants` menganggap `tenantIds: []` sebagai "tanpa filter"; picker anggota hub jadi bocor kandidat tenant lain. Fix: `tenantIds !== undefined` → `$in` (array kosong = tidak ada yang cocok; `undefined` = semua tenant)
 
 **Problems encountered:**
+* Smoke test awal salah di 3 tempat — bukan bug aplikasi: `UID` adalah variabel read-only di bash (user jadi "1000" → 404), assertion `hubName` dibandingkan ke string `"null"` padahal value-nya `null`, dan ekspektasi `POST /api/hub-memberships` 200 padahal route memang 201. Skrip smoke ditulis ulang + dicek ulang ke kode route
+* `GET /api/platform/audit-logs` membalas **HTML SPA dengan status 200** — path yang benar `/api/platform/audit`; docs (`AGENTS.md`, `DAILY_LOG.md`, `HUB_ARCHITECTURE.md`) sempat menyebut `audit-logs` dan sudah dikoreksi, endpoint-nya sendiri tidak berubah karena frontend sudah benar memanggil `/audit`
+* Perbedaan semantik scope: `/platform/tenants?hubId=` sudah benar mengembalikan 0 tenant, sementara `/platform/users?hubId=` bocor semua user — beide membaca `resolvePlatformScope` yang sama, jadi selisihnya ada di consumer, bukan di helper
+
 * `userRepository` bertipe `any` di `PlatformController` → `users.map(...).filter(...)` membuat `new Set<unknown>()`, `tsc` protes `unknown` bukan `string`. Solusi: eksplisit `{ users: any[]; total: number }` pada hasil search + `new Set<string>(...)`
 * `HubsSection.test.tsx` gagal 6/6 karena query global (nama "BCA Hospitality" muncul di list + detail, mock Swal tidak menjalankan `preConfirm`, mock URL tidak menangani query string). Solusi: `aria-label="Daftar hub"` + `within(...)`, Swal mock eksekusi `preConfirm`, `url.startsWith('/platform/tenants?')`
 * Ekspektasi test salah: `isHubMember` tanpa `hubId` memang selalu `false` (konteks keanggotaan per hub) — test diubah, bukan kodenya
@@ -22,14 +28,19 @@
 * `apiPost`/`apiDelete` mentah & `confirm`/`alert`/`prompt` di `TerminalCenterPage` — dihapus total (Swal2 + `apiErrorMessage`)
 * `hubName` per baris di `GET /platform/tenants` (F8, satu lookup per hub unik)
 * Docs: `HUB_FRONTEND_PLAN.md` (baru), `HUB_ARCHITECTURE.md`, `API_REFERENCE.md`, `PROJECT_ROADMAP.md`, `AGENTS.md`
+* **Fix scope user picker**: `MongoUserRepository.searchAcrossTenants` kini membedakan `tenantIds: []` (nol hasil) dari `tenantIds` di-omit (semua tenant) → `GET /platform/users?hubId=…` konsisten dengan `/platform/tenants?hubId=…`; regression test repo + integrasi HTTP (hub tanpa tenant, tenant tidak dikenal)
+* Dokumentasi endpoint audit: `GET /api/platform/audit` masuk tabel platform + query params di `API_REFERENCE.md` (sebelumnya belum terdokumentasi sama sekali)
 
 **What I learned:**
 * Mock Swal di test wajib memanggil `preConfirm` sendiri — kalau tidak, jalur mutasi di balik konfirmasi tidak pernah tersentuh dan test "hijau" secara palsu
 * Backend `userRepository: any` di controller hampir selalu menghasilkan TypeScript error tersembunyi di `new Set(...)`/generic inference — lebih baik annotate batas trust boundary
+* Smoke test HTTP menutup dua celah yang tidak tertangkap suite: scope kosong yang bocor lintas-tenant, dan path endpoint yang salah di docs (route typo tidak error karena SPA fallback balas 200 HTML)
+* Assertion smoke test harus diverifikasi ulang ke kode route sebelum dianggap bug aplikasi — 3 "kegagalan" awal semuanya salah ekspektasi skrip
 
 **Tomorrow priority:**
-* E2E manual Terminal Center dengan platform admin sungguhan (provisioning → assign hub → tambah anggota → tenant switcher lintas-tenant)
+* E2E visual Terminal Center lewat browser sungguhan (klik tab/modal/Swal) — smoke HTTP sudah hijau, yang tersisa verifikasi tampilan & alur klik
 * Endpoint `GET /api/platform/users` perlu index teks (`email`/`displayName` regex tak pakai index) bila volume user sudah besar
+* Ubah SPA fallback API 404 → JSON 404 agar path endpoint yang salah tidak lagi membalas 200 HTML
 
 **Productivity score:** 9
 
@@ -152,7 +163,7 @@ Copy this block for each new day:
 
 - **Logging dulu** (produk): device = registrasi manual; audit **eksplisit** di service/controllers (bukan event-outbox); rekam audit **tidak pernah** menggagalkan operasi utama (`audit()` dibungkus try/catch diam).
 - **Audit Log trx** — modul `core/platform/audit/`: domain `PlatformAuditLog` (action `PLATFORM_*|TENANT_*|HUB_*|OUTLET_*|SUBSCRIPTION_*`, actor/ip/requestId) + `PlatformAuditLogSchema` + `MongoPlatformAuditLogRepository` (filter action/tenantId/actorEmail/from/to + skip/limit). `PlatformAuditService.recordFromRequest` baca `req.platformUserId/...` dari `platformAuthenticate`; fallback actor `system`.
-- **Route + RBAC** `GET /api/platform/audit-logs` (`platformAuthenticate` + **`platform.audit.read`** — super admin harus re-login agar JWT memuat permission baru). Rekaman di: provision tenant, list/create venue tenant, hub create/update/delete, hub member add/remove, outlet platform create, tenant pause/resume, subscription assign/cancel/extend.
+- **Route + RBAC** `GET /api/platform/audit` (`platformAuthenticate` + **`platform.audit.read`** — super admin harus re-login agar JWT memuat permission baru). Rekaman di: provision tenant, list/create venue tenant, hub create/update/delete, hub member add/remove, outlet platform create, tenant pause/resume, subscription assign/cancel/extend.
 - **Subscription History ledger** — domain `SubscriptionHistory` + schema `subscription_histories` + `MongoSubscriptionHistoryRepository`; `SubscriptionService.recordHistory` (historyRepository **opsional**, 4-arg — `billing-plans.test.ts` tetap 3-arg). Semua mutasi (assign/change/extend/cancel) menulis ledger best-effort. **`extendSubscription` ter-unifikasi**: `PlatformController.extendTenantSubscription` mendelegasikan ke service (hapus duplikat logika), route `POST /api/platform/subscriptions/:tenantId/extend`.
 - **Provisioning History + idempotency DB** — `ProvisioningRunSchema` (collection `provisioning_runs`, index unique sparse `idempotencyKey`; **jangan** `index:true` di field → duplicate index warning) + `MongoProvisioningRunRepository`. `ProvisioningRun` pakai **setter publik** (`markStepDuration`, `setTenantId`, `setDurationMs`, `setResult`). `ProvisionTenantService` refactor: step tracking + timing, **idempotency kini DB** (cek `findByIdempotencyKey` lalu replay `existing.serialize().result`), simpan result/error dalam session txn (fallback standalone).
 - **Tenant 360°** — `GET /api/platform/tenants/:id` kini +`hubName`, `owner`, `userCount`, `usersSummary` (20), `warehouseCount`, `outletCount`, `subscription`, `recentActivity` (audit limit 10), `provisioningRuns` (3). Deps `platformController` +`userRepository`/`roleRepository`/`warehouseRepository`/`provisioningRunRepository`.

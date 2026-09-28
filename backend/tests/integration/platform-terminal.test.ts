@@ -386,6 +386,21 @@ describe('Terminal Center (/api/platform)', () => {
     expect(byHubId.get('user-budi').isHubMember).toBe(true);
     expect(byHubId.get('user-sari').isHubMember).toBe(false);
 
+    // A hub scope that resolves to zero tenants must return no user at all
+    // (never "every tenant"), otherwise hub member picking leaks other tenants.
+    await seedHub(ctx.hubRepo, 'hub-kosong', 'Hub Tanpa Tenant');
+    const emptyHub = await request(ctx.app)
+      .get('/api/platform/users?hubId=hub-kosong')
+      .set('Authorization', platformAuth());
+    expect(emptyHub.status).toBe(200);
+    expect(emptyHub.body.data.total).toBe(0);
+    expect(emptyHub.body.data.data).toHaveLength(0);
+
+    const unknownTenant = await request(ctx.app)
+      .get('/api/platform/users?tenantId=tenant-tidak-ada')
+      .set('Authorization', platformAuth());
+    expect(unknownTenant.body.data.total).toBe(0);
+
     const activeOnly = await request(ctx.app).get('/api/platform/users?isActive=true').set('Authorization', platformAuth());
     expect(activeOnly.body.data.total).toBe(2);
 

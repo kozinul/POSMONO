@@ -93,14 +93,17 @@ export class MongoUserRepository extends MongoRepository<User, UserId, UserDoc> 
 
   /**
    * Cross-tenant user search for the Terminal Center (e.g. picking a hub member).
-   * `tenantIds` scopes the result to a set of tenants; an empty/omitted list means "all tenants".
+   * `tenantIds` scopes the result to a set of tenants:
+   * - omitted (`undefined`) → every tenant
+   * - empty array → no tenant matches (a hub/tenant scope that resolved to nothing
+   *   must return nothing, never "all tenants")
    */
   async searchAcrossTenants(
     filter: { search?: string; tenantIds?: string[]; isActive?: boolean },
     options: { limit: number; skip: number },
   ): Promise<{ users: User[]; total: number }> {
     const query: Record<string, unknown> = {};
-    if (filter.tenantIds && filter.tenantIds.length > 0) {
+    if (filter.tenantIds !== undefined) {
       query.tenantId = { $in: filter.tenantIds };
     }
     if (typeof filter.isActive === 'boolean') {

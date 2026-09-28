@@ -163,6 +163,19 @@ describe('MongoUserRepository', () => {
       expect(active.total).toBe(2);
     });
 
+    it('returns nothing for an empty tenant scope (hub/tenant with no match), never all tenants', async () => {
+      const scoped = await repo.searchAcrossTenants({ tenantIds: [] }, { limit: 20, skip: 0 });
+      expect(scoped.total).toBe(0);
+      expect(scoped.users).toHaveLength(0);
+
+      const unknownTenant = await repo.searchAcrossTenants({ tenantIds: ['tenant-tidak-ada'] }, { limit: 20, skip: 0 });
+      expect(unknownTenant.total).toBe(0);
+
+      // Omitting the scope still means "every tenant".
+      const unscoped = await repo.searchAcrossTenants({}, { limit: 20, skip: 0 });
+      expect(unscoped.total).toBe(3);
+    });
+
     it('paginates while reporting the unpaginated total', async () => {
       const page1 = await repo.searchAcrossTenants({}, { limit: 2, skip: 0 });
       const page2 = await repo.searchAcrossTenants({}, { limit: 2, skip: 2 });
