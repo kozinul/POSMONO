@@ -90,4 +90,35 @@ export class MongoUserRepository extends MongoRepository<User, UserId, UserDoc> 
     const docs = await this.model.find({ tenantId }).sort({ createdAt: -1 }).exec();
     return docs.map((d: UserDoc) => this.toDomain(d));
   }
+
+  /**
+   * Cross-tenant user search for the Terminal Center (e.g. picking a hub member).
+   * `tenantIds` scopes the result to a set of tenants; an empty/omitted list means "all tenants".
+   */
+  async searchAcrossTenants(
+    filter: { search?: string; tenantIds?: string[]; isActive?: boolean },
+    options: { limit: number; skip: number },
+  ): Promise<{ users: User[]; total: number }> {
+    const query: Record<string, unknown> = {};
+    if (filter.tenantIds && filter.tenantIds.length > 0) {
+      query.tenantId = { $in: filter.tenantIds };
+    }
+    if (typeof filter.isActive === 'boolean') {
+      query.isActive = filter.isActive;
+    }
+    const term = (filter.search ?? '').trim();
+    if (term) {
+      // Escape user input so a search term can never be parsed as a regex.
+      const safe = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const rx = new RegExp(safe, 'i');
+      query.$or = [{ displayName: rx }, { email: rx }, { _id: rx }];
+    }
+
+    const [docs, total] = await Promise.all([
+      this.model.find(query).sort({ createdAt: -1 }).skip(options.skip).limit(options.limit).exec(),
+      this.model.countDocuments(query).exec(),
+    ]);
+
+    return { users: docs.map((d: UserDoc) => this.toDomain(d)), total };
+  }
 }

@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import {
   usePlatformHubs,
-  usePlatformHub,
   usePlatformHubConsolidated,
   usePlatformTenants,
   usePlatformOutlets,
@@ -17,17 +16,12 @@ import {
   usePlatformExtendSubscription,
   usePlatformAudit,
   usePlatformProvisioningRuns,
-  type PlatformHub,
   type PlatformTenantRow,
   type PlatformOutletRow,
 } from '../../../@shared/hooks/usePlatform';
 import EditOutletModal from '../components/EditOutletModal';
-import {
-  useHubMembers,
-  useAddHubMembership,
-  useUpdateHubMembership,
-  useRemoveHubMembership,
-} from '../../../@shared/hooks/useHubMemberships';
+import HubsSection from '../components/HubsSection';
+import { useAuthStore } from '../../../@shared/hooks/useAuth';
 import { formatCurrency } from '../../../@shared/utils/format';
 import { paymentMethodLabel } from '../../pos/utils/paymentLabels';
 import PlansSection from '../components/PlansSection';
@@ -52,198 +46,6 @@ function Next30DaysAgo(): string {
   const d = new Date();
   d.setDate(d.getDate() - 30);
   return d.toISOString().split('T')[0];
-}
-
-function HubsSection() {
-  const { data: hubs = [], isLoading } = usePlatformHubs();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  const save = async () => {
-    if (!name.trim()) return setError('Nama hub wajib diisi');
-    setError('');
-    setSaving(true);
-    try {
-      const res = await apiPost('/hubs', { name: name.trim(), description: description.trim() || undefined });
-      setCreateOpen(false);
-      setName('');
-      setDescription('');
-      if (res) setSelectedId(res.id);
-    } catch (e: any) {
-      setError(e?.response?.data?.error?.message || 'Gagal membuat hub');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const remove = async (hub: PlatformHub) => {
-    if (!confirm(`Hapus hub "${hub.name}"? Tenant yang ter-assign harus dilepas dulu.`)) return;
-    try {
-      await apiDelete(`/hubs/${hub.id}`);
-      if (selectedId === hub.id) setSelectedId(null);
-    } catch (e: any) {
-      alert(e?.response?.data?.error?.message || 'Gagal menghapus hub');
-    }
-  };
-
-  return (
-    <div className={`${cardCls} space-y-4`}>
-      <div className="flex justify-between items-center">
-        <SectionTitle>Hub</SectionTitle>
-        <button onClick={() => setCreateOpen(true)} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">
-          + Buat Hub
-        </button>
-      </div>
-
-      {createOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-md">
-            <div className="border-b border-gray-200 px-6 py-4">
-              <h2 className="text-lg font-bold text-gray-900">Buat Hub Baru</h2>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nama Hub *</label>
-                <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} placeholder="cth: BCA Hospitality" autoFocus />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Deskripsi</label>
-                <input className={inputCls} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Opsional" />
-              </div>
-              {error && <p className="text-sm text-red-600">{error}</p>}
-            </div>
-            <div className="border-t border-gray-200 px-6 py-4 flex justify-end gap-3">
-              <button onClick={() => { setCreateOpen(false); setError(''); }} className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 text-sm">Batal</button>
-              <button onClick={save} disabled={saving} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm disabled:opacity-50">{saving ? 'Menyimpan...' : 'Simpan'}</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {isLoading ? (
-        <Loading />
-      ) : hubs.length === 0 ? (
-        <p className="text-sm text-gray-500">Belum ada hub. Buat hub lalu assign tenant.</p>
-      ) : (
-        <div className="border rounded-lg overflow-hidden">
-          {hubs.map((hub) => (
-            <div key={hub.id} className={`flex items-center justify-between px-4 py-3 border-b last:border-b-0 hover:bg-gray-50 cursor-pointer ${selectedId === hub.id ? 'bg-blue-50' : ''}`}>
-              <button onClick={() => setSelectedId(selectedId === hub.id ? null : hub.id)} className="flex-1 text-left">
-                <span className="text-sm font-semibold text-gray-900">{hub.name}</span>
-                {hub.description && <span className="block text-xs text-gray-500">{hub.description}</span>}
-              </button>
-              <button onClick={() => remove(hub)} className="text-red-600 hover:text-red-900 text-sm ml-3">Hapus</button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {selectedId && <HubDetail key={selectedId} hubId={selectedId} />}
-    </div>
-  );
-}
-
-function HubDetail({ hubId }: { hubId: string }) {
-  const { data: hub } = usePlatformHub(hubId);
-  const { data: members = [], isLoading: membersLoading } = useHubMembers(hubId);
-  const addMember = useAddHubMembership();
-  const updateMember = useUpdateHubMembership();
-  const removeMember = useRemoveHubMembership();
-  const [userId, setUserId] = useState('');
-  const [role, setRole] = useState('owner');
-  const [msg, setMsg] = useState('');
-
-  if (!hub) return <Loading />;
-
-  const submitMember = () => {
-    if (!userId.trim()) return setMsg('User ID wajib diisi');
-    setMsg('');
-    addMember.mutate(
-      { hubId, userId: userId.trim(), role },
-      {
-        onSuccess: () => { setUserId(''); setMsg('Anggota ditambahkan'); },
-        onError: (e: any) => setMsg(e?.response?.data?.error?.message || 'Gagal menambah anggota'),
-      },
-    );
-  };
-
-  return (
-    <div className="space-y-4 mt-4 border-t border-gray-200 pt-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <h3 className="text-sm font-bold text-gray-700 mb-2 uppercase tracking-wide">Tenant Ter-assign ({hub.tenantCount})</h3>
-          {hub.tenants.length === 0 ? (
-            <p className="text-sm text-gray-500">Belum ada tenant. Assign tenant lewat halaman Tenants (klik "Hub").</p>
-          ) : (
-            <ul className="space-y-1">
-              {hub.tenants.map((t) => (
-                <li key={t.id} className="text-sm flex justify-between">
-                  <span className="text-gray-800">{t.name}</span>
-                  <span className="text-gray-400 text-xs">{t.slug}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div>
-          <h3 className="text-sm font-bold text-gray-700 mb-2 uppercase tracking-wide">Anggota Hub (Group Admin)</h3>
-          {membersLoading ? (
-            <Loading />
-          ) : members.length === 0 ? (
-            <p className="text-sm text-gray-500">Belum ada anggota. Tambah user yang diberi akses lintas-tenant di hub ini.</p>
-          ) : (
-            <ul className="space-y-2">
-              {members.map((m) => (
-                <li key={m.id} className="flex items-center justify-between text-sm bg-gray-50 rounded-lg px-3 py-2">
-                  <div>
-                    <span className="font-medium text-gray-900">{m.displayName ?? m.userId}</span>
-                    <span className="block text-xs text-gray-500">{m.email ?? m.userId}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <select
-                      className="text-xs px-1.5 py-0.5 rounded-md border border-gray-300 bg-white"
-                      value={m.role}
-                      onChange={(e) =>
-                        updateMember.mutate({ hubId, userId: m.userId, role: e.target.value })
-                      }
-                    >
-                      <option value="owner">owner</option>
-                      <option value="admin">admin</option>
-                      <option value="viewer">viewer</option>
-                    </select>
-                    <button onClick={() => removeMember.mutate({ hubId, userId: m.userId })} className="text-red-600 hover:text-red-900 text-xs">Hapus</button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
-            <label className="block text-xs font-medium text-gray-500">Tambah anggota (User ID)</label>
-            <div className="flex gap-2">
-              <input className={inputCls} value={userId} onChange={(e) => setUserId(e.target.value)} placeholder="User ID" />
-              <select className={inputCls + ' w-32'} value={role} onChange={(e) => setRole(e.target.value)} disabled={addMember.isPending}>
-                <option value="owner">owner</option>
-                <option value="admin">admin</option>
-                <option value="viewer">viewer</option>
-              </select>
-            </div>
-            <div className="flex items-center gap-3">
-              <button onClick={submitMember} disabled={addMember.isPending} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm disabled:opacity-50">
-                {addMember.isPending ? 'Menambah...' : 'Tambah'}
-              </button>
-              {msg && <span className={`text-sm ${msg.includes('Gagal') || msg.includes('wajib') ? 'text-red-600' : 'text-green-600'}`}>{msg}</span>}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 function CreateTenantModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
@@ -534,13 +336,24 @@ function CreateTenantModal({ isOpen, onClose }: { isOpen: boolean; onClose: () =
   );
 }
 
-function TenantsSection() {
+function TenantsSection({
+  hubFilter,
+  onClearHubFilter,
+}: {
+  hubFilter?: { hubId: string; hubName: string } | null;
+  onClearHubFilter?: () => void;
+}) {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
   const [page, setPage] = useState(1);
   const [createModalOpen, setCreateModalOpen] = useState(false);
-  const { data, isLoading } = usePlatformTenants({ search: debounced || undefined, page, limit: 20 });
+  const { data, isLoading } = usePlatformTenants({
+    search: debounced || undefined,
+    hubId: hubFilter?.hubId,
+    page,
+    limit: 20,
+  });
   const updateStatus = usePlatformUpdateTenantStatus();
   const extendSub = usePlatformExtendSubscription();
   const deleteTenant = usePlatformDeleteTenant();
@@ -579,37 +392,125 @@ function TenantsSection() {
     }
   };
 
-  const handleStatusChange = async (tenantId: string, currentStatus: string) => {
+  const handleStatusChange = async (tenantId: string, tenantName: string, currentStatus: string) => {
     const nextStatus = currentStatus === 'active' ? 'frozen' : 'active';
     const actionName = currentStatus === 'active' ? 'membekukan (freeze)' : 'mengaktifkan kembali';
-    if (!confirm(`Yakin ingin ${actionName} tenant ini?`)) return;
-    try {
-      await updateStatus.mutateAsync({ tenantId, status: nextStatus });
-    } catch (e: any) {
-      alert(e?.response?.data?.error?.message || 'Gagal mengubah status tenant');
+    const { isConfirmed } = await Swal.fire({
+      title: nextStatus === 'frozen' ? 'Bekukan Tenant?' : 'Aktifkan Kembali Tenant?',
+      text: `Yakin ingin ${actionName} "${tenantName}"?`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: nextStatus === 'frozen' ? 'Ya, Bekukan' : 'Ya, Aktifkan',
+      cancelButtonText: 'Batal',
+      confirmButtonColor: nextStatus === 'frozen' ? '#d97706' : '#2176D2',
+      cancelButtonColor: '#6b7280',
+      showLoaderOnConfirm: true,
+      preConfirm: async () => {
+        try {
+          await updateStatus.mutateAsync({ tenantId, status: nextStatus });
+          return true;
+        } catch (err: any) {
+          Swal.showValidationMessage(
+            err?.response?.data?.error?.message ||
+              err?.response?.data?.message ||
+              err?.message ||
+              'Gagal mengubah status tenant',
+          );
+          return false;
+        }
+      },
+    });
+    if (isConfirmed) {
+      Swal.fire({
+        title: nextStatus === 'frozen' ? 'Tenant Dibekukan' : 'Tenant Diaktifkan',
+        text: `Status "${tenantName}" kini ${nextStatus}.`,
+        icon: 'success',
+        timer: 2000,
+        showConfirmButton: false,
+      });
     }
   };
 
-  const handleSuspend = async (tenantId: string) => {
-    const reason = prompt('Masukkan alasan suspend (penangguhan):');
-    if (!reason || !reason.trim()) return;
-    try {
-      await updateStatus.mutateAsync({ tenantId, status: 'suspended', reason: reason.trim() });
-    } catch (e: any) {
-      alert(e?.response?.data?.error?.message || 'Gagal mensuspend tenant');
+  const handleSuspend = async (tenantId: string, tenantName: string) => {
+    const { value: reason, isConfirmed } = await Swal.fire({
+      title: 'Suspend Tenant?',
+      html: `<p style="color:#991b1b;margin:0 0 8px">Tenant <b>${tenantName}</b> akan ditolak aksesnya sampai diaktifkan kembali.</p><p style="color:#6b7280;font-size:13px;text-align:left">Alasan suspend (penangguhan):</p>`,
+      icon: 'warning',
+      input: 'textarea',
+      inputPlaceholder: 'Alasan suspend',
+      inputAttributes: { rows: '2' },
+      showCancelButton: true,
+      confirmButtonText: 'Ya, Suspend',
+      cancelButtonText: 'Batal',
+      confirmButtonColor: '#dc2626',
+      cancelButtonColor: '#6b7280',
+      showLoaderOnConfirm: true,
+      preConfirm: async (val: string) => {
+        if (!val?.trim()) {
+          Swal.showValidationMessage('Alasan suspend wajib diisi.');
+          return false;
+        }
+        try {
+          await updateStatus.mutateAsync({ tenantId, status: 'suspended', reason: val.trim() });
+          return true;
+        } catch (err: any) {
+          Swal.showValidationMessage(
+            err?.response?.data?.error?.message ||
+              err?.response?.data?.message ||
+              err?.message ||
+              'Gagal mensuspend tenant',
+          );
+          return false;
+        }
+      },
+    });
+    if (isConfirmed) {
+      Swal.fire({ title: 'Tenant Disuspend', text: `"${tenantName}" ditolak aksesnya.`, icon: 'success', timer: 2000, showConfirmButton: false });
     }
   };
 
-  const handleExtend = async (tenantId: string) => {
-    const daysStr = prompt('Masukkan jumlah hari perpanjangan masa aktif (cth: 30):', '30');
-    if (!daysStr) return;
-    const days = parseInt(daysStr, 10);
-    if (isNaN(days) || days <= 0) return alert('Jumlah hari tidak valid');
-    try {
-      await extendSub.mutateAsync({ tenantId, days });
-      alert(`Berhasil memperpanjang langganan selama ${days} hari.`);
-    } catch (e: any) {
-      alert(e?.response?.data?.error?.message || 'Gagal memperpanjang langganan');
+  const handleExtend = async (tenantId: string, tenantName: string) => {
+    const { value: daysInput, isConfirmed } = await Swal.fire({
+      title: 'Perpanjang Langganan',
+      html: `<p style="color:#1f2937;margin:0 0 8px">Jumlah hari perpanjangan masa aktif tenant <b>${tenantName}</b> (cth: 30):</p>`,
+      icon: 'question',
+      input: 'number',
+      inputValue: '30',
+      inputAttributes: { min: '1', step: '1' },
+      showCancelButton: true,
+      confirmButtonText: 'Perpanjang',
+      cancelButtonText: 'Batal',
+      confirmButtonColor: '#2176D2',
+      cancelButtonColor: '#6b7280',
+      showLoaderOnConfirm: true,
+      preConfirm: async (val: string) => {
+        const days = parseInt(String(val ?? ''), 10);
+        if (isNaN(days) || days <= 0) {
+          Swal.showValidationMessage('Jumlah hari harus angka > 0.');
+          return false;
+        }
+        try {
+          await extendSub.mutateAsync({ tenantId, days });
+          return true;
+        } catch (err: any) {
+          Swal.showValidationMessage(
+            err?.response?.data?.error?.message ||
+              err?.response?.data?.message ||
+              err?.message ||
+              'Gagal memperpanjang langganan',
+          );
+          return false;
+        }
+      },
+    });
+    if (isConfirmed) {
+      Swal.fire({
+        title: 'Langganan Diperpanjang',
+        text: `Masa aktif "${tenantName}" bertambah ${daysInput} hari.`,
+        icon: 'success',
+        timer: 2500,
+        showConfirmButton: false,
+      });
     }
   };
 
@@ -637,6 +538,18 @@ function TenantsSection() {
           </button>
         </div>
       </div>
+
+      {hubFilter && (
+        <div className="flex items-center gap-2 text-sm">
+          <span className="px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+            Filter hub: {hubFilter.hubName}
+          </span>
+          <button onClick={onClearHubFilter} className="text-xs text-gray-600 hover:text-gray-900">
+            Hapus filter
+          </button>
+        </div>
+      )}
+
       <CreateTenantModal isOpen={createModalOpen} onClose={() => setCreateModalOpen(false)} />
       <div className="overflow-x-auto border rounded-lg">
         <table className="min-w-full divide-y divide-gray-200">
@@ -661,7 +574,7 @@ function TenantsSection() {
                   </button>
                 </td>
                 <td className="px-4 py-2.5 text-sm text-gray-500">{t.slug}</td>
-                <td className="px-4 py-2.5 text-sm text-gray-500">{t.hubName ?? t.hubId ?? '-'}</td>
+                <td className="px-4 py-2.5 text-sm text-gray-500">{t.hubId ? t.hubName ?? 'Hub lain' : 'Standalone'}</td>
                 <td className="px-4 py-2.5 text-sm text-gray-500">{t.businessType ?? '-'}</td>
                 <td className="px-4 py-2.5 text-sm">
                   <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
@@ -675,14 +588,14 @@ function TenantsSection() {
                 <td className="px-4 py-2.5 text-sm text-right space-x-2 whitespace-nowrap">
                   {t.status === 'active' ? (
                     <button
-                      onClick={() => handleStatusChange(t.id, 'active')}
+                      onClick={() => handleStatusChange(t.id, t.name, 'active')}
                       className="px-2 py-1 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 rounded border border-amber-200"
                     >
                       Freeze
                     </button>
                   ) : (
                     <button
-                      onClick={() => handleStatusChange(t.id, t.status)}
+                      onClick={() => handleStatusChange(t.id, t.name, t.status)}
                       className="px-2 py-1 text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100 rounded border border-green-200"
                     >
                       Activate
@@ -690,14 +603,14 @@ function TenantsSection() {
                   )}
                   {t.status !== 'suspended' && (
                     <button
-                      onClick={() => handleSuspend(t.id)}
+                      onClick={() => handleSuspend(t.id, t.name)}
                       className="px-2 py-1 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded border border-red-200"
                     >
                       Suspend
                     </button>
                   )}
                   <button
-                    onClick={() => handleExtend(t.id)}
+                    onClick={() => handleExtend(t.id, t.name)}
                     className="px-2 py-1 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200"
                   >
                     + Extend
@@ -1128,9 +1041,14 @@ function StatCard({ label, value, loading }: { label: string; value: string | nu
   );
 }
 
-function ConsolidatedSection() {
+function ConsolidatedSection({
+  hubId,
+  onHubChange,
+}: {
+  hubId: string;
+  onHubChange: (hubId: string) => void;
+}) {
   const { data: hubs = [] } = usePlatformHubs();
-  const [hubId, setHubId] = useState('');
   const [dateFrom, setDateFrom] = useState(Next30DaysAgo());
   const [dateTo, setDateTo] = useState(todayISO());
   const { data, isLoading, isFetching } = usePlatformHubConsolidated(hubId || null, dateFrom, dateTo);
@@ -1140,7 +1058,7 @@ function ConsolidatedSection() {
       <div className={`${cardCls} flex flex-wrap items-end gap-3`}>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Hub</label>
-          <select className={inputCls + ' w-80'} value={hubId} onChange={(e) => setHubId(e.target.value)}>
+          <select className={inputCls + ' w-80'} value={hubId} onChange={(e) => onHubChange(e.target.value)}>
             <option value="">Pilih hub...</option>
             {hubs.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
           </select>
@@ -1211,27 +1129,23 @@ function ConsolidatedSection() {
   );
 }
 
-async function apiPost(url: string, body: unknown): Promise<any> {
-  const { api } = await import('../../../@shared/services/api');
-  const res = await api.post(url, body);
-  return res.data.data;
+interface TabDef {
+  id: string;
+  label: string;
+  permissions: string[];
 }
 
-async function apiDelete(url: string): Promise<any> {
-  const { api } = await import('../../../@shared/services/api');
-  const res = await api.delete(url);
-  return res.data.data;
-}
-
-const TABS = [
-  { id: 'plans', label: 'Plans' },
-  { id: 'hubs', label: 'Hub & Anggota' },
-  { id: 'tenants', label: 'Tenants' },
-  { id: 'outlets', label: 'Outlet' },
-  { id: 'summary', label: 'Ringkasan' },
-  { id: 'consolidated', label: 'Konsolidasi' },
-  { id: 'audit', label: 'Audit Log' },
+const TABS: TabDef[] = [
+  { id: 'plans', label: 'Plans', permissions: ['platform.plans.read', 'platform.plans.manage'] },
+  { id: 'hubs', label: 'Hub & Anggota', permissions: ['hub:manage'] },
+  { id: 'tenants', label: 'Tenants', permissions: ['platform.tenants.read', 'platform.tenants.manage'] },
+  { id: 'outlets', label: 'Outlet', permissions: ['platform.tenants.read', 'outlet:manage'] },
+  { id: 'summary', label: 'Ringkasan', permissions: ['platform.reports.read'] },
+  { id: 'consolidated', label: 'Konsolidasi', permissions: ['platform.reports.read'] },
+  { id: 'audit', label: 'Audit Log', permissions: ['platform.audit.read'] },
 ];
+
+const DEFAULT_TAB = 'hubs';
 
 const AUDIT_ACTION_LABELS: Record<string, string> = {
   TENANT_CREATED: 'Tenant Dibuat',
@@ -1266,9 +1180,12 @@ const AUDIT_ACTION_BADGE: Record<string, string> = {
   MEMBER_REMOVED: 'bg-red-100 text-red-700',
 };
 
-function AuditSection() {
-  const [action, setAction] = useState('');
+function AuditSection({ action, onActionChange }: { action: string; onActionChange: (action: string) => void }) {
   const [page, setPage] = useState(1);
+  const setAction = (next: string) => {
+    onActionChange(next);
+    setPage(1);
+  };
   const { data, isLoading } = usePlatformAudit({ action: action || undefined, page, limit: 30, enabled: true });
   const { data: runs } = usePlatformProvisioningRuns({ limit: 5, enabled: true });
 
@@ -1277,7 +1194,12 @@ function AuditSection() {
   return (
     <div className="space-y-6">
       <div className="flex gap-2 items-center">
-        <select className={inputCls + ' w-64'} value={action} onChange={(e) => { setAction(e.target.value); setPage(1); }}>
+        <select
+          className={inputCls + ' w-64'}
+          value={action}
+          onChange={(e) => setAction(e.target.value)}
+          aria-label="Filter aksi audit"
+        >
           <option value="">— Semua Aksi —</option>
           {Object.entries(AUDIT_ACTION_LABELS).map(([k, v]) => (
             <option key={k} value={k}>{v}</option>
@@ -1389,7 +1311,16 @@ function AuditSection() {
 }
 
 export default function TerminalCenterPage() {
-  const [tab, setTab] = useState('hubs');
+  const permissions = useAuthStore((s) => s.user?.permissions) ?? [];
+  const visibleTabs = TABS.filter((t) => t.permissions.some((p) => permissions.includes(p)));
+  const [tab, setTab] = useState(DEFAULT_TAB);
+  const [selectedHubId, setSelectedHubId] = useState<string | null>(null);
+  const [consolidatedHubId, setConsolidatedHubId] = useState<string>('');
+  const [tenantHubFilter, setTenantHubFilter] = useState<{ hubId: string; hubName: string } | null>(null);
+  const [auditAction, setAuditAction] = useState('');
+
+  const activeTab = visibleTabs.some((t) => t.id === tab) ? tab : visibleTabs[0]?.id ?? 'tenants';
+  const canManageHub = permissions.includes('hub:manage');
 
   return (
     <div>
@@ -1399,12 +1330,12 @@ export default function TerminalCenterPage() {
       </div>
 
       <div className="flex gap-2 mb-6 border-b border-gray-200 pb-3 overflow-x-auto">
-        {TABS.map((t) => (
+        {visibleTabs.map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-              tab === t.id ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'
+              activeTab === t.id ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'
             }`}
           >
             {t.label}
@@ -1412,13 +1343,43 @@ export default function TerminalCenterPage() {
         ))}
       </div>
 
-      {tab === 'plans' && <PlansSection />}
-      {tab === 'hubs' && <HubsSection />}
-      {tab === 'tenants' && <TenantsSection />}
-      {tab === 'outlets' && <OutletsSection />}
-      {tab === 'summary' && <SummarySection />}
-      {tab === 'consolidated' && <ConsolidatedSection />}
-      {tab === 'audit' && <AuditSection />}
+      {visibleTabs.length === 0 && (
+        <div className={cardCls}>
+          <p className="text-sm text-gray-500">
+            Akun platform ini tidak punya permission Terminal Center. Hubungi admin platform.
+          </p>
+        </div>
+      )}
+
+      {activeTab === 'plans' && <PlansSection />}
+      {activeTab === 'hubs' && (
+        <HubsSection
+          selectedHubId={selectedHubId}
+          onSelectHub={setSelectedHubId}
+          canManage={canManageHub}
+          onViewConsolidated={(hubId) => {
+            setConsolidatedHubId(hubId);
+            setTab('consolidated');
+          }}
+          onViewTenants={(hubId, hubName) => {
+            setTenantHubFilter({ hubId, hubName });
+            setTab('tenants');
+          }}
+          onViewAudit={(action) => {
+            setAuditAction(action);
+            setTab('audit');
+          }}
+        />
+      )}
+      {activeTab === 'tenants' && (
+        <TenantsSection hubFilter={tenantHubFilter} onClearHubFilter={() => setTenantHubFilter(null)} />
+      )}
+      {activeTab === 'outlets' && <OutletsSection />}
+      {activeTab === 'summary' && <SummarySection />}
+      {activeTab === 'consolidated' && (
+        <ConsolidatedSection hubId={consolidatedHubId} onHubChange={setConsolidatedHubId} />
+      )}
+      {activeTab === 'audit' && <AuditSection action={auditAction} onActionChange={setAuditAction} />}
     </div>
   );
 }

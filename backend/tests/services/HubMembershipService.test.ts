@@ -7,6 +7,7 @@ import { ConflictError, NotFoundError, ValidationError } from '../../src/@shared
 const HUB_ID = 'hub-1';
 const USER_A = 'user-a';
 const USER_B = 'user-b';
+const USER_C = 'user-c';
 
 function createHub(id: string, name = 'BCA Hospitality', isActive = true) {
   return Hub.hydrate({
@@ -30,7 +31,7 @@ function createMembership(hubId: string, userId: string, role: string, id = `m-$
   } as any);
 }
 
-function createTenant(id: string, name: string, hubId: string) {
+function createTenant(id: string, name: string, hubId: string = HUB_ID) {
   return { serialize: () => ({ id, name, hubId }) };
 }
 
@@ -142,6 +143,41 @@ describe('HubMembershipService', () => {
       expect(members[0].displayName).toBe('Alice Admin');
       expect(members[0].email).toBe('a@x.com');
       expect(members[1].displayName).toBeNull();
+    });
+
+    it('decorates members with their home tenant name, one lookup per distinct tenant', async () => {
+      repos.hubRepository.findById.mockResolvedValue(createHub(HUB_ID));
+      repos.hubMembershipRepository.findByHub.mockResolvedValue([
+        createMembership(HUB_ID, USER_A, 'owner'),
+        createMembership(HUB_ID, USER_B, 'admin', 'm-2'),
+        createMembership(HUB_ID, USER_C, 'viewer', 'm-3'),
+      ]);
+      repos.userRepository.findByIdRaw.mockImplementation(async (id: string) => {
+        if (id === USER_A) return { serialize: () => ({ displayName: 'A', email: 'a@x.com', tenantId: 'tenant-a' }) };
+        if (id === USER_B) return { serialize: () => ({ displayName: 'B', email: 'b@x.com', tenantId: 'tenant-a' }) };
+        return { serialize: () => ({ displayName: 'C', email: 'c@x.com', tenantId: 'tenant-b' }) };
+      });
+      repos.tenantRepository.findById.mockImplementation(async (id: string) =>
+        id === 'tenant-a' ? createTenant('tenant-a', 'Alpha Kopi') : createTenant('tenant-b', 'Beta Resto'),
+      );
+
+      const members = await service.listMembers(HUB_ID);
+
+      expect(members.map((m) => m.userTenantName)).toEqual(['Alpha Kopi', 'Alpha Kopi', 'Beta Resto']);
+      expect(repos.tenantRepository.findById).toHaveBeenCalledTimes(2);
+    });
+
+    it('keeps userTenantName null when the home tenant is gone or lookup fails', async () => {
+      repos.hubRepository.findById.mockResolvedValue(createHub(HUB_ID));
+      repos.hubMembershipRepository.findByHub.mockResolvedValue([createMembership(HUB_ID, USER_A, 'owner')]);
+      repos.userRepository.findByIdRaw.mockResolvedValue({
+        serialize: () => ({ displayName: 'A', email: 'a@x.com', tenantId: 'tenant-gone' }),
+      });
+      repos.tenantRepository.findById.mockResolvedValue(null);
+
+      const members = await service.listMembers(HUB_ID);
+      expect(members[0].userTenantId).toBe('tenant-gone');
+      expect(members[0].userTenantName).toBeNull();
     });
 
     it('throws NotFoundError for missing hub', async () => {

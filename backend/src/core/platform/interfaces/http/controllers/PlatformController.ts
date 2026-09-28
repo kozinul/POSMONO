@@ -30,6 +30,7 @@ interface PlatformControllerDeps {
   warehouseRepository?: any;
   userService?: UserService;
   cleanupService?: PlatformCleanupService;
+  hubMembershipService?: { listMembers(hubId: string): Promise<any[]> };
 }
 
 export class PlatformController extends BaseController {
@@ -94,7 +95,97 @@ export class PlatformController extends BaseController {
       page: parseInt(page as string, 10),
       limit: parseInt(limit as string, 10),
     });
-    this.ok(res, result);
+
+    // Attach hubName so the UI never has to render a raw hubId.
+    const rows = await this.withHubNames(result.data);
+
+    this.ok(res, { ...result, data: rows });
+  }
+
+  private async withHubNames<T extends { hubId?: string | null }>(rows: T[]): Promise<(T & { hubName: string | null })[]> {
+    if (!this.deps.hubRepository) {
+      return rows.map((row) => ({ ...row, hubName: null }));
+    }
+    const hubIds = [...new Set(rows.map((r) => r.hubId).filter((id): id is string => !!id))];
+    if (hubIds.length === 0) {
+      return rows.map((row) => ({ ...row, hubName: null }));
+    }
+    const names = new Map<string, string>();
+    for (const hubId of hubIds) {
+      try {
+        const hub = await this.deps.hubRepository.findById(hubId);
+        const name = hub?.serialize()?.name;
+        if (name) names.set(hubId, name);
+      } catch {
+        // best-effort hub name decoration
+      }
+    }
+    return rows.map((row) => ({ ...row, hubName: row.hubId ? names.get(row.hubId) ?? null : null }));
+  }
+
+  // Cross-tenant user search (Terminal Center, e.g. picking a hub member)
+  async listUsers(req: Request, res: Response): Promise<void> {
+    const userRepository = this.deps.userRepository;
+    if (!userRepository || typeof userRepository.searchAcrossTenants !== 'function') {
+      throw new ValidationError('Pencarian user lintas-tenant tidak dikonfigurasi');
+    }
+
+    const { search, tenantId, hubId, isActive, page = '1', limit = '20' } = req.query;
+    const scope = await resolvePlatformScope(this.deps.tenantRepository, {
+      hubId: hubId as string | undefined,
+      tenantId: tenantId as string | undefined,
+    });
+
+    const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit as string, 10) || 20));
+
+    const searchResult: { users: any[]; total: number } = await userRepository.searchAcrossTenants(
+      {
+        search: (search as string) || undefined,
+        tenantIds: scope.tenantIds,
+        isActive: isActive === undefined ? undefined : isActive === 'true',
+      },
+      { skip: (pageNum - 1) * limitNum, limit: limitNum },
+    );
+    const { users, total } = searchResult;
+
+    // One role lookup per distinct role, not per row.
+    const roleNames = new Map<string, string>();
+    const roleIds = [...new Set<string>(users.map((u: any) => u.serialize().roleId).filter((id: string) => !!id))];
+    for (const roleId of roleIds) {
+      try {
+        const role: any = this.deps.roleRepository ? await this.deps.roleRepository.findById(roleId) : null;
+        const name = role?.serialize()?.name;
+        if (name) roleNames.set(roleId, name);
+      } catch {
+        // best-effort role name decoration
+      }
+    }
+
+    // When the search is scoped to a hub, flag users that are already members of it.
+    const scopedHubId = hubId as string | undefined;
+    let memberIds: Set<string> | null = null;
+    if (scopedHubId && this.deps.hubMembershipService) {
+      const members = await this.deps.hubMembershipService.listMembers(scopedHubId);
+      memberIds = new Set<string>(members.map((m: any) => m.userId).filter(Boolean));
+    }
+
+    const data = users.map((u: any) => {
+      const row = u.serialize();
+      return {
+        id: row.id,
+        displayName: row.displayName,
+        email: row.email,
+        tenantId: row.tenantId,
+        tenantName: scope.tenantNameById[row.tenantId] ?? null,
+        roleId: row.roleId,
+        roleName: roleNames.get(row.roleId) ?? null,
+        isActive: row.isActive,
+        isHubMember: memberIds ? memberIds.has(row.id) : false,
+      };
+    });
+
+    this.ok(res, { data, total, page: pageNum, limit: limitNum });
   }
 
   async getTenant(req: Request, res: Response): Promise<void> {

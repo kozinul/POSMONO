@@ -4,6 +4,35 @@
 
 ---
 
+### DATE: 2026-09-28
+
+**Today I worked on:**
+* Frontend Terminal Center: tab **Hub & Anggota** (Fase 15 backend plan, fase frontend) — perbaikan 9 temuan audit F1–F9
+* Endpoint baru `GET /api/platform/users` (pencarian user lintas-tenant) + picker anggota satu kolom
+* `userTenantName` di `HubMembershipService.listMembers`, link "Lihat di Audit", a11y dialog/list
+
+**Problems encountered:**
+* `userRepository` bertipe `any` di `PlatformController` → `users.map(...).filter(...)` membuat `new Set<unknown>()`, `tsc` protes `unknown` bukan `string`. Solusi: eksplisit `{ users: any[]; total: number }` pada hasil search + `new Set<string>(...)`
+* `HubsSection.test.tsx` gagal 6/6 karena query global (nama "BCA Hospitality" muncul di list + detail, mock Swal tidak menjalankan `preConfirm`, mock URL tidak menangani query string). Solusi: `aria-label="Daftar hub"` + `within(...)`, Swal mock eksekusi `preConfirm`, `url.startsWith('/platform/tenants?')`
+* Ekspektasi test salah: `isHubMember` tanpa `hubId` memang selalu `false` (konteks keanggotaan per hub) — test diubah, bukan kodenya
+
+**What I completed:**
+* Komponen baru: `HubsSection`, `HubProfileCard`, `HubTenantPanel`, `HubMemberPanel`, `CreateHubModal`, `AssignTenantModal`, `AddMemberModal`, `platformUi.tsx`
+* 5 mutasi React Query (`usePlatformCreateHub/UpdateHub/DeleteHub/AssignTenantToHub/UnassignTenantFromHub`) + helper invalidasi cache
+* `apiPost`/`apiDelete` mentah & `confirm`/`alert`/`prompt` di `TerminalCenterPage` — dihapus total (Swal2 + `apiErrorMessage`)
+* `hubName` per baris di `GET /platform/tenants` (F8, satu lookup per hub unik)
+* Docs: `HUB_FRONTEND_PLAN.md` (baru), `HUB_ARCHITECTURE.md`, `API_REFERENCE.md`, `PROJECT_ROADMAP.md`, `AGENTS.md`
+
+**What I learned:**
+* Mock Swal di test wajib memanggil `preConfirm` sendiri — kalau tidak, jalur mutasi di balik konfirmasi tidak pernah tersentuh dan test "hijau" secara palsu
+* Backend `userRepository: any` di controller hampir selalu menghasilkan TypeScript error tersembunyi di `new Set(...)`/generic inference — lebih baik annotate batas trust boundary
+
+**Tomorrow priority:**
+* E2E manual Terminal Center dengan platform admin sungguhan (provisioning → assign hub → tambah anggota → tenant switcher lintas-tenant)
+* Endpoint `GET /api/platform/users` perlu index teks (`email`/`displayName` regex tak pakai index) bila volume user sudah besar
+
+**Productivity score:** 9
+
 ## Template
 
 Copy this block for each new day:

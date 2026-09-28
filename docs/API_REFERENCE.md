@@ -1048,6 +1048,7 @@ Hub = grouping non-tenant di atas tenant (`hubId` di Tenant; null = standalone).
 | GET | `/api/platform/hubs/:hubId` | platform | `hub:manage` |
 | GET | `/api/platform/tenants` | platform | `platform.tenants.read` |
 | GET | `/api/platform/tenants/:tenantId` | platform | `platform.tenants.read` |
+| GET | `/api/platform/users` | platform | `platform.tenants.read` |
 | POST | `/api/platform/provision/tenant` | platform | `hub:manage` |
 | GET | `/api/platform/outlets` | platform | `platform.tenants.read` |
 | POST | `/api/platform/outlets` | platform | `outlet:manage` |
@@ -1066,7 +1067,8 @@ Hub = grouping non-tenant di atas tenant (`hubId` di Tenant; null = standalone).
 
 **Query params:**
 
-- `GET /api/platform/tenants?page=&limit=&hubId=&search=` → `{ items, total, page, limit }`
+- `GET /api/platform/tenants?page=&limit=&hubId=&search=` → `{ items, total, page, limit }`; tiap baris tenant dilengkapi `hubName` (nama hub, `null` bila standalone) oleh `PlatformController.withHubNames` — UI tidak perlu menampilkan `hubId` mentah
+- `GET /api/platform/users?search=&tenantId=&hubId=&isActive=true|false&page=&limit=` → **pencarian user lintas-tenant** (dipakai picker anggota hub): `{ data[{ id, displayName, email, tenantId, tenantName, roleId, roleName, isActive, isHubMember }], total, page, limit }`. `search` cocok ke `displayName`/`email`/`_id` case-insensitive (regex di-escape, jadi `.*` tidak match semua); `tenantId`/`hubId` memakai `resolvePlatformScope` yang sama dengan list tenant/outlet; `roleName` di-dekorasi satu lookup per role unik; `isHubMember` **hanya terisi true/false bermakna bila `hubId` dikirim** (tanpa scope hub selalu `false`, karena keanggotaan hub berbeda-beda).
 - `GET /api/platform/outlets?tenantId=&hubId=&isActive=true|false` → outlets lintas-tenant + `tenantName`
 - `POST /api/platform/outlets` → **buat outlet baru untuk tenant existing** (`{ tenantId, name, address?, phone? }`); `PlatformController.createOutlet` memastikan tenant ada (404), lalu `OutletService.createWithWarehouse` membuat **Outlet + Warehouse 1:1** ("Warehouse {name}") dan melink `outlet.warehouseId`. Duplikat nama per tenant → 409. Response menyertakan `tenantName`.
 - `GET /api/platform/shifts/summary?dateFrom=&dateTo=&hubId=&tenantId=` → per tenant + per outlet (jumlah shift, durasi, total)
@@ -1165,13 +1167,15 @@ User lintas-tenant (Group Admin). Role: `owner` | `admin` | `viewer`; unique `{h
 | Method | Path | Auth | Permission |
 |--------|------|------|------------|
 | POST | `/api/hub-memberships` | ✓ | `hub:manage` |
-| GET | `/api/hub-memberships/hub/:hubId` | ✓ | `hub:manage` (list + nama/email user) |
+| GET | `/api/hub-memberships/hub/:hubId` | ✓ | `hub:manage` (list + nama/email user + `userTenantName`) |
 | PUT | `/api/hub-memberships/:hubId/:userId` | ✓ | `hub:manage` (ganti role) |
 | DELETE | `/api/hub-memberships/:hubId/:userId` | ✓ | `hub:manage` |
 | GET | `/api/hub-memberships/me` | ✓ | — (membership milik user) |
 | GET | `/api/hub-memberships/me/tenants` | ✓ | — (tenant yang bisa diakses via membership) |
 
 **Body** POST: `{ hubId, userId, role }`; PUT: `{ role }`. Errors: 400 invalid role, 404 hub/user/membership tidak ada, 409 duplikat.
+
+Response `GET /hub-memberships/hub/:hubId` dekorasi `displayName`/`email`/`userTenantId` + **`userTenantName`** (nama tenant asal anggota, satu lookup per tenant unik; `null` bila tenant sudah terhapus).
 
 ---
 
@@ -1342,15 +1346,16 @@ id, tenantId, email, displayName, roleId, isActive, lastLoginAt, createdAt, upda
 | 102 | GET | `/api/platform/hubs/:hubId` | platform `hub:manage` |
 | 103 | GET | `/api/platform/tenants` | platform `platform.tenants.read` |
 | 104 | GET | `/api/platform/tenants/:tenantId` | platform `platform.tenants.read` |
-| 105 | GET | `/api/platform/outlets` | platform `platform.tenants.read` |
-| 106 | POST | `/api/platform/outlets` | platform `outlet:manage` |
-| 107 | GET | `/api/platform/shifts/summary` | platform `platform.reports.read` |
-| 108 | GET | `/api/platform/payments/summary` | platform `platform.reports.read` |
-| 109 | GET | `/api/platform/hubs/:hubId/consolidated` | platform `platform.reports.read` |
-| 110 | POST | `/api/hub-memberships` | ✓ `hub:manage` |
-| 111 | GET | `/api/hub-memberships/hub/:hubId` | ✓ `hub:manage` |
-| 112 | PUT | `/api/hub-memberships/:hubId/:userId` | ✓ `hub:manage` |
-| 113 | DELETE | `/api/hub-memberships/:hubId/:userId` | ✓ `hub:manage` |
+| 105 | GET | `/api/platform/users` | platform `platform.tenants.read` (pencarian user lintas-tenant) |
+| 106 | GET | `/api/platform/outlets` | platform `platform.tenants.read` |
+| 107 | POST | `/api/platform/outlets` | platform `outlet:manage` |
+| 108 | GET | `/api/platform/shifts/summary` | platform `platform.reports.read` |
+| 109 | GET | `/api/platform/payments/summary` | platform `platform.reports.read` |
+| 110 | GET | `/api/platform/hubs/:hubId/consolidated` | platform `platform.reports.read` |
+| 111 | POST | `/api/hub-memberships` | ✓ `hub:manage` |
+| 112 | GET | `/api/hub-memberships/hub/:hubId` | ✓ `hub:manage` |
+| 113 | PUT | `/api/hub-memberships/:hubId/:userId` | ✓ `hub:manage` (ganti role) |
+| 113a | DELETE | `/api/hub-memberships/:hubId/:userId` | ✓ `hub:manage` |
 | 114 | GET | `/api/hub-memberships/me` | ✓ |
 | 116 | GET | `/api/hub-memberships/me/tenants` | ✓ |
 | 117 | GET | `/api/tenants/current/entitlement` | ✓ |

@@ -99,7 +99,29 @@ export class HubMembershipService {
       }),
     );
 
-    return members;
+    // One tenant lookup per distinct tenant, not per member.
+    const tenantNames = new Map<string, string>();
+    const tenantIds = [
+      ...new Set(
+        members
+          .map((m) => m.userTenantId as string)
+          .filter((id): id is string => !!id),
+      ),
+    ];
+    for (const tenantId of tenantIds) {
+      try {
+        const tenant = await this.deps.tenantRepository.findById(tenantId);
+        const name = tenant?.serialize()?.name;
+        if (name) tenantNames.set(tenantId, name);
+      } catch {
+        // best-effort tenant name decoration
+      }
+    }
+
+    return members.map((member) => ({
+      ...member,
+      userTenantName: member.userTenantId ? tenantNames.get(member.userTenantId) ?? null : null,
+    }));
   }
 
   async listByUser(userId: string): Promise<any[]> {

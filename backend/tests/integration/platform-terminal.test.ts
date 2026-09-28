@@ -12,6 +12,9 @@ import { MongoOutletRepository } from '../../src/core/outlet/infrastructure/pers
 import { MongoWarehouseRepository } from '../../src/core/inventory/infrastructure/persistence/MongoWarehouseRepository';
 import { MongoShiftRepository } from '../../src/core/pos/infrastructure/persistence/MongoShiftRepository';
 import { MongoPaymentRepository } from '../../src/core/payment/infrastructure/persistence/MongoPaymentRepository';
+import { MongoUserRepository } from '../../src/core/identity/infrastructure/persistence/MongoUserRepository';
+import { MongoRoleRepository } from '../../src/core/identity/infrastructure/persistence/MongoRoleRepository';
+import { MongoHubMembershipRepository } from '../../src/core/hub/infrastructure/persistence/MongoHubMembershipRepository';
 
 import { TenantSchema } from '../../src/core/tenant/infrastructure/persistence/schemas/TenantSchema';
 import { HubSchema } from '../../src/core/hub/infrastructure/persistence/schemas/HubSchema';
@@ -19,6 +22,9 @@ import { OutletSchema } from '../../src/core/outlet/infrastructure/persistence/s
 import { WarehouseSchema } from '../../src/core/inventory/infrastructure/persistence/schemas/WarehouseSchema';
 import { ShiftSchema } from '../../src/core/pos/infrastructure/persistence/schemas/ShiftSchema';
 import { PaymentSchema } from '../../src/core/payment/infrastructure/persistence/schemas/PaymentSchema';
+import { UserSchema } from '../../src/core/identity/infrastructure/persistence/schemas/UserSchema';
+import { RoleSchema } from '../../src/core/identity/infrastructure/persistence/schemas/RoleSchema';
+import { HubMembershipSchema } from '../../src/core/hub/infrastructure/persistence/schemas/HubMembershipSchema';
 
 import { Tenant } from '../../src/core/tenant/domain/Tenant';
 import { Hub } from '../../src/core/hub/domain/Hub';
@@ -26,6 +32,10 @@ import { Outlet } from '../../src/core/outlet/domain/Outlet';
 import { Warehouse } from '../../src/core/inventory/domain/Warehouse';
 import { Shift } from '../../src/core/pos/domain/Shift';
 import { Payment } from '../../src/core/payment/domain/Payment';
+import { User } from '../../src/core/identity/domain/User';
+import { Role } from '../../src/core/identity/domain/Role';
+import { HubMembership } from '../../src/core/hub/domain/HubMembership';
+import { HubMembershipService } from '../../src/core/hub/application/services/HubMembershipService';
 
 import { HubService } from '../../src/core/hub/application/services/HubService';
 import { TenantService } from '../../src/core/tenant/application/services/TenantService';
@@ -43,6 +53,7 @@ import { errorHandler } from '../../src/@shared/interfaces/middleware/errorHandl
 
 const TENANT_A = 'tenant-alpha';
 const TENANT_B = 'tenant-beta';
+const TENANT_C = 'tenant-gamma';
 const HUB_1 = 'hub-1';
 
 let ctx: {
@@ -52,6 +63,7 @@ let ctx: {
   outletRepo: MongoOutletRepository;
   shiftRepo: MongoShiftRepository;
   paymentRepo: MongoPaymentRepository;
+  userRepo: MongoUserRepository;
   platformToken: string;
   tenantToken: string;
 };
@@ -77,6 +89,61 @@ function seedTenant(repo: MongoTenantRepository, id: string, name: string, slug:
   return repo.save(tenant);
 }
 
+function seedUser(repo: MongoUserRepository, opts: {
+  id: string;
+  tenantId: string;
+  displayName: string;
+  email: string;
+  roleId: string;
+  isActive?: boolean;
+}) {
+  const user = User.hydrate({
+    id: opts.id,
+    tenantId: opts.tenantId,
+    email: opts.email,
+    passwordHash: 'hash',
+    displayName: opts.displayName,
+    roleId: opts.roleId,
+    outletIds: [],
+    isActive: opts.isActive ?? true,
+    lastLoginAt: null,
+    pin: null,
+    preferences: {},
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  } as any);
+  return repo.save(user);
+}
+
+function seedRole(repo: MongoRoleRepository, id: string, tenantId: string, name: string) {
+  const role = Role.hydrate({
+    id,
+    tenantId,
+    name,
+    description: null,
+    permissions: [],
+    isSystem: false,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  } as any);
+  return repo.save(role);
+}
+
+function seedMembership(
+  repo: MongoHubMembershipRepository,
+  opts: { hubId: string; userId: string; role?: 'owner' | 'admin' | 'viewer' },
+) {
+  const membership = HubMembership.hydrate({
+    id: `mem-${opts.hubId}-${opts.userId}`,
+    hubId: opts.hubId,
+    userId: opts.userId,
+    role: opts.role ?? 'admin',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  } as any);
+  return repo.save(membership);
+}
+
 function seedHub(repo: MongoHubRepository, id: string, name: string) {
   const hub = Hub.hydrate({
     id,
@@ -98,6 +165,9 @@ beforeAll(async () => {
   const warehouseModel = mongoose.model('Warehouse', WarehouseSchema);
   const shiftModel = mongoose.model('Shift', ShiftSchema);
   const paymentModel = mongoose.model('Payment', PaymentSchema);
+  const userModel = mongoose.model('User', UserSchema);
+  const roleModel = mongoose.model('Role', RoleSchema);
+  const hubMembershipModel = mongoose.model('HubMembership', HubMembershipSchema);
 
   const tenantRepo = new MongoTenantRepository(tenantModel);
   const hubRepo = new MongoHubRepository(hubModel);
@@ -105,6 +175,15 @@ beforeAll(async () => {
   const warehouseRepo = new MongoWarehouseRepository(warehouseModel);
   const shiftRepo = new MongoShiftRepository(shiftModel);
   const paymentRepo = new MongoPaymentRepository(paymentModel);
+  const userRepo = new MongoUserRepository(userModel);
+  const roleRepo = new MongoRoleRepository(roleModel);
+  const hubMembershipRepo = new MongoHubMembershipRepository(hubMembershipModel);
+  const hubMembershipService = new HubMembershipService({
+    hubMembershipRepository: hubMembershipRepo,
+    hubRepository: hubRepo,
+    tenantRepository: tenantRepo,
+    userRepository: userRepo,
+  });
 
   const hubService = new HubService(hubRepo, tenantRepo);
   const tenantService = new TenantService(tenantRepo);
@@ -134,6 +213,9 @@ beforeAll(async () => {
     paymentService,
     tenantRepository: tenantRepo,
     hubRepository: hubRepo,
+    userRepository: userRepo,
+    roleRepository: roleRepo,
+    hubMembershipService,
   });
 
   const app = express();
@@ -151,6 +233,7 @@ beforeAll(async () => {
     outletRepo,
     shiftRepo,
     paymentRepo,
+    userRepo,
     platformToken: generateTestToken({
       sub: 'platform-admin',
       tenant: 'platform',
@@ -219,6 +302,7 @@ describe('Terminal Center (/api/platform)', () => {
     expect(all.status).toBe(200);
     expect(all.body.data.total).toBe(2);
     expect(all.body.data.data).toHaveLength(2);
+    expect(all.body.data.data.map((t: any) => t.hubName)).toEqual(['BCA Hospitality', 'BCA Hospitality']);
 
     const byHub = await request(ctx.app).get(`/api/platform/tenants?hubId=${HUB_1}`).set('Authorization', platformAuth());
     expect(byHub.body.data.total).toBe(2);
@@ -230,6 +314,104 @@ describe('Terminal Center (/api/platform)', () => {
     const paginated = await request(ctx.app).get('/api/platform/tenants?limit=1&page=2').set('Authorization', platformAuth());
     expect(paginated.body.data.data).toHaveLength(1);
     expect(paginated.body.data.total).toBe(2);
+  });
+
+  it('reports hubName null for standalone tenants in the platform tenant list', async () => {
+    await seedTenant(ctx.tenantRepo, TENANT_C, 'Gamma Kios', 'gamma-kios', null);
+
+    const res = await request(ctx.app).get('/api/platform/tenants?search=gamma').set('Authorization', platformAuth());
+    expect(res.status).toBe(200);
+    expect(res.body.data.total).toBe(1);
+    expect(res.body.data.data[0].hubId).toBeNull();
+    expect(res.body.data.data[0].hubName).toBeNull();
+  });
+
+  it('searches users across tenants with search/tenant/hub/isActive filters and flags hub members', async () => {
+    const roleRepo = new MongoRoleRepository(mongoose.model('Role', RoleSchema));
+    const hubMembershipRepo = new MongoHubMembershipRepository(mongoose.model('HubMembership', HubMembershipSchema));
+
+    await seedRole(roleRepo, 'role-owner-a', TENANT_A, 'Owner');
+    await seedRole(roleRepo, 'role-cashier-b', TENANT_B, 'Cashier');
+    await seedUser(ctx.userRepo, {
+      id: 'user-budi',
+      tenantId: TENANT_A,
+      displayName: 'Budi Santoso',
+      email: 'budi@alpha.test',
+      roleId: 'role-owner-a',
+    });
+    await seedUser(ctx.userRepo, {
+      id: 'user-sari',
+      tenantId: TENANT_B,
+      displayName: 'Sari Wijaya',
+      email: 'sari@beta.test',
+      roleId: 'role-cashier-b',
+    });
+    await seedUser(ctx.userRepo, {
+      id: 'user-nonaktif',
+      tenantId: TENANT_A,
+      displayName: 'Dina Nonaktif',
+      email: 'dina@alpha.test',
+      roleId: 'role-owner-a',
+      isActive: false,
+    });
+    await seedMembership(hubMembershipRepo, { hubId: HUB_1, userId: 'user-budi', role: 'owner' });
+
+    const all = await request(ctx.app).get('/api/platform/users').set('Authorization', platformAuth());
+    expect(all.status).toBe(200);
+    expect(all.body.data.total).toBe(3);
+    const byId = new Map<string, any>(all.body.data.data.map((u: any) => [u.id, u]));
+    expect(byId.get('user-budi')).toMatchObject({
+      displayName: 'Budi Santoso',
+      tenantId: TENANT_A,
+      tenantName: 'Alpha Kopi',
+      roleName: 'Owner',
+      isActive: true,
+    });
+    expect(byId.get('user-sari')).toMatchObject({ tenantName: 'Beta Resto', roleName: 'Cashier' });
+    // Without a hub scope there is no membership context to report.
+    expect(all.body.data.data.every((u: any) => u.isHubMember === false)).toBe(true);
+
+    const bySearch = await request(ctx.app).get('/api/platform/users?search=sari').set('Authorization', platformAuth());
+    expect(bySearch.body.data.total).toBe(1);
+    expect(bySearch.body.data.data[0].id).toBe('user-sari');
+
+    const byTenant = await request(ctx.app)
+      .get(`/api/platform/users?tenantId=${TENANT_A}`)
+      .set('Authorization', platformAuth());
+    expect(byTenant.body.data.total).toBe(2);
+
+    const byHub = await request(ctx.app).get(`/api/platform/users?hubId=${HUB_1}`).set('Authorization', platformAuth());
+    expect(byHub.body.data.total).toBe(3);
+    const byHubId = new Map<string, any>(byHub.body.data.data.map((u: any) => [u.id, u]));
+    expect(byHubId.get('user-budi').isHubMember).toBe(true);
+    expect(byHubId.get('user-sari').isHubMember).toBe(false);
+
+    const activeOnly = await request(ctx.app).get('/api/platform/users?isActive=true').set('Authorization', platformAuth());
+    expect(activeOnly.body.data.total).toBe(2);
+
+    // Regex metacharacters are escaped, not executed.
+    const literal = await request(ctx.app)
+      .get('/api/platform/users?search=' + encodeURIComponent('.*'))
+      .set('Authorization', platformAuth());
+    expect(literal.body.data.total).toBe(0);
+
+    // Pagination
+    const page2 = await request(ctx.app).get('/api/platform/users?limit=2&page=2').set('Authorization', platformAuth());
+    expect(page2.body.data.data).toHaveLength(1);
+    expect(page2.body.data.total).toBe(3);
+
+    // RBAC: platform.audit.read alone is not enough
+    const weakToken = generateTestToken({
+      sub: 'platform-audit',
+      tenant: 'platform',
+      role: 'platform-super-admin',
+      permissions: ['platform.audit.read'],
+    });
+    const forbidden = await request(ctx.app).get('/api/platform/users').set('Authorization', `Bearer ${weakToken}`);
+    expect(forbidden.status).toBe(403);
+
+    const tenantScoped = await request(ctx.app).get('/api/platform/users').set('Authorization', ctx.tenantToken);
+    expect(tenantScoped.status).toBe(401);
   });
 
   it('lists outlets across tenants with tenant/hub/isActive filters + tenantName', async () => {

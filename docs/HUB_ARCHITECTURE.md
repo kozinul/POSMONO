@@ -182,7 +182,7 @@ Dibutuhkan untuk user lintas-tenant (Group Admin) dan Hub Consolidated Report.
 ### Fase 7 — Frontend
 - [x] `useAuth.ts`: `AuthUser` + `outletIds`; store + `activeOutletId` (persist `localStorage.activeOutletId`, auto-pick 1 outlet bila user hanya punya 1, cleared saat logout/tak lagi dalam scope user)
 - [x] `api.ts`: header `X-Outlet-Id` dari `activeOutletId`
-- [x] Hooks `useOutlets` (pindah ke `@shared/hooks/useOutlets.ts` + CRUD) / `useHubs` (`@shared/hooks/useHubs.ts`); `useTenant` membaca `hubId` + `hubName` (read-only dari `GET /tenants/current`); backend `TenantController.getCurrent` +`hubId`/`hubName` (inject `hubRepository`)
+- [x] Hooks `useOutlets` (pindah ke `@shared/hooks/useOutlets.ts` + CRUD) / hub — **Catatan 2026-09-28**: tidak ada file `useHubs.ts`; hook hub ada di `@shared/hooks/usePlatform.ts` (`usePlatformHubs`, `usePlatformHub`, mutasi create/update/delete/assign/unassign) + `@shared/hooks/useHubMemberships.ts` (`useHubMembers`, `useMyHubMemberships`, `useAccessibleTenants`); `useTenant` membaca `hubId` + `hubName` (read-only dari `GET /tenants/current`); backend `TenantController.getCurrent` +`hubId`/`hubName` (inject `hubRepository`)
 - [x] `DashboardLayout.tsx`: outlet switcher saat user punya >1 outlet (data-driven, tanpa flag mode; pilihan outlet dari `useOutlets` dibatasi `user.outletIds`; akses semua outlet `[]` → semua); ganti outlet → invalidate `inventory/products/orders/shifts/daily-report/sales-report/best-sellers`
 - [x] `frontend/src/core/outlets/pages/OutletListPage.tsx` (`/outlets`, nav "Outlet" guarded `outlet:manage`, CRUD via `OutletController` `outlet:manage`)
 - [x] Halaman Users: assign outlet (Fase 6); POS: `useStockList()` di-scope warehouse outlet aktif (`PosPage.stockMap` filter `activeWarehouseId` → `Outlet.warehouseId`); `ReceiptDisplay` fallback struk + nama outlet aktif; `OpenShiftModal` menampilkan "Outlet: {nama}"
@@ -270,3 +270,15 @@ Dibutuhkan untuk user lintas-tenant (Group Admin) dan Hub Consolidated Report.
 - `docs/POS_CURRENT_FEATURES.md` — spec fitur (outlet di baris 141–160, 619–750)
 - `docs/REPORT_REQUIREMENTS.md` — laporan (filter `outletId` di aggregation)
 - `docs/DAILY_LOG.md` — log harian
+
+---
+
+## Catatan 2026-09-28 — Fase 15: Frontend Hub & Anggota
+
+Rencana & status rinci: **`docs/HUB_FRONTEND_PLAN.md`** (temuan audit F1–F9, matriks invalidasi cache, test plan).
+
+Backend Hub/keanggotaan **tidak diubah** pada fase ini — yang ditambahkan hanya `PlatformController.withHubNames` sehingga `GET /api/platform/tenants` menyertakan `hubName` (F8, menggantikan `hubId` mentah di UI).
+
+Frontend Terminal Center sekarang punya tab **Hub & Anggota** yang utuh: buat/edit/hapus hub (toggle `isActive` dengan peringatan cabut akses lintas-tenant), assign/unassign tenant per hub, serta kelola anggota — semuanya lewat React Query dengan invalidasi cache, konfirmasi Swal2, error berbahasa Indonesia, dan tab yang visibility-gated per permission (`hub:manage`).
+
+**Fase 4 (pencarian user lintas-tenant)**: endpoint baru `GET /api/platform/users?search=&tenantId=&hubId=&isActive=&page=&limit=` (`platform.tenants.read`, `PlatformController.listUsers` + `MongoUserRepository.searchAcrossTenants`) membuat picker anggota jadi **satu kolom pencarian** — regex search di-escape, `roleName` di-dekorasi satu lookup per role unik, dan `isHubMember` terisi bila pencarian di-scope ke sebuah hub. `HubMembershipService.listMembers` kini mengembalikan `userTenantName` (nama tenant asal anggota) sehingga tabel anggota tak perlu menebak nama tenant di frontend.

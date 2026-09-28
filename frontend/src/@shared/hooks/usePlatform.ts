@@ -235,6 +235,100 @@ export function usePlatformTenant(tenantId: string | null) {
   });
 }
 
+export interface CreateHubInput {
+  name: string;
+  description?: string;
+}
+
+export interface UpdateHubInput {
+  name?: string;
+  description?: string;
+  isActive?: boolean;
+}
+
+function invalidateHubScope(queryClient: ReturnType<typeof useQueryClient>, hubId?: string) {
+  queryClient.invalidateQueries({ queryKey: ['platform-hubs'] });
+  if (hubId) queryClient.invalidateQueries({ queryKey: ['platform-hub', hubId] });
+  queryClient.invalidateQueries({ queryKey: ['platform-tenants'] });
+  queryClient.invalidateQueries({ queryKey: ['platform-audit'] });
+}
+
+function invalidateHubTenantScope(
+  queryClient: ReturnType<typeof useQueryClient>,
+  hubId: string,
+  tenantId: string,
+) {
+  invalidateHubScope(queryClient, hubId);
+  queryClient.invalidateQueries({ queryKey: ['platform-tenant', tenantId] });
+  queryClient.invalidateQueries({ queryKey: ['platform-outlets'] });
+}
+
+export function usePlatformCreateHub() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CreateHubInput) => {
+      const res = await api.post<{ success: boolean; data: PlatformHub }>('/hubs', input);
+      return res.data.data;
+    },
+    onSuccess: () => {
+      invalidateHubScope(queryClient);
+    },
+  });
+}
+
+export function usePlatformUpdateHub() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ hubId, ...data }: { hubId: string } & UpdateHubInput) => {
+      const res = await api.put<{ success: boolean; data: PlatformHub }>(`/hubs/${hubId}`, data);
+      return res.data.data;
+    },
+    onSuccess: (_data, variables) => {
+      invalidateHubScope(queryClient, variables.hubId);
+    },
+  });
+}
+
+export function usePlatformDeleteHub() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (hubId: string) => {
+      await api.delete(`/hubs/${hubId}`);
+    },
+    onSuccess: (_data, hubId) => {
+      queryClient.removeQueries({ queryKey: ['platform-hub', hubId] });
+      queryClient.removeQueries({ queryKey: ['hub-members', hubId] });
+      invalidateHubScope(queryClient);
+    },
+  });
+}
+
+export function usePlatformAssignTenantToHub() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ hubId, tenantId }: { hubId: string; tenantId: string }) => {
+      const res = await api.post(`/hubs/${hubId}/tenants/${tenantId}`);
+      return res.data.data;
+    },
+    onSuccess: (_data, variables) => {
+      invalidateHubTenantScope(queryClient, variables.hubId, variables.tenantId);
+    },
+  });
+}
+
+export function usePlatformUnassignTenantFromHub() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ hubId, tenantId }: { hubId: string; tenantId: string }) => {
+      const res = await api.delete(`/hubs/${hubId}/tenants/${tenantId}`);
+      return res.data.data;
+    },
+    onSuccess: (_data, variables) => {
+      invalidateHubTenantScope(queryClient, variables.hubId, variables.tenantId);
+    },
+  });
+}
+
 export function usePlatformHubConsolidated(hubId: string | null, dateFrom: string, dateTo: string) {
   return useQuery({
     queryKey: ['platform-consolidated', hubId, dateFrom, dateTo],
@@ -267,6 +361,46 @@ export function usePlatformTenants(params: { hubId?: string; search?: string; pa
       );
       return res.data.data;
     },
+  });
+}
+
+export interface PlatformUserRow {
+  id: string;
+  displayName: string;
+  email: string;
+  tenantId: string;
+  tenantName: string | null;
+  roleId: string;
+  roleName: string | null;
+  isActive: boolean;
+  isHubMember: boolean;
+}
+
+/**
+ * Cross-tenant user search (Terminal Center). Passing `hubId` also flags users that are
+ * already members of that hub, so a member picker only needs one column.
+ */
+export function usePlatformUsers(
+  params: { search?: string; tenantId?: string; hubId?: string; isActive?: boolean; page?: number; limit?: number },
+  options: { enabled?: boolean } = {},
+) {
+  return useQuery({
+    queryKey: ['platform-users', params],
+    queryFn: async () => {
+      const p = new URLSearchParams();
+      if (params.search) p.set('search', params.search);
+      if (params.tenantId) p.set('tenantId', params.tenantId);
+      if (params.hubId) p.set('hubId', params.hubId);
+      if (typeof params.isActive === 'boolean') p.set('isActive', String(params.isActive));
+      if (params.page) p.set('page', String(params.page));
+      if (params.limit) p.set('limit', String(params.limit));
+      const res = await api.get<{ success: boolean; data: { data: PlatformUserRow[]; total: number; page: number; limit: number } }>(
+        `${BASE}/users${p.toString() ? `?${p.toString()}` : ''}`,
+      );
+      return res.data.data;
+    },
+    enabled: options.enabled ?? true,
+    staleTime: 15_000,
   });
 }
 

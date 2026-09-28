@@ -1134,6 +1134,7 @@ export function buildContainer() {
           warehouseRepository: container.resolve('warehouseRepository'),
           userService: container.resolve('userService'),
           cleanupService: container.resolve('platformCleanupService'),
+          hubMembershipService: container.resolve('hubMembershipService'),
         },
       }),
     }),

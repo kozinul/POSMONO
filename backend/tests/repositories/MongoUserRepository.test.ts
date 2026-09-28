@@ -126,4 +126,50 @@ describe('MongoUserRepository', () => {
       expect(users).toHaveLength(0);
     });
   });
+
+  describe('searchAcrossTenants', () => {
+    beforeEach(async () => {
+      await repo.save(createUser(TENANT_A, { email: 'budi@alpha.test', displayName: 'Budi Santoso' }));
+      await repo.save(createUser(TENANT_B, { email: 'sari@beta.test', displayName: 'Sari Wijaya' }));
+      await repo.save(createUser(TENANT_A, { email: 'dina@alpha.test', displayName: 'Dina', isActive: false }));
+    });
+
+    it('returns every user across tenants when no filter is given', async () => {
+      const { users, total } = await repo.searchAcrossTenants({}, { limit: 20, skip: 0 });
+      expect(total).toBe(3);
+      expect(users).toHaveLength(3);
+    });
+
+    it('matches displayName, email and user id case-insensitively', async () => {
+      const byName = await repo.searchAcrossTenants({ search: 'santoso' }, { limit: 20, skip: 0 });
+      expect(byName.total).toBe(1);
+      expect(byName.users[0].serialize().displayName).toBe('Budi Santoso');
+
+      const byEmail = await repo.searchAcrossTenants({ search: 'SARI@BETA' }, { limit: 20, skip: 0 });
+      expect(byEmail.total).toBe(1);
+      expect(byEmail.users[0].serialize().email).toBe('sari@beta.test');
+    });
+
+    it('escapes regex metacharacters instead of matching them', async () => {
+      const all = await repo.searchAcrossTenants({ search: '.*' }, { limit: 20, skip: 0 });
+      expect(all.total).toBe(0);
+    });
+
+    it('scopes by tenant ids and isActive', async () => {
+      const tenantA = await repo.searchAcrossTenants({ tenantIds: [TENANT_A] }, { limit: 20, skip: 0 });
+      expect(tenantA.total).toBe(2);
+
+      const active = await repo.searchAcrossTenants({ isActive: true }, { limit: 20, skip: 0 });
+      expect(active.total).toBe(2);
+    });
+
+    it('paginates while reporting the unpaginated total', async () => {
+      const page1 = await repo.searchAcrossTenants({}, { limit: 2, skip: 0 });
+      const page2 = await repo.searchAcrossTenants({}, { limit: 2, skip: 2 });
+      expect(page1.users).toHaveLength(2);
+      expect(page2.users).toHaveLength(1);
+      expect(page1.total).toBe(3);
+      expect(page2.total).toBe(3);
+    });
+  });
 });

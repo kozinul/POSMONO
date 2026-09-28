@@ -1,0 +1,199 @@
+import { useEffect, useState } from 'react';
+import { usePlatformHub, usePlatformHubs, type PlatformHub } from '../../../@shared/hooks/usePlatform';
+import { useHubMembers } from '../../../@shared/hooks/useHubMemberships';
+import AssignTenantModal from './AssignTenantModal';
+import AddMemberModal from './AddMemberModal';
+import CreateHubModal from './CreateHubModal';
+import HubMemberPanel from './HubMemberPanel';
+import HubProfileCard from './HubProfileCard';
+import HubTenantPanel from './HubTenantPanel';
+import {
+  Badge,
+  EmptyState,
+  Loading,
+  inputCls,
+  primaryBtnCls,
+} from './platformUi';
+
+type HubSubTab = 'profil' | 'tenant' | 'anggota';
+
+const SUB_TABS: { id: HubSubTab; label: string }[] = [
+  { id: 'profil', label: 'Profil' },
+  { id: 'tenant', label: 'Tenant' },
+  { id: 'anggota', label: 'Anggota' },
+];
+
+export default function HubsSection({
+  selectedHubId,
+  onSelectHub,
+  canManage,
+  onViewConsolidated,
+  onViewTenants,
+  onViewAudit,
+}: {
+  selectedHubId: string | null;
+  onSelectHub: (hubId: string | null) => void;
+  canManage: boolean;
+  onViewConsolidated: (hubId: string) => void;
+  onViewTenants: (hubId: string, hubName: string) => void;
+  onViewAudit?: (action: string) => void;
+}) {
+  const { data: hubs = [], isLoading } = usePlatformHubs();
+  const [search, setSearch] = useState('');
+  const [createOpen, setCreateOpen] = useState(false);
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [addMemberOpen, setAddMemberOpen] = useState(false);
+  const [subTab, setSubTab] = useState<HubSubTab>('profil');
+
+  const { data: hubDetail, isLoading: hubLoading } = usePlatformHub(selectedHubId);
+  const { data: members = [] } = useHubMembers(selectedHubId);
+
+  useEffect(() => {
+    if (!selectedHubId && hubs.length > 0) {
+      onSelectHub(hubs[0].id);
+    }
+  }, [hubs, selectedHubId, onSelectHub]);
+
+  const filtered = hubs.filter((h) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return h.name.toLowerCase().includes(q) || (h.description ?? '').toLowerCase().includes(q);
+  });
+
+  const selectedHub: PlatformHub | undefined = hubs.find((h) => h.id === selectedHubId);
+  const tenantNamesById: Record<string, string> = {};
+  for (const t of hubDetail?.tenants ?? []) {
+    tenantNamesById[t.id] = t.name;
+  }
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 items-start">
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <input
+            className={inputCls}
+            placeholder="Cari hub..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          {canManage && (
+            <button onClick={() => setCreateOpen(true)} className={primaryBtnCls + ' whitespace-nowrap'}>
+              + Buat Hub
+            </button>
+          )}
+        </div>
+
+        <div aria-label="Daftar hub" className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          {isLoading ? (
+            <Loading />
+          ) : filtered.length === 0 ? (
+            <EmptyState>
+              {hubs.length === 0
+                ? 'Belum ada hub. Buat hub lalu assign tenant ke dalamnya.'
+                : 'Tidak ada hub yang cocok dengan pencarian.'}
+            </EmptyState>
+          ) : (
+            filtered.map((hub) => (
+              <button
+                key={hub.id}
+                onClick={() => {
+                  onSelectHub(hub.id);
+                  setSubTab('profil');
+                }}
+                className={`w-full text-left px-4 py-3 border-b last:border-b-0 hover:bg-gray-50 ${
+                  selectedHubId === hub.id ? 'bg-blue-50 border-l-2 border-l-blue-600' : ''
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-gray-900">{hub.name}</span>
+                  <Badge tone={hub.isActive ? 'green' : 'gray'}>{hub.isActive ? 'Aktif' : 'Nonaktif'}</Badge>
+                </span>
+                {hub.description && <span className="block text-xs text-gray-500 mt-0.5">{hub.description}</span>}
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-4 min-w-0">
+        <CreateHubModal
+          isOpen={createOpen}
+          onClose={() => setCreateOpen(false)}
+          onCreated={(hub) => onSelectHub(hub.id)}
+        />
+
+        {!selectedHubId ? (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <EmptyState>Pilih atau buat hub untuk mulai mengelola tenant & anggota.</EmptyState>
+          </div>
+        ) : hubLoading || !hubDetail ? (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <Loading />
+          </div>
+        ) : (
+          <>
+            <div className="flex flex-wrap gap-2 border-b border-gray-200 pb-2">
+              {SUB_TABS.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setSubTab(t.id)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
+                    subTab === t.id ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  {t.label}
+                  {t.id === 'tenant' && hubDetail.tenantCount > 0 && ` (${hubDetail.tenantCount})`}
+                </button>
+              ))}
+            </div>
+
+            {subTab === 'profil' && (
+              <HubProfileCard
+                hub={hubDetail}
+                memberCount={members.length}
+                canManage={canManage}
+                onDeleted={() => onSelectHub(null)}
+                onViewConsolidated={onViewConsolidated}
+              />
+            )}
+
+            {subTab === 'tenant' && (
+              <HubTenantPanel
+                hub={hubDetail}
+                canManage={canManage}
+                onAssign={() => setAssignOpen(true)}
+                onViewTenants={() => onViewTenants(hubDetail.id, hubDetail.name)}
+                onViewAudit={onViewAudit}
+              />
+            )}
+
+            {subTab === 'anggota' && (
+              <HubMemberPanel
+                hubId={hubDetail.id}
+                hubName={hubDetail.name}
+                canManage={canManage}
+                tenantNamesById={tenantNamesById}
+                onAdd={() => setAddMemberOpen(true)}
+                onViewAudit={onViewAudit}
+              />
+            )}
+          </>
+        )}
+
+        <AssignTenantModal
+          isOpen={assignOpen && !!selectedHubId}
+          hubId={selectedHubId ?? ''}
+          hubName={selectedHub?.name ?? ''}
+          onClose={() => setAssignOpen(false)}
+        />
+
+        <AddMemberModal
+          isOpen={addMemberOpen && !!selectedHubId}
+          hubId={selectedHubId ?? ''}
+          hubName={selectedHub?.name ?? ''}
+          onClose={() => setAddMemberOpen(false)}
+        />
+      </div>
+    </div>
+  );
+}
