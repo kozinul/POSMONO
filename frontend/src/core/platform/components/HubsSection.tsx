@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { usePlatformHub, usePlatformHubs, type PlatformHub } from '../../../@shared/hooks/usePlatform';
 import { useHubMembers } from '../../../@shared/hooks/useHubMemberships';
 import AssignTenantModal from './AssignTenantModal';
@@ -65,6 +65,12 @@ export default function HubsSection({
   for (const t of hubDetail?.tenants ?? []) {
     tenantNamesById[t.id] = t.name;
   }
+  // Memoized so a parent re-render cannot reset an in-progress edit inside the
+  // Access modal (it re-seeds its draft whenever the `tenants` identity changes).
+  const accessTenants = useMemo(
+    () => (hubDetail?.tenants ?? []).map((t) => ({ id: t.id, name: t.name })),
+    [hubDetail?.tenants],
+  );
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 items-start">
@@ -173,6 +179,7 @@ export default function HubsSection({
                 hubName={hubDetail.name}
                 canManage={canManage}
                 tenantNamesById={tenantNamesById}
+                tenants={accessTenants}
                 onAdd={() => setAddMemberOpen(true)}
                 onViewAudit={onViewAudit}
               />

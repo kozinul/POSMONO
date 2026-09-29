@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import Swal from 'sweetalert2';
+import HubMemberAccessModal, { type AccessTenantOption } from './HubMemberAccessModal';
 import {
   HUB_MEMBER_ROLES,
   HUB_MEMBER_ROLE_LABELS,
@@ -17,6 +18,7 @@ import {
   cardCls,
   dangerBtnCls,
   smallPillBtnCls,
+  subtleBtnCls,
 } from './platformUi';
 
 const ROLE_TONE: Record<HubMemberRole, 'blue' | 'green' | 'gray'> = {
@@ -31,6 +33,7 @@ export default function HubMemberPanel({
   hubName,
   canManage,
   tenantNamesById,
+  tenants,
   onAdd,
   onViewAudit,
 }: {
@@ -38,6 +41,7 @@ export default function HubMemberPanel({
   hubName: string;
   canManage: boolean;
   tenantNamesById: Record<string, string>;
+  tenants: AccessTenantOption[];
   onAdd: () => void;
   onViewAudit?: (action: string) => void;
 }) {
@@ -45,6 +49,7 @@ export default function HubMemberPanel({
   const updateMember = useUpdateHubMembership();
   const removeMember = useRemoveHubMembership();
   const [error, setError] = useState('');
+  const [accessUserId, setAccessUserId] = useState<string | null>(null);
   const isBusy = updateMember.isPending || removeMember.isPending;
 
   const handleRoleChange = async (userId: string, currentRole: HubMemberRole, nextRole: HubMemberRole) => {
@@ -97,6 +102,12 @@ export default function HubMemberPanel({
       toast({ title: 'Anggota dihapus dari hub', icon: 'success' });
     }
   };
+
+  const accessMember =
+    members.find((m) => m.userId === accessUserId) ?? null;
+  const accessMemberLabel = accessUserId
+    ? (accessMember?.displayName ?? accessMember?.email ?? accessUserId)
+    : '';
 
   function memberName(userId: string): string {
     return members.find((m) => m.userId === userId)?.displayName ?? members.find((m) => m.userId === userId)?.email ?? userId;
@@ -182,9 +193,18 @@ export default function HubMemberPanel({
                     </td>
                     {canManage && (
                       <td className="px-3 py-2 text-right">
-                        <button onClick={() => handleRemove(m.userId)} disabled={isBusy} className={dangerBtnCls}>
-                          Hapus
-                        </button>
+                        <div className="inline-flex items-center gap-2">
+                          <button
+                            onClick={() => setAccessUserId(m.userId)}
+                            className={subtleBtnCls}
+                            title="Batasi tenant & outlet yang boleh diakses anggota ini"
+                          >
+                            Akses
+                          </button>
+                          <button onClick={() => handleRemove(m.userId)} disabled={isBusy} className={dangerBtnCls}>
+                            Hapus
+                          </button>
+                        </div>
                       </td>
                     )}
                   </tr>
@@ -194,6 +214,17 @@ export default function HubMemberPanel({
           </table>
         </div>
       )}
+
+      <HubMemberAccessModal
+        isOpen={accessUserId !== null}
+        onClose={() => setAccessUserId(null)}
+        hubId={hubId}
+        hubName={hubName}
+        userId={accessUserId ?? ''}
+        memberName={accessMemberLabel}
+        tenants={tenants}
+        canManage={canManage}
+      />
     </div>
   );
 }

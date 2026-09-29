@@ -104,6 +104,46 @@ Copy this block for each new day:
 
 ## Entries
 
+### DATE: 2026-09-29 — Hub V2 Fase 17: grant akses per tenant/outlet
+
+**Spek user**: lanjut roadmap Hub (Fase 17) — "gas lanjut" setelah commit Fase 16.
+
+**Today I worked on:**
+
+- **Domain + persistence** `HubMemberTenantAccess` (koleksi `hubmembertenantaccesses`): `{hubId, userId, tenantId, tenantRole, outletIds[], status}`. `tenantRole` = role **tenant** (`owner|admin|manager|cashier|viewer`) — ini yang bikin grant bisa lebih narrower, karena role hub hanya ada empat. Index unik `{hubId, userId, tenantId}` + lookup `{userId, tenantId}`; wiring `container.ts` + `syncIndexes`.
+- **`HubMemberAccessService`** (service baru, 12 method): lifecycle grant, seeding default, suspend-all, resolusi sesi, dan `getContext`.
+- **Resolusi dua mode di `AuthService.switchTenant`**: grant dibaca lebih dulu (≥1 baris = mode grant, `role: grant-{tenantRole}`, `outletIds` dari grant, `suspended` = 403); **nol baris = fallback** `HUB_MEMBER_ROLE_PERMS` + semua tenant — supaya nol anggota existing kehilangan akses (D3). Kedua mode tetap re-verifikasi `isGrantStillLinked` (hub aktif + membership ada + tenant milik hub), jadi baris grant yang rusak/ditulis manual tidak jadi pintu belakang.
+- **API**: `GET/PUT/DELETE /api/hub-memberships/hub/:hubId/:userId/access` (`platformAuthenticate` + `platform.hubs.manage`, D1 tahap 1) dan `GET /api/hub-context/me` (`authenticate`). `GET /auth/accessible-tenants` jadi mengirim `accessSource` + `tenantRole` + `outletIds` supaya UI bisa tahu dia sedang grant atau fallback.
+- **Frontend**: tombol **Akses** per anggota → `HubMemberAccessModal` (tenant + role + narrowing outlet, badge `Ditangguhkan`, peringatan mode fallback 0-grant), 5 hook baru di `useHubMemberships.ts`, `usePlatformOutlets` dapat opsi `enabled` supaya panel read-only tidak menembak endpoint platform (403 sia-sia tiap render).
+
+**Problems encountered:**
+
+- **Revoke sebagai hard delete ternyata mengembalikan akses.** Setelah `DELETE` baris grant terakhir, `switchTenant` melihat "nol baris" dan jatuh ke fallback — anggota yang tadinya direvoke balik jadi **Owner penuh di semua tenant hub**, justru saat admin sedang mencabut akses. Diubah jadi `suspended` (tombstone) supaya mode grant bertahan dengan akses nol. Tes integrasi yang menangkap ini: "suspended grant → 403" hanya hijau kalau barisnya benar-benar tidak hilang.
+- **Anggota baru punya masalah yang sama lewat jalur lain**: `addMembership` tidak pernah menyentuh grant, jadi user baru = 0 baris = fallback = owner-like kalau role hub-nya `owner`. Diperbaiki dengan `syncDefaultGrantsForMember` (viewer ke semua tenant aktif hub) yang dipanggil dari `addMembership`; `removeMembership` memanggil `suspendAllGrantsForMember` supaya grant tidak hidup lebih lama dari membership.
+- **`setAccess` cabang create tidak memvalidasi target**, hanya cabang update — jadi `PUT` ke tenant milik hub lain atau outlet milik tenant lain bisa lolos di grant yang baru dibuat. Sekarang `assertValidTarget` dipanggil di kedua cabang.
+- **Render loop ∞ tanpa error** di modal: `const { data: grants = [] } = useQuery(...)` memberi array baru tiap render, jadi `useEffect` yang men-seed draft re-trigger dirinya sendiri. Test tidak gagal, cuma **hang** — baru ketahuan karena `vitest run` timeout tanpa output. Diperbaiki dengan konstanta stabil `NO_GRANTS`/`NO_OUTLETS`. Polanya sama tapi lebih halus di parent: `tenants` yang di-`map` inline di `HubsSection` akan mereset draft tiap render → `useMemo`.
+- Import path `HubMemberTenantAccessSchema.ts` masih menunjuk ke struktur folder lama (`../../../../platform/...` dan `../../../domain/...`) sehingga tsc gagal sebelum sempat nulis test.
+- `HubMembershipSchema.role` masih `enum: ['owner','admin','viewer']` tulis-tangan padahal Fase 16 menambah role `manager`, dan `save()` memakai `findOneAndUpdate` yang **melewati validator** — role ngawur akan tersimpan lalu meledak saat dibaca, bukan saat ditulis. Diganti `enum: [...HUB_MEMBER_ROLES]` + `runValidators: true`; test guarnya dicek dengan sengaja menghapus flag itu dan memastikan test gagal.
+- `HUB_MEMBER_ROLE_PERMS.manager` punya `reports:read` dua kali (dari `MANAGER_PERMS` + tambahan manual) → test permission uniqueness gagal, bukan karena logic grant.
+
+**What I completed:**
+
+- `backend/tests/services/HubMemberAccessService.test.ts` (18 test), `backend/tests/repositories/MongoHubMemberTenantAccessRepository.test.ts` (baru, 9 — termasuk guard role enum), `backend/tests/integration/hub-fase17-access.test.ts` (baru, 22 integrasi HTTP penuh), `HubMembershipService.test.ts` +2, `AuthService.test.ts` +3.
+- **Test DENY (bukan hanya GRANT berhasil)**: tenant tanpa grant → `POST /auth/switch-tenant` 403 & tidak muncul di `GET /auth/accessible-tenants`; grant suspended → 403; outlet di luar `outletIds` → 403; grant tenant cross-hub / outlet cross-tenant → 400; endpoint grant butuh `platform.hubs.manage`.
+- `frontend/tests/unit/HubMemberAccess.test.tsx` (baru, 11): role contract 5 tenant role, upsert dengan role + outlet ternarrowing, `[]` untuk semua outlet, uncheck → `DELETE` (bukan `PUT`), grant suspended tampil & dihidupkan ulang, **read-only tidak memanggil endpoint outlet**, path hook grant & context.
+- Backend **1249/1249 (103 files)**, frontend **121/121 (17 files)**, tsc shared+backend+frontend bersih, `vite build` OK.
+- Docs: `HUB_ARCHITECTURE.md` Fase 17 → `[x]` + tabel **keputusan runtime** (grant mode, revoke=suspend, seeding viewer, cascade, validasi kedua cabang), `API_REFERENCE.md` (3 endpoint access + `/hub-context/me` + urutan resolusi + matriks permission tenant), `ROLE_ACCESS_PLAN.md` § 2.2, `AGENTS.md`.
+
+**What I learned:**
+
+- "Hapus akses" dan "hapus baris" bukan hal yang sama di sistem yang punya fallback. Begitu ada jalur fallback, revoke wajib berupa **perubahan state**, bukan penghapusan data — kalau tidak, mencabut akses justru membuka akses.
+- Fallback kompatibilitas (D3) dan keamanan berada di jalur kode yang sama, jadi **harus ada penanda mode eksplisit** dilainnya. Sekarang penandanya "≥1 baris grant", yang cukup selama grant selalu di-seed; kalau suatu saat ada mode tanpa grant yang sah, ini perlu jadi kolom `accessMode` (catatan untuk Fase 18/20).
+- Test yang "hang tanpa error" adalah kelas kegagalan yang berbeda: tidak ada stack trace yang mengarah. Kalau sebuah test UI timeout, pertama yang dicurigai bukan flaky tapi **loop**, dan cara tercepatnya adalah mengisolasi per-`it` dengan `-t` untuk melihat test mana yang tidak pernah selesai.
+
+**Batasan yang diketahui:**
+
+- Member yang ditambahkan ke hub yang **belum punya tenant** mendapat 0 baris grant, jadi masih mode fallback sampai grant pertama ditulis. Tidak diperluas di fase ini; akan ditangani bersama status hub (Fase 18) dan invitation (Fase 20).
+
 ### DATE: 2026-09-29 — Hub V2 Fase 16: namespace permission & matriks role hub
 
 **Spek user**: lanjut roadmap Hub berikutnya (Fase 16) — "gas lanjut" setelah commit ADR D1–D4.

@@ -289,7 +289,7 @@ Frontend Terminal Center sekarang punya tab **Hub & Anggota** yang utuh: buat/ed
 
 > Keputusan arsitektur yang mengunci fase-fase ini: **[`HUB_V2_DECISIONS.md`](HUB_V2_DECISIONS.md)** (D1–D4 + opsi yang ditolak).
 > Rencana frontend: **[`HUB_V2_FRONTEND_PLAN.md`](HUB_V2_FRONTEND_PLAN.md)**.
-> Status: **Fase 16 selesai 2026-09-29** (permission namespace + matriks role hub). Fase 17–20 masih rencana.
+> Status: **Fase 16 & 17 selesai 2026-09-29**. Fase 18–20 masih rencana.
 > Fase 1–15 tetap utuh; Fase 16 tidak mengubah perilaku apa pun.
 
 ### Konteks (recon 2026-09-28)
@@ -331,15 +331,31 @@ masa depan, karena itu access model (Fase 17) didahulukan.
 - ⚠️ **Release note — super admin WAJIB re-login.** Permission di-embed di access+refresh JWT, jadi token yang sudah terbit masih membawa `hub:manage` dan akan kena 403 di `/api/hubs*`, `/api/hub-memberships*`, dan sebagian `/api/platform/*` sampai login ulang (DB sudah dimigrasi otomatis; yang stale cuma token).
 
 ### Fase 17 — Access model per tenant/outlet ★ (menutup temuan otorisasi)
-- [ ] Domain `HubMemberTenantAccess { id, hubId, userId, tenantId, tenantRole, outletIds[] }` — `tenantRole` adalah role **tenant** (`owner|admin|manager|cashier|viewer`), bukan role hub.
-- [ ] `HubMemberTenantAccessSchema`: index unik `{hubId, userId, tenantId}`, lookup `{userId, tenantId}`; repo + wiring `container.ts`.
-- [ ] Service: `listGrants(userId)`, `grantAccess`, `revokeAccess`, `setOutlets`, `resolveSessionFor(userId, tenantId)`.
-- [ ] `AuthService.switchTenant` **baca grant dulu** → `{ tenantRole, outletIds }`; **fallback** ke perilaku lama (`HUB_MEMBER_ROLE_PERMS`, `outletIds: []`, semua tenant) bila tabel grant kosong untuk user tsb → **nol anggota existing kehilangan akses** (D3).
-- [ ] `HubMembershipService.findAccessibleTenants` di-intersect dengan grant → tenant switcher hanya menampilkan tenant ber-grant.
-- [ ] `HubMemberTenantAccess.status`: `active`/`suspended` per tenant (menunda revoke, atau memindahkan revoke ke status bila butuh histori).
-- [ ] API: `GET /api/hub-context/me` (`hubs[]`, `grants[]`, `effectivePermissions[]`), `GET/PUT /api/hub-memberships/hub/:hubId/:userId/access` (sementara `platformAuthenticate` — D1 tahap 1).
-- [ ] **Test DENY wajib**: tenant yang di-revoke → `POST /auth/switch-tenant` 403, tenant tak muncul di switcher, outlet di luar `outletIds` tak terlihat. Bukan hanya test GRANT berhasil.
-- [ ] Frontend: sub-tab "Access" (`HubMemberAccessModal`) + `useHubMemberAccess`/`useSaveHubMemberAccess`.
+> Status: **Fase 17 selesai 2026-09-29**. Koleksi `hubmembertenantaccesses`.
+
+- [x] Domain `HubMemberTenantAccess { id, hubId, userId, tenantId, tenantRole, outletIds[], status }` — `tenantRole` adalah role **tenant** (`owner|admin|manager|cashier|viewer`), bukan role hub. Matriks permission di `platform/defaults/roles.ts` (`TENANT_ACCESS_ROLES` / `TENANT_ACCESS_ROLE_PERMS`).
+- [x] `HubMemberTenantAccessSchema`: index unik `{hubId, userId, tenantId}`, lookup `{userId, tenantId}`; repo + wiring `container.ts` (+ `syncIndexes`).
+- [x] Service: `listGrantsForMember/listGrantsForUser`, `grantAccess`, `setAccess` (upsert), `updateAccess`, `setOutlets`, `revokeAccess`, `syncDefaultGrantsForMember`, `suspendAllGrantsForMember`, `resolveSessionFor`, `findAccessibleTenants`, `getContext`.
+- [x] `AuthService.switchTenant` **baca grant dulu** → `{ tenantRole, outletIds }`; **fallback** ke perilaku lama (`HUB_MEMBER_ROLE_PERMS`, `outletIds: []`, semua tenant) bila tabel grant kosong untuk user tsb → **nol anggota existing kehilangan akses** (D3).
+- [x] `HubMembershipService.findAccessibleTenants` di-intersect dengan grant → tenant switcher hanya menampilkan tenant ber-grant.
+- [x] `HubMemberTenantAccess.status`: `active`/`suspended` per tenant.
+- [x] API: `GET /api/hub-context/me` (`hubs[]`, `grants[]`, `tenants[]`, `effectivePermissions[]`), `GET/PUT/DELETE /api/hub-memberships/hub/:hubId/:userId/access` (sementara `platformAuthenticate` — D1 tahap 1).
+- [x] **Test DENY wajib**: tenant tanpa grant / suspended → `POST /auth/switch-tenant` 403, tenant tak muncul di switcher, outlet di luar `outletIds` → 403.
+- [x] Frontend: tombol "Akses" per anggota (`HubMemberAccessModal`) + `useHubMemberAccess`/`useSaveHubMemberAccess`/`useRevokeHubMemberAccess`/`useHubContext`.
+
+#### Keputusan runtime Fase 17 (penting saat membaca kode)
+
+| Aturan | Kenapa |
+|---|---|
+| **Grant mode** = user punya ≥1 baris grant (status apa pun). Nol baris = **fallback** legacy. | Nol anggota existing kehilangan akses (D3). |
+| **Revoke = `suspended`, bukan delete.** | Hard delete baris terakhir akan mengembalikan user ke fallback → akses owner-like come back sendiri. Baris yang disuspend jadi *tombstone*. |
+| **Anggota baru langsung di-seed grant `viewer` untuk semua tenant hub** (`syncDefaultGrantsForMember`). | Tanpa ini anggota baru dengan role hub `owner` mewarisi fallback dan jadi **Owner di setiap tenant** — persislubang yang fase ini tutup. |
+| **Hapus anggota → suspend semua grant-nya** (`suspendAllGrantsForMember`). | Baris grant tidak boleh hidup lebih lama dari membership. |
+| **Re-add anggota → grant suspended diaktifkan lagi** dengan role/outlet yang sudah ada. | Tidak menghapus hasil narrowing yang memang disengaja. |
+| Grant divalidasi di **kedua** cabang `setAccess` (upsert). | Cabang create pernah melewati validasi → `PUT` bisa memberi tenant milik hub lain / outlet milik tenant lain. |
+| Resolusi grant re-cek **`isGrantStillLinked`**: hub aktif + membership masih ada + tenant masih milik hub itu. | Defence in depth: baris yang diedit manual / warisan tidak bisa jadi pintu belakang. |
+| `PUT` tanpa `status` menghidupkan kembali grant suspended. | Menangguhkan selalu eksplisit di body; `PUT` berarti "ini konfigurasi yang saya mau". |
+| **Batasan diketahui**: hub yang **belum punya tenant** saat anggota ditambahkan → nol baris grant → anggota tetap di mode fallback sampai grant pertama ditulis. | Diperbaiki di Fase 18/20 (status hub + seeding saat tenant masuk hub), tidak diperluas di fase ini. |
 
 ### Fase 18 — Hub identity
 - [ ] `Hub`: `code` (unique, uppercase, backfill dari `name`), `status: 'active'|'suspended'|'archived'` (menggantikan `isActive`; `isActive` jadi field derived sementara agar UI lama tidak rusak), `ownerUserId` (**display only** — otoritas tetap `HubMembership.role`).

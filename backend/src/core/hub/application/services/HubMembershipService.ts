@@ -14,6 +14,13 @@ interface HubMembershipServiceDeps {
   hubRepository: HubRepository;
   tenantRepository: any;
   userRepository: any;
+  /**
+   * Hub V2 Fase 17 — per-tenant grants. When wired, the reachable tenant set is
+   * narrowed by the member's grants; when absent the pre-Fase 17 behaviour
+   * (every tenant of an active hub) is kept, so a partially deployed instance
+   * does not lock members out.
+   */
+  accessService?: any;
 }
 
 export interface AccessibleTenant {
@@ -49,6 +56,19 @@ export class HubMembershipService {
 
     const membership = HubMembership.create({ hubId, userId, role });
     await this.deps.hubMembershipRepository.save(membership);
+
+    // ADR D3: a new member's baseline is "reach every tenant of the hub as
+    // viewer". Seeding it here is what stops a member with hub role `owner` from
+    // inheriting the permissive fallback and becoming Owner in every tenant.
+    // Best-effort: a failure must not undo the membership the admin just created.
+    if (this.deps.accessService?.syncDefaultGrantsForMember) {
+      try {
+        await this.deps.accessService.syncDefaultGrantsForMember(hubId, userId);
+      } catch {
+        // grant baseline is repaired from the Access UI
+      }
+    }
+
     return membership;
   }
 
@@ -71,6 +91,16 @@ export class HubMembershipService {
     const deleted = await this.deps.hubMembershipRepository.deleteByHubAndUser(hubId, userId);
     if (!deleted) {
       throw new NotFoundError('HubMembership');
+    }
+
+    // Suspend (never delete) the grants: rows left active would keep granting
+    // access to a user who is no longer a member of this hub.
+    if (this.deps.accessService?.suspendAllGrantsForMember) {
+      try {
+        await this.deps.accessService.suspendAllGrantsForMember(hubId, userId);
+      } catch {
+        // resolution re-checks the membership, so a stale row cannot be used
+      }
     }
   }
 
@@ -141,6 +171,10 @@ export class HubMembershipService {
   }
 
   async findAccessibleTenants(userId: string): Promise<AccessibleTenant[]> {
+    if (this.deps.accessService) {
+      return this.deps.accessService.findAccessibleTenants(userId);
+    }
+
     const memberships = await this.deps.hubMembershipRepository.findByUser(userId);
 
     const out: AccessibleTenant[] = [];

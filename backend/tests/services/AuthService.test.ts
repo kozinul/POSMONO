@@ -383,8 +383,10 @@ describe('AuthService', () => {
       const user = createUser();
       userRepo.findByIdRaw.mockResolvedValue(user);
 
+      // Fase 17 reworded this from "No hub membership grants access" — the rule
+      // is unchanged, only the vocabulary (access grants instead of membership).
       await expect(service.switchTenant('user-1', 'tenant-not-member')).rejects.toThrow(
-        /No hub membership grants access/,
+        /No hub access grants entry to this tenant/,
       );
     });
 

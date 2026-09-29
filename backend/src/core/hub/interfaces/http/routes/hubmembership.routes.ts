@@ -18,5 +18,12 @@ export function createHubMembershipRoutes(hubMembershipController: HubMembership
   router.get('/me', authenticate, asyncHandler(hubMembershipController.myMemberships.bind(hubMembershipController)));
   router.get('/me/tenants', authenticate, asyncHandler(hubMembershipController.myAccessibleTenants.bind(hubMembershipController)));
 
+  // Hub V2 Fase 17 — per-tenant access grants. Still platform-administered (D1
+  // tahap 1): the Terminal Center is the only surface that can narrow a member
+  // down to specific tenants/outlets.
+  router.get('/hub/:hubId/:userId/access', platformAuthenticate, platformAuthorize(PLATFORM_HUBS_MANAGE), asyncHandler(hubMembershipController.listAccess.bind(hubMembershipController)));
+  router.put('/hub/:hubId/:userId/access', platformAuthenticate, platformAuthorize(PLATFORM_HUBS_MANAGE), asyncHandler(hubMembershipController.replaceAccess.bind(hubMembershipController)));
+  router.delete('/hub/:hubId/:userId/access/:tenantId', platformAuthenticate, platformAuthorize(PLATFORM_HUBS_MANAGE), asyncHandler(hubMembershipController.revokeAccess.bind(hubMembershipController)));
+
   return router;
 }

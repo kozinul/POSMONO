@@ -404,7 +404,10 @@ export function usePlatformUsers(
   });
 }
 
-export function usePlatformOutlets(filters: { tenantId?: string; hubId?: string; isActive?: boolean }) {
+export function usePlatformOutlets(
+  filters: { tenantId?: string; hubId?: string; isActive?: boolean },
+  options?: { enabled?: boolean },
+) {
   return useQuery({
     queryKey: ['platform-outlets', filters],
     queryFn: async () => {
@@ -417,6 +420,9 @@ export function usePlatformOutlets(filters: { tenantId?: string; hubId?: string;
       );
       return res.data.data;
     },
+    // The outlet list is platform-admin only; a read-only viewer of the hub
+    // would get a 403 on every render of the Access modal.
+    enabled: options?.enabled ?? true,
   });
 }
 

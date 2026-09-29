@@ -30,6 +30,7 @@ import { createDatabaseRoutes } from '../core/database/interfaces/http/routes/da
 import { createPrinterRoutes, createPrintRoutes } from '../core/printing/interfaces/http/routes/printer.routes';
 import { createHubRoutes } from '../core/hub/interfaces/http/routes/hub.routes';
 import { createHubMembershipRoutes } from '../core/hub/interfaces/http/routes/hubmembership.routes';
+import { createHubContextRoutes } from '../core/hub/interfaces/http/routes/hubcontext.routes';
 import { createOutletRoutes } from '../core/outlet/interfaces/http/routes/outlet.routes';
 import { createPlatformRoutes } from '../core/platform/interfaces/http/routes/platform.routes';
 import { createPlanRoutes } from '../core/billing/interfaces/http/routes/plan.routes';
@@ -131,6 +132,7 @@ export function registerRoutes(app: Express, container: DIContainer): void {
 
   const hubMembershipController = container.resolve('hubMembershipController');
   app.use('/api/hub-memberships', createHubMembershipRoutes(hubMembershipController));
+  app.use('/api/hub-context', createHubContextRoutes(hubMembershipController));
 
   const outletController = container.resolve('outletController');
   app.use('/api/outlets', createOutletRoutes(outletController));

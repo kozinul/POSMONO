@@ -32,6 +32,12 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
     private readonly sessionService: any,
     private readonly roleRepository?: any,
     private readonly hubMembershipService?: any,
+    /**
+     * Hub V2 Fase 17 — resolves per-tenant grants. Optional: when it is absent
+     * (or not wired) the hub-role fallback in `switchTenant` still applies, so
+     * existing members keep working during a rolling deploy.
+     */
+    private readonly hubMemberAccessService?: any,
   ) {}
 
   async execute(input: LoginInput): Promise<LoginOutput> {
@@ -223,10 +229,15 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
       throw new ForbiddenError('Hub membership is not configured on this instance');
     }
 
-    const accessibleTenants = await this.hubMembershipService.findAccessibleTenants(userId);
-    const target = accessibleTenants.find((t: any) => t.tenantId === targetTenantId);
-    if (!target) {
-      throw new ForbiddenError('No hub membership grants access to this tenant');
+    // Grant first (Fase 17): a member with any grant row is limited to the
+    // granted tenants/roles/outlets, and a tenant outside the grant set is
+    // rejected here rather than silently downgraded.
+    const session = this.hubMemberAccessService
+      ? await this.hubMemberAccessService.resolveSessionFor(userId, targetTenantId)
+      : await this.resolveLegacyTenantSession(userId, targetTenantId);
+
+    if (!session) {
+      throw new ForbiddenError('No hub access grants entry to this tenant');
     }
 
     const user = await this.userRepository.findByIdRaw(userId);
@@ -234,14 +245,16 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
       throw new UnauthorizedError('User not found');
     }
 
-    const roleName = HUB_MEMBER_ROLE_LABELS[target.role] ?? 'Hub Member';
-    const permissions = HUB_MEMBER_ROLE_PERMS[target.role] ?? [];
-    const outletIds: string[] = [];
+    const accessibleTenants = await this.listAccessibleTenants(userId);
+    const roleName = session.roleName;
+    const permissions = session.permissions;
+    const outletIds = session.outletIds;
+    const tokenRole = session.source === 'grant' ? `grant-${session.tenantRole}` : `hub-${session.hubRole}`;
 
     const refreshToken = this.tokenService.generateRefreshToken({
       sub: user.id.toValue(),
       tenant: targetTenantId,
-      role: `hub-${target.role}`,
+      role: tokenRole,
       roleName,
       permissions,
       outletIds,
@@ -259,7 +272,7 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
     const accessToken = this.tokenService.generateToken({
       sub: user.id.toValue(),
       tenant: targetTenantId,
-      role: `hub-${target.role}`,
+      role: tokenRole,
       roleName,
       permissions,
       outletIds,
@@ -267,6 +280,24 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
     });
 
     return { user, roleName, permissions, outletIds, accessToken, refreshToken, accessibleTenants };
+  }
+
+  /** Pre-Fase 17 resolution: the hub role alone decides reach. */
+  private async resolveLegacyTenantSession(
+    userId: string,
+    tenantId: string,
+  ): Promise<{ roleName: string; permissions: string[]; outletIds: string[]; source: 'fallback'; hubRole: string | null } | null> {
+    const accessibleTenants = await this.hubMembershipService!.findAccessibleTenants(userId);
+    const target = accessibleTenants.find((t: any) => t.tenantId === tenantId);
+    if (!target) return null;
+
+    return {
+      roleName: HUB_MEMBER_ROLE_LABELS[target.role] ?? 'Hub Member',
+      permissions: [...(HUB_MEMBER_ROLE_PERMS[target.role] ?? [])],
+      outletIds: [],
+      source: 'fallback',
+      hubRole: target.role,
+    };
   }
 
   private async resolveHubMemberContext(
@@ -277,6 +308,17 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
 
     const user = await this.userRepository.findByIdRaw(userId);
     if (!user) return null;
+
+    if (this.hubMemberAccessService) {
+      const session = await this.hubMemberAccessService.resolveSessionFor(userId, tenantId);
+      if (!session) return null;
+      return {
+        user,
+        roleName: session.roleName,
+        permissions: session.permissions,
+        outletIds: session.outletIds,
+      };
+    }
 
     const role = await this.hubMembershipService.resolveRoleForTenant(userId, tenantId);
     if (!role) return null;

@@ -8,6 +8,11 @@ export {
   HUB_MEMBER_ROLE_PERMS,
   HUB_MEMBER_ROLE_LABELS,
   HUB_ROLE_PERMISSION_MATRIX,
+  CASHIER_PERMS,
+  TENANT_ACCESS_ROLES,
+  TENANT_ACCESS_ROLE_LABELS,
+  TENANT_ACCESS_ROLE_PERMS,
+  type TenantAccessRole,
 } from './roles';
 export { DEFAULT_TEMPLATES } from './templates';
 export { DEFAULT_PAYMENT_METHODS } from './paymentMethods';

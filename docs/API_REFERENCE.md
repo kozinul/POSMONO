@@ -1164,7 +1164,7 @@ Response shifts/payments summary menambahkan `tenantName` per tenant (dari `reso
 
 ## HubMembership (`/api/hub-memberships`)
 
-User lintas-tenant (Group Admin). Role: `owner` | `admin` | `viewer`; unique `{hubId, userId}`. Mutasi & list per hub hanya Platform Super Admin (`platform.hubs.manage`); `/me` & `/me/tenants` siapa pun terautentikasi.
+User lintas-tenant (Group Admin). Role: `owner` | `admin` | `manager` | `viewer`; unique `{hubId, userId}`. Mutasi & list per hub hanya Platform Super Admin (`platform.hubs.manage`); `/me` & `/me/tenants` siapa pun terautentikasi.
 
 | Method | Path | Auth | Permission |
 |--------|------|------|------------|
@@ -1174,10 +1174,30 @@ User lintas-tenant (Group Admin). Role: `owner` | `admin` | `viewer`; unique `{h
 | DELETE | `/api/hub-memberships/:hubId/:userId` | ✓ | `platform.hubs.manage` |
 | GET | `/api/hub-memberships/me` | ✓ | — (membership milik user) |
 | GET | `/api/hub-memberships/me/tenants` | ✓ | — (tenant yang bisa diakses via membership) |
+| GET | `/api/hub-memberships/hub/:hubId/:userId/access` | ✓ | `platform.hubs.manage` — **Fase 17** grant per tenant |
+| PUT | `/api/hub-memberships/hub/:hubId/:userId/access` | ✓ | `platform.hubs.manage` — upsert grant (`tenantId` wajib) |
+| DELETE | `/api/hub-memberships/hub/:hubId/:userId/access/:tenantId` | ✓ | `platform.hubs.manage` — **menangguhkan** (status `suspended`), bukan hapus |
 
 **Body** POST: `{ hubId, userId, role }`; PUT: `{ role }`. Errors: 400 invalid role, 404 hub/user/membership tidak ada, 409 duplikat.
 
 Response `GET /hub-memberships/hub/:hubId` dekorasi `displayName`/`email`/`userTenantId` + **`userTenantName`** (nama tenant asal anggota, satu lookup per tenant unik; `null` bila tenant sudah terhapus).
+
+### Grant akses tenant per anggota — `hub/:hubId/:userId/access` (Fase 17)
+
+Satu baris grant = satu tenant yang boleh dimasuki anggota tersebut, dengan `tenantRole` (`owner|admin|manager|cashier|viewer` — role **tenant**, bukan role hub) dan `outletIds[]` (`[]` = semua outlet tenant).
+
+**Body** `PUT /access`: `{ tenantId, tenantRole, outletIds?, status? }`
+- `tenantId` wajib. Validasi di kedua cabang (create **dan** update): tenant harus milik hub tersebut, seluruh `outletIds` harus outlet dari tenant itu.
+- `status` opsional (`active|suspended`). **Tidak diisi → grant yang sedang `suspended` dihidupkan kembali** (penangguhan harus selalu eksplisit di body).
+
+Response `GET /access`:
+```
+{ items[{ id, hubId, userId, tenantId, tenantRole, outletIds[], status, allOutlets, tenantRoleLabel, createdAt, updatedAt }] }
+```
+
+**Kenapa `DELETE` → `suspended`, bukan hard delete:** kalau baris grant terakhir dihapus, user kembali ke **mode fallback** (semua tenant dalam hub dengan `HUB_MEMBER_ROLE_PERMS`). Di mode fallback anggota ber-role `owner` otomatis menjadi **Owner penuh di tiap tenant hub** — persislubang otorisasi yang fase ini tutup. Baris `suspended` adalah *tombstone* yang menjaga user tetap dalam mode grant dengan akses **nol**.
+
+Catatan lain: menambah anggota baru langsung di-*seed* grant `viewer` ke semua tenant aktif hub; menghapus anggota me-*suspend* seluruh grant-nya; menambah ulang mengaktifkan kembali grant yang ada. Lihat `docs/HUB_ARCHITECTURE.md` § "Keputusan runtime Fase 17".
 
 ---
 
@@ -1185,10 +1205,18 @@ Response `GET /hub-memberships/hub/:hubId` dekorasi `displayName`/`email`/`userT
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/api/auth/accessible-tenants` | ✓ | Tenant yang bisa diakses user via hub memberships `{ tenantId, tenantName, hubId, hubName, role }` |
-| POST | `/api/auth/switch-tenant` | ✓ | `{ tenantId }` → token access+refresh baru scope target; `role: 'hub-'+membershipRole`, permissions `HUB_MEMBER_ROLE_PERMS`, `outletIds: []`; 403 bila tidak tercakup membership |
+| GET | `/api/auth/accessible-tenants` | ✓ | Tenant yang bisa diakses user, sudah ter-**intersect dengan grant Fase 17** `{ tenantId, tenantName, hubId, hubName, role, accessSource, tenantRole, outletIds }` |
+| GET | `/api/hub-context/me` | ✓ | Konteks keanggotaan hub user yang login: `{ hubs[], grants[], tenants[], effectivePermissions[] }` (Fase 17) |
+| POST | `/api/auth/switch-tenant` | ✓ | `{ tenantId }` → token access+refresh baru scope target; **grant per tenant dibaca lebih dulu**; 403 bila tidak tercakup |
 
-Permissions hub member: `owner` = full Owner; `admin` = Manager-level + `users:read` + `reports:read`; `viewer` = read-only (`reports/orders/products/customers/inventory/shifts/payments:read`).
+**Resolusi akses lintas-tenant (Fase 17)** — urutan di `AuthService.switchTenant`:
+1. User punya **≥1 baris grant** (status apa pun) → mode grant. Token memakai `tenantRole` dari grant itu (`role: 'grant-'+tenantRole`, permissions `TENANT_ACCESS_ROLE_PERMS[tenantRole]`, `outletIds` dari grant). Grant `suspended`/tidak ada → **403**.
+2. Nol baris grant → **fallback** lama: `role: 'hub-'+membershipRole`, permissions `HUB_MEMBER_ROLE_PERMS`, `outletIds: []` (semua outlet), seluruh tenant dalam hub.
+3. Kedua mode tetap diverifikasi ulang: hub harus aktif, membership harus masih ada, dan tenant harus benar-benar milik hub tersebut.
+
+Permissions hub member (fallback): `owner` = full Owner; `admin` = Manager-level + `users:read` + `reports:read`; `manager` = Manager-level + `reports:read`; `viewer` = read-only (`reports/orders/products/customers/inventory/shifts/payments:read`).
+
+Permissions tenant grant: `owner` = full Owner; `admin` = Manager-level + `users:read` + `reports:read`; `manager` = Manager-level; `cashier` = POS (`orders:read/write`, `payments:read/write`, `shifts:*`, `printers:read`, `reports:shift|best-sellers`); `viewer` = read-only.
 
 ---
 

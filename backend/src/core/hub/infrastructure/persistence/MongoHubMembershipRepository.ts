@@ -39,6 +39,7 @@ export class MongoHubMembershipRepository {
     await this.model.findOneAndUpdate({ _id: membership.id.toValue() }, data, {
       upsert: true,
       new: true,
+      runValidators: true,
     });
     membership.clearEvents();
   }

@@ -24,6 +24,12 @@ export const PLATFORM_AUDIT_ACTIONS = [
   'MEMBER_ADDED',
   'MEMBER_ROLE_CHANGED',
   'MEMBER_REMOVED',
+  // Hub V2 Fase 17 — per-tenant access grants. Access changes are the
+  // security-relevant ones, so they get their own audit actions rather than
+  // being folded into MEMBER_ROLE_CHANGED.
+  'MEMBER_ACCESS_GRANTED',
+  'MEMBER_ACCESS_UPDATED',
+  'MEMBER_ACCESS_REVOKED',
 ] as const;
 
 export type PlatformAuditAction = (typeof PLATFORM_AUDIT_ACTIONS)[number];

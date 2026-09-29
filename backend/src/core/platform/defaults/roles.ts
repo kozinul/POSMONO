@@ -46,7 +46,7 @@ export const MANAGER_PERMS = [
   'printers:read', 'printers:write',
 ];
 
-const CASHIER_PERMS = [
+export const CASHIER_PERMS = [
   'products:read',
   'orders:read', 'orders:write',
   'payments:read',
@@ -103,7 +103,48 @@ export const PLATFORM_TENANT_ID = 'platform';
 export const HUB_MEMBER_ROLE_PERMS: Record<string, string[]> = {
   owner: [...OWNER_PERMS],
   admin: [...MANAGER_PERMS, 'users:read', 'reports:read'],
-  manager: [...MANAGER_PERMS, 'reports:read'],
+  manager: [...MANAGER_PERMS], // already carries reports:read
+  viewer: [
+    'reports:read',
+    'orders:read',
+    'products:read',
+    'customers:read',
+    'inventory:read',
+    'shifts:read',
+    'payments:read',
+  ],
+};
+
+/**
+ * Hub V2 Fase 17 — roles a hub member can be *granted* per tenant.
+ *
+ * These are **tenant** roles (the role the user acts as inside that tenant),
+ * not hub roles: a grant replaces "hub role owner ⇒ Owner penuh di semua tenant"
+ * with an explicit, per-tenant decision. Keep it explicit rather than reusing
+ * the hub role names so the two layers can never be confused.
+ */
+export const TENANT_ACCESS_ROLES = ['owner', 'admin', 'manager', 'cashier', 'viewer'] as const;
+export type TenantAccessRole = (typeof TENANT_ACCESS_ROLES)[number];
+
+export const TENANT_ACCESS_ROLE_LABELS: Record<TenantAccessRole, string> = {
+  owner: 'Owner',
+  admin: 'Admin',
+  manager: 'Manager',
+  cashier: 'Cashier',
+  viewer: 'Viewer',
+};
+
+/**
+ * Tenant permissions per granted role. Bundled from the seeded tenant roles so a
+ * granted session carries the same permission set a real role of that name would
+ * (minus `users:*` for the non-admin levels — user management stays a tenant
+ * admin/owner concern, not a cross-tenant grant one).
+ */
+export const TENANT_ACCESS_ROLE_PERMS: Record<TenantAccessRole, string[]> = {
+  owner: [...OWNER_PERMS],
+  admin: [...MANAGER_PERMS, 'users:read', 'reports:read'],
+  manager: [...MANAGER_PERMS], // already carries reports:read
+  cashier: [...CASHIER_PERMS],
   viewer: [
     'reports:read',
     'orders:read',

@@ -64,10 +64,79 @@ function createMockRepos() {
 describe('HubMembershipService', () => {
   let repos: ReturnType<typeof createMockRepos>;
   let service: HubMembershipService;
+  let accessService: {
+    syncDefaultGrantsForMember: ReturnType<typeof vi.fn>;
+    suspendAllGrantsForMember: ReturnType<typeof vi.fn>;
+    findAccessibleTenants: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(() => {
     repos = createMockRepos();
+    accessService = {
+      syncDefaultGrantsForMember: vi.fn(async () => 0),
+      suspendAllGrantsForMember: vi.fn(async () => 0),
+      findAccessibleTenants: vi.fn(async () => []),
+    };
     service = new HubMembershipService(repos as any);
+  });
+
+  describe('Fase 17 access-grant coupling', () => {
+    it('seeds the D3 viewer baseline when a member is added', async () => {
+      service = new HubMembershipService({ ...repos, accessService } as any);
+      repos.hubRepository.findById.mockResolvedValue(createHub(HUB_ID));
+      repos.userRepository.findByIdRaw.mockResolvedValue({ id: USER_A });
+      repos.hubMembershipRepository.findByHubAndUser.mockResolvedValue(null);
+
+      await service.addMembership(HUB_ID, USER_A, 'owner');
+
+      // hub role `owner` must not become Owner in every tenant of the hub
+      expect(accessService.syncDefaultGrantsForMember).toHaveBeenCalledWith(HUB_ID, USER_A);
+    });
+
+    it('keeps the membership when the baseline seeding fails', async () => {
+      service = new HubMembershipService({ ...repos, accessService } as any);
+      accessService.syncDefaultGrantsForMember.mockRejectedValueOnce(new Error('grant db down'));
+      repos.hubRepository.findById.mockResolvedValue(createHub(HUB_ID));
+      repos.userRepository.findByIdRaw.mockResolvedValue({ id: USER_A });
+      repos.hubMembershipRepository.findByHubAndUser.mockResolvedValue(null);
+
+      const membership = await service.addMembership(HUB_ID, USER_A, 'viewer');
+      expect(membership.serialize().userId).toBe(USER_A);
+    });
+
+    it('suspends the member grants on removal so they cannot outlive the membership', async () => {
+      service = new HubMembershipService({ ...repos, accessService } as any);
+      repos.hubMembershipRepository.deleteByHubAndUser.mockResolvedValue(true);
+
+      await service.removeMembership(HUB_ID, USER_A);
+
+      expect(accessService.suspendAllGrantsForMember).toHaveBeenCalledWith(HUB_ID, USER_A);
+    });
+
+    it('does not suspend grants when the removal itself failed', async () => {
+      service = new HubMembershipService({ ...repos, accessService } as any);
+      repos.hubMembershipRepository.deleteByHubAndUser.mockResolvedValue(false);
+
+      await expect(service.removeMembership(HUB_ID, USER_A)).rejects.toThrow(NotFoundError);
+      expect(accessService.suspendAllGrantsForMember).not.toHaveBeenCalled();
+    });
+
+    it('still works when the access service is not wired', async () => {
+      repos.hubRepository.findById.mockResolvedValue(createHub(HUB_ID));
+      repos.userRepository.findByIdRaw.mockResolvedValue({ id: USER_A });
+      repos.hubMembershipRepository.findByHubAndUser.mockResolvedValue(null);
+
+      const membership = await service.addMembership(HUB_ID, USER_A, 'owner');
+      expect(membership.serialize().role).toBe('owner');
+    });
+
+    it('delegates findAccessibleTenants to the access service when present', async () => {
+      service = new HubMembershipService({ ...repos, accessService } as any);
+      const rows = [{ tenantId: 'tenant-a', role: 'owner' }];
+      accessService.findAccessibleTenants.mockResolvedValue(rows);
+
+      expect(await service.findAccessibleTenants(USER_A)).toBe(rows);
+    });
   });
 
   describe('addMembership', () => {

@@ -133,10 +133,13 @@ import { PrinterController } from '../core/printing/interfaces/http/controllers/
 import { KotRenderService } from '../core/template/application/services/KotRenderService';
 import { HubSchema } from '../core/hub/infrastructure/persistence/schemas/HubSchema';
 import { HubMembershipSchema } from '../core/hub/infrastructure/persistence/schemas/HubMembershipSchema';
+import { HubMemberTenantAccessSchema } from '../core/hub/infrastructure/persistence/schemas/HubMemberTenantAccessSchema';
 import { MongoHubRepository } from '../core/hub/infrastructure/persistence/MongoHubRepository';
 import { MongoHubMembershipRepository } from '../core/hub/infrastructure/persistence/MongoHubMembershipRepository';
+import { MongoHubMemberTenantAccessRepository } from '../core/hub/infrastructure/persistence/MongoHubMemberTenantAccessRepository';
 import { HubService } from '../core/hub/application/services/HubService';
 import { HubMembershipService } from '../core/hub/application/services/HubMembershipService';
+import { HubMemberAccessService } from '../core/hub/application/services/HubMemberAccessService';
 import { HubController } from '../core/hub/interfaces/http/controllers/HubController';
 import { HubMembershipController } from '../core/hub/interfaces/http/controllers/HubMembershipController';
 import { OutletSchema } from '../core/outlet/infrastructure/persistence/schemas/OutletSchema';
@@ -208,6 +211,11 @@ export function buildContainer() {
   const HubModel = systemConnection.model('Hub', HubSchema);
   const HubMembershipModel = systemConnection.model('HubMembership', HubMembershipSchema);
   HubMembershipModel.syncIndexes().catch(() => {});
+  const HubMemberTenantAccessModel = systemConnection.model(
+    'HubMemberTenantAccess',
+    HubMemberTenantAccessSchema,
+  );
+  HubMemberTenantAccessModel.syncIndexes().catch(() => {});
   const OutletModel = systemConnection.model('Outlet', OutletSchema);
   OutletModel.syncIndexes().catch(() => {});
   const PlanModel = systemConnection.model('Plan', PlanSchema);
@@ -255,6 +263,7 @@ export function buildContainer() {
     printerModel: asValue(PrinterModel),
     hubModel: asValue(HubModel),
     hubMembershipModel: asValue(HubMembershipModel),
+    hubMemberTenantAccessModel: asValue(HubMemberTenantAccessModel),
     outletModel: asValue(OutletModel),
     planModel: asValue(PlanModel),
     subscriptionModel: asValue(SubscriptionModel),
@@ -334,6 +343,7 @@ export function buildContainer() {
         sessionService: container.resolve('sessionService'),
         roleRepository: container.resolve('roleRepository'),
         hubMembershipService: container.resolve('hubMembershipService'),
+        hubMemberAccessService: container.resolve('hubMemberAccessService'),
       }),
     }),
     authController: asClass(AuthController, {
@@ -1071,6 +1081,25 @@ export function buildContainer() {
           hubRepository: container.resolve('hubRepository'),
           tenantRepository: container.resolve('tenantRepository'),
           userRepository: container.resolve('userRepository'),
+          accessService: container.resolve('hubMemberAccessService'),
+        },
+      }),
+    }),
+    hubMemberTenantAccessRepository: asClass(MongoHubMemberTenantAccessRepository, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        model: HubMemberTenantAccessModel,
+      }),
+    }),
+    hubMemberAccessService: asClass(HubMemberAccessService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        deps: {
+          accessRepository: container.resolve('hubMemberTenantAccessRepository'),
+          hubMembershipRepository: container.resolve('hubMembershipRepository'),
+          hubRepository: container.resolve('hubRepository'),
+          tenantRepository: container.resolve('tenantRepository'),
+          outletRepository: container.resolve('outletRepository'),
         },
       }),
     }),
@@ -1079,6 +1108,7 @@ export function buildContainer() {
       injector: () => ({
         hubMembershipService: container.resolve('hubMembershipService'),
         auditService: container.resolve('platformAuditService'),
+        hubMemberAccessService: container.resolve('hubMemberAccessService'),
       }),
     }),
     outletRepository: asClass(MongoOutletRepository, {
