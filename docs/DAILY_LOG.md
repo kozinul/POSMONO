@@ -4,6 +4,34 @@
 
 ---
 
+### DATE: 2026-09-28 (sesi 2 — dokumen & pengelompokan docs)
+
+**Today I worked on:**
+* Menulis **ADR `docs/HUB_V2_DECISIONS.md`** — 4 keputusan yang mengunci seluruh pekerjaan Hub berikutnya: **D1** administrasi bertahap (platform dulu, hub-side admin nanti), **D2** satu tenant = satu hub (`Tenant.hubId` satu-satunya sumber kebenaran, `HubTenantMembership` ditolak), **D3** anggota baru default akses semua tenant dalam hub dengan role `viewer`, **D4** tidak ada wallet/saldo di level hub
+* Menulis **`docs/HUB_V2_FRONTEND_PLAN.md`** — target UI sub-tab "Access" (matriks tenant × role × outlet) & "Overview" (5 kartu, penjualan per tenant, status outlet, rollup langganan), 6 hook baru, matriks invalidasi cache, permission gate per aksi, test plan, acceptance criteria, file inventory
+* Men-append **Fase 16–20** ke `docs/HUB_ARCHITECTURE.md` sebagai phase ledger kanonik, termasuk "Di luar scope" (multi-hub, wallet, `HubInvoice`, `Hub.settings`, scheduled reports) dan urutan release per fase
+* **Membekukan** `docs/HUB_FRONTEND_PLAN.md` (Fase 15) dengan banner pointer ke dokumen baru — supaya tidak ada dua dokumen yang sama-sama "terkunci"
+* **Mengelompokkan `docs/`**: index baru `docs/README.md`; 8 dokumen historis/duplikat + folder `pos/` dipindah ke `docs/archive/`, root `dokumen.md` → `docs/archive/dokumen_pricing_wiremap.md`; `docs/pricing/` tetap aktif
+* Root `README.md` kini menunjuk `docs/README.md`; referensi path lama di `DAILY_LOG.md` & `ROLE_ACCESS_PLAN.md` diperbarui
+
+**Temuan penting (alasan urutan fase):**
+* Recon kode menemukan **lubang otorisasi aktif** di `AuthService.switchTenant`: token lintas-tenant diterbitkan dengan `permissions: HUB_MEMBER_ROLE_PERMS[role]` (`owner → OWNER_PERMS`) dan `outletIds: []` (= semua outlet), sementara `HubMembershipService.findAccessibleTenants` memberi seluruh tenant dalam hub ke setiap anggota. Hasilnya anggota role `owner` otomatis **Owner penuh di semua tenant** — tidak ada cara menyatakan "hanya tenant C, outlet Jakarta saja"
+* Karena itu urutan dibalik dari yang awalnya saya susun: proposal awalnya "identitas hub → CRUD → laporan → akses", tapi akses harus **pertama** (Fase 17) karena yang rusak sekarang, bukan nanti
+
+**Problems encountered:**
+* Draft pertama ADR sempat tercemar teks non-Indonesia (CJK & kata terpisah) karena menulis cepat beberapa baris — dibersihkan dengan grep karakter CJK + cek kata per baris sebelum commit
+* Banner "dokumen beku" di `HUB_FRONTEND_PLAN.md` tidak ter-apply karena string yang dicari (`> ### Status`) tidak cocok dengan isi file (`### Status`) — dicek ulang dengan assert jumlah kemunculan
+
+**Decisions locked (ringkas):**
+* Fase 16 sebelum Fase 17, dan Fase 16 harus **commit sendiri** karena ada migrasi dokumen `Role` di DB + seluruh super admin wajib re-login (JWT embed permission)
+* `hub:manage` (platform) di-rename `platform.hubs.manage`; namespace `hub:*` didefinisikan di Fase 16 tapi dipakai tahap kedua (D1) — statusnya "reserved", bukan permission mati
+* Test **DENY** (revoke) wajib ada di Fase 17, bukan cuma test GRANT berhasil
+
+**Selesai dengan:**
+* Semua perubahan docs belum di-commit — commit tunggal `docs(hub): ...` untuk ADR + plan + arsip + referensi
+
+---
+
 ### DATE: 2026-09-28
 
 **Today I worked on:**
@@ -429,7 +457,7 @@ Copy this block for each new day:
 
 - Super-admin login: `platform@demo.com`/`admin123` dengan header `X-Tenant-Id: platform` (di-seed dev.ts & seed.ts, idempotent)
 - Frontend halaman admin Terminal Center sengaja di-wire bersama HubMembership (Fase 9), backend `/api/platform` sudah siap dikonsumsi
-- `docs/ops-dashboard-plan.md` (rencana lama 2026-07) digantikan oleh `docs/HUB_ARCHITECTURE.md` Fase 8 — grid endpoint yang diimplementasikan mengikuti dokumen ini
+- `docs/archive/ops-dashboard-plan.md` (rencana lama 2026-07) digantikan oleh `docs/HUB_ARCHITECTURE.md` Fase 8 — grid endpoint yang diimplementasikan mengikuti dokumen ini
 
 ### DATE: 2026-08-13 — Printer Integration (Network ESC/POS, WebUSB, WebBluetooth, Auto-Print Struk & KOT)
 
@@ -626,7 +654,7 @@ Copy this block for each new day:
 - `backend/.../BuyXPayYEffect.ts`, `DiscountEngine.ts` (`freeItemValue`), `DiscountServiceAdapter.ts` (fallback `freeItemValue: 0`), `PricingService.ts` (`totalFreeItemValue`)
 - `frontend/src/core/pos/store/posStore.ts` (recalc folds free qty into total, paid-only increments, `recalcToken`)
 - `frontend/tests/unit/posStore.test.ts` (rewritten)
-- `docs/pricing/04-discount-engine.md`, `dokumen.md`, `docs/DAILY_LOG.md`
+- `docs/pricing/04-discount-engine.md`, `docs/archive/dokumen_pricing_wiremap.md`, `docs/DAILY_LOG.md`
 
 **What I learned:**
 
@@ -1104,7 +1132,7 @@ POS frontend is now complete and matches the reference template. Cart flow is sm
 - 93 unit tests, all passing
 - 6 fixture files for test data
 - Edge cases tested: validation errors, state transitions, immutable IDs
-- Test results documented in `docs/LAYER1_TEST_RESULTS.md`
+- Test results documented in `docs/archive/LAYER1_TEST_RESULTS.md`
 
 **What I learned:**
 
@@ -1129,7 +1157,7 @@ Solid testing session. All domain entities now have test coverage. The double-cl
 
 **Today I worked on:**
 
-- Documentation: Created `docs/API_REFERENCE.md` (52 endpoints), `docs/TEST_PROGRESS.md` (5 testing layers), `docs/LAYER1_TEST_RESULTS.md`
+- Documentation: Created `docs/API_REFERENCE.md` (52 endpoints), `docs/TEST_PROGRESS.md` (5 testing layers), `docs/archive/LAYER1_TEST_RESULTS.md`
 - STEP 8 — Reporting & Operations backend:
   - `ReportService`, `ReportController`, `report.routes.ts`
   - Added `dateFrom`/`dateTo` filter to `MongoOrderRepository.findByTenant`

@@ -1,9 +1,16 @@
 # PLAN — Frontend Hub (Terminal Center): Assign Tenant & Kelola Anggota
 
 > Dokumen rencana **frontend Hub**. Dibuat 2026-09-28.
-> LCompanion: `docs/HUB_ARCHITECTURE.md` (arsitektur & fase backend 1–14, sudah selesai).
+> LCompanion: [`HUB_ARCHITECTURE.md`](HUB_ARCHITECTURE.md) (arsitektur & fase backend 1–14, sudah selesai).
 > Fokus dokumen ini: **UI/UX + implementasi frontend** tab `Hub & Anggota` di Terminal Center — khususnya **assign/unassign tenant ke hub** dan **kelola anggota (group admin)** yang saat ini belum ada jalur UI-nya.
 > **Status: FASE 0–5 SELESAI & TERVERIFIKASI 2026-09-28** — frontend **106 test / 15 files**, backend **1157 test / 99 files**, `tsc` kedua sisi bersih, `vite build` OK. Fase 4 (backend opsional) **sudah dikerjakan 2026-09-28**: `GET /api/platform/users` (pencarian user lintas-tenant) + `userTenantName` di `HubMembershipService.listMembers`, dan picker anggota `AddMemberModal` kini **satu kolom** (tanpa pilih-tenant-dulu).
+
+> **DOKUMEN BEKU.** Cakupannya (Fase 0–5 di bawah = Fase 15 pada phase ledger
+> `HUB_ARCHITECTURE.md`) sudah selesai & terverifikasi. Dokumen ini tidak lagi diperbarui; jangan menambah
+> fase/temuan baru di sini. Lanjutan (Fase 16–20: access matrix, hub identity, overview, undangan)
+> ada di **[`HUB_V2_FRONTEND_PLAN.md`](HUB_V2_FRONTEND_PLAN.md)** — keputusannya di
+> [`HUB_V2_DECISIONS.md`](HUB_V2_DECISIONS.md), phase ledger di
+> [`HUB_ARCHITECTURE.md`](HUB_ARCHITECTURE.md) § Fase 16–20.
 
 ### Status implementasi (F1–F9)
 

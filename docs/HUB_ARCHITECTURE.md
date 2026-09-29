@@ -282,3 +282,82 @@ Backend Hub/keanggotaan **tidak diubah** pada fase ini — yang ditambahkan hany
 Frontend Terminal Center sekarang punya tab **Hub & Anggota** yang utuh: buat/edit/hapus hub (toggle `isActive` dengan peringatan cabut akses lintas-tenant), assign/unassign tenant per hub, serta kelola anggota — semuanya lewat React Query dengan invalidasi cache, konfirmasi Swal2, error berbahasa Indonesia, dan tab yang visibility-gated per permission (`hub:manage`).
 
 **Fase 4 (pencarian user lintas-tenant)**: endpoint baru `GET /api/platform/users?search=&tenantId=&hubId=&isActive=&page=&limit=` (`platform.tenants.read`, `PlatformController.listUsers` + `MongoUserRepository.searchAcrossTenants`) membuat picker anggota jadi **satu kolom pencarian** — regex search di-escape, `roleName` di-dekorasi satu lookup per role unik, dan `isHubMember` terisi bila pencarian di-scope ke sebuah hub. `HubMembershipService.listMembers` kini mengembalikan `userTenantName` (nama tenant asal anggota) sehingga tabel anggota tak perlu menebak nama tenant di frontend.
+
+---
+
+## Fase 16–20 — Hub Next (rencana 2026-09-28)
+
+> Keputusan arsitektur yang mengunci fase-fase ini: **[`HUB_V2_DECISIONS.md`](HUB_V2_DECISIONS.md)** (D1–D4 + opsi yang ditolak).
+> Rencana frontend: **[`HUB_V2_FRONTEND_PLAN.md`](HUB_V2_FRONTEND_PLAN.md)**.
+> Status: **RENCANA — belum ada kode.** Fase 1–15 tetap utuh; tidak ada perubahan pada kode existing.
+
+### Konteks (recon 2026-09-28)
+
+Semua yang sudah ada hasil Fase 1–15 **tetap dipakai**, tidak ditulis ulang:
+
+```
+Hub { id, name, description?, isActive }                 # tanpa tenantId
+Tenant.hubId                                             # 1 tenant maksimal 1 hub (keputusan #9)
+HubMembership { hubId, userId, role: owner|admin|viewer }
+Tenant switcher (POST /auth/switch-tenant + /hub-memberships/me/tenants)
+Hub Consolidated Report (shift sales + payments per tenant→outlet)
+Terminal Center: tab "Hub & Anggota" (Fase 15, UI lengkap)
+```
+
+**Temuan yang jadi alasan utama fase ini**: `AuthService.switchTenant` menerbitkan token lintas-tenant
+dengan `permissions: HUB_MEMBER_ROLE_PERMS[role]` (`owner → OWNER_PERMS`) dan `outletIds: []`
+(= semua outlet), sementara `findAccessibleTenants` memberi **seluruh tenant dalam hub** ke setiap
+anggota. Artinya anggota hub role `owner` otomatis **Owner penuh di semua tenant** — tidak ada cara
+menyatakan "hanya tenant C, outlet Jakarta saja". Ini **lubang otorisasi yang aktif**, bukan fitur
+masa depan, karena itu access model (Fase 17) didahulukan.
+
+### Fase 16 — Namespace permission & matriks role hub
+- [ ] `shared/src/constants/permissions.ts`: tambah `PLATFORM_HUBS_MANAGE`, `HUB_READ`, `HUB_MEMBERS_READ/MANAGE`, `HUB_TENANTS_READ/MANAGE`, `HUB_REPORTS_READ/EXPORT`.
+- [ ] **Rename** permission platform `hub:manage` → `platform.hubs.manage` (`PLATFORM_ROLE_PERMS`) + **migrasi dokumen `Role` di DB** (permission tersimpan di collection, bukan hanya di kode).
+- [ ] Namespace `hub:*` **didefinisikan sekarang, dipakai nanti** (D1 tahap 2) — statusnya "reserved" supaya tidak ada permission mati tanpa penjelasan.
+- [ ] Matriks role hub 4 (`owner`/`admin`/`manager`/`viewer`) → permission, sebagai konstanta yang dapat di-seed (bukan hardcode di `AuthService`).
+- ⚠️ **JWT embed permission → seluruh super admin wajib re-login setelah deploy.** Release note wajib.
+- [ ] Test: permission baru ada di `PERMISSIONS`, `PLATFORM_ROLE_PERMS` tidak lagi memuat `hub:manage`, route hub memakai nama baru.
+
+### Fase 17 — Access model per tenant/outlet ★ (menutup temuan otorisasi)
+- [ ] Domain `HubMemberTenantAccess { id, hubId, userId, tenantId, tenantRole, outletIds[] }` — `tenantRole` adalah role **tenant** (`owner|admin|manager|cashier|viewer`), bukan role hub.
+- [ ] `HubMemberTenantAccessSchema`: index unik `{hubId, userId, tenantId}`, lookup `{userId, tenantId}`; repo + wiring `container.ts`.
+- [ ] Service: `listGrants(userId)`, `grantAccess`, `revokeAccess`, `setOutlets`, `resolveSessionFor(userId, tenantId)`.
+- [ ] `AuthService.switchTenant` **baca grant dulu** → `{ tenantRole, outletIds }`; **fallback** ke perilaku lama (`HUB_MEMBER_ROLE_PERMS`, `outletIds: []`, semua tenant) bila tabel grant kosong untuk user tsb → **nol anggota existing kehilangan akses** (D3).
+- [ ] `HubMembershipService.findAccessibleTenants` di-intersect dengan grant → tenant switcher hanya menampilkan tenant ber-grant.
+- [ ] `HubMemberTenantAccess.status`: `active`/`suspended` per tenant (menunda revoke, atau memindahkan revoke ke status bila butuh histori).
+- [ ] API: `GET /api/hub-context/me` (`hubs[]`, `grants[]`, `effectivePermissions[]`), `GET/PUT /api/hub-memberships/hub/:hubId/:userId/access` (sementara `platformAuthenticate` — D1 tahap 1).
+- [ ] **Test DENY wajib**: tenant yang di-revoke → `POST /auth/switch-tenant` 403, tenant tak muncul di switcher, outlet di luar `outletIds` tak terlihat. Bukan hanya test GRANT berhasil.
+- [ ] Frontend: sub-tab "Access" (`HubMemberAccessModal`) + `useHubMemberAccess`/`useSaveHubMemberAccess`.
+
+### Fase 18 — Hub identity
+- [ ] `Hub`: `code` (unique, uppercase, backfill dari `name`), `status: 'active'|'suspended'|'archived'` (menggantikan `isActive`; `isActive` jadi field derived sementara agar UI lama tidak rusak), `ownerUserId` (**display only** — otoritas tetap `HubMembership.role`).
+- [ ] `status: suspended|archived` → `findAccessibleTenants` kosong untuk anggotanya; Terminal Center tetap bisa melihat detail hub (diagnostics), dengan konfirmasi yang menyebut jumlah anggota terdampak.
+- [ ] `logo`/`contact`/`settings` **ditunda** (D4 & opsi ditolak) — jebakan config-bag yang sama seperti `TenantConfig`/QRIS.
+- [ ] Frontend: `HubProfileCard` + field `code`, dropdown `status`, baris owner.
+
+### Fase 19 — Hub Overview (read model)
+- [ ] `ReportService.getPlatformSalesByTenant(tenantIds, { dateFrom, dateTo })` mengikuti pola `getPlatformShiftsSummary` (**satu** agregasi grouped `tenantId` — bukan `getFinanceAggregation` per tenant yang N+1), sumber **`orders`** (bukan shift sales).
+- [ ] `GET /api/platform/hubs/:hubId/overview` (`platform.reports.read`) → `{ hub, counts, operational, sales.byTenant[], subscription[] }`.
+- [ ] **Tanpa koleksi baru** — Hub tidak menyimpan data bisnis; semua agregasi dari `orders`/`payments`/`shifts`/`outlets` yang sudah tenant-scoped (`tenantId: {$in: [...]}`).
+- [ ] Frontend: sub-tab "Overview" (`HubOverviewPanel`) — 5 kartu, penjualan per tenant, status outlet (open shift/stale), rollup langganan. Nol → `Rp 0`; tidak ada data → `—`.
+
+### Fase 20 — Hub Invitation & suspend member
+- [ ] Domain `HubInvitation { id, hubId, email, role, tokenHash, expiresAt, invitedBy, status: pending|accepted|expired|revoked }` + repo/schema/service.
+- [ ] `HubMembership.status: 'active'|'suspended'` (suspend ≠ hapus; membership yang disuspend tidak muncul di `findAccessibleTenants`).
+- [ ] API platform: `POST/GET /api/hubs/:hubId/invitations`, `DELETE /api/hubs/:hubId/invitations/:id`; accept: `POST /api/hub-invitations/:token/accept` (`authenticate`).
+- [ ] Validasi: email format, duplikat `(hubId, email, pending)` ditolak, token di-hash (tidak disimpan plaintext), expiry dicek saat accept.
+- [ ] Frontend: `HubInvitationPanel` (daftar pending + kirim) di tab Anggota; halaman accept `/hub-invitations/accept` (layout minimal, **bukan** `TerminalLayout`/`PlatformRoute`).
+
+### Di luar scope (terkunci di `HUB_V2_DECISIONS.md`)
+`HubTenantMembership` (multi-hub) · wallet/`WalletLedger`/`HubWallet` · `HubInvoice`/prepaid credit
+(ditunda) · `Hub.settings`/logo/contact · UI admin sisi customer (D1 tahap 2) · scheduled reports &
+export overview.
+
+### Urutan & release
+```
+1. Commit dokumen: HUB_V2_DECISIONS.md + HUB_V2_FRONTEND_PLAN.md + fase ini   (docs only)
+2. Fase 16 (commit sendiri — ada migrasi Role & wajib re-login)
+3. Fase 17 (commit sendiri — mengubah cara token lintas-tenant diterbitkan)
+4. Fase 18 → 19 → 20 (satu commit per fase)
+```

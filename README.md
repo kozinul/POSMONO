@@ -250,9 +250,11 @@ cd frontend && pnpm preview
 - Laporan Keuangan menampilkan **Diskon 2×** karena `getFinanceAggregation` menjumlah `$add: [$discount, $discountTotal]` (kedua field diisi identik). Diganti `$sum: { $max: [discount, discountTotal] }` — generik untuk order lama & baru.
 
 
+- **[Indeks Dokumentasi](docs/README.md)** — peta semua dokumen (aktif vs arsip)
 - [Arsitektur](docs/ARCHITECTURE.md)
 - [API Reference](docs/API_REFERENCE.md)
 - [Keputusan Teknis](docs/DECISIONS.md)
+- [Arsitektur Hub](docs/HUB_ARCHITECTURE.md)
 - [Fitur POS](docs/POS_CURRENT_FEATURES.md)
 - [Bug Tracker](docs/BUG_TRACKER.md)
 

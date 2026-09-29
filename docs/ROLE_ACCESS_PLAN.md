@@ -3,7 +3,7 @@
 > **Status: TERVERIFIKASI 2026-09-12.** Bagian §2 (recon) & §3 (desain) = WHAT-WAS dan rencana; bagian §5 (fase) ditandai `[x]` per item yang sudah diimplementasikan.
 > Diimplementasikan: RBAC JWT permission (`authenticate` isi `req.userPermissions` dari token, `authorize()` aktif), redirect kasir → `/pos` + filter sidebar, guard route per permission, modul Outlet + `User.outletIds` + `resolveOutlet` (`X-Outlet-Id`), frontend outlet switcher/`activeOutletId`, laporan per-outlet. **Keterbatasan aktif**: 9-role template belum (baru `Owner`/`Manager`/`Cashier` + `Platform Super Admin`), KDS/drink-queue tidak ada, device/integration permission belum dibuat, limit nominal (approval by amount) deferred.
 > Dokumen dibuat 2026-08-05, direvisi 2026-08-06; impl. bertahap 2026-08-08 s/d 2026-09-12. Detail terkini: `docs/HUB_ARCHITECTURE.md`.
-> Melengkapi `docs/VOID_APPROVAL_PLAN.md` (void approval) — keputusan "fix `authorize()`/JWT roleName" di dokumen itu menjadi fondasi dokumen ini.
+> Melengkapi `docs/archive/VOID_APPROVAL_PLAN.md` (void approval) — keputusan "fix `authorize()`/JWT roleName" di dokumen itu menjadi fondasi dokumen ini.
 
 ---
 
@@ -161,7 +161,7 @@ Memisahkan dua kelompok pengaturan agar hak akses Administrator tidak ambigu:
 Role hanya menyatakan **capability**. Siapa yang mengesahkan (mis. void, refund, cash difference) diatur oleh **Approval Policy** terpisah yang dapat menggunakan role, permission, approval level, nominal transaksi, atau kondisi lain.
 
 - Dokumen ini tidak memuat aturan approval (mis. "Owner/Manager/SPV bypass").
-- Contoh konkret policy void: `docs/VOID_APPROVAL_PLAN.md` (per-manager PIN, dua alur same-terminal / two-device).
+- Contoh konkret policy void: `docs/archive/VOID_APPROVAL_PLAN.md` (per-manager PIN, dua alur same-terminal / two-device).
 - Policy lain (refund, cash difference) didokumentasikan terpisah bila diperlukan.
 
 ### 3.5 Outlet
@@ -191,7 +191,7 @@ router.get('/', authenticate, tenantContext, authorize('report:view'), controlle
 
 Rincian (hanya permission; aturan approval mengikuti policy terpisah):
 - **Promotion**: `POST/PUT/DELETE` → `authorize('promotion:create')`. `GET` → semua role terautentikasi (dengan scoping outlet).
-- **Void** (`order.routes.ts`): route dilindungi `pos:use` (bukan `order:void`, supaya cashier bisa inisiasi void + PIN). Enforcement approval di service: caller dengan permission `order:void`/`payment:void` self-approve (tanpa PIN); caller lain wajib PIN approver yang punya permission tsb. Detail: `VOID_APPROVAL_PLAN.md`. Guard `pos:use` otomatis mengecualikan waiter/kitchen/barista/inventory/administrator.
+- **Void** (`order.routes.ts`): route dilindungi `pos:use` (bukan `order:void`, supaya cashier bisa inisiasi void + PIN). Enforcement approval di service: caller dengan permission `order:void`/`payment:void` self-approve (tanpa PIN); caller lain wajib PIN approver yang punya permission tsb. Detail: `archive/VOID_APPROVAL_PLAN.md`. Guard `pos:use` otomatis mengecualikan waiter/kitchen/barista/inventory/administrator.
 - **Settings/System** (`setting.routes.ts`, `tenant config`): `authorize('system:settings')` (owner/administrator). Business Settings: `owner`/`manager`.
 - **User & Role management** (`user.routes.ts`, `role.routes.ts`): `authorize('user:manage')` / `authorize('role:manage')` (owner/administrator).
 - **Device/Integrasi** (baru): `authorize('device:manage')` / `authorize('integration:manage')` (owner/administrator).
@@ -201,7 +201,7 @@ Rincian (hanya permission; aturan approval mengikuti policy terpisah):
 - **Shift**: cashier hanya shift outlet miliknya; manager/supervisor/owner bisa lintas outlet miliknya.
 - **Open shift (keputusan #3, 2026-08-05)**: cashier BOLEH membuka shift sendiri. Nilai `openingBalance` default diambil dari **Business Settings** (field baru `defaultOpeningBalance` di `Tenant.config`, di-set dari halaman Settings oleh owner/manager). Modal "Open Register" (`ShiftModal`, `frontend/src/core/shifts/pages/ShiftPage.tsx:13`) saat ini memakai `useState(0)` — diubah agar ter-prefill dari nilai default tersebut (tetap bisa diubah oleh kasir).
 
-### 3.8 JWT & sesi (fondasi, dijelaskan di VOID_APPROVAL_PLAN §3.2)
+### 3.8 JWT & sesi (fondasi, dijelaskan di archive/VOID_APPROVAL_PLAN.md §3.2)
 
 - JWT tetap `{ sub, tenant, role }` ringan, tapi **`role` diubah menjadi role NAME** (bukan roleId) — atau tambahkan klaim `roleName` + `perm`.
 - Setelah `authenticate`, load user+role dari DB → isi `req.userRole` (name), `req.userPermissions` (dari `Role.permissions`), `req.outletIds`. (Kesalahan kredensial/peran berubah dicerminkan, walau dengan biaya 1 query/request.)
@@ -225,7 +225,7 @@ Rincian (hanya permission; aturan approval mengikuti policy terpisah):
 3. **Cashier & Shift** — DIPUTUSKAN: YA, cashier bisa buka shift dengan nilai `openingBalance` default dari Business Settings (lihat §3.7).
 4. **Backfill outlet** — data lama di-assign otomatis ke outlet default, atau dibiarkan `outletId: null` sampai diatur manual? (masih perlu keputusan)
 5. **Multi-tenant** — apakah ini tetap 1 tenant per instalasi (multi-outlet dalam 1 tenant), atau platform multi-tenant penuh (1 admin super mengelola banyak bisnis)? Dokumen ini diasumsikan **yang pertama**.
-6. **Approval Policy** — DISELESAIKAN: dipisah dari dokumen role. Policy void sudah ada di `VOID_APPROVAL_PLAN.md`; policy lain (refund, cash difference, dsb.) didokumentasikan terpisah.
+6. **Approval Policy** — DISELESAIKAN: dipisah dari dokumen role. Policy void sudah ada di `archive/VOID_APPROVAL_PLAN.md`; policy lain (refund, cash difference, dsb.) didokumentasikan terpisah.
 7. **Limit nominal** — DEFERRED: "refund kecil", "approve cash difference kecil", "discount besar" butuh permission dengan ambang nilai (`{ perm, limit? }`) yang belum didukung data model (saat ini boolean). Ditangani sebagai ekstensi masa depan, bukan di dokumen role.
 
 ---
@@ -249,7 +249,7 @@ Rincian (hanya permission; aturan approval mengikuti policy terpisah):
 
 ### Fase 2 — Guard backend per route
 - [x] Promotion, produk/kategori/family: mutasi butuh `products:write`. *(promotions: semua mutasi → `products:write`)*
-- [x] Void/refund: `order:void` gating + Approval Policy terpisah (`VOID_APPROVAL_PLAN.md`).
+- [x] Void/refund: `order:void` gating + Approval Policy terpisah (`archive/VOID_APPROVAL_PLAN.md`).
 - [x] Settings: `settings:read`/`settings:write`.
 - [x] User/Role management: `users:read`/`users:write`, `roles:read`/`roles:write`.
 - [ ] Device/Integrasi (baru): `device:manage`/`integration:manage` — **belum dibuat** (tidak ada modul device/integration).
@@ -264,7 +264,7 @@ Rincian (hanya permission; aturan approval mengikuti policy terpisah):
 - [ ] POS: gating tombol aksi per permission; layar KDS/drink-queue terpisah untuk kitchen/barista.
 - [x] Laporan per outlet + konsolidasi owner. *(report filter `outletId` opsional; konsolidasi lintas-tenant via `/api/platform` Terminal Center)*
 
-> **Fokus awal**: redirect kasir langsung ke POS + filter sidebar role-aware — lihat `docs/POS_REDIRECT_PLAN.md` (2026-08-07).
+> **Fokus awal**: redirect kasir langsung ke POS + filter sidebar role-aware — lihat `docs/archive/POS_REDIRECT_PLAN.md` (2026-08-07).
 
 ### Fase 4 — Uji & dokumentasi
 - [x] Unit test (guard/scope/outlet), integrasi (login→route per role). *(backend 991/991; `platform-terminal.test.ts`, `useAuth.test.ts` outlet)*
