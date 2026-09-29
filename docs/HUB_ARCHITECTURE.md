@@ -99,7 +99,7 @@ HubMembership { userId, hubId, role: 'owner' | 'admin' | 'viewer' }
 
 Dibutuhkan untuk user lintas-tenant (Group Admin) dan Hub Consolidated Report.
 - **Kepemilikan & CRUD**: `hub:manage` (platform) via `POST/PUT/DELETE /api/hub-memberships`, `GET /api/hub-memberships/hub/:hubId` (list member + nama user); `GET /api/hub-memberships/me` + `GET /api/hub-memberships/me/tenants` untuk owner user.
-- **Session lintas-tenant**: user memegang JWT tenant sendiri, lalu `POST /auth/switch-tenant {tenantId}` → token baru ber-`role: hub-{owner|admin|viewer}`, `permissions` dari `HUB_MEMBER_ROLE_PERMS` (owner = FULL Owner, admin = Manager-level + reports, viewer = read-only), `outletIds: []`; `GET /auth/me` pada token lintas-tenant otomatis resolve lewat membership (bukan role tenant). Frontend top bar menampilkan tenant switcher dari `GET /auth/accessible-tenants`; ganti tenant → `switchTenant` store + `queryClient.clear()`.
+- **Session lintas-tenant**: user memegang JWT tenant sendiri, lalu `POST /auth/switch-tenant {tenantId}` → token baru ber-`role: hub-{owner|admin|manager|viewer}`, `permissions` dari `HUB_MEMBER_ROLE_PERMS` (owner = FULL Owner, admin = Manager-level + `users:read`, manager = Manager-level tanpa user management, viewer = read-only), `outletIds: []`; `GET /auth/me` pada token lintas-tenant otomatis resolve lewat membership (bukan role tenant). Frontend top bar menampilkan tenant switcher dari `GET /auth/accessible-tenants`; ganti tenant → `switchTenant` store + `queryClient.clear()`.
 - **Hub Consolidated Report**: `GET /api/platform/hubs/:hubId/consolidated?dateFrom=&dateTo=` (guard `platform.reports.read`) — breakdown `Tenant → Outlet` dari shift summary + payment consolidation per outlet (`PaymentService.getPlatformPaymentsConsolidationByOutlet`), plus totals. UI di tab Konsolidasi halaman Terminal Center.
 
 ---
@@ -289,7 +289,8 @@ Frontend Terminal Center sekarang punya tab **Hub & Anggota** yang utuh: buat/ed
 
 > Keputusan arsitektur yang mengunci fase-fase ini: **[`HUB_V2_DECISIONS.md`](HUB_V2_DECISIONS.md)** (D1–D4 + opsi yang ditolak).
 > Rencana frontend: **[`HUB_V2_FRONTEND_PLAN.md`](HUB_V2_FRONTEND_PLAN.md)**.
-> Status: **RENCANA — belum ada kode.** Fase 1–15 tetap utuh; tidak ada perubahan pada kode existing.
+> Status: **Fase 16 selesai 2026-09-29** (permission namespace + matriks role hub). Fase 17–20 masih rencana.
+> Fase 1–15 tetap utuh; Fase 16 tidak mengubah perilaku apa pun.
 
 ### Konteks (recon 2026-09-28)
 
@@ -298,7 +299,7 @@ Semua yang sudah ada hasil Fase 1–15 **tetap dipakai**, tidak ditulis ulang:
 ```
 Hub { id, name, description?, isActive }                 # tanpa tenantId
 Tenant.hubId                                             # 1 tenant maksimal 1 hub (keputusan #9)
-HubMembership { hubId, userId, role: owner|admin|viewer }
+HubMembership { hubId, userId, role: owner|admin|manager|viewer }
 Tenant switcher (POST /auth/switch-tenant + /hub-memberships/me/tenants)
 Hub Consolidated Report (shift sales + payments per tenant→outlet)
 Terminal Center: tab "Hub & Anggota" (Fase 15, UI lengkap)
@@ -311,13 +312,23 @@ anggota. Artinya anggota hub role `owner` otomatis **Owner penuh di semua tenant
 menyatakan "hanya tenant C, outlet Jakarta saja". Ini **lubang otorisasi yang aktif**, bukan fitur
 masa depan, karena itu access model (Fase 17) didahulukan.
 
-### Fase 16 — Namespace permission & matriks role hub
-- [ ] `shared/src/constants/permissions.ts`: tambah `PLATFORM_HUBS_MANAGE`, `HUB_READ`, `HUB_MEMBERS_READ/MANAGE`, `HUB_TENANTS_READ/MANAGE`, `HUB_REPORTS_READ/EXPORT`.
-- [ ] **Rename** permission platform `hub:manage` → `platform.hubs.manage` (`PLATFORM_ROLE_PERMS`) + **migrasi dokumen `Role` di DB** (permission tersimpan di collection, bukan hanya di kode).
-- [ ] Namespace `hub:*` **didefinisikan sekarang, dipakai nanti** (D1 tahap 2) — statusnya "reserved" supaya tidak ada permission mati tanpa penjelasan.
-- [ ] Matriks role hub 4 (`owner`/`admin`/`manager`/`viewer`) → permission, sebagai konstanta yang dapat di-seed (bukan hardcode di `AuthService`).
+### Fase 16 — Namespace permission & matriks role hub ✅ (2026-09-29)
+- [x] `shared/src/constants/permissions.ts`: tambah `PLATFORM_HUBS_MANAGE`, `HUB_READ`, `HUB_MEMBERS_READ/MANAGE`, `HUB_TENANTS_READ/MANAGE`, `HUB_REPORTS_READ/EXPORT`.
+- [x] **Rename** permission platform `hub:manage` → `platform.hubs.manage` (`PLATFORM_ROLE_PERMS`) + **migrasi dokumen `Role` di DB** (permission tersimpan di collection, bukan hanya di kode).
+- [x] Namespace `hub:*` **didefinisikan sekarang, dipakai nanti** (D1 tahap 2) — statusnya "reserved" supaya tidak ada permission mati tanpa penjelasan.
+- [x] Matriks role hub 4 (`owner`/`admin`/`manager`/`viewer`) → permission, sebagai konstanta yang dapat di-seed (bukan hardcode di `AuthService`).
 - ⚠️ **JWT embed permission → seluruh super admin wajib re-login setelah deploy.** Release note wajib.
-- [ ] Test: permission baru ada di `PERMISSIONS`, `PLATFORM_ROLE_PERMS` tidak lagi memuat `hub:manage`, route hub memakai nama baru.
+- [x] Test: permission baru ada di `PERMISSIONS`, `PLATFORM_ROLE_PERMS` tidak lagi memuat `hub:manage`, route hub memakai nama baru.
+
+#### Catatan implementasi Fase 16 (2026-09-29)
+- **Rename berlaku penuh**: `PLATFORM_ROLE_PERMS`, 21 route guard (`platform.routes.ts` 9, `hub.routes.ts` 8, `hubmembership.routes.ts` 4) & tab `Hub & Anggota` di `TerminalCenterPage` kini memakai `PERMISSIONS.PLATFORM_HUBS_MANAGE`. `PERMISSIONS.HUB_MANAGE` dihapus, bukan di-backward-compatible-kan: satu permission satu nama.
+- **Migrasi DB otomatis saat boot**: `migratePlatformHubPermissions(RoleModel)` dipanggil di `bootstrap/container.ts` (fire-and-forget, seperti `syncIndexes()`) → `updateMany({ permissions: 'hub:manage' }, [aggregation pipeline])` yang menulis ulang array: buang `hub:manage`, lalu `$setUnion` dengan `platform.hubs.manage` (aman bila keduanya sudah ada, tetap idempotent). Tidak ada langkah manual/SQL.
+  - Jebakan yang perlu diwaspadai: `$pull` + `$addToSet` pada field yang sama **ditolak MongoDB** (`code 40: Updating the path 'permissions' would create a conflict`) — harus aggregation pipeline update.
+  - Cakupannya **semua tenant** (`updateMany` tanpa filter `tenantId`), bukan hanya role platform: kalau ada role kustom yang memegang `hub:manage`, role itu ikut kehilangan akses tanpa disadari.
+- **Role `manager` ditambahkan** (4 role: `owner`/`admin`/`manager`/`viewer`) di domain `HUB_MEMBER_ROLES`, `HUB_MEMBER_ROLE_PERMS.manager` (= `MANAGER_PERMS` + `reports:read`, **tanpa** `users:read`), label backend `Hub Manager`, dan `useHubMemberships` (label `Manager` + hint). Role existing tidak berubah → nol anggota kehilangan akses.
+- **Matriks reserved** `HUB_ROLE_PERMISSION_MATRIX` (hub role → `hub.*`) ditambahkan di `platform/defaults/roles.ts` sebagai data, bukan rantai ternary, supaya bisa di-seed saat hub-side admin (D1 tahap 2) tiba. Belum ada route yang menegakkan `hub.*` — itu sebabnya ditandai *reserved*, bukan *unused*.
+- **Tidak ada perubahan perilaku**: `AuthService.switchTenant` masih membaca `HUB_MEMBER_ROLE_PERMS` persis seperti sebelumnya (Fase 17 yang menggantinya dengan grant per-tenant, dengan constant ini sebagai fallback).
+- ⚠️ **Release note — super admin WAJIB re-login.** Permission di-embed di access+refresh JWT, jadi token yang sudah terbit masih membawa `hub:manage` dan akan kena 403 di `/api/hubs*`, `/api/hub-memberships*`, dan sebagian `/api/platform/*` sampai login ulang (DB sudah dimigrasi otomatis; yang stale cuma token).
 
 ### Fase 17 — Access model per tenant/outlet ★ (menutup temuan otorisasi)
 - [ ] Domain `HubMemberTenantAccess { id, hubId, userId, tenantId, tenantRole, outletIds[] }` — `tenantRole` adalah role **tenant** (`owner|admin|manager|cashier|viewer`), bukan role hub.

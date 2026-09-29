@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
+import { PERMISSIONS } from '@posmono/shared';
 import {
   usePlatformHubs,
   usePlatformHubConsolidated,
@@ -1135,9 +1136,11 @@ interface TabDef {
   permissions: string[];
 }
 
+const PLATFORM_HUBS_PERMISSION = PERMISSIONS.PLATFORM_HUBS_MANAGE;
+
 const TABS: TabDef[] = [
   { id: 'plans', label: 'Plans', permissions: ['platform.plans.read', 'platform.plans.manage'] },
-  { id: 'hubs', label: 'Hub & Anggota', permissions: ['hub:manage'] },
+  { id: 'hubs', label: 'Hub & Anggota', permissions: [PLATFORM_HUBS_PERMISSION] },
   { id: 'tenants', label: 'Tenants', permissions: ['platform.tenants.read', 'platform.tenants.manage'] },
   { id: 'outlets', label: 'Outlet', permissions: ['platform.tenants.read', 'outlet:manage'] },
   { id: 'summary', label: 'Ringkasan', permissions: ['platform.reports.read'] },
@@ -1320,7 +1323,7 @@ export default function TerminalCenterPage() {
   const [auditAction, setAuditAction] = useState('');
 
   const activeTab = visibleTabs.some((t) => t.id === tab) ? tab : visibleTabs[0]?.id ?? 'tenants';
-  const canManageHub = permissions.includes('hub:manage');
+  const canManageHub = permissions.includes(PLATFORM_HUBS_PERMISSION);
 
   return (
     <div>

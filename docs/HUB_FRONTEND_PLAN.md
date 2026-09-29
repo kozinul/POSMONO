@@ -37,7 +37,7 @@ Ekstra yang ikut dikerjakan: `TenantsSection` menerima filter hub (chip + hapus 
 1. **Assign tenant ↔ hub** bisa dilakukan **langsung dari tab Hub** (bukan hanya lewat form tenant), lengkap dengan pencarian tenant, konfirmasi pindah hub, dan tampilan tenant yang sudah punya hub lain.
 2. **Kelola anggota hub** tanpa mengetik `User ID` manual — pakai pencarian user, ganti role dengan konfirmasi, hapus dengan konfirmasi.
 3. **Lengkapi CRUD hub** (edit nama/deskripsi + toggle aktif/nonaktif) yang endpoint-nya sudah ada tapi tidak terpakai.
-4. **Konsisten** dengan section Terminal Center lain (React Query + invalidasi, Swal2, toast) dan **gating permission `hub:manage`**.
+4. **Konsisten** dengan section Terminal Center lain (React Query + invalidasi, Swal2, toast) dan **gating permission `platform.hubs.manage`**.
 
 Out of scope: perubahan model hub/tenant, logika `HubMembershipService`, billing, konsolidasi (sudah ada tab sendiri).
 
@@ -45,7 +45,7 @@ Out of scope: perubahan model hub/tenant, logika `HubMembershipService`, billing
 
 ## 2. Hasil Audit — Backend SUDAH LENGKAP (tidak perlu diubah untuk MVP)
 
-Semua route sudah ada & ter-mount. Prefix `/api/hubs` & `/api/hub-memberships` (mount di `backend/src/bootstrap/routes.ts:130,133`), guard `platformAuthenticate` + `platformAuthorize('hub:manage')` untuk semua route mutasi & list.
+Semua route sudah ada & ter-mount. Prefix `/api/hubs` & `/api/hub-memberships` (mount di `backend/src/bootstrap/routes.ts:130,133`), guard `platformAuthenticate` + `platformAuthorize('platform.hubs.manage')` untuk semua route mutasi & list.
 
 ### 2.1 Hub (`backend/src/core/hub/interfaces/http/routes/hub.routes.ts`)
 
@@ -64,7 +64,7 @@ Semua route sudah ada & ter-mount. Prefix `/api/hubs` & `/api/hub-memberships` (
 
 | Method | Path | Body | Response |
 |---|---|---|---|
-| POST | `/api/hub-memberships` | `{ hubId, userId, role }` | `201 HubMembership` · `400` role invalid (harus `owner|admin|viewer`), `404` user/hub tak ada, `409` sudah anggota |
+| POST | `/api/hub-memberships` | `{ hubId, userId, role }` | `201 HubMembership` · `400` role invalid (harus `owner|admin|manager|viewer`), `404` user/hub tak ada, `409` sudah anggota |
 | GET | `/api/hub-memberships/hub/:hubId` | – | `HubMember[]` **didekorasi**: `+ displayName, email, userTenantId` (null bila user hilang) |
 | PUT | `/api/hub-memberships/:hubId/:userId` | `{ role }` | `200 HubMembership` |
 | DELETE | `/api/hub-memberships/:hubId/:userId` | – | `204` |
@@ -75,13 +75,13 @@ Semua route sudah ada & ter-mount. Prefix `/api/hubs` & `/api/hub-memberships` (
 
 | Method | Path | Permission | Dipakai untuk |
 |---|---|---|---|
-| GET | `/platform/hubs` | `hub:manage` | daftar hub (sudah dipakai) |
-| GET | `/platform/hubs/:hubId` | `hub:manage` | detail hub + `tenants[]` + `tenantCount` (sudah dipakai) |
+| GET | `/platform/hubs` | `platform.hubs.manage` | daftar hub (sudah dipakai) |
+| GET | `/platform/hubs/:hubId` | `platform.hubs.manage` | detail hub + `tenants[]` + `tenantCount` (sudah dipakai) |
 | GET | `/platform/tenants?search=&hubId=&page=&limit=` | `platform.tenants.read` | **kandidat picker assign tenant** (TIDAK ada `hubName` di list) |
 | GET | `/platform/tenants/:tenantId` | `platform.tenants.read` | `usersSummary[]` (maks 20 user) — **MVP picker anggota** |
 | GET | `/platform/audit` | `platform.audit.read` | audit sudah punya label `HUB_*`, `TENANT_ASSIGNED_TO_HUB`, `MEMBER_*` |
 
-Permission platform tersedia (`core/platform/defaults/roles.ts:49-59`): `hub:manage`, `outlet:manage`, `platform.tenants.read|manage`, `platform.plans.read|manage`, `platform.reports.read`, `platform.support.access`, `platform.audit.read`.
+Permission platform tersedia (`core/platform/defaults/roles.ts:49-59`): `platform.hubs.manage`, `outlet:manage`, `platform.tenants.read|manage`, `platform.plans.read|manage`, `platform.reports.read`, `platform.support.access`, `platform.audit.read`.
 
 > ⚠️ `permissions` di-embed di JWT saat login → **super admin yang sudah login harus re-login** agar permission baru terbaca.
 
@@ -102,7 +102,7 @@ Implementasi existing sudah ada tapi masih minim: `HubsSection` + `HubDetail` in
 | F6 | Warna pesan error ditentukan string match | `TerminalCenterPage.tsx:240` (`msg.includes('Gagal')`) | Rapuh; pesan sukses/kegagalan bercampur |
 | F7 | Ganti role & hapus anggota **tanpa konfirmasi & tanpa `isPending` guard** | `TerminalCenterPage.tsx:208-219` | Salah klik langsung mengubah akses lintas-tenant; double-click bisa spam request |
 | F8 | Kolom "Hub" di tabel Tenants menampilkan `hubId` mentah | `TerminalCenterPage.tsx` `TenantsSection` + `usePlatform.ts:28-30` | `TenantService.list` **tidak mengembalikan `hubName`** → user baca ID, bukan nama |
-| F9 | `PlatformRoute` hanya cek `tenantId === 'platform'`, **tanpa cek permission** | `frontend/src/@shared/components/PlatformRoute.tsx:13` | Platform user tanpa `hub:manage` tetap lihat tab Hub → kumpulkan 403 |
+| F9 | `PlatformRoute` hanya cek `tenantId === 'platform'`, **tanpa cek permission** | `frontend/src/@shared/components/PlatformRoute.tsx:13` | Platform user tanpa `platform.hubs.manage` tetap lihat tab Hub → kumpulkan 403 |
 
 Tambahan kecil: `apiDelete` (`TerminalCenterPage.tsx:1220`) memanggil `res.data.data` padahal `DELETE /hubs/:id` balas `204 No Content`; `GET /hub-memberships/me` tanpa konsumen.
 
@@ -124,7 +124,7 @@ Tambahan kecil: `apiDelete` (`TerminalCenterPage.tsx:1220`) memanggil `res.data.
 | **Pencarian anggota: 2 tahap** (pilih tenant → pilih user dari `usersSummary`) untuk MVP | Nol perubahan backend; `GET /platform/tenants/:id` sudah mengembalikan `usersSummary` |
 | Backend search user lintas-tenant = **P3 (opsional)** | `usersSummary` dipotong 20 & tidak ada `tenantName`; setelah 20 user per tenant, picker MVP tidak bisa Total |
 | Notifikasimutasi = **Swal2 (`Swal.fire` + `showLoaderOnConfirm`)**; pesan sukses = `Swal.toast` | Konsisten dengan `TenantsSection` hapus tenant |
-| **Gating `hub:manage`** di level tab + tombol aksi | `PlatformRoute` tidak bisa gating per-permission tanpa parse permission; gate di tab lebih lokal & murah |
+| **Gating `platform.hubs.manage`** di level tab + tombol aksi | `PlatformRoute` tidak bisa gating per-permission tanpa parse permission; gate di tab lebih lokal & murah |
 | Lift state `hubFocus` ke `TerminalCenterPage` | Tombol "Lihat Konsolidasi" & "Lihat di Tenants" bisa=/cross-navigasi tab tanpa URL router |
 | Ganti role anggota: `<select>` → **modal konfirmasi** | Perubahan akses lintas-tenant deserve konfirmasi (F7) |
 
@@ -134,7 +134,7 @@ Tambahan kecil: `apiDelete` (`TerminalCenterPage.tsx:1220`) memanggil `res.data.
 
 ```
 ┌─ Terminal Center ─ [Plans] [Hub & Anggota] [Tenants] [Outlet] [Ringkasan] [Konsolidasi] [Audit Log] ─┐
-│ tab "Hub & Anggota" (hanya bila punya permission hub:manage)                                        │
+│ tab "Hub & Anggota" (hanya bila punya permission platform.hubs.manage)                                        │
 │ ┌────────────────────┐ ┌──────────────────────────────────────────────────────────┐                │
 │ │ 🔍 cari hub        │ │  [Profil] [Tenant (3)] [Anggota (2)]        [Lihat Konsolidasi]│  │
 │ │ + Buat Hub        │ ├──────────────────────────────────────────────────────────┤                │
@@ -154,7 +154,7 @@ Tambahan kecil: `apiDelete` (`TerminalCenterPage.tsx:1220`) memanggil `res.data.
 
 **AssignTenantModal**: input search (debounce 300 ms, `usePlatformTenants({ search, limit: 20 })`) → hasil = tenant yang `hubId !== hub.id` (tenant dalam hub ditampilkan sebagai "Sudah di hub ini" non-klik); baris menampilkan `status` pill + `hubName ?? 'Standalone'`; klik baris → konfirmasi Swal bila tenant punya hub lain ("Pindahkan dari {hubName}?") → `POST /hubs/:hubId/tenants/:tenantId` → invalidasi.
 
-**AddMemberModal (MVP 2 tahap)**: step 1 pilih tenant (search `usePlatformTenants`, default = tenant pertama dalam hub) → step 2 `usePlatformTenant(tenantId).usersSummary` → pilih user → pilih role (`owner|admin|viewer` + deskripsi singkat) → `POST /hub-memberships`. User yang sudah anggota ditampilkan badge "Sudah anggota" (dicek terhadap `useHubMembers`).
+**AddMemberModal (MVP 2 tahap)**: step 1 pilih tenant (search `usePlatformTenants`, default = tenant pertama dalam hub) → step 2 `usePlatformTenant(tenantId).usersSummary` → pilih user → pilih role (`owner|admin|manager|viewer` + deskripsi singkat) → `POST /hub-memberships`. User yang sudah anggota ditampilkan badge "Sudah anggota" (dicek terhadap `useHubMembers`).
 
 ---
 
@@ -198,7 +198,7 @@ export function usePlatformUnassignTenantFromHub() { // DELETE /hubs/:hubId/tena
 
 ```ts
 // di dalam platform section
-const canManageHub = (useAuthStore((s) => s.user?.permissions) ?? []).includes('hub:manage');
+const canManageHub = (useAuthStore((s) => s.user?.permissions) ?? []).includes('platform.hubs.manage');
 ```
 - Tab `'hubs'` **disembunyikan** dari `TABS` kalau `!canManageHub`.
 - Tab `'consolidated'` butuh `platform.reports.read`, tab `'audit'` butuh `platform.audit.read` (terapkan sekalian, konsistensi).
@@ -288,7 +288,7 @@ Hasil 2026-09-28: frontend tsc bersih, **106/106**, build OK · backend tsc bers
 - [x] Tidak ada input `User ID` manual; anggota dipilih lewat pencarian (tenant → user → role).
 - [x] Semua mutasi lewat React Query → **tidak ada cache basi** setelah create/edit/delete/assign/remove.
 - [x] Semua aksi destruktif punya konfirmasi Swal2; semua error dari API tampil dalam bahasa Indonesia.
-- [x] Tab Hub tidak terlihat untuk platform user tanpa `hub:manage`.
+- [x] Tab Hub tidak terlihat untuk platform user tanpa `platform.hubs.manage`.
 - [x] `PUT /api/hubs/:id` (terutama `isActive`) terjangkau dari UI.
 - [x] Tidak ada lagi `apiPost`/`apiDelete`/`confirm()`/`alert()`/`prompt()` di `TerminalCenterPage`.
 - [x] `npx tsc --noEmit` + test + build hijau: frontend **104/104 (15 files)**, backend **1149/1149 (99 files)**.

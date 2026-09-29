@@ -16,6 +16,7 @@ import { AuthController } from '../core/identity/interfaces/http/controllers/Aut
 import { MongoUserRepository } from '../core/identity/infrastructure/persistence/MongoUserRepository';
 import { UserSchema } from '../core/identity/infrastructure/persistence/schemas/UserSchema';
 import { RoleSchema } from '../core/identity/infrastructure/persistence/schemas/RoleSchema';
+import { migratePlatformHubPermissions } from '../core/platform/infrastructure/persistence/migratePlatformHubPermissions';
 import { SessionSchema } from '../core/identity/infrastructure/persistence/schemas/SessionSchema';
 import { TenantSchema } from '../core/tenant/infrastructure/persistence/schemas/TenantSchema';
 import { MongoTenantRepository } from '../core/tenant/infrastructure/persistence/MongoTenantRepository';
@@ -171,6 +172,9 @@ export function buildContainer() {
 
   const UserModel = systemConnection.model('User', UserSchema);
   const RoleModel = systemConnection.model('Role', RoleSchema);
+  // Hub V2 Fase 16: `hub:manage` → `platform.hubs.manage` in stored roles, so a
+  // deployed platform super-admin keeps hub access without a manual DB step.
+  migratePlatformHubPermissions(RoleModel).catch(() => {});
   const SessionModel = systemConnection.model('Session', SessionSchema);
   const TenantModel = systemConnection.model('Tenant', TenantSchema);
   const ProductModel = systemConnection.model('Product', ProductSchema);

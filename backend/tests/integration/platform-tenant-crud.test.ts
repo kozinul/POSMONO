@@ -250,7 +250,7 @@ describe('Platform Tenant Update (PUT /api/platform/tenants/:tenantId)', () => {
     expect(res.status).toBe(401);
   });
 
-  it('rejects viewer without hub:manage permission', async () => {
+  it('rejects viewer without platform.hubs.manage permission', async () => {
     const res = await request(ctx.app)
       .put(`/api/platform/tenants/${TENANT_ID}`)
       .set('Authorization', `Bearer ${ctx.platformTokenNoOutletManage}`)

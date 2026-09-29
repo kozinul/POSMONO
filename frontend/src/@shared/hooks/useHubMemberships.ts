@@ -1,19 +1,21 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 
-export type HubMemberRole = 'owner' | 'admin' | 'viewer';
+export type HubMemberRole = 'owner' | 'admin' | 'manager' | 'viewer';
 
-export const HUB_MEMBER_ROLES: HubMemberRole[] = ['owner', 'admin', 'viewer'];
+export const HUB_MEMBER_ROLES: HubMemberRole[] = ['owner', 'admin', 'manager', 'viewer'];
 
 export const HUB_MEMBER_ROLE_LABELS: Record<HubMemberRole, string> = {
   owner: 'Owner',
   admin: 'Admin',
+  manager: 'Manager',
   viewer: 'Viewer',
 };
 
 export const HUB_MEMBER_ROLE_HINTS: Record<HubMemberRole, string> = {
   owner: 'Akses penuh lintas tenant di hub ini',
   admin: 'Kelola user & lihat laporan lintas tenant',
+  manager: 'Operasional harian lintas tenant (tanpa kelola user)',
   viewer: 'Hanya baca data lintas tenant',
 };
 

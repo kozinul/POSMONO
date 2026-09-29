@@ -148,7 +148,7 @@ beforeAll(async () => {
       sub: 'regular-user',
       tenant: 'tenant-test',
       role: 'owner',
-      permissions: ['hub:manage'],
+      permissions: ['platform.hubs.manage'],
     }),
   };
 }, 60000);

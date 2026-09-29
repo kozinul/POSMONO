@@ -22,6 +22,7 @@ import {
 const ROLE_TONE: Record<HubMemberRole, 'blue' | 'green' | 'gray'> = {
   owner: 'blue',
   admin: 'green',
+  manager: 'blue',
   viewer: 'gray',
 };
 

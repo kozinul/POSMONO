@@ -217,7 +217,7 @@ beforeAll(async () => {
       sub: 'platform-admin',
       tenant: 'platform',
       role: 'platform-super-admin',
-      permissions: ['hub:manage', 'platform.tenants.read', 'platform.reports.read'],
+      permissions: ['platform.hubs.manage', 'platform.tenants.read', 'platform.reports.read'],
     }),
   };
 }, 60000);
@@ -238,7 +238,7 @@ beforeEach(async () => {
 const platformAuth = () => `Bearer ${ctx.platformToken}`;
 
 describe('Fase 9 — Hub membership & cross-tenant session', () => {
-  it('rejects member CRUD without hub:manage', async () => {
+  it('rejects member CRUD without platform.hubs.manage', async () => {
     const cashierToken = generateTestToken({ sub: 'cashier-1', tenant: TENANT_A, role: 'cashier', permissions: [] });
     const res = await request(ctx.app)
       .post('/api/hub-memberships')
@@ -488,7 +488,7 @@ describe('Fase 9 — Hub consolidated report', () => {
       sub: 'platform-admin-2',
       tenant: 'platform',
       role: 'platform-super-admin',
-      permissions: ['hub:manage'],
+      permissions: ['platform.hubs.manage'],
     });
     const res = await request(ctx.app)
       .get(`/api/platform/hubs/${HUB_1}/consolidated`)
@@ -497,10 +497,58 @@ describe('Fase 9 — Hub consolidated report', () => {
   });
 
   it('rejects non-platform sessions', async () => {
-    const tenantToken = generateTestToken({ sub: 'owner-a', tenant: TENANT_A, permissions: ['hub:manage'] });
+    const tenantToken = generateTestToken({ sub: 'owner-a', tenant: TENANT_A, permissions: ['platform.hubs.manage'] });
     const res = await request(ctx.app)
       .get(`/api/platform/hubs/${HUB_1}/consolidated`)
       .set('Authorization', `Bearer ${tenantToken}`);
     expect(res.status).toBe(401);
+  });
+});
+
+describe('Hub V2 Fase 16 — permission namespace over HTTP', () => {
+  it('rejects a platform session that still carries the legacy hub:manage permission', async () => {
+    const legacyToken = generateTestToken({
+      sub: 'platform-admin-legacy',
+      tenant: 'platform',
+      role: 'platform-super-admin',
+      permissions: ['hub:manage'],
+    });
+
+    const hubs = await request(ctx.app).get('/api/hubs').set('Authorization', `Bearer ${legacyToken}`);
+    expect(hubs.status).toBe(403);
+
+    const members = await request(ctx.app)
+      .post('/api/hub-memberships')
+      .set('Authorization', `Bearer ${legacyToken}`)
+      .send({ hubId: HUB_1, userId: GROUP_ADMIN, role: 'admin' });
+    expect(members.status).toBe(403);
+  });
+
+  it('accepts the renamed platform.hubs.manage permission', async () => {
+    const hubs = await request(ctx.app).get('/api/hubs').set('Authorization', platformAuth());
+    expect(hubs.status).toBe(200);
+    expect(hubs.body.data.map((h: any) => h.id)).toContain(HUB_1);
+  });
+
+  it('accepts the manager hub role', async () => {
+    const added = await request(ctx.app)
+      .post('/api/hub-memberships')
+      .set('Authorization', platformAuth())
+      .send({ hubId: HUB_1, userId: GROUP_ADMIN, role: 'manager' });
+    expect(added.status).toBe(201);
+    expect(added.body.data.role).toBe('manager');
+
+    const list = await request(ctx.app)
+      .get(`/api/hub-memberships/hub/${HUB_1}`)
+      .set('Authorization', platformAuth());
+    expect(list.body.data.some((m: any) => m.role === 'manager')).toBe(true);
+  });
+
+  it('still rejects an unknown hub role', async () => {
+    const res = await request(ctx.app)
+      .post('/api/hub-memberships')
+      .set('Authorization', platformAuth())
+      .send({ hubId: HUB_1, userId: GROUP_ADMIN, role: 'superadmin' });
+    expect(res.status).toBe(400);
   });
 });

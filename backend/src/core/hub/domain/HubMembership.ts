@@ -3,7 +3,7 @@ import { Identifier } from '../../../@shared/domain/Identifier';
 
 class HubMembershipId extends Identifier {}
 
-export const HUB_MEMBER_ROLES = ['owner', 'admin', 'viewer'] as const;
+export const HUB_MEMBER_ROLES = ['owner', 'admin', 'manager', 'viewer'] as const;
 export type HubMemberRole = (typeof HUB_MEMBER_ROLES)[number];
 
 export interface IHubMembership {

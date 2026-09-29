@@ -161,7 +161,7 @@ describe('HubsSection', () => {
     expect(hubList().getByText('Maju Grup')).toBeInTheDocument();
   });
 
-  it('hides management actions when the platform user lacks hub:manage', async () => {
+  it('hides management actions when the platform user lacks platform.hubs.manage', async () => {
     renderSection({ canManage: false });
 
     expect(await hubList().findByText('BCA Hospitality')).toBeInTheDocument();

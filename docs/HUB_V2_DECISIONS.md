@@ -173,5 +173,11 @@ Front-end plan: [`HUB_V2_FRONTEND_PLAN.md`](HUB_V2_FRONTEND_PLAN.md).
 
 ## 8. Status
 
-**D1–D4 terkunci.** Tidak ada kode yang ditulis sebelum dokumen ini di-commit. Fase berikutnya
-adalah Fase 16 (namespace permission) — lihat `HUB_ARCHITECTURE.md`.
+**D1–D4 terkunci** (2026-09-28). **Fase 16 selesai 2026-09-29** — permission platform
+`hub:manage` → `platform.hubs.manage` (+ migrasi dokumen `Role` saat boot), namespace `hub.*`
+direservasi untuk D1 tahap 2, matriks role hub 4. Catatan & release note di
+[`HUB_ARCHITECTURE.md`](HUB_ARCHITECTURE.md) § Fase 16.
+
+**Fase berikutnya: Fase 17** — `HubMemberTenantAccess` + `switch-tenant` membaca grant, yang
+menutup temuan otorisasi di §"Temuan kritis". WAJIB menyertakan test **DENY**, dan tetap punya
+fallback ke perilaku lama supaya nol anggota existing kehilangan akses (D3).

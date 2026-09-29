@@ -1169,17 +1169,17 @@ export type CreateOrderInput = {
 - **Tenant** kini punya `hubId: string | null` (null = standalone)
 - **User `outletIds`** juga disimpan — outlet scope per user (JWT + request)
 
-### API Endpoints (`/api/hubs`, permission `hub:manage` — dimiliki Platform Super Admin & Owner)
+### API Endpoints (`/api/hubs`, permission `platform.hubs.manage` — dimiliki Platform Super Admin & Owner)
 | Method | Endpoint | Auth |
 |--------|----------|------|
-| GET | `/api/hubs` | ✅ `hub:manage` |
-| GET | `/api/hubs/:id` | ✅ `hub:manage` |
-| POST | `/api/hubs` | ✅ `hub:manage` |
-| PUT | `/api/hubs/:id` | ✅ `hub:manage` |
-| DELETE | `/api/hubs/:id` | ✅ `hub:manage` |
-| POST | `/api/hubs/:hubId/tenants/:tenantId` | ✅ `hub:manage` (assign) |
-| DELETE | `/api/hubs/:hubId/tenants/:tenantId` | ✅ `hub:manage` (unassign) |
-| GET | `/api/hubs/:hubId/tenants` | ✅ `hub:manage` |
+| GET | `/api/hubs` | ✅ `platform.hubs.manage` |
+| GET | `/api/hubs/:id` | ✅ `platform.hubs.manage` |
+| POST | `/api/hubs` | ✅ `platform.hubs.manage` |
+| PUT | `/api/hubs/:id` | ✅ `platform.hubs.manage` |
+| DELETE | `/api/hubs/:id` | ✅ `platform.hubs.manage` |
+| POST | `/api/hubs/:hubId/tenants/:tenantId` | ✅ `platform.hubs.manage` (assign) |
+| DELETE | `/api/hubs/:hubId/tenants/:tenantId` | ✅ `platform.hubs.manage` (unassign) |
+| GET | `/api/hubs/:hubId/tenants` | ✅ `platform.hubs.manage` |
 
 ### Business Logic
 - Hub **tidak menyentuh Order/Payment/Shift** — `tenantId` = legal boundary, `outletId` = operational boundary, `hubId` = grouping saja
@@ -1195,11 +1195,11 @@ export type CreateOrderInput = {
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | GET | `/api/platform/health` | platform | Diagnostik `{status:'ok', timestamp}` |
-| GET | `/api/platform/hubs` | `hub:manage` | List semua Hub |
-| GET | `/api/platform/hubs/:hubId` | `hub:manage` | Detail Hub + `tenants[]` + `tenantCount` |
+| GET | `/api/platform/hubs` | `platform.hubs.manage` | List semua Hub |
+| GET | `/api/platform/hubs/:hubId` | `platform.hubs.manage` | Detail Hub + `tenants[]` + `tenantCount` |
 | GET | `/api/platform/tenants` | `platform.tenants.read` | List tenant paginated + filter `hubId`/`search` |
 | GET | `/api/platform/tenants/:tenantId` | `platform.tenants.read` | Detail tenant + `hubName` |
-| POST | `/api/platform/provision/tenant` | `hub:manage` | **Buat Tenant baru** (`ProvisionTenantService`): Tenant + Owner + Outlet Utama + Warehouse Utama atomik; body: `{tenant, owner, outlet, hubId?}`; header `Idempotency-Key` (opsional); response `201` |
+| POST | `/api/platform/provision/tenant` | `platform.hubs.manage` | **Buat Tenant baru** (`ProvisionTenantService`): Tenant + Owner + Outlet Utama + Warehouse Utama atomik; body: `{tenant, owner, outlet, hubId?}`; header `Idempotency-Key` (opsional); response `201` |
 | GET | `/api/platform/outlets` | `platform.tenants.read` | Outlet lintas-tenant + `tenantName`; filter `tenantId`/`hubId`/`isActive` |
 | GET | `/api/platform/shifts/summary` | `platform.reports.read` | Summary shift per tenant + per outlet (`dateFrom`/`dateTo`/`hubId`/`tenantId`) |
 | GET | `/api/platform/payments/summary` | `platform.reports.read` | Total pembayaran + breakdown metode lintas-tenant |
@@ -1217,10 +1217,10 @@ export type CreateOrderInput = {
 ### HubMembership & Session Lintas-Tenant (`/api/hub-memberships`, `/api/auth`)
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| POST | `/api/hub-memberships` | `hub:manage` | Tambah anggota `{hubId, userId, role}` |
-| GET | `/api/hub-memberships/hub/:hubId` | `hub:manage` | List anggota + nama/email user |
-| PUT | `/api/hub-memberships/:hubId/:userId` | `hub:manage` | Ganti role anggota |
-| DELETE | `/api/hub-memberships/:hubId/:userId` | `hub:manage` | Hapus anggota |
+| POST | `/api/hub-memberships` | `platform.hubs.manage` | Tambah anggota `{hubId, userId, role}` |
+| GET | `/api/hub-memberships/hub/:hubId` | `platform.hubs.manage` | List anggota + nama/email user |
+| PUT | `/api/hub-memberships/:hubId/:userId` | `platform.hubs.manage` | Ganti role anggota |
+| DELETE | `/api/hub-memberships/:hubId/:userId` | `platform.hubs.manage` | Hapus anggota |
 | GET | `/api/hub-memberships/me` | authenticate | Membership milik user |
 | GET | `/api/hub-memberships/me/tenants` | authenticate | Tenant yang bisa diakses user via membership |
 | GET | `/api/auth/accessible-tenants` | authenticate | Sama dengan `/me/tenants` (dipakai tenant switcher) |

@@ -83,9 +83,32 @@ export const PERMISSIONS = {
   RESTAURANT_SPLIT_BILL_PROCESS: 'restaurant.split_bill.process',
   RESTAURANT_PRINTER_MANAGE: 'restaurant.printer.manage',
 
-  // Outlet & Hub
+  // Outlet
   OUTLET_MANAGE: 'outlet:manage',
-  HUB_MANAGE: 'hub:manage',
+
+  // Platform — hub & outlet layer (Terminal Center, tenantId 'platform')
+  PLATFORM_HUBS_MANAGE: 'platform.hubs.manage',
+
+  /**
+   * Hub namespace — **RESERVED** (Hub V2 Fase 16).
+   *
+   * These permissions are *defined now, enforced later* (ADR D1 tahap 2:
+   * hub-side admin). They are not yet granted to anyone and no route checks
+   * them, so they must not be treated as dead constants: the role matrix that
+   * consumes them lives in `backend/src/core/platform/defaults/roles.ts`
+   * (`HUB_ROLE_PERMISSION_MATRIX`) and they are wired when hub-side admin ships.
+   *
+   * Note the namespace is intentionally NOT `hub:manage`: that string used to
+   * be the *platform* permission and was renamed to `platform.hubs.manage` in
+   * Fase 16 so the two layers can never be confused.
+   */
+  HUB_READ: 'hub.read',
+  HUB_MEMBERS_READ: 'hub.members.read',
+  HUB_MEMBERS_MANAGE: 'hub.members.manage',
+  HUB_TENANTS_READ: 'hub.tenants.read',
+  HUB_TENANTS_MANAGE: 'hub.tenants.manage',
+  HUB_REPORTS_READ: 'hub.reports.read',
+  HUB_REPORTS_EXPORT: 'hub.reports.export',
 
   // Hospitality
   HOSPITALITY_PROPERTIES_READ: 'hospitality.properties.read',

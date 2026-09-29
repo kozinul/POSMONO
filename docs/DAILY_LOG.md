@@ -104,6 +104,43 @@ Copy this block for each new day:
 
 ## Entries
 
+### DATE: 2026-09-29 — Hub V2 Fase 16: namespace permission & matriks role hub
+
+**Spek user**: lanjut roadmap Hub berikutnya (Fase 16) — "gas lanjut" setelah commit ADR D1–D4.
+
+**Today I worked on:**
+
+- **Permission rename** `hub:manage` → `platform.hubs.manage` (`PLATFORM_HUBS_MANAGE`). String lama mencampur kapabilitas platform dengan namespace `hub.*` yang sekarang direservasi untuk hub-side admin (ADR D1 tahap 2). Diterapkan di `PLATFORM_ROLE_PERMS`, **21 route guard** (`platform.routes.ts` 9, `hub.routes.ts` 8, `hubmembership.routes.ts` 4), tab `Hub & Anggota` di `TerminalCenterPage`, dan 5 file test. `PERMISSIONS.HUB_MANAGE` dihapus (bukan dual-accept) — satu permission satu nama.
+- **Migrasi dokumen `Role` otomatis saat boot**: `migratePlatformHubPermissions` (`core/platform/infrastructure/persistence/`) dipanggil di `bootstrap/container.ts` fire-and-forget, seperti `syncIndexes()`. `updateMany({ permissions: 'hub:manage' }, [pipeline])` → `$filter` buang legacy + `$setUnion` dengan nama baru. Cakupan **semua tenant**, jadi role kustom yang memegang string lama ikut ter-migrasi.
+- **Namespace `hub.*` reserved** di `shared/src/constants/permissions.ts`: `hub.read`, `hub.members.read/manage`, `hub.tenants.read/manage`, `hub.reports.read/export` — didefinisikan sekarang, ditegakkan nanti (D1 tahap 2), dengan komentar alasan supaya tidak dibaca sebagai permission mati.
+- **Matriks role hub 4** (`owner`/`admin`/`manager`/`viewer`): `HUB_MEMBER_ROLES` (domain), `HUB_MEMBER_ROLE_PERMS.manager` (= `MANAGER_PERMS` + `reports:read`, tanpa `users:read`), `HUB_MEMBER_ROLE_LABELS.Hub Manager`, dan `HUB_ROLE_PERMISSION_MATRIX` (hub role → `hub.*`) sebagai konstanta yang dapat di-seed, bukan rantai ternary di `AuthService`.
+
+**Problems encountered:**
+
+- `$pull` + `$addToSet` pada field `permissions` yang sama **ditolak MongoDB** (`code 40: Updating the path 'permissions' would create a conflict`) — baru ketahuan karena test, bukan saat baca kode. Solusi: aggregation pipeline update (`$setUnion` sekalian men-collapse duplikat bila kedua string sudah ada).
+- `Model<unknown>` untuk param `updateMany` bikin TS tidak bisa assign tipe dokumen Mongoose → `Model<any>`, mengikuti konvensi repository yang sudah ada.
+- `shared/dist` harus di-rebuild (`npx tsc` di `shared/`) karena backend/frontend resolve `@posmono/shared` ke `.d.ts` hasil build — stale dist bikin tsc backend gagal/errors palsu.
+- `ROLE_TONE` di `HubMemberPanel.tsx` bertipe `Record<HubMemberRole, …>` → role baru `manager` wajib addition (dicek tsc).
+
+**What I completed:**
+
+- `backend/tests/repositories/HubPermissionNamespace.test.ts` (baru, 10 test): `PLATFORM_ROLE_PERMS` tidak memuat legacy, namespace `hub.*` unique & berawalan `hub.`, matriks monoton (manager tak bisa manage members), migrasi (rename, role kustom lintas tenant, idempotent, tanpa duplikat, role tak tersentuh).
+- `hub-fase9.test.ts` +4 integrasi HTTP: token dengan `hub:manage` **lama** → 403 di `/api/hubs` & `POST /api/hub-memberships`; `platform.hubs.manage` → 200; role `manager` diterima (201 + role di list); role ngawur tetap 400.
+- `frontend/tests/unit/hubPermissions.test.ts` (baru, 4 test): guard dari `PERMISSIONS`, 4 role + label/hint lengkap, namespace reserved, union role lengkap.
+- Backend **1172/1172 (100 files)**, frontend **110/110 (16 files)**, tsc shared+backend+frontend bersih, `vite build` OK.
+- Docs: `HUB_ARCHITECTURE.md` Fase 16 → `[x]` + catatan implementasi; `API_REFERENCE.md` (31), `POS_CURRENT_FEATURES.md` (16), `ARCHITECTURE.md`, `HUB_FRONTEND_PLAN.md`, `ROLE_ACCESS_PLAN.md` → permission & role set terbaru.
+
+**What I learned:**
+
+- Rename permission string yang **tersimpan di DB** tidak bisa diselesaikan di kode saja — token juga meng-embed permission lama, jadi migrasi harus dua lapis: dokumen Role (otomatis saat boot) + re-login user (release note).
+- Menulis test integrasi permission rename dengan cara "token lama harus 403" jauh lebih berguna daripada assert string konstanta saja: ia membuktikan rename benar-benar ditegakkan di semua route.
+
+**⚠️ Release note**: seluruh **Platform Super Admin wajib re-login** setelah deploy. Role di DB sudah dimigrasi otomatis, tapi JWT access/refresh yang sudah terbit masih membawa `hub:manage` → 403 di `/api/hubs*`, `/api/hub-memberships*`, dan sebagian `/api/platform/*` sampai login ulang.
+
+**Tomorrow priority:**
+
+- Fase 17 (`HubMemberTenantAccess` + `switch-tenant` baca grant dengan fallback) sebagai commit sendiri — menutup lubang otorisasi anggota hub role owner, dan wajib menyertakan test **DENY**.
+
 ### DATE: 2026-09-23 — Provisioning Tenant Baru Menyalin Template Default (Struk/KOT/Invoice)
 
 **Spek user**: setiap tenant baru dibuat, template dokumen (terutama struk) harus ikut tersedia — "hanya yang default saja" (bukan template custom).

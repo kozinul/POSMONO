@@ -969,7 +969,7 @@ interface DomainEvent {
   - `hubId` = murni **grouping** lintas-tenant (tidak mengandung data bisnis; `Tenant.hubId: null` = standalone)
   - `User.outletIds: string[]` — `[]` = semua outlet tenant; di-embed ke JWT; perubahan require re-login
   - Provisioning boot `ensureDefaultOutlet`: tiap tenant otomatis mendapat Outlet Utama + Warehouse Utama + backfill data lama
-  - Modul baru: `core/hub/` (CRUD + assign tenant, permission `hub:manage`), `core/outlet/` (CRUD + Warehouse 1:1, permission `outlet:manage`)
+  - Modul baru: `core/hub/` (CRUD + assign tenant, permission `platform.hubs.manage`), `core/outlet/` (CRUD + Warehouse 1:1, permission `outlet:manage`)
 
 - **Platform layer / Terminal Center (`core/platform/`):** lapisan super-admin lintas-tenant yang **terpisah dari auth tenant biasa**. Login `POST /api/auth/login` dengan header `X-Tenant-Id: platform` (seeded `platform@demo.com`/`admin123`) menghasilkan token JWT berklaim `tenant: 'platform'`; middleware `platformAuthenticate`/`platformAuthorize` mewajibkan klaim tersebut (token tenant biasa → 401). Route grup `/api/platform` (health, hub/tenant/outlet listing lintas-tenant, shift & payment summary) di-mount terpisah dari `/api/*` tenant. Scope query (`tenantId`/`hubId`) di-resolve oleh `resolvePlatformScope`.
 

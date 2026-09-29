@@ -72,9 +72,9 @@ Prinsip:
 
 ### 2.2 Seed role saat ini (`backend/src/seed.ts` / `core/platform/defaults/roles.ts`)
 
-> **Status 2026-09-12:** men-seed `Owner`, `Manager`, `Cashier` + **`Platform Super Admin`** (`tenantId: 'platform'`, `hub:manage`, `platform.*`). Role `Supervisor`/`Administrator`/`Waiter`/`Kitchen`/`Barista`/`Inventory` **belum** di-seed (9-role template tetap rencana).
+> **Status 2026-09-12:** men-seed `Owner`, `Manager`, `Cashier` + **`Platform Super Admin`** (`tenantId: 'platform'`, `platform.hubs.manage`, `platform.*`). Role `Supervisor`/`Administrator`/`Waiter`/`Kitchen`/`Barista`/`Inventory` **belum** di-seed (9-role template tetap rencana).
 >
-> **Group Admin lintas-tenant (HubMembership, Fase 9 2026-09-12):** user lintas-tenant memakai `HubMembership {hubId, userId, role}` — BUKAN role tenant. Saat `switch-tenant`, token baru ber-`role: hub-{owner|admin|viewer}` dengan permission dari `HUB_MEMBER_ROLE_PERMS` (`core/platform/defaults/roles.ts`): **owner** = set Owner penuh, **admin** = Manager-level + `users:read` + `reports:read`, **viewer** = read-only (`reports/orders/products/customers/inventory/shifts/payments:read`). `outletIds: []` (semua outlet tenant target). Manajemen anggota via `/api/hub-memberships` (`hub:manage`, platform).
+> **Group Admin lintas-tenant (HubMembership, Fase 9 2026-09-12):** user lintas-tenant memakai `HubMembership {hubId, userId, role}` — BUKAN role tenant. Saat `switch-tenant`, token baru ber-`role: hub-{owner|admin|manager|viewer}` dengan permission dari `HUB_MEMBER_ROLE_PERMS` (`core/platform/defaults/roles.ts`): **owner** = set Owner penuh, **admin** = Manager-level + `users:read` + `reports:read`, **manager** = Manager-level + `reports:read` (tanpa `users:read`), **viewer** = read-only (`reports/orders/products/customers/inventory/shifts/payments:read`). `outletIds: []` (semua outlet tenant target). Manajemen anggota via `/api/hub-memberships` (`platform.hubs.manage`, platform).
 
 ### 2.3 Outlet
 

@@ -1018,18 +1018,18 @@ Catatan: ganti outlet membutuhkan re-login bila `outletIds` di JWT berubah; assi
 
 ## Hubs (`/api/hubs`)
 
-Hub = grouping non-tenant di atas tenant (`hubId` di Tenant; null = standalone). CRUD & assign tenant goto Platform Super Admin (`hub:manage`). Hub **tidak menyentuh data bisnis** — murni grouping.
+Hub = grouping non-tenant di atas tenant (`hubId` di Tenant; null = standalone). CRUD & assign tenant goto Platform Super Admin (`platform.hubs.manage`). Hub **tidak menyentuh data bisnis** — murni grouping.
 
 | Method | Path | Auth | Permission |
 |--------|------|------|------------|
-| GET | `/api/hubs` | ✓ | `hub:manage` |
-| GET | `/api/hubs/:id` | ✓ | `hub:manage` |
-| POST | `/api/hubs` | ✓ | `hub:manage` |
-| PUT | `/api/hubs/:id` | ✓ | `hub:manage` |
-| DELETE | `/api/hubs/:id` | ✓ | `hub:manage` |
-| POST | `/api/hubs/:hubId/tenants/:tenantId` | ✓ | `hub:manage` (assign) |
-| DELETE | `/api/hubs/:hubId/tenants/:tenantId` | ✓ | `hub:manage` (unassign) |
-| GET | `/api/hubs/:hubId/tenants` | ✓ | `hub:manage` |
+| GET | `/api/hubs` | ✓ | `platform.hubs.manage` |
+| GET | `/api/hubs/:id` | ✓ | `platform.hubs.manage` |
+| POST | `/api/hubs` | ✓ | `platform.hubs.manage` |
+| PUT | `/api/hubs/:id` | ✓ | `platform.hubs.manage` |
+| DELETE | `/api/hubs/:id` | ✓ | `platform.hubs.manage` |
+| POST | `/api/hubs/:hubId/tenants/:tenantId` | ✓ | `platform.hubs.manage` (assign) |
+| DELETE | `/api/hubs/:hubId/tenants/:tenantId` | ✓ | `platform.hubs.manage` (unassign) |
+| GET | `/api/hubs/:hubId/tenants` | ✓ | `platform.hubs.manage` |
 
 **Body** POST/PUT: `{ name, description? }`. Assign tenant = set `tenant.hubId` (via `HubService.assignTenant`).
 
@@ -1044,13 +1044,13 @@ Hub = grouping non-tenant di atas tenant (`hubId` di Tenant; null = standalone).
 | Method | Path | Auth | Permission |
 |--------|------|------|------------|
 | GET | `/api/platform/health` | platform | — (diagnostik) |
-| GET | `/api/platform/hubs` | platform | `hub:manage` |
-| GET | `/api/platform/hubs/:hubId` | platform | `hub:manage` |
+| GET | `/api/platform/hubs` | platform | `platform.hubs.manage` |
+| GET | `/api/platform/hubs/:hubId` | platform | `platform.hubs.manage` |
 | GET | `/api/platform/tenants` | platform | `platform.tenants.read` |
 | GET | `/api/platform/tenants/:tenantId` | platform | `platform.tenants.read` |
 | GET | `/api/platform/users` | platform | `platform.tenants.read` |
 | GET | `/api/platform/audit` | platform | `platform.audit.read` |
-| POST | `/api/platform/provision/tenant` | platform | `hub:manage` |
+| POST | `/api/platform/provision/tenant` | platform | `platform.hubs.manage` |
 | GET | `/api/platform/outlets` | platform | `platform.tenants.read` |
 | POST | `/api/platform/outlets` | platform | `outlet:manage` |
 | GET | `/api/platform/shifts/summary` | platform | `platform.reports.read` |
@@ -1164,14 +1164,14 @@ Response shifts/payments summary menambahkan `tenantName` per tenant (dari `reso
 
 ## HubMembership (`/api/hub-memberships`)
 
-User lintas-tenant (Group Admin). Role: `owner` | `admin` | `viewer`; unique `{hubId, userId}`. Mutasi & list per hub hanya Platform Super Admin (`hub:manage`); `/me` & `/me/tenants` siapa pun terautentikasi.
+User lintas-tenant (Group Admin). Role: `owner` | `admin` | `viewer`; unique `{hubId, userId}`. Mutasi & list per hub hanya Platform Super Admin (`platform.hubs.manage`); `/me` & `/me/tenants` siapa pun terautentikasi.
 
 | Method | Path | Auth | Permission |
 |--------|------|------|------------|
-| POST | `/api/hub-memberships` | ✓ | `hub:manage` |
-| GET | `/api/hub-memberships/hub/:hubId` | ✓ | `hub:manage` (list + nama/email user + `userTenantName`) |
-| PUT | `/api/hub-memberships/:hubId/:userId` | ✓ | `hub:manage` (ganti role) |
-| DELETE | `/api/hub-memberships/:hubId/:userId` | ✓ | `hub:manage` |
+| POST | `/api/hub-memberships` | ✓ | `platform.hubs.manage` |
+| GET | `/api/hub-memberships/hub/:hubId` | ✓ | `platform.hubs.manage` (list + nama/email user + `userTenantName`) |
+| PUT | `/api/hub-memberships/:hubId/:userId` | ✓ | `platform.hubs.manage` (ganti role) |
+| DELETE | `/api/hub-memberships/:hubId/:userId` | ✓ | `platform.hubs.manage` |
 | GET | `/api/hub-memberships/me` | ✓ | — (membership milik user) |
 | GET | `/api/hub-memberships/me/tenants` | ✓ | — (tenant yang bisa diakses via membership) |
 
@@ -1335,17 +1335,17 @@ id, tenantId, email, displayName, roleId, isActive, lastLoginAt, createdAt, upda
 | 89 | GET | `/api/outlets` | ✓ |
 | 90 | GET | `/api/outlets/:id` | ✓ outlet scope |
 | 91 | PUT | `/api/outlets/:id` | ✓ `outlet:manage` (update info; create/delete platform-only) |
-| 92 | GET | `/api/hubs` | ✓ `hub:manage` |
-| 93 | GET | `/api/hubs/:id` | ✓ `hub:manage` |
-| 94 | POST | `/api/hubs` | ✓ `hub:manage` |
-| 95 | PUT | `/api/hubs/:id` | ✓ `hub:manage` |
-| 96 | DELETE | `/api/hubs/:id` | ✓ `hub:manage` |
-| 97 | POST | `/api/hubs/:hubId/tenants/:tenantId` | ✓ `hub:manage` |
-| 98 | DELETE | `/api/hubs/:hubId/tenants/:tenantId` | ✓ `hub:manage` |
-| 99 | GET | `/api/hubs/:hubId/tenants` | ✓ `hub:manage` |
+| 92 | GET | `/api/hubs` | ✓ `platform.hubs.manage` |
+| 93 | GET | `/api/hubs/:id` | ✓ `platform.hubs.manage` |
+| 94 | POST | `/api/hubs` | ✓ `platform.hubs.manage` |
+| 95 | PUT | `/api/hubs/:id` | ✓ `platform.hubs.manage` |
+| 96 | DELETE | `/api/hubs/:id` | ✓ `platform.hubs.manage` |
+| 97 | POST | `/api/hubs/:hubId/tenants/:tenantId` | ✓ `platform.hubs.manage` |
+| 98 | DELETE | `/api/hubs/:hubId/tenants/:tenantId` | ✓ `platform.hubs.manage` |
+| 99 | GET | `/api/hubs/:hubId/tenants` | ✓ `platform.hubs.manage` |
 | 100 | GET | `/api/platform/health` | platform |
-| 101 | GET | `/api/platform/hubs` | platform `hub:manage` |
-| 102 | GET | `/api/platform/hubs/:hubId` | platform `hub:manage` |
+| 101 | GET | `/api/platform/hubs` | platform `platform.hubs.manage` |
+| 102 | GET | `/api/platform/hubs/:hubId` | platform `platform.hubs.manage` |
 | 103 | GET | `/api/platform/tenants` | platform `platform.tenants.read` |
 | 104 | GET | `/api/platform/tenants/:tenantId` | platform `platform.tenants.read` |
 | 105 | GET | `/api/platform/users` | platform `platform.tenants.read` (pencarian user lintas-tenant) |
@@ -1354,10 +1354,10 @@ id, tenantId, email, displayName, roleId, isActive, lastLoginAt, createdAt, upda
 | 108 | GET | `/api/platform/shifts/summary` | platform `platform.reports.read` |
 | 109 | GET | `/api/platform/payments/summary` | platform `platform.reports.read` |
 | 110 | GET | `/api/platform/hubs/:hubId/consolidated` | platform `platform.reports.read` |
-| 111 | POST | `/api/hub-memberships` | ✓ `hub:manage` |
-| 112 | GET | `/api/hub-memberships/hub/:hubId` | ✓ `hub:manage` |
-| 113 | PUT | `/api/hub-memberships/:hubId/:userId` | ✓ `hub:manage` (ganti role) |
-| 113a | DELETE | `/api/hub-memberships/:hubId/:userId` | ✓ `hub:manage` |
+| 111 | POST | `/api/hub-memberships` | ✓ `platform.hubs.manage` |
+| 112 | GET | `/api/hub-memberships/hub/:hubId` | ✓ `platform.hubs.manage` |
+| 113 | PUT | `/api/hub-memberships/:hubId/:userId` | ✓ `platform.hubs.manage` (ganti role) |
+| 113a | DELETE | `/api/hub-memberships/:hubId/:userId` | ✓ `platform.hubs.manage` |
 | 114 | GET | `/api/hub-memberships/me` | ✓ |
 | 116 | GET | `/api/hub-memberships/me/tenants` | ✓ |
 | 117 | GET | `/api/tenants/current/entitlement` | ✓ |

@@ -240,7 +240,7 @@ beforeAll(async () => {
       role: 'platform-super-admin',
       permissions: PLATFORM_ROLE_PERMS,
     }),
-    tenantToken: generateTestToken({ sub: 'owner-a', tenant: TENANT_A, permissions: ['hub:manage'] }),
+    tenantToken: generateTestToken({ sub: 'owner-a', tenant: TENANT_A, permissions: ['platform.hubs.manage'] }),
   };
 }, 60000);
 
@@ -506,7 +506,7 @@ describe('Terminal Center (/api/platform)', () => {
       sub: 'platform-admin-2',
       tenant: 'platform',
       role: 'platform-super-admin',
-      permissions: ['hub:manage'],
+      permissions: ['platform.hubs.manage'],
     });
     const res = await request(ctx.app)
       .get('/api/platform/shifts/summary')
