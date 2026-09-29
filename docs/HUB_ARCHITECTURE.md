@@ -357,6 +357,8 @@ masa depan, karena itu access model (Fase 17) didahulukan.
 | `PUT` tanpa `status` menghidupkan kembali grant suspended. | Menangguhkan selalu eksplisit di body; `PUT` berarti "ini konfigurasi yang saya mau". |
 | **Batasan diketahui**: hub yang **belum punya tenant** saat anggota ditambahkan → nol baris grant → anggota tetap di mode fallback sampai grant pertama ditulis. | Diperbaiki di Fase 18/20 (status hub + seeding saat tenant masuk hub), tidak diperluas di fase ini. |
 
+> ⛔ **Gate**: Fase 18 **terblokir** sampai T0–T2 di [`TECH_DEBT_PLAN.md`](TECH_DEBT_PLAN.md) selesai (pagar regresi CI + `PaymentService`/`OrderController` jadi deps object). Alasannya di §1 dokumen itu: composition root adalah tempat semua salah-urut terjadi, dan menambah 3 fase baru di atasnya tanpa pagar hanya memperbesar masalah.
+
 ### Fase 18 — Hub identity
 - [ ] `Hub`: `code` (unique, uppercase, backfill dari `name`), `status: 'active'|'suspended'|'archived'` (menggantikan `isActive`; `isActive` jadi field derived sementara agar UI lama tidak rusak), `ownerUserId` (**display only** — otoritas tetap `HubMembership.role`).
 - [ ] `status: suspended|archived` → `findAccessibleTenants` kosong untuk anggotanya; Terminal Center tetap bisa melihat detail hub (diagnostics), dengan konfirmasi yang menyebut jumlah anggota terdampak.

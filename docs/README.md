@@ -15,6 +15,7 @@
 | Paham sistem secara keseluruhan | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
 | Tahau endpoint-nya | [`API_REFERENCE.md`](API_REFERENCE.md) |
 | Lihat status/rencana kerja | [`PROJECT_ROADMAP.md`](PROJECT_ROADMAP.md) · [`DAILY_LOG.md`](DAILY_LOG.md) |
+| Kenapa lagi refactor, bukan fitur | [`TECH_DEBT_PLAN.md`](TECH_DEBT_PLAN.md) |
 | Tau fitur POS sudah sampai mana | [`POS_CURRENT_FEATURES.md`](POS_CURRENT_FEATURES.md) |
 
 ---
@@ -54,6 +55,7 @@ masih dirujuk (mis. kontrak API QRIS). Yang benar-benar usang ada di `archive/`.
 | [`HUB_V2_DECISIONS.md`](HUB_V2_DECISIONS.md) | **ADR** — keputusan D1–D4 untuk pengembangan Hub berikutnya + opsi yang ditolak | 🟢 baru, aktif |
 | [`HUB_V2_FRONTEND_PLAN.md`](HUB_V2_FRONTEND_PLAN.md) | Fase 17–20 — bagian **frontend** (matriks akses, identity, overview, undangan) | 🟡 direncanakan |
 | [`QRIS_GATEWAY_PLAN.md`](QRIS_GATEWAY_PLAN.md) | Kontrak integrasi gateway QRIS (endpoint, polling, mapping invoice) | ✅ selesai, rujukan kontrak |
+| [`TECH_DEBT_PLAN.md`](TECH_DEBT_PLAN.md) | **Rencana pengurangan kompleksitas**: pagar regresi (CI), composition root, file god, type safety, budget anti-regresi — skala prioritas P0–P3 | 🔴 **aktif, memblokir Fase 18** |
 
 ## 4. Kontrak & Operasional
 

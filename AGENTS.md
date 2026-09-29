@@ -456,6 +456,9 @@ Modular SaaS POS Platform (Node.js/Express + React/Tailwind). Multi-tenant, mult
 - **Tests**: `HubMemberAccessService.test.ts` +18, `MongoHubMemberTenantAccessRepository.test.ts` (baru 9), `hub-fase17-access.test.ts` (baru, integrasi HTTP penuh — **DENY**: tenant tanpa grant & suspended → `switch-tenant` 403, tenant tak muncul di switcher, outlet di luar grant → 403, plus grant CRUD, RBAC namespace, D3 baseline, cascade saat hapus anggota), `HubMembershipService.test.ts` +2, `AuthService.test.ts` +3. Frontend: `HubMemberAccess.test.tsx` (baru, 11). **Backend 1249/1249 (103 files)**, **frontend 121/121 (17 files)**, tsc shared+backend+frontend bersih, `vite build` OK.
 
 
+> [!IMPORTANT]
+> **Debt pass aktif.** `docs/TECH_DEBT_PLAN.md` — 9 item T0–T9, skala P0–P3. **Fase 18 terblokir sampai T0–T2 selesai.** Petaasan terukur per 2026-09-29: backend 367 file/36.978 LOC, frontend 141/28.529, 1.249+121 test, `container.ts` 1.241 baris, `PaymentService` 16 param `any`, `OrderController` 24 param, 289 `: any`, 17 file test frontend. **Penting: CI (`ci.yml`) belum menjalankan suite sungguhan** — test hijau = lokal (`cd backend && npx vitest run`), bukan `./ci.yml`.
+
 ## Key Patterns
 - `useQueryClient()` for cache invalidation after mutations
 - `useVoidOrder` for full order void; `useVoidItem` for per-item void
