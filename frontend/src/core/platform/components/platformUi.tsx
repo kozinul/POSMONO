@@ -92,3 +92,12 @@ export const subtleBtnCls =
   'px-2 py-1 text-xs font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 rounded border border-gray-200 disabled:opacity-50';
 export const smallPillBtnCls =
   'px-2 py-1 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 disabled:opacity-50';
+
+export function StatCard({ label, value, loading }: { label: string; value: string | number; loading?: boolean }) {
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+      <p className="text-xs text-gray-500 font-medium">{label}</p>
+      <p className="text-lg font-bold text-gray-900 mt-1">{loading ? '-' : value}</p>
+    </div>
+  );
+}
