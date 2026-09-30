@@ -164,21 +164,9 @@ beforeAll(async () => {
   );
 
   const shiftService = new ShiftService(shiftRepo);
-  const paymentService = new PaymentService(
-    paymentRepo,
-    undefined as any,
-    undefined as any,
-    undefined as any,
-    undefined as any,
-    undefined as any,
-    undefined as any,
-    undefined as any,
-    undefined as any,
-    undefined as any,
-    undefined as any,
-    undefined as any,
-    undefined as any,
-  );
+  const paymentService = new PaymentService({
+    paymentRepository: paymentRepo,
+  });
   const outletService = new OutletService(outletRepo, warehouseRepo);
 
   const app = express();

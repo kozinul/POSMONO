@@ -84,21 +84,9 @@ beforeAll(async () => {
   const hubRepo = new MongoHubRepository(hubModel);
   const hubService = new HubService(hubRepo, tenantRepo);
   const shiftService = new ShiftService(new MongoShiftRepository(shiftModel));
-  const paymentService = new PaymentService(
-    new MongoPaymentRepository(paymentModel),
-    undefined as any,
-    undefined as any,
-    undefined as any,
-    undefined as any,
-    undefined as any,
-    undefined as any,
-    undefined as any,
-    undefined as any,
-    undefined as any,
-    undefined as any,
-    undefined as any,
-    undefined as any,
-  );
+  const paymentService = new PaymentService({
+    paymentRepository: new MongoPaymentRepository(paymentModel),
+  });
 
   const platformController = new PlatformController({
     hubService,

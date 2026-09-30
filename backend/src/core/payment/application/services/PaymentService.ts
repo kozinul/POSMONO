@@ -7,6 +7,7 @@ import { Order, IOrderItem, IPromotionBreakdown, IDiscountBreakdown } from '../.
 import { roundToDenomination, TotalRoundingMode } from '../../../tax/domain/RoundingEngine';
 import { ReceiptRenderResult } from '../../../template/application/services/ReceiptRenderService';
 import { ModifierValidationService, ModifierSelection } from '../../../catalog/application/services/ModifierValidationService';
+import type { PaymentServiceDeps } from './PaymentServiceDeps';
 
 export interface PaymentItemInput {
   productId: string;
@@ -20,31 +21,31 @@ export interface PaymentItemInput {
   modifiers?: ModifierSelection[];
 }
 
+type PaymentMethodTotals = { total: number; count: number };
+type PaymentMethodRow = { method: string } & PaymentMethodTotals;
+type PaymentSummaryBucket = {
+  totalAmount: number;
+  totalTransactions: number;
+  methods: Record<string, PaymentMethodTotals>;
+};
+type OutletPaymentSummaryBucket = PaymentSummaryBucket & { outletId: string | null };
+type TenantPaymentSummaryBucket = PaymentSummaryBucket & {
+  tenantId: string;
+  outlets: Record<string, OutletPaymentSummaryBucket>;
+};
+
+function toPaymentMethodRows(methods: Record<string, PaymentMethodTotals>): PaymentMethodRow[] {
+  return Object.entries(methods).map(([method, totals]) => ({ method, ...totals }));
+}
+
 export class PaymentService {
-  constructor(
-    private readonly paymentRepository: any,
-    private readonly orderRepository: any,
-    private readonly refundRepository: any,
-    private readonly tenantRepository: any,
-    private readonly taxService: any,
-    private readonly discountService: any,
-    private readonly eventBus: any,
-    private readonly receiptRenderService?: any,
-    private readonly inventoryService?: any,
-    private readonly userRepository?: any,
-    private readonly shiftRepository?: any,
-    private readonly printService?: any,
-    private readonly qrisGatewayService?: any,
-    private readonly productRepository?: any,
-    private readonly modifierRepository?: any,
-    private readonly categoryRepository?: any,
-  ) {}
+  constructor(private readonly deps: PaymentServiceDeps) {}
 
   private async assertOpenShift(tenantId: string, cashierId: string, outletId?: string | null, providedShiftId?: string | null): Promise<{ shiftId: string; outletId: string | null }> {
-    if (!this.shiftRepository) return { shiftId: providedShiftId ?? '', outletId: null };
+    if (!this.deps.shiftRepository) return { shiftId: providedShiftId ?? '', outletId: null };
     const shift = outletId
-      ? await this.shiftRepository.findOpenShift(tenantId, cashierId, outletId)
-      : await this.shiftRepository.findOpenShift(tenantId, cashierId);
+      ? await this.deps.shiftRepository.findOpenShift(tenantId, cashierId, outletId)
+      : await this.deps.shiftRepository.findOpenShift(tenantId, cashierId);
     if (!shift) {
       throw new ValidationError('Buka shift terlebih dahulu sebelum bertransaksi');
     }
@@ -53,9 +54,9 @@ export class PaymentService {
   }
 
   private async resolveCashierName(cashierId: string, tenantId: string, fallback?: string): Promise<string> {
-    if (this.userRepository) {
+    if (this.deps.userRepository) {
       try {
-        const user = await this.userRepository.findByIdAndTenant(cashierId, tenantId);
+        const user = await this.deps.userRepository.findByIdAndTenant(cashierId, tenantId);
         const name = user?.serialize().displayName;
         if (name) return name;
       } catch {
@@ -66,8 +67,8 @@ export class PaymentService {
   }
 
   private async getRoundingConfig(tenantId: string): Promise<{ enabled: boolean; mode: TotalRoundingMode; denomination: number }> {
-    if (!this.tenantRepository) return { enabled: false, mode: 'nearest', denomination: 0 };
-    const tenant = await this.tenantRepository.findById(tenantId);
+    if (!this.deps.tenantRepository) return { enabled: false, mode: 'nearest', denomination: 0 };
+    const tenant = await this.deps.tenantRepository.findById(tenantId);
     const cfg = tenant?.serialize().config;
     if (!cfg?.roundingEnabled || !cfg.roundingDenomination) return { enabled: false, mode: 'nearest', denomination: 0 };
     return { enabled: true, mode: (cfg.roundingMode || 'nearest') as TotalRoundingMode, denomination: cfg.roundingDenomination };
@@ -77,8 +78,8 @@ export class PaymentService {
     tenantId: string,
     items: PaymentItemInput[],
   ): Promise<PaymentItemInput[]> {
-    if (!this.productRepository || !this.modifierRepository) return items;
-    const validator = new ModifierValidationService(this.modifierRepository);
+    if (!this.deps.productRepository || !this.deps.modifierRepository) return items;
+    const validator = new ModifierValidationService(this.deps.modifierRepository);
     const productCache = new Map<string, any>();
     const resolvedItems: PaymentItemInput[] = [];
 
@@ -96,7 +97,7 @@ export class PaymentService {
       }
       let product = productCache.get(item.productId);
       if (!product) {
-        product = await this.productRepository.findById(item.productId);
+        product = await this.deps.productRepository.findById(item.productId);
         if (!product) {
           resolvedItems.push(item);
           continue;
@@ -106,18 +107,18 @@ export class PaymentService {
       const productData = product.serialize();
       const applicableGroupIds = new Set<string>(productData.modifierGroupIds || []);
       try {
-        const productGroups = await this.modifierRepository.findByProduct(item.productId);
+        const productGroups = await this.deps.modifierRepository.findByProduct(item.productId);
         for (const g of productGroups) {
           const gid = groupIdOf(g);
           if (gid) applicableGroupIds.add(gid);
         }
       } catch { /* best-effort */ }
-      if (this.categoryRepository && productData.categoryId) {
+      if (this.deps.categoryRepository && productData.categoryId) {
         try {
-          const category = await this.categoryRepository.findById(productData.categoryId);
+          const category = await this.deps.categoryRepository.findById(productData.categoryId);
           const familyId = category?.serialize().familyId;
           if (familyId) {
-            const familyGroups = await this.modifierRepository.findByFamily(familyId);
+            const familyGroups = await this.deps.modifierRepository.findByFamily(familyId);
             for (const g of familyGroups) {
               const gid = groupIdOf(g);
               if (gid) applicableGroupIds.add(gid);
@@ -139,11 +140,11 @@ export class PaymentService {
   }
 
   private async applyStockDeductions(order: Order, tenantId: string, userId: string): Promise<void> {
-    if (!this.inventoryService) return;
+    if (!this.deps.inventoryService) return;
     const orderData = order.serialize();
     for (const item of orderData.items) {
       if (item.isFreeItem) continue;
-      await this.inventoryService.decrementForSale({
+      await this.deps.inventoryService.decrementForSale({
         tenantId,
         productId: item.productId,
         quantity: item.quantity,
@@ -154,11 +155,11 @@ export class PaymentService {
   }
 
   private async applyStockRestore(order: Order, tenantId: string, userId: string): Promise<void> {
-    if (!this.inventoryService) return;
+    if (!this.deps.inventoryService) return;
     const orderData = order.serialize();
     for (const item of orderData.items) {
       if (item.isFreeItem) continue;
-      await this.inventoryService.incrementForReturn({
+      await this.deps.inventoryService.incrementForReturn({
         tenantId,
         productId: item.productId,
         quantity: item.quantity,
@@ -199,8 +200,8 @@ export class PaymentService {
     let promotionBreakdown: IPromotionBreakdown[] = [];
     let discountBreakdownList: IDiscountBreakdown[] = [];
 
-    if (this.discountService) {
-      const discountResult = await this.discountService.apply({
+    if (this.deps.discountService) {
+      const discountResult = await this.deps.discountService.apply({
         tenantId: input.tenantId,
         items: inputItems.map((item) => ({
           productId: item.productId,
@@ -232,7 +233,7 @@ export class PaymentService {
 
     const totalDiscountValue = manualDiscountValue + promoDiscount;
 
-    const taxResult = await this.taxService.calculate({
+    const taxResult = await this.deps.taxService.calculate({
       tenantId: input.tenantId,
       items: inputItems.map((item) => ({
         productId: item.productId,
@@ -398,8 +399,8 @@ export class PaymentService {
     const isPendingTransfer = paymentMethod === 'transfer';
 
     if (isPendingTransfer) {
-      await this.orderRepository.save(order);
-      await this.paymentRepository.save(payment);
+      await this.deps.orderRepository.save(order);
+      await this.deps.paymentRepository.save(payment);
       return { payment, order, receipt: null, pending: true };
     }
 
@@ -407,16 +408,16 @@ export class PaymentService {
 
     order.pay([paymentBreakdownEntry], input.cashierId, cashierName);
 
-    await this.orderRepository.save(order);
-    await this.paymentRepository.save(payment);
+    await this.deps.orderRepository.save(order);
+    await this.deps.paymentRepository.save(payment);
 
     await this.applyStockDeductions(order, input.tenantId, input.cashierId);
 
     for (const event of order.domainEvents) {
-      this.eventBus.publish(event);
+      this.deps.eventBus.publish(event);
     }
     for (const event of payment.domainEvents) {
-      this.eventBus.publish(event);
+      this.deps.eventBus.publish(event);
     }
 
     const receipt = await this.renderReceipt(order, payment, input.splitIndex, undefined, input.splitBaseOrderNumber);
@@ -427,23 +428,23 @@ export class PaymentService {
   }
 
   private async autoPrintReceipt(tenantId: string, receipt: ReceiptRenderResult | null): Promise<void> {
-    if (!receipt || !this.printService) return;
+    if (!receipt || !this.deps.printService) return;
     try {
-      const tenant = await this.tenantRepository.findById(tenantId);
+      const tenant = await this.deps.tenantRepository.findById(tenantId);
       if (!tenant) return;
       if (!tenant.serialize().config?.autoPrintReceipt) return;
-      await this.printService.printEscPos({ tenantId, purpose: 'receipt', buffer: receipt.thermal });
+      await this.deps.printService.printEscPos({ tenantId, purpose: 'receipt', buffer: receipt.thermal });
     } catch {
       // auto-print must never break the transaction
     }
   }
 
   private async renderReceipt(order: Order, payment: Payment, splitIndex?: number, totalSplits?: number, splitBaseOrderNumber?: string): Promise<ReceiptRenderResult | null> {
-    if (!this.receiptRenderService) return null;
+    if (!this.deps.receiptRenderService) return null;
     try {
-      const tenant = await this.tenantRepository.findById(order.serialize().tenantId);
+      const tenant = await this.deps.tenantRepository.findById(order.serialize().tenantId);
       if (!tenant) return null;
-      return await this.receiptRenderService.render({
+      return await this.deps.receiptRenderService.render({
         tenantId: order.serialize().tenantId,
         order: order.serialize(),
         payment: payment.serialize(),
@@ -474,7 +475,7 @@ export class PaymentService {
     outletId?: string | null;
   }): Promise<{ payment: Payment; order: Order; receipt: ReceiptRenderResult | null; pending?: boolean }> {
     const { shiftId, outletId: shiftOutletId } = await this.assertOpenShift(input.tenantId, input.cashierId, input.outletId, input.shiftId);
-    const order = await this.orderRepository.findById(input.orderId);
+    const order = await this.deps.orderRepository.findById(input.orderId);
     if (!order) throw new NotFoundError('Order not found');
 
     const orderData = order.serialize();
@@ -520,8 +521,8 @@ export class PaymentService {
     const isPendingTransfer = input.method === 'transfer';
 
     if (isPendingTransfer) {
-      await this.orderRepository.save(order);
-      await this.paymentRepository.save(payment);
+      await this.deps.orderRepository.save(order);
+      await this.deps.paymentRepository.save(payment);
       return { payment, order, receipt: null, pending: true };
     }
 
@@ -545,18 +546,18 @@ export class PaymentService {
 
     order.pay(updatedBreakdown, input.cashierId, cashierName);
 
-    await this.orderRepository.save(order);
-    await this.paymentRepository.save(payment);
+    await this.deps.orderRepository.save(order);
+    await this.deps.paymentRepository.save(payment);
 
     if (wasUnpaid) {
       await this.applyStockDeductions(order, input.tenantId, input.cashierId);
     }
 
     for (const event of order.domainEvents) {
-      this.eventBus.publish(event);
+      this.deps.eventBus.publish(event);
     }
     for (const event of payment.domainEvents) {
-      this.eventBus.publish(event);
+      this.deps.eventBus.publish(event);
     }
 
     const receipt = await this.renderReceipt(order, payment);
@@ -567,12 +568,12 @@ export class PaymentService {
   }
 
   async listPendingTransfers(tenantId: string) {
-    const payments = await this.paymentRepository.findPending(tenantId);
+    const payments = await this.deps.paymentRepository.findPending(tenantId);
     const result: Array<{ payment: any; order: any }> = [];
     for (const p of payments) {
       const paymentData = p.serialize();
       let orderInfo = null;
-      const order = await this.orderRepository.findById(paymentData.orderId);
+      const order = await this.deps.orderRepository.findById(paymentData.orderId);
       if (order && order.serialize().tenantId === tenantId) {
         const o = order.serialize();
         orderInfo = {
@@ -595,7 +596,7 @@ export class PaymentService {
     cashierId: string;
     cashierName?: string;
   }): Promise<{ payment: Payment; order: Order; receipt: ReceiptRenderResult | null }> {
-    const payment = await this.paymentRepository.findById(input.paymentId);
+    const payment = await this.deps.paymentRepository.findById(input.paymentId);
     if (!payment) throw new NotFoundError('Payment not found');
     const paymentData = payment.serialize();
     if (paymentData.tenantId !== input.tenantId) throw new NotFoundError('Payment not found');
@@ -603,7 +604,7 @@ export class PaymentService {
       throw new ValidationError('Pembayaran sudah dikonfirmasi atau dibatalkan');
     }
 
-    const order = await this.orderRepository.findById(paymentData.orderId);
+    const order = await this.deps.orderRepository.findById(paymentData.orderId);
     if (!order) throw new NotFoundError('Order not found');
     const orderData = order.serialize();
     if (orderData.tenantId !== input.tenantId) throw new NotFoundError('Order not found');
@@ -628,18 +629,18 @@ export class PaymentService {
       cashierName,
     );
 
-    await this.orderRepository.save(order);
-    await this.paymentRepository.save(payment);
+    await this.deps.orderRepository.save(order);
+    await this.deps.paymentRepository.save(payment);
 
     if (wasUnpaid) {
       await this.applyStockDeductions(order, input.tenantId, input.cashierId);
     }
 
     for (const event of order.domainEvents) {
-      this.eventBus.publish(event);
+      this.deps.eventBus.publish(event);
     }
     for (const event of payment.domainEvents) {
-      this.eventBus.publish(event);
+      this.deps.eventBus.publish(event);
     }
 
     const receipt = await this.renderReceipt(order, payment);
@@ -653,7 +654,7 @@ export class PaymentService {
     paymentId: string;
     reason?: string;
   }): Promise<{ payment: Payment; order: Order | null; orderCancelled: boolean }> {
-    const payment = await this.paymentRepository.findById(input.paymentId);
+    const payment = await this.deps.paymentRepository.findById(input.paymentId);
     if (!payment) throw new NotFoundError('Payment not found');
     const paymentData = payment.serialize();
     if (paymentData.tenantId !== input.tenantId) throw new NotFoundError('Payment not found');
@@ -663,17 +664,17 @@ export class PaymentService {
 
     payment.fail(input.reason || 'Dibatalkan oleh kasir');
 
-    const order = await this.orderRepository.findById(paymentData.orderId);
+    const order = await this.deps.orderRepository.findById(paymentData.orderId);
     let orderCancelled = false;
     if (order && order.serialize().tenantId === input.tenantId) {
       const ordData = order.serialize();
       if (ordData.paymentStatus !== 'completed' && !['paid', 'refunded'].includes(ordData.status) && ordData.status !== 'cancelled') {
         order.cancel(input.reason || 'Transfer dibatalkan');
-        if (this.inventoryService) {
+        if (this.deps.inventoryService) {
           for (const item of ordData.items) {
             if (item.isFreeItem) continue;
             try {
-              await this.inventoryService.releaseStock({
+              await this.deps.inventoryService.releaseStock({
                 tenantId: input.tenantId,
                 productId: item.productId,
                 quantity: item.quantity,
@@ -685,19 +686,19 @@ export class PaymentService {
             }
           }
         }
-        await this.orderRepository.save(order);
+        await this.deps.orderRepository.save(order);
         orderCancelled = true;
       }
     }
 
-    await this.paymentRepository.save(payment);
+    await this.deps.paymentRepository.save(payment);
 
     for (const event of payment.domainEvents) {
-      this.eventBus.publish(event);
+      this.deps.eventBus.publish(event);
     }
     if (orderCancelled) {
       for (const event of order!.domainEvents) {
-        this.eventBus.publish(event);
+        this.deps.eventBus.publish(event);
       }
     }
 
@@ -721,7 +722,7 @@ export class PaymentService {
     const { referenceNumber, amount, orderId } = input;
     logger.info({ referenceNumber, amount, orderId, cashierId: input.cashierId, shiftId: input.shiftId }, '[QRIS] confirmQrisPayment started');
 
-    if (!this.qrisGatewayService) {
+    if (!this.deps.qrisGatewayService) {
       logger.error('[QRIS] confirm rejected — gateway service not wired');
       throw new ValidationError('Layanan QRIS Gateway tidak tersedia');
     }
@@ -731,7 +732,7 @@ export class PaymentService {
 
     let order: Order | null = null;
     if (orderId) {
-      order = await this.orderRepository.findById(orderId);
+      order = await this.deps.orderRepository.findById(orderId);
       if (!order) throw new NotFoundError('Order not found');
       const orderData = order.serialize();
       if (orderData.tenantId !== input.tenantId) throw new NotFoundError('Order not found');
@@ -748,15 +749,15 @@ export class PaymentService {
       throw new ValidationError('orderId atau items wajib diisi untuk finalisasi QRIS');
     }
 
-    if (typeof this.paymentRepository.findByReferenceNumber === 'function') {
-      const existing = await this.paymentRepository.findByReferenceNumber(input.tenantId, referenceNumber);
+    if (typeof this.deps.paymentRepository.findByReferenceNumber === 'function') {
+      const existing = await this.deps.paymentRepository.findByReferenceNumber(input.tenantId, referenceNumber);
       if (existing) {
         logger.warn({ referenceNumber, existingOrderId: existing.serialize?.()?.orderId }, '[QRIS] confirm rejected — reference already used');
         throw new ValidationError('Pembayaran QRIS ini sudah dikonfirmasi sebelumnya');
       }
     }
 
-    const status = await this.qrisGatewayService.checkStatus(input.tenantId, referenceNumber);
+    const status = await this.deps.qrisGatewayService.checkStatus(input.tenantId, referenceNumber);
     logger.info({ referenceNumber, gatewayStatus: status.status, gatewayAmount: status.amount, paidAt: status.paidAt }, '[QRIS] gateway status checked');
 
     if (status.status === 'expired') {
@@ -817,15 +818,15 @@ export class PaymentService {
     refundedBy: string;
     refundedByName: string;
   }): Promise<{ refund: Refund; payment: Payment; order: Order | null }> {
-    const payment = await this.paymentRepository.findById(input.paymentId);
+    const payment = await this.deps.paymentRepository.findById(input.paymentId);
     if (!payment) throw new NotFoundError('Payment not found');
 
     const paymentData = payment.serialize();
     if (paymentData.tenantId !== input.tenantId) throw new NotFoundError('Payment not found');
 
-    if (this.shiftRepository) {
+    if (this.deps.shiftRepository) {
       const shift = paymentData.shiftId
-        ? await this.shiftRepository.findById(paymentData.shiftId)
+        ? await this.deps.shiftRepository.findById(paymentData.shiftId)
         : null;
       if (!shift) {
         throw new ValidationError('Transaksi tidak tercatat pada shift, tidak dapat direfund.');
@@ -848,25 +849,25 @@ export class PaymentService {
     });
     refund.complete();
 
-    await this.paymentRepository.save(payment);
-    await this.refundRepository.save(refund);
+    await this.deps.paymentRepository.save(payment);
+    await this.deps.refundRepository.save(refund);
 
-    const order = await this.orderRepository.findById(paymentData.orderId);
+    const order = await this.deps.orderRepository.findById(paymentData.orderId);
     if (order && order.serialize().paymentBreakdown.length === 1) {
       await this.applyStockRestore(order, input.tenantId, input.refundedBy);
       order.markRefunded(input.refundedBy, input.refundedByName, input.reason);
-      await this.orderRepository.save(order);
+      await this.deps.orderRepository.save(order);
     }
 
     for (const event of payment.domainEvents) {
-      this.eventBus.publish(event);
+      this.deps.eventBus.publish(event);
     }
     for (const event of refund.domainEvents) {
-      this.eventBus.publish(event);
+      this.deps.eventBus.publish(event);
     }
     if (order) {
       for (const event of order.domainEvents) {
-        this.eventBus.publish(event);
+        this.deps.eventBus.publish(event);
       }
     }
 
@@ -874,8 +875,8 @@ export class PaymentService {
   }
 
   async listRefundable(tenantId: string, dateFrom?: string, dateTo?: string) {
-    if (!this.paymentRepository.findRefundable) return [];
-    return this.paymentRepository.findRefundable(tenantId, dateFrom, dateTo);
+    if (!this.deps.paymentRepository.findRefundable) return [];
+    return this.deps.paymentRepository.findRefundable(tenantId, dateFrom, dateTo);
   }
 
   async payOpenBill(input: {
@@ -886,7 +887,7 @@ export class PaymentService {
     cashierName: string;
   }): Promise<Order> {
     await this.assertOpenShift(input.tenantId, input.cashierId);
-    const order = await this.orderRepository.findById(input.orderId);
+    const order = await this.deps.orderRepository.findById(input.orderId);
     if (!order) throw new NotFoundError('Order not found');
 
     const orderData = order.serialize();
@@ -897,14 +898,14 @@ export class PaymentService {
     const cashierName = await this.resolveCashierName(input.cashierId, input.tenantId, input.cashierName);
     order.pay(input.paymentBreakdown, input.cashierId, cashierName);
 
-    await this.orderRepository.save(order);
+    await this.deps.orderRepository.save(order);
 
     if (wasUnpaid) {
       await this.applyStockDeductions(order, input.tenantId, input.cashierId);
     }
 
     for (const event of order.domainEvents) {
-      this.eventBus.publish(event);
+      this.deps.eventBus.publish(event);
     }
 
     return order;
@@ -919,7 +920,7 @@ export class PaymentService {
     shiftId?: string | null;
   }): Promise<{ payments: Payment[]; order: Order; receipts: (ReceiptRenderResult | null)[] }> {
     const { shiftId, outletId: shiftOutletId } = await this.assertOpenShift(input.tenantId, input.cashierId, input.outletId, input.shiftId);
-    const order = await this.orderRepository.findById(input.orderId);
+    const order = await this.deps.orderRepository.findById(input.orderId);
     if (!order) throw new NotFoundError('Order not found');
 
     const orderData = order.serialize();
@@ -961,10 +962,10 @@ export class PaymentService {
       });
 
       payment.complete();
-      await this.paymentRepository.save(payment);
+      await this.deps.paymentRepository.save(payment);
 
       for (const event of payment.domainEvents) {
-        this.eventBus.publish(event);
+        this.deps.eventBus.publish(event);
       }
 
       payments.push(payment);
@@ -982,38 +983,42 @@ export class PaymentService {
 
     const cashierName = await this.resolveCashierName(input.cashierId, input.tenantId, '');
     order.pay(breakdown, input.cashierId, cashierName);
-    await this.orderRepository.save(order);
+    await this.deps.orderRepository.save(order);
 
     if (wasUnpaid) {
       await this.applyStockDeductions(order, input.tenantId, input.cashierId);
     }
 
     for (const event of order.domainEvents) {
-      this.eventBus.publish(event);
+      this.deps.eventBus.publish(event);
     }
 
     return { payments, order, receipts };
   }
 
   async getByOrder(tenantId: string, orderId: string): Promise<Payment | null> {
-    return this.paymentRepository.findByOrder(tenantId, orderId);
+    return this.deps.paymentRepository.findByOrder(tenantId, orderId);
   }
 
   async list(tenantId: string): Promise<Payment[]> {
-    return this.paymentRepository.findByTenant(tenantId);
+    return this.deps.paymentRepository.findByTenant(tenantId);
   }
 
   async getPlatformPaymentsSummary(
     tenantIds: string[],
     options?: { dateFrom?: Date; dateTo?: Date },
   ) {
-    const payments = await this.paymentRepository.findCompletedByTenantIds(tenantIds, {
+    const payments = await this.deps.paymentRepository.findCompletedByTenantIds(tenantIds, {
       from: options?.dateFrom,
       to: options?.dateTo,
     });
 
-    const totals = { totalAmount: 0, totalTransactions: 0, methods: {} as Record<string, { total: number; count: number }> };
-    const perTenant: Record<string, any> = {};
+    const totals: PaymentSummaryBucket = {
+      totalAmount: 0,
+      totalTransactions: 0,
+      methods: {} as Record<string, PaymentMethodTotals>,
+    };
+    const perTenant: Record<string, PaymentSummaryBucket & { tenantId: string }> = {};
 
     for (const payment of payments) {
       const p = payment.serialize();
@@ -1021,7 +1026,7 @@ export class PaymentService {
         tenantId: p.tenantId,
         totalAmount: 0,
         totalTransactions: 0,
-        methods: {} as Record<string, { total: number; count: number }>,
+        methods: {} as Record<string, PaymentMethodTotals>,
       });
       const methodBucket = (tenantBucket.methods[p.method] ??= { total: 0, count: 0 });
       const totalMethodBucket = (totals.methods[p.method] ??= { total: 0, count: 0 });
@@ -1040,7 +1045,7 @@ export class PaymentService {
       tenantId: t.tenantId,
       totalAmount: t.totalAmount,
       totalTransactions: t.totalTransactions,
-      methods: Object.entries(t.methods).map(([method, v]: any) => ({ method, ...v })),
+      methods: toPaymentMethodRows(t.methods),
     }));
 
     return {
@@ -1050,7 +1055,7 @@ export class PaymentService {
       totals: {
         totalAmount: totals.totalAmount,
         totalTransactions: totals.totalTransactions,
-        methods: Object.entries(totals.methods).map(([method, v]: any) => ({ method, ...v })),
+        methods: toPaymentMethodRows(totals.methods),
       },
       tenants,
     };
@@ -1064,16 +1069,16 @@ export class PaymentService {
     tenantIds: string[],
     options?: { dateFrom?: Date; dateTo?: Date },
   ) {
-    const payments = await this.paymentRepository.findCompletedByTenantIds(tenantIds, {
+    const payments = await this.deps.paymentRepository.findCompletedByTenantIds(tenantIds, {
       from: options?.dateFrom,
       to: options?.dateTo,
     });
 
-    const perTenant: Record<string, any> = {};
-    const totals = {
+    const perTenant: Record<string, TenantPaymentSummaryBucket> = {};
+    const totals: PaymentSummaryBucket = {
       totalAmount: 0,
       totalTransactions: 0,
-      methods: {} as Record<string, { total: number; count: number }>,
+      methods: {} as Record<string, PaymentMethodTotals>,
     };
 
     for (const payment of payments) {
@@ -1082,18 +1087,18 @@ export class PaymentService {
         tenantId: p.tenantId,
         totalAmount: 0,
         totalTransactions: 0,
-        methods: {} as Record<string, { total: number; count: number }>,
-        outlets: {} as Record<string, any>,
+        methods: {} as Record<string, PaymentMethodTotals>,
+        outlets: {} as Record<string, OutletPaymentSummaryBucket>,
       });
       const outletKey = p.outletId ?? 'default';
       const outletBucket = (tenantBucket.outlets[outletKey] ??= {
         outletId: p.outletId ?? null,
         totalAmount: 0,
         totalTransactions: 0,
-        methods: {} as Record<string, { total: number; count: number }>,
+        methods: {} as Record<string, PaymentMethodTotals>,
       });
 
-      const inc = (bucket: any) => {
+      const inc = (bucket: PaymentSummaryBucket) => {
         bucket.totalAmount += p.amount;
         bucket.totalTransactions += 1;
         const methodBucket = (bucket.methods[p.method] ??= { total: 0, count: 0 });
@@ -1109,12 +1114,12 @@ export class PaymentService {
       tenantId: t.tenantId,
       totalAmount: t.totalAmount,
       totalTransactions: t.totalTransactions,
-      methods: Object.entries(t.methods).map(([method, v]: any) => ({ method, ...v })),
-      outlets: Object.values(t.outlets).map((o: any) => ({
+      methods: toPaymentMethodRows(t.methods),
+      outlets: Object.values(t.outlets).map((o) => ({
         outletId: o.outletId,
         totalAmount: o.totalAmount,
         totalTransactions: o.totalTransactions,
-        methods: Object.entries(o.methods).map(([method, v]: any) => ({ method, ...v })),
+        methods: toPaymentMethodRows(o.methods),
       })),
     }));
 
@@ -1125,7 +1130,7 @@ export class PaymentService {
       totals: {
         totalAmount: totals.totalAmount,
         totalTransactions: totals.totalTransactions,
-        methods: Object.entries(totals.methods).map(([method, v]: any) => ({ method, ...v })),
+        methods: toPaymentMethodRows(totals.methods),
       },
       tenants,
     };

@@ -1,7 +1,7 @@
 # Rencana Pengurangan Kompleksitas (Technical Debt Plan)
 
 > Tanggal baseline: **2026-09-29** (setelah Fase 17 commit `ab80d14e`)
-> Status: 🟡 **aktif** — **1/9 item selesai (T0, 2026-09-30)**. Fase 18 **terblokir** sampai T1–T2 selesai.
+> Status: 🟡 **aktif** — **2/9 item selesai (T0, T1 — 2026-09-30)**. Fase 18 **terblokir** sampai T2 selesai.
 > Catatan: dokumen ini adalah **satu-satunya** daftar pekerjaan pengurangan kompleksitas.
 > Kalau ada item refactor yang dikerjakan di luar daftar ini, tambahkan di sini lebih dulu.
 
@@ -55,7 +55,7 @@ Empat tingkat. Tiap item punya skor agar urutannya bisa dipertanggungjawabkan, b
 | ID | Item | D | R | Skor | Effort | P |
 |---|---|---|---|---|---|---|
 | **T0** | Pagar regresi nyata: CI menjalankan suite sungguhan | 5 | 5 | **10** | S | **P0** ✅ |
-| **T1** | `PaymentService` 16 param `any` → 1 deps object bertipe | 5 | 5 | **10** | M | **P0** |
+| **T1** | `PaymentService` 16 param `any` → 1 deps object bertipe | 5 | 5 | **10** | M | **P0** ✅ |
 | **T2** | `OrderController` 24 param → 1 deps object | 4 | 4 | **8** | S | **P0** |
 | **T3** | `container.ts` 1.241 baris → wiring per domain | 5 | 4 | **9** | L | **P1** |
 | **T4** | `GeneralSettingsPage` 1.749 → shell + 9 section | 4 | 2 | **6** | M | **P1** |
@@ -241,6 +241,62 @@ komentar) · endpoint & perilaku tidak berubah (suite hijau tanpa test yang diha
 **Risiko & mitigasi.** Sedang — diff lebar tapi tanpa mengubah logika. Mitigasi: tidak boleh ada
 satu pun `test.skip` atau penghapusan test supaya item ini hijau; kalau ada test yang harus diubah,
 itu bukti ada perilaku yang tidak sengaja berubah.
+
+#### Hasil T1 — 2026-09-30 ✅
+
+| Yang diubah | Dari | Jadi |
+|---|---|---|
+| `PaymentService.ts` ctor | 16 param `any` (7 wajib + 9 opsional) | `constructor(private readonly deps: PaymentServiceDeps) {}` |
+| Tipe dependency | `any` | `PaymentServiceDeps.ts` (baru): tiap slot `Pick<Konkret, 'method' \| …>`, 0 `any` |
+| `this.<x>` | 86 kemunculan | `this.deps.<x>` (mekanis, diverifikasi lewat diff: hanya prefix yang berubah) |
+| `grep -c ': any' PaymentService.ts` | **28** | **5** (sisa = callback internal `appliedRules`/return type, bukan dependency) |
+| `container.ts` | `injector: () => ({ …16 slot… })` | `injector: () => ({ deps: { …16 slot bernama… } })` (pola `HubMemberAccessService`) |
+| Call-site test | 9 file `new PaymentService(a, b, null as any, …)` | 9 file `new PaymentService({ nama: x, … })` |
+| `PlatformSummaries.test.ts` | `(service as any).paymentRepository = repo` (menusuk field privat) | repo jadi argumen `makeService(repo)` |
+
+**Tiga keputusan yang menyimpang dari rencana awal — dan alasannya.**
+
+1. **`Pick<KelasKonkret, …>`, bukan port interface baru.** Rencana menyebut "memakai tipe domain
+   yang sudah ada" (`PaymentRepository`, `TaxService`, …) — nama interface seperti itu **tidak ada**
+   di repo ini untuk payment/order/user/shift. Menulis port interface untuk 9 repository hanya
+   menduplikasi tanda tangan yang sudah dijaga `tsc`, dan tetap perlu di-drift-kan manual.
+   `Pick<>` memberi hal yang sama (tiap slot punya nama + tanda tangan asli, typo ketahuan `tsc`)
+   tanpa permukaan baru, dan precedent-nya sudah ada: `EntitlementService`/`BillingService`/
+   `PrintingService` sudah mengimpor `Mongo*Repository` langsung. Konsekuensi yang **disukai**:
+   perubahan tanda tangan di repository menjatuhkan wiring container saat compile, bukan saat runtime.
+2. **Sembilan slot tetap opsional** (`?:`) persis seperti sebelumnya — beberapa jalur hanya butuh
+   QRIS gateway, printer, shift enforcement, atau resolusi modifier, dan test membentuk service
+   tanpa tool itu. Mengubahnya jadi wajib = perubahan perilaku di jalur yang tidak diuji.
+3. **DoD `: any` 28 → ≤5 dijangkau dengan membetulkan 8 sisanya**, dan itu **tetap di dalam
+   item ini** karena satu file: bucket agregasi `getPlatformPaymentsSummary` /
+   `getPlatformPaymentsConsolidationByOutlet` (`perTenant: Record<string, any>`, `inc(bucket: any)`,
+   6× `Object.entries(...).map(([method, v]: any) => …)`) diganti tipe lokal
+   (`PaymentSummaryBucket`/`OutletPaymentSummaryBucket`/`TenantPaymentSummaryBucket` +
+   `toPaymentMethodRows()`). **Anotasi saja** — bentuk objek, urutan key, dan isi tidak berubah;
+   `PlatformSummaries.test.ts` (12 test) yang mengunci angka agregatnya tetap hijau tanpa perubahan
+   ekspektasi. Sisa 5 `any` sengaja ditahan: itu return type/callback internal
+   (`order: any` di hasil `payCash`, `appliedRules.map((rule: any) …)`), bukan dependency —
+   membresihkannya = item "`any` yang tersisa" terpisah, bukan T1.
+
+**Verifikasi (lokal, urutan sama dengan CI).**
+`npx tsc --noEmit` ✅ 0 error · `npx vitest run tests/services/PaymentService.test.ts
+tests/services/PaymentService.qris.test.ts` ✅ 34/34 · `npx vitest run tests/e2e
+tests/integration/tenant-isolation.test.ts` ✅ 16/16 (money loop, void restore stok, carried bill,
+DENY tenant) · `npx vitest run` ✅ **1.249/1.249 (103 file)** · `pnpm run build` ✅ ·
+`pnpm run lint` ✅. **Tidak ada test yang dihapus, di-`skip`, atau dilewati**; satu-satunya
+perubahan pada test adalah bentuk pemanggilan ctor (dan penghapusan satu poke field privat).
+
+**Catatan jebakan yang ditemukan sambil mengerjakan.**
+`tests/services/PlatformSummaries.test.ts` ternyata menusuk `(service as any).paymentRepository`
+untuk menyuntik repo — pola itu **tidak akan menangkap** error wiring container mana pun, hanya
+dibiarkan hidup oleh `any`. Sudah diganti jadi argumen eksplisit.
+
+**Utang yang tersisa dari T1 (sengaja, tidak diruvik di sini).**
+- 5 `any` sisa di `PaymentService.ts` (return type + callback internal) — belum masuk item mana pun
+  di daftar T0–T9; biayanya kecil, tapi file yang sama sudah dua kali disentuh.
+- `container.ts` masih `container.resolve()` **tanpa tipe** (awilix `any`), jadi isi `deps` produksi
+  tidak di-check `tsc` — pagar sesungguhnya ada di kelas konkret yang jadi `Pick`, bukan di wiring.
+  T3 (pisah wiring per domain) adalah tempat wajar memperkecil ini.
 
 ---
 
@@ -482,7 +538,7 @@ T3+T7 ≈ 10 sesi L). Setara ~2–3 minggu kerja terfokus, atau ~1–2 minggu ka
 
 | Metrik | Baseline (2026-09-29) | Target setelah plan |
 |---|---|---|
-| Constructor ≥ 8 param | 5 | **0** |
+| Constructor ≥ 8 param | 5 | **0** _(T1: 3 tersisa di `src` — `OrderController` 23, `AuthService` 8, `DatabaseService` 8)_ |
 | `container.ts` | 1.241 baris | ≤ 200 |
 | File `src` > 1.000 baris | 4 (`GeneralSettings`, `TerminalCenter`, `ReportPage`, `ReportAggregation`) | **0** |
 | `backend/src` `: any` | 289 | ≤ 120 |
@@ -496,7 +552,7 @@ Target test total naik karena T8 menambah test, bukan karena ada fitur baru.
 
 ## 8. Definition of Done — seluruh plan
 
-- [ ] T0–T2 selesai, CI hijau pada commit bersih (bukan hanya lokal). _(T0 selesai 2026-09-30)_
+- [ ] T0–T2 selesai, CI hijau pada commit bersih (bukan hanya lokal). _(T0, T1 selesai 2026-09-30)_
 - [ ] T3–T6 selesai: `container.ts` ≤ 200; 3 god page ≤ 300 masing-masing.
 - [ ] T7–T9 selesai: `: any` ≤ 120; test frontend naik; `pnpm budget` hijau di CI.
 - [ ] `docs/HUB_ARCHITECTURE.md` Fase 18 dibuka (gate terpenuhi), `HUB_V2_FRONTEND_PLAN.md`

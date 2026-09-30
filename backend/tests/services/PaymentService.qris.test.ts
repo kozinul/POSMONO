@@ -88,21 +88,15 @@ function createService(options: { gateway?: any; existingPayment?: any; order?: 
       checkStatus: vi.fn(async () => ({ status: 'paid', paidAt: '2026-08-23T10:00:00Z', amount: 20000 })),
     };
 
-  const service = new PaymentService(
-    paymentRepository as any,
-    orderRepository as any,
-    {} as any,
-    tenantRepository as any,
-    taxService as any,
-    undefined as any,
-    eventBus as any,
-    undefined as any,
-    undefined as any,
-    undefined as any,
-    shiftRepository as any,
-    undefined as any,
-    gateway as any,
-  );
+  const service = new PaymentService({
+    paymentRepository,
+    orderRepository,
+    tenantRepository,
+    taxService,
+    eventBus,
+    shiftRepository,
+    qrisGatewayService: gateway,
+  });
 
   return { service, paymentRepository, orderRepository, eventBus, shiftRepository, gateway };
 }
@@ -116,7 +110,7 @@ const baseInput = {
 
 describe('PaymentService.confirmQrisPayment — guards', () => {
   it('throws when QRIS gateway service is not wired', async () => {
-    const bare = new PaymentService({} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any);
+    const bare = new PaymentService({} as any);
     await expect(
       bare.confirmQrisPayment({ ...baseInput, orderId: 'order-1' }),
     ).rejects.toThrow('Layanan QRIS Gateway tidak tersedia');

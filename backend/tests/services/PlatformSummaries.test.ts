@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { Shift } from '../../src/core/pos/domain/Shift';
 import { Payment } from '../../src/core/payment/domain/Payment';
 import { Outlet } from '../../src/core/outlet/domain/Outlet';
@@ -89,25 +89,9 @@ describe('PaymentService.getPlatformPaymentsSummary', () => {
     return payment;
   }
 
-  let service: PaymentService;
-
-  beforeEach(() => {
-    service = new PaymentService(
-      {} as any,
-      undefined as any,
-      undefined as any,
-      undefined as any,
-      undefined as any,
-      undefined as any,
-      undefined as any,
-      undefined as any,
-      undefined as any,
-      undefined as any,
-      undefined as any,
-      undefined as any,
-      undefined as any,
-    );
-  });
+  function makeService(paymentRepository: { findCompletedByTenantIds: ReturnType<typeof vi.fn> }) {
+    return new PaymentService({ paymentRepository: paymentRepository as any });
+  }
 
   it('aggregates payment totals + method breakdown', async () => {
     const paymentRepo = {
@@ -117,7 +101,7 @@ describe('PaymentService.getPlatformPaymentsSummary', () => {
         makePayment('t-b', 30000, 'cash', 'o3'),
       ]),
     };
-    (service as any).paymentRepository = paymentRepo;
+    const service = makeService(paymentRepo);
 
     const summary = await service.getPlatformPaymentsSummary(['t-a', 't-b'], {
       dateFrom: new Date('2026-01-01T00:00:00.000Z'),
@@ -136,7 +120,7 @@ describe('PaymentService.getPlatformPaymentsSummary', () => {
 
   it('returns zeroed totals when no payments found', async () => {
     const paymentRepo = { findCompletedByTenantIds: vi.fn(async () => []) };
-    (service as any).paymentRepository = paymentRepo;
+    const service = makeService(paymentRepo);
     const summary = await service.getPlatformPaymentsSummary(['t-a']);
     expect(summary.totals.totalAmount).toBe(0);
     expect(summary.totals.totalTransactions).toBe(0);

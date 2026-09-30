@@ -64,7 +64,12 @@ describe('PaymentService', () => {
     orderRepo = createMockRepo();
     taxService = createMockTaxService();
     eventBus = createMockEventBus();
-    service = new PaymentService(paymentRepo, orderRepo, null as any, null as any, taxService as any, null as any, eventBus);
+    service = new PaymentService({
+      paymentRepository: paymentRepo,
+      orderRepository: orderRepo,
+      taxService,
+      eventBus,
+    });
   });
 
   describe('payCash', () => {
@@ -256,19 +261,14 @@ describe('PaymentService', () => {
     }
 
     function withShiftRepo(shiftRepo: unknown, refundRepo: { save: ReturnType<typeof vi.fn> }) {
-      return new PaymentService(
-        paymentRepo,
-        orderRepo,
-        refundRepo as never,
-        null as never,
-        taxService as never,
-        null as never,
+      return new PaymentService({
+        paymentRepository: paymentRepo,
+        orderRepository: orderRepo,
+        refundRepository: refundRepo,
+        taxService,
         eventBus,
-        undefined,
-        undefined,
-        undefined,
-        shiftRepo as never,
-      );
+        shiftRepository: shiftRepo,
+      });
     }
 
     it('rejects refund when payment not found', async () => {
@@ -320,15 +320,13 @@ describe('PaymentService', () => {
       paymentRepo.findById.mockResolvedValue(createPaidPayment('shift-1'));
       orderRepo.findById.mockResolvedValue(null);
       const refundRepo = { save: vi.fn() };
-      const svc = new PaymentService(
-        paymentRepo,
-        orderRepo,
-        refundRepo as never,
-        null as never,
-        taxService as never,
-        null as never,
+      const svc = new PaymentService({
+        paymentRepository: paymentRepo,
+        orderRepository: orderRepo,
+        refundRepository: refundRepo,
+        taxService,
         eventBus,
-      );
+      });
 
       const result = await svc.refund({
         tenantId: TENANT_ID,
@@ -494,17 +492,13 @@ describe('PaymentService', () => {
       paymentRepo.findById.mockResolvedValue(createPendingPayment());
       orderRepo.findById.mockResolvedValue(createUnpaidOrder());
       const inventoryRepo = { releaseStock: vi.fn().mockResolvedValue(undefined) };
-      const svc = new PaymentService(
-        paymentRepo,
-        orderRepo,
-        null as never,
-        null as never,
-        taxService as never,
-        null as never,
+      const svc = new PaymentService({
+        paymentRepository: paymentRepo,
+        orderRepository: orderRepo,
+        taxService,
         eventBus,
-        undefined,
-        inventoryRepo,
-      );
+        inventoryService: inventoryRepo,
+      });
 
       const result = await svc.cancelTransferPayment({
         tenantId: TENANT_ID,

@@ -86,21 +86,9 @@ beforeAll(async () => {
   const tenantService = new TenantService(tenantRepo);
   const outletService = new OutletService(outletRepo, warehouseRepo);
   const shiftService = new ShiftService(shiftRepo);
-  const paymentService = new PaymentService(
-    paymentRepo,
-    undefined as any,
-    undefined as any,
-    undefined as any,
-    undefined as any,
-    undefined as any,
-    undefined as any,
-    undefined as any,
-    undefined as any,
-    undefined as any,
-    undefined as any,
-    undefined as any,
-    undefined as any,
-  );
+  const paymentService = new PaymentService({
+    paymentRepository: paymentRepo,
+  });
 
   const provisionTenantService = new ProvisionTenantService({
     tenantRepository: tenantRepo,

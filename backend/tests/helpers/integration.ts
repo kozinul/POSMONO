@@ -187,24 +187,19 @@ export async function buildIntegrationApp(options: IntegrationAppOptions = {}): 
     closeBill: new CloseBillService(orderRepo, eventBus, inventoryService),
   });
 
-  const paymentService = new PaymentService(
-    paymentRepo,
-    orderRepo,
-    null as any,
-    tenantRepo,
-    taxService as any,
-    null as any,
+  const paymentService = new PaymentService({
+    paymentRepository: paymentRepo,
+    orderRepository: orderRepo,
+    tenantRepository: tenantRepo,
+    taxService,
     eventBus,
-    null as any,
     inventoryService,
-    userRepo,
-    shiftRepoForEnforcement,
-    null as any,
-    null as any,
-    productRepo,
-    modifierRepo,
-    categoryRepo,
-  );
+    userRepository: userRepo,
+    shiftRepository: shiftRepoForEnforcement,
+    productRepository: productRepo,
+    modifierRepository: modifierRepo,
+    categoryRepository: categoryRepo,
+  });
 
   const templateService = new TemplateService(templateRepo);
   const invoiceRenderService = new InvoiceRenderService(templateService);
