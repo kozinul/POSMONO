@@ -9,18 +9,11 @@ import { buildModels, registerModels } from './wiring/models';
 import { registerPrintingWiring } from './wiring/printing';
 import { registerPromotionWiring } from './wiring/promotion';
 import { registerUploadWiring } from './wiring/upload';
+import { registerIdentityWiring } from './wiring/identity';
+import { registerTenantWiring } from './wiring/tenant';
 import { EventBus } from '../@shared/infrastructure/eventBus/EventBus';
 import { ConnectionManager } from '../@shared/infrastructure/database/ConnectionManager';
 import { env } from '../@shared/config/env';
-import { PasswordService } from '../core/identity/domain/services/PasswordService';
-import { TokenService } from '../core/identity/application/services/TokenService';
-import { AuthService } from '../core/identity/application/services/AuthService';
-import { SessionService } from '../core/identity/application/services/SessionService';
-import { AuthController } from '../core/identity/interfaces/http/controllers/AuthController';
-import { MongoUserRepository } from '../core/identity/infrastructure/persistence/MongoUserRepository';
-import { MongoTenantRepository } from '../core/tenant/infrastructure/persistence/MongoTenantRepository';
-import { TenantService } from '../core/tenant/application/services/TenantService';
-import { TenantController } from '../core/tenant/interfaces/http/controllers/TenantController';
 import { MongoProductRepository } from '../core/catalog/infrastructure/persistence/MongoProductRepository';
 import { MongoCategoryRepository } from '../core/catalog/infrastructure/persistence/MongoCategoryRepository';
 import { MongoFamilyRepository } from '../core/catalog/infrastructure/persistence/MongoFamilyRepository';
@@ -40,12 +33,6 @@ import { InventoryService } from '../core/inventory/application/services/Invento
 import { WarehouseService } from '../core/inventory/application/services/WarehouseService';
 import { InventoryController } from '../core/inventory/interfaces/http/controllers/InventoryController';
 import { WarehouseController } from '../core/inventory/interfaces/http/controllers/WarehouseController';
-import { MongoRoleRepository } from '../core/identity/infrastructure/persistence/MongoRoleRepository';
-import { RoleService } from '../core/identity/application/services/RoleService';
-import { UserService } from '../core/identity/application/services/UserService';
-import { RoleController } from '../core/identity/interfaces/http/controllers/RoleController';
-import { UserController } from '../core/identity/interfaces/http/controllers/UserController';
-import { PermissionController } from '../core/identity/interfaces/http/controllers/PermissionController';
 import { MongoOrderRepository } from '../core/ordering/infrastructure/persistence/MongoOrderRepository';
 import { CreateOrderService, UpdateOrderService, ReplaceOrderItemsService, VoidOrderService, VoidItemService, PayOrderService, VoidPaymentService, ReopenOrderService, SplitItemService, RemoveItemService, UpdateItemQuantityService, VoidAndRollbackService, TopayService, RefundService, ApplyDiscountService, SetServiceChargeService, HoldOrderService, RecallOrderService, CloseBillService } from '../core/ordering/application/services/OrderService';
 import { VoidApprovalService } from '../core/ordering/application/services/VoidApprovalService';
@@ -91,7 +78,6 @@ import { ReceiptRenderService } from '../core/template/application/services/Rece
 import { ReceiptAssembler } from '../core/template/application/receipt/ReceiptAssembler';
 import { InvoiceRenderService } from '../core/template/application/services/InvoiceRenderService';
 import { TemplateController } from '../core/template/interfaces/http/controllers/TemplateController';
-import { OnboardingService } from '../core/platform/application/services/OnboardingService';
 import { DatabaseService } from '../core/database/application/services/DatabaseService';
 import { DatabaseController } from '../core/database/interfaces/http/controllers/DatabaseController';
 import { MongoHubRepository } from '../core/hub/infrastructure/persistence/MongoHubRepository';
@@ -190,115 +176,10 @@ export function buildContainer() {
   registerPrintingWiring({ container, models, eventBus });
   registerPromotionWiring({ container, models, eventBus });
   registerUploadWiring({ container, models, eventBus });
+  registerIdentityWiring({ container, models, eventBus });
+  registerTenantWiring({ container, models, eventBus });
 
   container.register({
-    userRepository: asClass(MongoUserRepository, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        model: UserModel,
-      }),
-    }),
-    tenantRepository: asClass(MongoTenantRepository, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        model: TenantModel,
-      }),
-    }),
-    passwordService: asClass(PasswordService, {
-      lifetime: Lifetime.SINGLETON,
-    }),
-    tokenService: asClass(TokenService, {
-      lifetime: Lifetime.SINGLETON,
-    }),
-    sessionService: asClass(SessionService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        model: SessionModel,
-      }),
-    }),
-    tenantService: asClass(TenantService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        tenantRepository: container.resolve('tenantRepository'),
-        eventBus: container.resolve('eventBus'),
-      }),
-    }),
-    onboardingService: asClass(OnboardingService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        deps: {
-          tenantRepository: container.resolve('tenantRepository'),
-          roleRepository: container.resolve('roleRepository'),
-          userRepository: container.resolve('userRepository'),
-          paymentMethodRepository: container.resolve('paymentMethodRepository'),
-          warehouseService: container.resolve('warehouseService'),
-          templateService: container.resolve('templateService'),
-        },
-      }),
-    }),
-    roleRepository: asClass(MongoRoleRepository, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        model: RoleModel,
-      }),
-    }),
-    roleService: asClass(RoleService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        roleRepository: container.resolve('roleRepository'),
-      }),
-    }),
-    userService: asClass(UserService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        userRepository: container.resolve('userRepository'),
-        passwordService: container.resolve('passwordService'),
-        roleRepository: container.resolve('roleRepository'),
-      }),
-    }),
-  });
-
-  container.register({
-    authService: asClass(AuthService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        userRepository: container.resolve('userRepository'),
-        tokenService: container.resolve('tokenService'),
-        passwordService: container.resolve('passwordService'),
-        sessionService: container.resolve('sessionService'),
-        roleRepository: container.resolve('roleRepository'),
-        hubMembershipService: container.resolve('hubMembershipService'),
-        hubMemberAccessService: container.resolve('hubMemberAccessService'),
-      }),
-    }),
-    authController: asClass(AuthController, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        authService: container.resolve('authService'),
-      }),
-    }),
-    roleController: asClass(RoleController, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        roleService: container.resolve('roleService'),
-      }),
-    }),
-    userController: asClass(UserController, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        userService: container.resolve('userService'),
-      }),
-    }),
-    permissionController: asClass(PermissionController, {
-      lifetime: Lifetime.SINGLETON,
-    }),
-    tenantController: asClass(TenantController, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        tenantService: container.resolve('tenantService'),
-        hubRepository: container.resolve('hubRepository'),
-      }),
-    }),
     productRepository: asClass(MongoProductRepository, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
