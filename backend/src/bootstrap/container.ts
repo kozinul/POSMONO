@@ -11,28 +11,11 @@ import { registerPromotionWiring } from './wiring/promotion';
 import { registerUploadWiring } from './wiring/upload';
 import { registerIdentityWiring } from './wiring/identity';
 import { registerTenantWiring } from './wiring/tenant';
+import { registerCatalogWiring } from './wiring/catalog';
+import { registerInventoryWiring } from './wiring/inventory';
 import { EventBus } from '../@shared/infrastructure/eventBus/EventBus';
 import { ConnectionManager } from '../@shared/infrastructure/database/ConnectionManager';
 import { env } from '../@shared/config/env';
-import { MongoProductRepository } from '../core/catalog/infrastructure/persistence/MongoProductRepository';
-import { MongoCategoryRepository } from '../core/catalog/infrastructure/persistence/MongoCategoryRepository';
-import { MongoFamilyRepository } from '../core/catalog/infrastructure/persistence/MongoFamilyRepository';
-import { MongoModifierRepository } from '../core/catalog/infrastructure/persistence/MongoModifierRepository';
-import { ProductService } from '../core/catalog/application/services/ProductService';
-import { CategoryService } from '../core/catalog/application/services/CategoryService';
-import { FamilyService } from '../core/catalog/application/services/FamilyService';
-import { ModifierService } from '../core/catalog/application/services/ModifierService';
-import { ProductController } from '../core/catalog/interfaces/http/controllers/ProductController';
-import { CategoryController } from '../core/catalog/interfaces/http/controllers/CategoryController';
-import { FamilyController } from '../core/catalog/interfaces/http/controllers/FamilyController';
-import { ModifierController } from '../core/catalog/interfaces/http/controllers/ModifierController';
-import { MongoStockRepository } from '../core/inventory/infrastructure/persistence/MongoStockRepository';
-import { MongoStockMovementRepository } from '../core/inventory/infrastructure/persistence/MongoStockMovementRepository';
-import { MongoWarehouseRepository } from '../core/inventory/infrastructure/persistence/MongoWarehouseRepository';
-import { InventoryService } from '../core/inventory/application/services/InventoryService';
-import { WarehouseService } from '../core/inventory/application/services/WarehouseService';
-import { InventoryController } from '../core/inventory/interfaces/http/controllers/InventoryController';
-import { WarehouseController } from '../core/inventory/interfaces/http/controllers/WarehouseController';
 import { MongoOrderRepository } from '../core/ordering/infrastructure/persistence/MongoOrderRepository';
 import { CreateOrderService, UpdateOrderService, ReplaceOrderItemsService, VoidOrderService, VoidItemService, PayOrderService, VoidPaymentService, ReopenOrderService, SplitItemService, RemoveItemService, UpdateItemQuantityService, VoidAndRollbackService, TopayService, RefundService, ApplyDiscountService, SetServiceChargeService, HoldOrderService, RecallOrderService, CloseBillService } from '../core/ordering/application/services/OrderService';
 import { VoidApprovalService } from '../core/ordering/application/services/VoidApprovalService';
@@ -68,9 +51,6 @@ import { SettingController } from '../core/settings/interfaces/http/controllers/
 import { MongoPaymentMethodRepository } from '../core/payment/infrastructure/persistence/MongoPaymentMethodRepository';
 import { PaymentMethodService } from '../core/payment/application/services/PaymentMethodService';
 import { PaymentMethodController } from '../core/payment/interfaces/http/controllers/PaymentMethodController';
-import { MongoMenuTypeRepository } from '../core/catalog/infrastructure/persistence/MongoMenuTypeRepository';
-import { MenuTypeService } from '../core/catalog/application/services/MenuTypeService';
-import { MenuTypeController } from '../core/catalog/interfaces/http/controllers/MenuTypeController';
 import { MongoTemplateRepository } from '../core/template/infrastructure/persistence/MongoTemplateRepository';
 import { TemplateService } from '../core/template/application/services/TemplateService';
 import { RenderService } from '../core/template/application/services/RenderService';
@@ -178,127 +158,10 @@ export function buildContainer() {
   registerUploadWiring({ container, models, eventBus });
   registerIdentityWiring({ container, models, eventBus });
   registerTenantWiring({ container, models, eventBus });
+  registerCatalogWiring({ container, models, eventBus });
+  registerInventoryWiring({ container, models, eventBus });
 
   container.register({
-    productRepository: asClass(MongoProductRepository, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        model: ProductModel,
-      }),
-    }),
-    categoryRepository: asClass(MongoCategoryRepository, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        model: CategoryModel,
-      }),
-    }),
-    productService: asClass(ProductService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        productRepository: container.resolve('productRepository'),
-        eventBus: container.resolve('eventBus'),
-      }),
-    }),
-    categoryService: asClass(CategoryService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        categoryRepository: container.resolve('categoryRepository'),
-      }),
-    }),
-    productController: asClass(ProductController, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        productService: container.resolve('productService'),
-      }),
-    }),
-    categoryController: asClass(CategoryController, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        categoryService: container.resolve('categoryService'),
-      }),
-    }),
-    familyRepository: asClass(MongoFamilyRepository, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        model: FamilyModel,
-      }),
-    }),
-    modifierRepository: asClass(MongoModifierRepository, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        model: ModifierModel,
-      }),
-    }),
-    familyService: asClass(FamilyService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        familyRepository: container.resolve('familyRepository'),
-      }),
-    }),
-    modifierService: asClass(ModifierService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        modifierRepository: container.resolve('modifierRepository'),
-        productRepository: container.resolve('productRepository'),
-      }),
-    }),
-    familyController: asClass(FamilyController, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        familyService: container.resolve('familyService'),
-      }),
-    }),
-    modifierController: asClass(ModifierController, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        modifierService: container.resolve('modifierService'),
-      }),
-    }),
-    stockRepository: asClass(MongoStockRepository, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        model: StockModel,
-      }),
-    }),
-    stockMovementRepository: asClass(MongoStockMovementRepository, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        model: StockMovementModel,
-      }),
-    }),
-    warehouseRepository: asClass(MongoWarehouseRepository, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        model: WarehouseModel,
-      }),
-    }),
-    inventoryService: asClass(InventoryService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        stockRepository: container.resolve('stockRepository'),
-        stockMovementRepository: container.resolve('stockMovementRepository'),
-        warehouseRepository: container.resolve('warehouseRepository'),
-        eventBus: container.resolve('eventBus'),
-      }),
-    }),
-    warehouseService: asClass(WarehouseService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        warehouseRepository: container.resolve('warehouseRepository'),
-      }),
-    }),
-    inventoryController: asClass(InventoryController, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        inventoryService: container.resolve('inventoryService'),
-      }),
-    }),
-    warehouseController: asClass(WarehouseController, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        warehouseService: container.resolve('warehouseService'),
-      }),
-    }),
     orderRepository: asClass(MongoOrderRepository, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
@@ -585,25 +448,6 @@ export function buildContainer() {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
         paymentMethodService: container.resolve('paymentMethodService'),
-      }),
-    }),
-    menuTypeRepository: asClass(MongoMenuTypeRepository, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        model: MenuTypeModel,
-      }),
-    }),
-    menuTypeService: asClass(MenuTypeService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        menuTypeRepository: container.resolve('menuTypeRepository'),
-        familyRepository: container.resolve('familyRepository'),
-      }),
-    }),
-    menuTypeController: asClass(MenuTypeController, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        menuTypeService: container.resolve('menuTypeService'),
       }),
     }),
     taxConfigurationRepository: asClass(MongoTaxConfigurationRepository, {
