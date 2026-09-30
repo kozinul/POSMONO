@@ -1,8 +1,8 @@
 # Rencana Pengurangan Kompleksitas (Technical Debt Plan)
 
 > Tanggal baseline: **2026-09-29** (setelah Fase 17 commit `ab80d14e`)
-> Status: 🟢 **gate Fase 18 TERPENUHI** — **5/9 item selesai (T0, T1, T2, T3, T4 — 2026-09-30)**. T0–T4 sudah hijau, jadi
-> produk boleh lanjut Fase 18; debt pass tetap dilanjutkan (T5–T9) sebagai P1–P3.
+> Status: 🟢 **gate Fase 18 TERPENUHI** — **6/9 item selesai (T0, T1, T2, T3, T4, T5 — 2026-09-30)**. T0–T5 sudah hijau, jadi
+> produk boleh lanjut Fase 18; debt pass tetap dilanjutkan (T6–T9) sebagai P1–P3.
 > Catatan: dokumen ini adalah **satu-satunya** daftar pekerjaan pengurangan kompleksitas.
 > Kalau ada item refactor yang dikerjakan di luar daftar ini, tambahkan di sini lebih dulu.
 
@@ -520,7 +520,40 @@ Yang masih inline: `TenantsSection` (±311 baris), `OutletsSection`, `SummarySec
 mengikuti pola `HubsSection.test.tsx` · tab filtering tidak berubah.
 
 **Risiko & mitigasi.** Rendah — ini **pemindahan**, logika tidak disentuh. Contoh item "murah, tapi banyak
-yang langsung terasa".
+yang langsung terasa**.
+
+#### Hasil T5 ✅ — commit `b970dd70` (2026-09-30)
+
+| | Sebelum | Sesudah |
+|---|---|---|
+| `pages/TerminalCenterPage.tsx` | 1.387 | **105** |
+| Komponen lokal di halaman | 8 | **0** (7 section + 2 modal di `platform/sections/`) |
+| Test frontend | 17 file / 121 | **18 file / 131** (`TenantsSection.test.tsx`, 10 test) |
+
+Struktur: `platform/sections/` (7 file), `platform/utils/dates.ts`
+(`todayISO`/`Next30DaysAgo`), `StatCard` masuk `platformUi.tsx`. Sisa di
+halaman benar-benar milik shell: `TABS` + `visibleTabs` + fallback `activeTab`,
+state lintas tab, header & tab bar. Tab filtering tidak berubah — logikanya
+verbatim.
+
+Tiga hal yang **bukan** pemindahan murni dan sengaja dicatat:
+
+- `inputCls`, `cardCls`, `SectionTitle`, `Loading` di halaman lama adalah
+  salinan `platformUi.tsx` yang sudah ada (konten identik) — sekarang di-import.
+- `AUDIT_ACTION_LABELS`/`AUDIT_ACTION_BADGE` pindah bersama `AuditSection`:
+  state filter-nya memang sudah di-lift ke halaman sejak Fase 15, labelnya
+  hanya dipakai section itu.
+- Modul `platform/sections/import` menyatu `PlansSection` + `HubsSection`
+  (sudah di file sendiri) dengan 7 file baru — satu nama folder untuk semua tab.
+
+Jebakan test yang ditemukan sambil menulis test (bukan dari kode produksi):
+`vi.clearAllMocks()` **tidak** mengembalikan `mockImplementation`. Override Swal
+di test "alasan suspend wajib diisi" bocor ke test berikutnya, membuat test
+extend & delete gagal dengan input kosong. Default dialog sekarang dipasang
+ulang di `beforeEach` — pola ini akan dipakai ulang di T6/T8.
+
+Verifikasi: tsc 0 error · frontend 131/131 (18 file) · vite build OK · backend
+1249/1249 (103 file) · `pnpm -r lint` bersih.
 
 ---
 
@@ -681,7 +714,7 @@ Target test total naik karena T8 menambah test, bukan karena ada fitur baru.
 ## 8. Definition of Done — seluruh plan
 
 - [x] T0–T3 selesai, suite hijau pada commit bersih (bukan hanya lokal). _(T0, T1, T2, T3 selesai 2026-09-30 — **gate Fase 18 terpenuhi**; CI di GitHub Actions sendiri masih belum pernah dieksekusi)_
-- [ ] T4–T6 selesai: 3 god page ≤ 300 masing-masing. _(T3: `container.ts` **81 baris**; T4: `GeneralSettingsPage` **1.749 → 95 baris** — sisa T5 `TerminalCenterPage` & T6 `ReportPage`)_
+- [ ] T4–T6 selesai: 3 god page ≤ 300 masing-masing. _(T3: `container.ts` **81 baris**; T4: `GeneralSettingsPage` **1.749 → 95 baris**; T5: `TerminalCenterPage` **1.387 → 105 baris** — sisa T6 `ReportPage` 1.368)_
 - [ ] T7–T9 selesai: `: any` ≤ 120; test frontend naik; `pnpm budget` hijau di CI.
 - [ ] `docs/HUB_ARCHITECTURE.md` Fase 18 dibuka (gate terpenuhi), `HUB_V2_FRONTEND_PLAN.md`
       di-unfreeze per plan.
