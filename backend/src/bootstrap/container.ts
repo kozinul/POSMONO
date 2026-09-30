@@ -13,6 +13,12 @@ import { registerIdentityWiring } from './wiring/identity';
 import { registerTenantWiring } from './wiring/tenant';
 import { registerCatalogWiring } from './wiring/catalog';
 import { registerInventoryWiring } from './wiring/inventory';
+import { registerPosWiring } from './wiring/pos';
+import { registerCustomerWiring } from './wiring/customer';
+import { registerSettingsWiring } from './wiring/settings';
+import { registerTaxWiring } from './wiring/tax';
+import { registerPricingWiring } from './wiring/pricing';
+import { registerDiscountWiring } from './wiring/discount';
 import { EventBus } from '../@shared/infrastructure/eventBus/EventBus';
 import { ConnectionManager } from '../@shared/infrastructure/database/ConnectionManager';
 import { env } from '../@shared/config/env';
@@ -20,9 +26,6 @@ import { MongoOrderRepository } from '../core/ordering/infrastructure/persistenc
 import { CreateOrderService, UpdateOrderService, ReplaceOrderItemsService, VoidOrderService, VoidItemService, PayOrderService, VoidPaymentService, ReopenOrderService, SplitItemService, RemoveItemService, UpdateItemQuantityService, VoidAndRollbackService, TopayService, RefundService, ApplyDiscountService, SetServiceChargeService, HoldOrderService, RecallOrderService, CloseBillService } from '../core/ordering/application/services/OrderService';
 import { VoidApprovalService } from '../core/ordering/application/services/VoidApprovalService';
 import { OrderController } from '../core/ordering/interfaces/http/controllers/OrderController';
-import { MongoShiftRepository } from '../core/pos/infrastructure/persistence/MongoShiftRepository';
-import { ShiftService } from '../core/pos/application/services/ShiftService';
-import { ShiftController } from '../core/pos/interfaces/http/controllers/ShiftController';
 import { MongoPaymentRepository } from '../core/payment/infrastructure/persistence/MongoPaymentRepository';
 import { MongoRefundRepository } from '../core/payment/infrastructure/persistence/MongoRefundRepository';
 import { PaymentService } from '../core/payment/application/services/PaymentService';
@@ -34,20 +37,7 @@ import { ReportExportService } from '../core/reporting/application/services/Repo
 import { ReportController } from '../core/reporting/interfaces/http/controllers/ReportController';
 import { MongoDailyMetricRepository } from '../core/reporting/infrastructure/persistence/MongoDailyMetricRepository';
 import { ReportAggregation } from '../core/reporting/infrastructure/aggregation/ReportAggregation';
-import { MongoTaxConfigurationRepository } from '../core/tax/infrastructure/persistence/MongoTaxConfigurationRepository';
-import { TaxServiceAdapter } from '../core/tax/application/services/TaxServiceAdapter';
-import { MongoPricingProfileRepository } from '../core/pricing/infrastructure/persistence/MongoPricingProfileRepository';
-import { MongoDiscountConfigurationRepository } from '../core/discount/infrastructure/persistence/MongoDiscountConfigurationRepository';
-import { MongoPromoCodeRepository } from '../core/discount/infrastructure/persistence/MongoPromoCodeRepository';
-import { DiscountServiceAdapter } from '../core/discount/application/services/DiscountServiceAdapter';
-import { ManageDiscountRuleUseCase } from '../core/discount/application/services/ManageDiscountRuleUseCase';
 import { createDiscountRouter } from '../core/discount/api/discount.routes';
-import { MongoCustomerRepository } from '../core/customer/infrastructure/persistence/MongoCustomerRepository';
-import { CustomerService } from '../core/customer/application/services/CustomerService';
-import { CustomerController } from '../core/customer/interfaces/http/controllers/CustomerController';
-import { MongoSettingRepository } from '../core/settings/infrastructure/persistence/MongoSettingRepository';
-import { SettingService } from '../core/settings/application/services/SettingService';
-import { SettingController } from '../core/settings/interfaces/http/controllers/SettingController';
 import { MongoPaymentMethodRepository } from '../core/payment/infrastructure/persistence/MongoPaymentMethodRepository';
 import { PaymentMethodService } from '../core/payment/application/services/PaymentMethodService';
 import { PaymentMethodController } from '../core/payment/interfaces/http/controllers/PaymentMethodController';
@@ -160,6 +150,12 @@ export function buildContainer() {
   registerTenantWiring({ container, models, eventBus });
   registerCatalogWiring({ container, models, eventBus });
   registerInventoryWiring({ container, models, eventBus });
+  registerPosWiring({ container, models, eventBus });
+  registerCustomerWiring({ container, models, eventBus });
+  registerSettingsWiring({ container, models, eventBus });
+  registerTaxWiring({ container, models, eventBus });
+  registerPricingWiring({ container, models, eventBus });
+  registerDiscountWiring({ container, models, eventBus });
 
   container.register({
     orderRepository: asClass(MongoOrderRepository, {
@@ -356,27 +352,6 @@ export function buildContainer() {
         },
       }),
     }),
-    shiftRepository: asClass(MongoShiftRepository, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        model: ShiftModel,
-      }),
-    }),
-    shiftService: asClass(ShiftService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        shiftRepository: container.resolve('shiftRepository'),
-        reportAggregation: container.resolve('reportAggregation'),
-        orderRepository: container.resolve('orderRepository'),
-        userRepository: container.resolve('userRepository'),
-      }),
-    }),
-    shiftController: asClass(ShiftController, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        shiftService: container.resolve('shiftService'),
-      }),
-    }),
     paymentRepository: asClass(MongoPaymentRepository, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
@@ -450,44 +425,6 @@ export function buildContainer() {
         paymentMethodService: container.resolve('paymentMethodService'),
       }),
     }),
-    taxConfigurationRepository: asClass(MongoTaxConfigurationRepository, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        model: TaxConfigurationModel,
-      }),
-    }),
-    pricingProfileRepository: asClass(MongoPricingProfileRepository, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        model: PricingProfileModel,
-      }),
-    }),
-    discountConfigurationRepository: asClass(MongoDiscountConfigurationRepository, {
-      lifetime: Lifetime.SINGLETON,
-    }),
-    promoCodeRepository: asClass(MongoPromoCodeRepository, {
-      lifetime: Lifetime.SINGLETON,
-    }),
-    discountService: asClass(DiscountServiceAdapter, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        configRepo: container.resolve('discountConfigurationRepository'),
-        promoCodeRepo: container.resolve('promoCodeRepository'),
-      }),
-    }),
-    manageDiscountRuleUseCase: asClass(ManageDiscountRuleUseCase, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        repo: container.resolve('discountConfigurationRepository'),
-      }),
-    }),
-    taxService: asClass(TaxServiceAdapter, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        repo: container.resolve('taxConfigurationRepository'),
-        pricingProfileRepo: container.resolve('pricingProfileRepository'),
-      }),
-    }),
     dailyMetricRepository: asClass(MongoDailyMetricRepository, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
@@ -527,42 +464,6 @@ export function buildContainer() {
       injector: () => ({
         reportService: container.resolve('reportService'),
         reportExportService: container.resolve('reportExportService'),
-      }),
-    }),
-    customerRepository: asClass(MongoCustomerRepository, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        model: CustomerModel,
-      }),
-    }),
-    customerService: asClass(CustomerService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        customerRepository: container.resolve('customerRepository'),
-      }),
-    }),
-    customerController: asClass(CustomerController, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        customerService: container.resolve('customerService'),
-      }),
-    }),
-    settingRepository: asClass(MongoSettingRepository, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        model: SettingModel,
-      }),
-    }),
-    settingService: asClass(SettingService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        settingRepository: container.resolve('settingRepository'),
-      }),
-    }),
-    settingController: asClass(SettingController, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        settingService: container.resolve('settingService'),
       }),
     }),
     templateRepository: asClass(MongoTemplateRepository, {
