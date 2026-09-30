@@ -1,8 +1,8 @@
 # Rencana Pengurangan Kompleksitas (Technical Debt Plan)
 
 > Tanggal baseline: **2026-09-29** (setelah Fase 17 commit `ab80d14e`)
-> Status: 🟢 **gate Fase 18 TERPENUHI** — **3/9 item selesai (T0, T1, T2 — 2026-09-30)**. T0+T1+T2 sudah hijau, jadi
-> produk boleh lanjut Fase 18; debt pass tetap dilanjutkan (T3–T9) sebagai,P1–P3.
+> Status: 🟢 **gate Fase 18 TERPENUHI** — **4/9 item selesai (T0, T1, T2, T3 — 2026-09-30)**. T0+T1+T2+T3 sudah hijau, jadi
+> produk boleh lanjut Fase 18; debt pass tetap dilanjutkan (T4–T9) sebagai P1–P3.
 > Catatan: dokumen ini adalah **satu-satunya** daftar pekerjaan pengurangan kompleksitas.
 > Kalau ada item refactor yang dikerjakan di luar daftar ini, tambahkan di sini lebih dulu.
 
@@ -14,7 +14,7 @@ Masalahnya bukan fitur. Yang rusak adalah **pagar regresi** dan **batas konteks 
 
 | Gejala | Angka terukur | Akibat nyata |
 |---|---|---|
-| Composition root monolitik | `container.ts` 1.241 baris, 162 import, 36 deklarasi model | Satu tempat untuk salah urut; sulit direview |
+| Composition root monolitik | `container.ts` 1.241 baris, 162 import, 38 deklarasi model | Satu tempat untuk salah urut; sulit direview |
 | Constructor tidak terlindungi tipe | `PaymentService` 16 param **semua `any`**; `OrderController` 24 param | 1 kelas bug **sudah terjadi**: argumen geser → HTTP 500 produksi |
 | File god | `GeneralSettingsPage` 1.749 · `TerminalCenterPage` 1.387 · `ReportPage` 1.368 · `ReportAggregation` 1.212 | Tidak muat di satu layar/context; perubahan = baca ulang semuanya |
 | Pagar regresi **tidak nyata di CI** — **✅ diperbaiki T0** | `ci.yml` jalankan `pnpm vitest run` tanpa config root; job lint panggil `eslint` yang tidak terpasang | 1.249 test hanya "hijau" secara lokal |
@@ -58,7 +58,7 @@ Empat tingkat. Tiap item punya skor agar urutannya bisa dipertanggungjawabkan, b
 | **T0** | Pagar regresi nyata: CI menjalankan suite sungguhan | 5 | 5 | **10** | S | **P0** ✅ |
 | **T1** | `PaymentService` 16 param `any` → 1 deps object bertipe | 5 | 5 | **10** | M | **P0** ✅ |
 | **T2** | `OrderController` 24 param → 1 deps object | 4 | 4 | **8** | S | **P0** ✅ |
-| **T3** | `container.ts` 1.241 baris → wiring per domain | 5 | 4 | **9** | L | **P1** |
+| **T3** | `container.ts` 1.241 baris → wiring per domain | 5 | 4 | **9** | L | **P1** ✅ |
 | **T4** | `GeneralSettingsPage` 1.749 → shell + 9 section | 4 | 2 | **6** | M | **P1** |
 | **T5** | `TerminalCenterPage` 1.387 → 7 file section | 3 | 2 | **5** | S | **P1** |
 | **T6** | `ReportPage` 1.368 → 1 file per report type | 3 | 2 | **5** | M | **P1** |
@@ -93,14 +93,14 @@ grep -rn ": any" backend/src --include='*.ts' | wc -l
 #   PaymentService 16 | OrderController 24 | AuthService 9 | DatabaseService 9 | ReportAggregation 8
 #   (dari 200 constructor; 5 sudah memakai gaya deps-object)
 
-# endpoint & koleksi (baseline: 280 endpoint, 36 schema)
+# endpoint & koleksi (baseline: 280 endpoint, 38 model)
 grep -rn "router\.\(get\|post\|put\|delete\|patch\)" backend/src --include='*.routes.ts' | wc -l
 ls backend/src/core/*/infrastructure/persistence/schemas/*.ts | wc -l
 ```
 
 **Baseline 2026-09-29:** backend 367 file / 36.978 LOC · frontend 141 file / 28.529 LOC ·
 shared 35 file / 1.288 LOC · test 67 file / 16.847 LOC · **1.249 test backend** (103 file) ·
-**121 test frontend** (17 file) · 280 endpoint · 36 schema · 48 service · 98 file domain ·
+**121 test frontend** (17 file) · 280 endpoint · 38 model · 48 service · 98 file domain ·
 289 `: any` · 134 cast · 136 commit (48 Agu, 45 Sep).
 
 > Diverifikasi ulang **2026-09-30** (sebelum T0): `pnpm -r build` + `pnpm -r test` hijau dengan
@@ -366,7 +366,7 @@ nama yang salah akan jadi `TypeError` di `tsc`, bukan di produksi.
 
 ### T3 — `container.ts` 1.241 baris → wiring per domain · **P1** · D5 R4 · Effort L
 
-**Bukti.** `backend/src/bootstrap/container.ts`: 162 import, 36 deklarasi
+**Bukti.** `backend/src/bootstrap/container.ts`: 162 import, 38 deklarasi
 `systemConnection.model(...)` + `syncIndexes()` + migrasi, lalu satu `container.register({ … })`
 raksasa. Import per domain: catalog 20 · identity 15 · payment 13 · hub 11 · billing 11 ·
 template 10 · platform 10 · inventory 10 · … 21 domain lain.
@@ -385,7 +385,7 @@ template 10 · platform 10 · inventory 10 · … 21 domain lain.
 3. `identity`, `catalog`, `tenant`, `settings`, `tax`, `pricing`.
 4. **Terakhir** `payment` & `ordering` (dependensi silang terbanyak; T1/T2 sudah menyiapkan call-site-nya jadi deps-object, jadi ini jauh lebih murah daripada kalau T3 duluan).
 
-**DoD.** `container.ts` ≤ 200 baris · semua 36 deklarasi model hanya di `models.ts` ·
+**DoD.** `container.ts` ≤ 200 baris · semua 38 deklarasi model hanya di `models.ts` ·
 `buildContainer()` resolve identik (dibuktikan `tests/integration/provisioning.test.ts`, satu-satunya
 pemanggil `buildContainer()`) · **urutan** `container.register` tidak berubah untuk
 `eventBus`/`connectionManager` (keduanya `Lifetime.SINGLETON`, urutan memengaruhi waktu koneksi) ·
@@ -397,6 +397,61 @@ pemanggil `buildContainer()`) · **urutan** `container.register` tidak berubah u
 **Risiko & mitigasi.** **Tinggi dari semua item** — menyentuh tempat semua hal bertemu. Syarat
 eksplisit: **T0 sudah hijau** (suite jalan di CI) dan diff per domain_small supaya `git revert`
 nyata mungkin. Jangan pernah mencampur T3 dengan item lain dalam satu commit.
+
+#### Hasil T3 — 2026-09-30 ✅
+
+| Yang diubah | Dari | Jadi |
+|---|---|---|
+| `container.ts` | **1.241** baris, 162 import, 1 `register` raksasa | **81** baris, 31 import, 22 call `register<Domain>Wiring` |
+| Deklarasi model | 36 (`systemConnection.model(...)`) | **38** di `wiring/models.ts` (baseline plan salah hitung — lihat catatan) + `registerModels()` untuk 31 `asValue` |
+| `bootstrap/wiring/` | — | **24 file**: `models.ts`, `types.ts`, 22 domain |
+| `routes.ts` | 100% di `container.ts` | **0 byte tersentuh** |
+
+Commit per domain_small (urutan = urutan dikerjakan): `467e33f2` (models) · `0dfe055b` (printing,
+promotion, upload) · `855d4f2c` (identity, tenant) · `cc00d868` (catalog, inventory) ·
+`e7800c3e` (pos, customer, settings, tax, pricing, discount) · `cad92690` (reporting, template,
+database) · `2b9f3937` (hub, outlet, platform, billing) · `b327cee5` (ordering, payment).
+Tidak ada satu pun commit yang mencampur T3 dengan item lain.
+
+**Bukti `buildContainer()` resolve identik — bukan "test hijau berarti aman".**
+Selain `provisioning.test.ts`, kunci registrasi dibandingkan secara mekanik antara
+`container.ts` versi pra-T3 dan gabungan `container.ts` + `wiring/*.ts`:
+**168 kunci sebelum vs sesudah** (136 `asClass` + 31 model `asValue` + `eventBus`) —
+nol hilang, nol tambahan, nol duplikat, dan `eventBus`/`connectionManager` tetap dua
+registrasi pertama. Inilah yang membuktikan DoD "resolve identik" tanpa harus menebak.
+
+**Tiga keputusan yang menyimpang dari rencana awal.**
+
+1. **Baseline plan salah hitung: 38 deklarasi model, bukan 36.** Angka itu hasil hitung
+   `connection.model` sambil membaca cepat. Setelah diekstrak otomatis ternyata 38
+   (`QrisInvoice`, `DiscountConfiguration`, `PromoCode`, `DailyMetric`, `PlatformAuditLog`,
+   `ProvisioningRun`, `SubscriptionHistory` termasuk). Tepatnya: 7 model itu memang ada tapi
+   hanya dipakai langsung oleh injector, tidak pernah `asValue` — itu sebabnya angka lama meleset.
+2. **`registerModels(container, models)` tambahan.** Rencana hanya menyebut `buildModels`.
+   Tanpa helper ini, 31 `asValue` model harus didaftarkan ulang di orkestrator, jadi
+   `container.ts` akan kembali menyimpan inventaris model — persis masalah yang item ini
+   maksudkan selesaikan. Helper-nya hidup di `models.ts`, bukan di orkestrator.
+3. **`WiringContext.systemConnection` opsional.** `PlatformCleanupService` menerima
+   `connection`, bukan model, jadi `platform` butuh handle mongoose mentah. Dibuat opsional
+   supaya 21 wiring lain tak perlu menyalinnya.
+
+**Catatan yang jadi komentar di kode, bukan sekadar urutan baris.** Selama pemindahan,
+`container.register` yang urutan domainnya "kebetulan benar" ternyata menyiratkan kontrak
+yang belum pernah ditulis. Tiga di antaranya:
+- `ordering` ⇄ `payment` saling bergantung (`orderController` resolve `paymentRepository`,
+  `paymentService` resolve `orderRepository`). Aman **hanya** karena resolve lazy di dalam
+  `injector`; reference eager akan membuat salah satunya tak pernah ter-resolve.
+- `databaseService` sengaja memakai model mentah, bukan repository, supaya job maintenance
+  tetap jalan saat repository di atasnya bermasalah.
+- Tripel akses hub (`hubMembershipRepository` + `hubMembershipService` + grant Fase 17
+  `hubMemberAccessService`) tidak boleh digabung: anggota dengan nol grant jatuh ke fallback
+  akses legacy yang luas, dan itu perilaku yang disengaja selama Fase 18/19 belum selesai.
+
+**Verifikasi (lokal, urutan sama dengan CI).**
+`npx tsc --noEmit` ✅ 0 error · `npx vitest run tests/integration/provisioning.test.ts` ✅ 4/4 ·
+`npx vitest run` ✅ **1.249/1.249 (103 file)** · `npx vitest run` frontend ✅ **121/121 (17 file)** ·
+`pnpm run lint` ✅ · `pnpm run build` ✅. Tidak ada test yang dihapus, di-`skip`, atau diberi
+ekspektasi baru.
 
 ---
 
@@ -581,7 +636,7 @@ T3+T7 ≈ 10 sesi L). Setara ~2–3 minggu kerja terfokus, atau ~1–2 minggu ka
 | Metrik | Baseline (2026-09-29) | Target setelah plan |
 |---|---|---|
 | Constructor ≥ 8 param | 5 | **0** _(T1+T2: 2 tersisa di `src` — `AuthService` 8, `DatabaseService` 8)_ |
-| `container.ts` | 1.241 baris | ≤ 200 |
+| `container.ts` | 1.241 baris | ≤ 200 _(T3: **81**)_ |
 | File `src` > 1.000 baris | 4 (`GeneralSettings`, `TerminalCenter`, `ReportPage`, `ReportAggregation`) | **0** |
 | `backend/src` `: any` | 289 | ≤ 120 |
 | CI menjalankan test | ❌ tidak | ✅ ya _(T0 — `pnpm run test`; belum pernah dijalankan di GitHub Actions)_ |
@@ -594,8 +649,8 @@ Target test total naik karena T8 menambah test, bukan karena ada fitur baru.
 
 ## 8. Definition of Done — seluruh plan
 
-- [x] T0–T2 selesai, CI hijau pada commit bersih (bukan hanya lokal). _(T0, T1, T2 selesai 2026-09-30 — **gate Fase 18 terpenuhi**; CI di GitHub Actions sendiri masih belum pernah dieksekusi)_
-- [ ] T3–T6 selesai: `container.ts` ≤ 200; 3 god page ≤ 300 masing-masing.
+- [x] T0–T3 selesai, suite hijau pada commit bersih (bukan hanya lokal). _(T0, T1, T2, T3 selesai 2026-09-30 — **gate Fase 18 terpenuhi**; CI di GitHub Actions sendiri masih belum pernah dieksekusi)_
+- [ ] T4–T6 selesai: 3 god page ≤ 300 masing-masing. _(T3 sudah memenuhi target `container.ts` ≤ 200 → **81 baris**)_
 - [ ] T7–T9 selesai: `: any` ≤ 120; test frontend naik; `pnpm budget` hijau di CI.
 - [ ] `docs/HUB_ARCHITECTURE.md` Fase 18 dibuka (gate terpenuhi), `HUB_V2_FRONTEND_PLAN.md`
       di-unfreeze per plan.
