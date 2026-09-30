@@ -1,8 +1,8 @@
 # Rencana Pengurangan Kompleksitas (Technical Debt Plan)
 
 > Tanggal baseline: **2026-09-29** (setelah Fase 17 commit `ab80d14e`)
-> Status: 🟢 **gate Fase 18 TERPENUHI** — **6/9 item selesai (T0, T1, T2, T3, T4, T5 — 2026-09-30)**. T0–T5 sudah hijau, jadi
-> produk boleh lanjut Fase 18; debt pass tetap dilanjutkan (T6–T9) sebagai P1–P3.
+> Status: 🟢 **gate Fase 18 TERPENUHI** — **7/9 item selesai (T0–T6 — 2026-09-30)**. T0–T6 sudah hijau, jadi
+> produk boleh lanjut Fase 18; debt pass tetap dilanjutkan (T7–T9) sebagai P2–P3.
 > Catatan: dokumen ini adalah **satu-satunya** daftar pekerjaan pengurangan kompleksitas.
 > Kalau ada item refactor yang dikerjakan di luar daftar ini, tambahkan di sini lebih dulu.
 
@@ -572,6 +572,46 @@ export, dipakai bersama — sudah ada `ExportButtons`, jangan diduplikasi).
 **Risiko & mitigasi.** Rendah–sedang. `ReportPage` punya banyak tab yang berbagi state
 filter tanggal — pastikan state filter **naik** ke `ReportShell`, jangan diduplikasi per section.
 
+#### Hasil T6 ✅ — commit `dc28bf31` (2026-09-30)
+
+| | Sebelum | Sesudah |
+|---|---|---|
+| `pages/ReportPage.tsx` | 1.368 | **157** |
+| Laporan dalam satu component | 10 | **10 file** di `reports/sections/` |
+| Test frontend | 18 file / 131 | **19 file / 137** (`ReportPage.test.tsx`, 6 test) |
+
+Struktur: `reports/sections/` (10 file), `reports/components/ReportShell.tsx`
+(chrome: top bar + sidebar + kerangka konten, plus slot `overlay`),
+`reports/components/ExportButtons.tsx`, `reports/components/Spinner.tsx`,
+`reports/components/reportUi.ts` (`inputCls`/`labelCls`),
+`reports/reportCatalog.tsx` (katalog + `ReportDefinition`),
+`reports/hooks/useCategoryName.ts`. Tujuh file frontend terbesar sekarang
+969/907/823/802 baris — `ReportPage` 1.368 keluar dari daftar.
+
+**981 baris JSX dari 10 body section diverifikasi ulang secara mekanis dan
+cocok byte-per-byte** dengan versi sebelum refactor; chrome halaman juga
+terverifikasi kecuali empat rename yang disengaja (`setSearch` →
+`onSearchChange`, `filteredReports` → prop `reports`, `setActiveReport` →
+`onSelectReport`) dan penyisipan `{children}`.
+
+**Risiko yang disebut di atas diselesaikan dengan keputusan yang bisa diuji:**
+kedua puluh state tanggal tetap di halaman, satu pasang per laporan seperti
+sebelumnya, dan diteruskan sebagai prop — **tidak** dinaikkan jadi satu rentang
+global. Menaikkan filter ke `ReportShell` akan mengubah perilaku (ganti tab ikut
+membawa tanggal) dan itu keputusan produk, bukan refactor, jadi ditunda. Smoke
+test mengunci hal ini eksplisit: set `Dari` di tab Penjualan, pindah ke
+Keuangan, nilainya masih `today`; kembali ke Penjualan, nilainya masih
+2026-01-05. `selectedRefund`/`expandedProduct` juga tetap di halaman supaya
+state UI section tidak reset saat ganti tab; `RefundReceiptModal` tetap di
+level frame lewat slot `overlay` (dulu ada di luar blok switch).
+
+Satu perbedaan perilaku yang disengaja dan dicatat di commit: hook data ikut
+pindah ke section, jadi **hanya tab aktif yang memanggil endpoint-nya**
+(sebelumnya membuka Laporan menembak 10 agregasi sekaligus).
+
+Verifikasi: tsc 0 error · frontend 137/137 (19 file) · vite build OK · backend
+1249/1249 (103 file) · `pnpm -r lint` bersih.
+
 ---
 
 ### T7 — Ketik jalur uang (buang `: any` di dependency) · **P2** · D4 R2 · Effort L
@@ -714,7 +754,7 @@ Target test total naik karena T8 menambah test, bukan karena ada fitur baru.
 ## 8. Definition of Done — seluruh plan
 
 - [x] T0–T3 selesai, suite hijau pada commit bersih (bukan hanya lokal). _(T0, T1, T2, T3 selesai 2026-09-30 — **gate Fase 18 terpenuhi**; CI di GitHub Actions sendiri masih belum pernah dieksekusi)_
-- [ ] T4–T6 selesai: 3 god page ≤ 300 masing-masing. _(T3: `container.ts` **81 baris**; T4: `GeneralSettingsPage` **1.749 → 95 baris**; T5: `TerminalCenterPage` **1.387 → 105 baris** — sisa T6 `ReportPage` 1.368)_
+- [x] T4–T6 selesai: 3 god page ≤ 300 masing-masing. _(T3: `container.ts` **81 baris**; T4: `GeneralSettingsPage` **1.749 → 95 baris**; T5: `TerminalCenterPage` **1.387 → 105 baris**; T6: `ReportPage` **1.368 → 157 baris**)_
 - [ ] T7–T9 selesai: `: any` ≤ 120; test frontend naik; `pnpm budget` hijau di CI.
 - [ ] `docs/HUB_ARCHITECTURE.md` Fase 18 dibuka (gate terpenuhi), `HUB_V2_FRONTEND_PLAN.md`
       di-unfreeze per plan.
