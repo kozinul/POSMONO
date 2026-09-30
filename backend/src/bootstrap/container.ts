@@ -6,6 +6,9 @@ import {
 } from 'awilix';
 import mongoose from 'mongoose';
 import { buildModels, registerModels } from './wiring/models';
+import { registerPrintingWiring } from './wiring/printing';
+import { registerPromotionWiring } from './wiring/promotion';
+import { registerUploadWiring } from './wiring/upload';
 import { EventBus } from '../@shared/infrastructure/eventBus/EventBus';
 import { ConnectionManager } from '../@shared/infrastructure/database/ConnectionManager';
 import { env } from '../@shared/config/env';
@@ -75,11 +78,6 @@ import { CustomerController } from '../core/customer/interfaces/http/controllers
 import { MongoSettingRepository } from '../core/settings/infrastructure/persistence/MongoSettingRepository';
 import { SettingService } from '../core/settings/application/services/SettingService';
 import { SettingController } from '../core/settings/interfaces/http/controllers/SettingController';
-import { UploadService } from '../core/upload/application/services/UploadService';
-import { UploadController } from '../core/upload/interfaces/http/controllers/UploadController';
-import { MongoPromotionRepository } from '../core/promotion/infrastructure/persistence/MongoPromotionRepository';
-import { PromotionService } from '../core/promotion/application/services/PromotionService';
-import { PromotionController } from '../core/promotion/interfaces/http/controllers/PromotionController';
 import { MongoPaymentMethodRepository } from '../core/payment/infrastructure/persistence/MongoPaymentMethodRepository';
 import { PaymentMethodService } from '../core/payment/application/services/PaymentMethodService';
 import { PaymentMethodController } from '../core/payment/interfaces/http/controllers/PaymentMethodController';
@@ -96,12 +94,6 @@ import { TemplateController } from '../core/template/interfaces/http/controllers
 import { OnboardingService } from '../core/platform/application/services/OnboardingService';
 import { DatabaseService } from '../core/database/application/services/DatabaseService';
 import { DatabaseController } from '../core/database/interfaces/http/controllers/DatabaseController';
-import { MongoPrinterRepository } from '../core/printing/infrastructure/persistence/MongoPrinterRepository';
-import { PrinterService } from '../core/printing/application/services/PrinterService';
-import { PrintService } from '../core/printing/application/services/PrintService';
-import { DocumentPrintService } from '../core/printing/application/services/DocumentPrintService';
-import { PrinterController } from '../core/printing/interfaces/http/controllers/PrinterController';
-import { KotRenderService } from '../core/template/application/services/KotRenderService';
 import { MongoHubRepository } from '../core/hub/infrastructure/persistence/MongoHubRepository';
 import { MongoHubMembershipRepository } from '../core/hub/infrastructure/persistence/MongoHubMembershipRepository';
 import { MongoHubMemberTenantAccessRepository } from '../core/hub/infrastructure/persistence/MongoHubMemberTenantAccessRepository';
@@ -192,6 +184,12 @@ export function buildContainer() {
   });
 
   registerModels(container, models);
+
+  // Debt item T3 stage 2: three small domains proved the per-domain wiring
+  // pattern before the commerce-heavy ones (stage 4) were moved.
+  registerPrintingWiring({ container, models, eventBus });
+  registerPromotionWiring({ container, models, eventBus });
+  registerUploadWiring({ container, models, eventBus });
 
   container.register({
     userRepository: asClass(MongoUserRepository, {
@@ -842,35 +840,6 @@ export function buildContainer() {
         settingService: container.resolve('settingService'),
       }),
     }),
-    uploadService: asClass(UploadService, {
-      lifetime: Lifetime.SINGLETON,
-    }),
-    uploadController: asClass(UploadController, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        uploadService: container.resolve('uploadService'),
-      }),
-    }),
-    promotionRepository: asClass(MongoPromotionRepository, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        model: PromotionModel,
-      }),
-    }),
-    promotionService: asClass(PromotionService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        promotionRepository: container.resolve('promotionRepository'),
-        discountConfigRepo: container.resolve('discountConfigurationRepository'),
-        eventBus: container.resolve('eventBus'),
-      }),
-    }),
-    promotionController: asClass(PromotionController, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        promotionService: container.resolve('promotionService'),
-      }),
-    }),
     templateRepository: asClass(MongoTemplateRepository, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
@@ -933,49 +902,6 @@ export function buildContainer() {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
         databaseService: container.resolve('databaseService'),
-      }),
-    }),
-    printerRepository: asClass(MongoPrinterRepository, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        model: PrinterModel,
-      }),
-    }),
-    printerService: asClass(PrinterService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        printerRepository: container.resolve('printerRepository'),
-      }),
-    }),
-    printService: asClass(PrintService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        printerRepository: container.resolve('printerRepository'),
-      }),
-    }),
-    printerController: asClass(PrinterController, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        printerService: container.resolve('printerService'),
-        printService: container.resolve('printService'),
-        documentPrintService: container.resolve('documentPrintService'),
-      }),
-    }),
-    kotRenderService: asClass(KotRenderService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        templateService: container.resolve('templateService'),
-      }),
-    }),
-    documentPrintService: asClass(DocumentPrintService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        printService: container.resolve('printService'),
-        orderRepository: container.resolve('orderRepository'),
-        paymentRepository: container.resolve('paymentRepository'),
-        tenantRepository: container.resolve('tenantRepository'),
-        receiptRenderService: container.resolve('receiptRenderService'),
-        kotRenderService: container.resolve('kotRenderService'),
       }),
     }),
     hubRepository: asClass(MongoHubRepository, {
