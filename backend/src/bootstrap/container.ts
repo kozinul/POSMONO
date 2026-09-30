@@ -19,6 +19,9 @@ import { registerSettingsWiring } from './wiring/settings';
 import { registerTaxWiring } from './wiring/tax';
 import { registerPricingWiring } from './wiring/pricing';
 import { registerDiscountWiring } from './wiring/discount';
+import { registerReportingWiring } from './wiring/reporting';
+import { registerTemplateWiring } from './wiring/template';
+import { registerDatabaseWiring } from './wiring/database';
 import { EventBus } from '../@shared/infrastructure/eventBus/EventBus';
 import { ConnectionManager } from '../@shared/infrastructure/database/ConnectionManager';
 import { env } from '../@shared/config/env';
@@ -32,24 +35,10 @@ import { PaymentService } from '../core/payment/application/services/PaymentServ
 import { QrisGatewayService } from '../core/payment/application/services/QrisGatewayService';
 import { MongoQrisInvoiceRepository } from '../core/payment/infrastructure/persistence/MongoQrisInvoiceRepository';
 import { PaymentController } from '../core/payment/interfaces/http/controllers/PaymentController';
-import { ReportService } from '../core/reporting/application/services/ReportService';
-import { ReportExportService } from '../core/reporting/application/services/ReportExportService';
-import { ReportController } from '../core/reporting/interfaces/http/controllers/ReportController';
-import { MongoDailyMetricRepository } from '../core/reporting/infrastructure/persistence/MongoDailyMetricRepository';
-import { ReportAggregation } from '../core/reporting/infrastructure/aggregation/ReportAggregation';
 import { createDiscountRouter } from '../core/discount/api/discount.routes';
 import { MongoPaymentMethodRepository } from '../core/payment/infrastructure/persistence/MongoPaymentMethodRepository';
 import { PaymentMethodService } from '../core/payment/application/services/PaymentMethodService';
 import { PaymentMethodController } from '../core/payment/interfaces/http/controllers/PaymentMethodController';
-import { MongoTemplateRepository } from '../core/template/infrastructure/persistence/MongoTemplateRepository';
-import { TemplateService } from '../core/template/application/services/TemplateService';
-import { RenderService } from '../core/template/application/services/RenderService';
-import { ReceiptRenderService } from '../core/template/application/services/ReceiptRenderService';
-import { ReceiptAssembler } from '../core/template/application/receipt/ReceiptAssembler';
-import { InvoiceRenderService } from '../core/template/application/services/InvoiceRenderService';
-import { TemplateController } from '../core/template/interfaces/http/controllers/TemplateController';
-import { DatabaseService } from '../core/database/application/services/DatabaseService';
-import { DatabaseController } from '../core/database/interfaces/http/controllers/DatabaseController';
 import { MongoHubRepository } from '../core/hub/infrastructure/persistence/MongoHubRepository';
 import { MongoHubMembershipRepository } from '../core/hub/infrastructure/persistence/MongoHubMembershipRepository';
 import { MongoHubMemberTenantAccessRepository } from '../core/hub/infrastructure/persistence/MongoHubMemberTenantAccessRepository';
@@ -156,6 +145,9 @@ export function buildContainer() {
   registerTaxWiring({ container, models, eventBus });
   registerPricingWiring({ container, models, eventBus });
   registerDiscountWiring({ container, models, eventBus });
+  registerReportingWiring({ container, models, eventBus });
+  registerTemplateWiring({ container, models, eventBus });
+  registerDatabaseWiring({ container, models, eventBus });
 
   container.register({
     orderRepository: asClass(MongoOrderRepository, {
@@ -423,111 +415,6 @@ export function buildContainer() {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
         paymentMethodService: container.resolve('paymentMethodService'),
-      }),
-    }),
-    dailyMetricRepository: asClass(MongoDailyMetricRepository, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        model: DailyMetricModel,
-      }),
-    }),
-    reportAggregation: asClass(ReportAggregation, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        orderModel: OrderModel,
-        shiftModel: ShiftModel,
-        productModel: ProductModel,
-        paymentModel: PaymentModel,
-        refundModel: RefundModel,
-        stockModel: StockModel,
-        stockMovementModel: StockMovementModel,
-      }),
-    }),
-    reportService: asClass(ReportService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        orderRepository: container.resolve('orderRepository'),
-        shiftRepository: container.resolve('shiftRepository'),
-        dailyMetricRepository: container.resolve('dailyMetricRepository'),
-        reportAggregation: container.resolve('reportAggregation'),
-      }),
-    }),
-    reportExportService: asClass(ReportExportService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        reportService: container.resolve('reportService'),
-        categoryRepository: container.resolve('categoryRepository'),
-      }),
-    }),
-    reportController: asClass(ReportController, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        reportService: container.resolve('reportService'),
-        reportExportService: container.resolve('reportExportService'),
-      }),
-    }),
-    templateRepository: asClass(MongoTemplateRepository, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        model: TemplateModel,
-        versionModel: TemplateVersionModel,
-      }),
-    }),
-    templateService: asClass(TemplateService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        templateRepository: container.resolve('templateRepository'),
-      }),
-    }),
-    renderService: asClass(RenderService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        templateService: container.resolve('templateService'),
-      }),
-    }),
-    receiptAssembler: asClass(ReceiptAssembler, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        outletRepository: container.resolve('outletRepository'),
-      }),
-    }),
-    receiptRenderService: asClass(ReceiptRenderService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        templateService: container.resolve('templateService'),
-        assembler: container.resolve('receiptAssembler'),
-      }),
-    }),
-    invoiceRenderService: asClass(InvoiceRenderService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        templateService: container.resolve('templateService'),
-      }),
-    }),
-    templateController: asClass(TemplateController, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        templateService: container.resolve('templateService'),
-        renderService: container.resolve('renderService'),
-      }),
-    }),
-    databaseService: asClass(DatabaseService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        orderModel: OrderModel,
-        paymentModel: PaymentModel,
-        refundModel: RefundModel,
-        dailyMetricModel: DailyMetricModel,
-        shiftModel: ShiftModel,
-        shiftRepository: container.resolve('shiftRepository'),
-        shiftService: container.resolve('shiftService'),
-        reportAggregation: container.resolve('reportAggregation'),
-      }),
-    }),
-    databaseController: asClass(DatabaseController, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        databaseService: container.resolve('databaseService'),
       }),
     }),
     hubRepository: asClass(MongoHubRepository, {
