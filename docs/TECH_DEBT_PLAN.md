@@ -1,8 +1,8 @@
 # Rencana Pengurangan Kompleksitas (Technical Debt Plan)
 
 > Tanggal baseline: **2026-09-29** (setelah Fase 17 commit `ab80d14e`)
-> Status: 🟢 **gate Fase 18 TERPENUHI** — **4/9 item selesai (T0, T1, T2, T3 — 2026-09-30)**. T0+T1+T2+T3 sudah hijau, jadi
-> produk boleh lanjut Fase 18; debt pass tetap dilanjutkan (T4–T9) sebagai P1–P3.
+> Status: 🟢 **gate Fase 18 TERPENUHI** — **5/9 item selesai (T0, T1, T2, T3, T4 — 2026-09-30)**. T0–T4 sudah hijau, jadi
+> produk boleh lanjut Fase 18; debt pass tetap dilanjutkan (T5–T9) sebagai P1–P3.
 > Catatan: dokumen ini adalah **satu-satunya** daftar pekerjaan pengurangan kompleksitas.
 > Kalau ada item refactor yang dikerjakan di luar daftar ini, tambahkan di sini lebih dulu.
 
@@ -474,6 +474,37 @@ smoke test render halaman ada (bagian T8) · tidak ada nilai default yang beruba
 `tsc` + `vite build` + smoke test T8. Saat memindah, **jangan** menyalin logika — pindahkan
 JSX apa adanya; setiap perbedaan logika ditunda ke commit terpisah.
 
+#### Hasil T4 ✅ — commit `35c86ac7` (2026-09-30)
+
+| | Sebelum | Sesudah |
+|---|---|---|
+| `pages/GeneralSettingsPage.tsx` | 1.749 | **95** |
+| File section | 0 | **9** (`sections/<Name>Section.tsx`) |
+| Pemilik alur simpan | 1 fungsi di dalam halaman | 1 (`hooks/useSettingsSave.ts`) |
+| `Array<any>` di helper tax config | 2 | **0** (`ITaxRule[]` / `IChargeConfig[]`) |
+
+Struktur: `sections/` (9 section + `settingsSections.tsx` untuk registry sidebar),
+`components/` (`SettingsTopBar`, `SettingsSidebar` — chrome shell),
+`hooks/useSettingsDraft.ts` (state draft + 2 efek init, dikelompokkan per section),
+`hooks/useSettingsSave.ts` (satu-satunya pemilik alur simpan), `utils/`.
+
+**Bukti "pemindahan, bukan penulisan ulang"**: blok JSX ke-9 dicek ulang dengan
+pembandingan baris-demi-baris terhadap versi sebelum refactor — 8 dari 9 **cocok
+byte-per-byte**. Pengecualian satu-satunya ada di `TaxRulesSection` dan memang
+dipaksa compiler: begitu `activeRules` bertipe `ITaxRule[]` (bukan `Array<any>`),
+dua baris gagal strict check dan diperbaiki dengan `?? 0` + dua cast `as number`
+(`undefined > 0` ≡ `0 > 0` ≡ false; cast menjaga propagasi NaN yang sudah ada).
+
+State milik tiap section ikut pindah ke section-nya (form aturan pajak, form biaya,
+form profil harga, status uji QRIS, pilih logo struk) — masing-masing hanya dipakai
+satu section, jadi tidak ada state bersama yang terpecah. `qrisConfigComplete`
+ditarik ke `utils/qris.ts` supaya definisi "config QRIS lengkap" punya satu
+definisi, dipakai halaman dan hook simpan.
+
+Verifikasi: tsc 0 error · frontend 121/121 (17 file) · vite build OK · backend
+1249/1249 (103 file) · `pnpm -r lint` bersih. Smoke test render halaman **tetap
+menunggu T8** (belum ada test render untuk halaman ini).
+
 ---
 
 ### T5 — `TerminalCenterPage` 1.387 → 7 file section · **P1** · D3 R2 · Effort S
@@ -650,7 +681,7 @@ Target test total naik karena T8 menambah test, bukan karena ada fitur baru.
 ## 8. Definition of Done — seluruh plan
 
 - [x] T0–T3 selesai, suite hijau pada commit bersih (bukan hanya lokal). _(T0, T1, T2, T3 selesai 2026-09-30 — **gate Fase 18 terpenuhi**; CI di GitHub Actions sendiri masih belum pernah dieksekusi)_
-- [ ] T4–T6 selesai: 3 god page ≤ 300 masing-masing. _(T3 sudah memenuhi target `container.ts` ≤ 200 → **81 baris**)_
+- [ ] T4–T6 selesai: 3 god page ≤ 300 masing-masing. _(T3: `container.ts` **81 baris**; T4: `GeneralSettingsPage` **1.749 → 95 baris** — sisa T5 `TerminalCenterPage` & T6 `ReportPage`)_
 - [ ] T7–T9 selesai: `: any` ≤ 120; test frontend naik; `pnpm budget` hijau di CI.
 - [ ] `docs/HUB_ARCHITECTURE.md` Fase 18 dibuka (gate terpenuhi), `HUB_V2_FRONTEND_PLAN.md`
       di-unfreeze per plan.
