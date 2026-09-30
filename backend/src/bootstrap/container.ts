@@ -22,6 +22,10 @@ import { registerDiscountWiring } from './wiring/discount';
 import { registerReportingWiring } from './wiring/reporting';
 import { registerTemplateWiring } from './wiring/template';
 import { registerDatabaseWiring } from './wiring/database';
+import { registerHubWiring } from './wiring/hub';
+import { registerOutletWiring } from './wiring/outlet';
+import { registerPlatformWiring } from './wiring/platform';
+import { registerBillingWiring } from './wiring/billing';
 import { EventBus } from '../@shared/infrastructure/eventBus/EventBus';
 import { ConnectionManager } from '../@shared/infrastructure/database/ConnectionManager';
 import { env } from '../@shared/config/env';
@@ -39,31 +43,6 @@ import { createDiscountRouter } from '../core/discount/api/discount.routes';
 import { MongoPaymentMethodRepository } from '../core/payment/infrastructure/persistence/MongoPaymentMethodRepository';
 import { PaymentMethodService } from '../core/payment/application/services/PaymentMethodService';
 import { PaymentMethodController } from '../core/payment/interfaces/http/controllers/PaymentMethodController';
-import { MongoHubRepository } from '../core/hub/infrastructure/persistence/MongoHubRepository';
-import { MongoHubMembershipRepository } from '../core/hub/infrastructure/persistence/MongoHubMembershipRepository';
-import { MongoHubMemberTenantAccessRepository } from '../core/hub/infrastructure/persistence/MongoHubMemberTenantAccessRepository';
-import { HubService } from '../core/hub/application/services/HubService';
-import { HubMembershipService } from '../core/hub/application/services/HubMembershipService';
-import { HubMemberAccessService } from '../core/hub/application/services/HubMemberAccessService';
-import { HubController } from '../core/hub/interfaces/http/controllers/HubController';
-import { HubMembershipController } from '../core/hub/interfaces/http/controllers/HubMembershipController';
-import { MongoOutletRepository } from '../core/outlet/infrastructure/persistence/MongoOutletRepository';
-import { OutletService } from '../core/outlet/application/services/OutletService';
-import { OutletController } from '../core/outlet/interfaces/http/controllers/OutletController';
-import { PlatformController } from '../core/platform/interfaces/http/controllers/PlatformController';
-import { PlatformCleanupService } from '../core/platform/application/services/PlatformCleanupService';
-import { ProvisionTenantService } from '../core/platform/application/services/ProvisionTenantService';
-import { MongoPlanRepository } from '../core/billing/infrastructure/persistence/MongoPlanRepository';
-import { MongoSubscriptionRepository } from '../core/billing/infrastructure/persistence/MongoSubscriptionRepository';
-import { PlanService } from '../core/billing/application/services/PlanService';
-import { SubscriptionService } from '../core/billing/application/services/SubscriptionService';
-import { EntitlementService } from '../core/billing/application/services/EntitlementService';
-import { PlanController } from '../core/billing/interfaces/http/controllers/PlanController';
-import { SubscriptionController } from '../core/billing/interfaces/http/controllers/SubscriptionController';
-import { MongoPlatformAuditLogRepository } from '../core/platform/audit/infrastructure/persistence/MongoPlatformAuditLogRepository';
-import { PlatformAuditService } from '../core/platform/audit/application/services/PlatformAuditService';
-import { MongoProvisioningRunRepository } from '../core/platform/provisioning/infrastructure/persistence/MongoProvisioningRunRepository';
-import { MongoSubscriptionHistoryRepository } from '../core/billing/infrastructure/persistence/MongoSubscriptionHistoryRepository';
 
 export type DIContainer = ReturnType<typeof buildContainer>;
 
@@ -148,6 +127,10 @@ export function buildContainer() {
   registerReportingWiring({ container, models, eventBus });
   registerTemplateWiring({ container, models, eventBus });
   registerDatabaseWiring({ container, models, eventBus });
+  registerHubWiring({ container, models, eventBus });
+  registerOutletWiring({ container, models, eventBus });
+  registerPlatformWiring({ container, models, eventBus, systemConnection });
+  registerBillingWiring({ container, models, eventBus });
 
   container.register({
     orderRepository: asClass(MongoOrderRepository, {
@@ -415,194 +398,6 @@ export function buildContainer() {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
         paymentMethodService: container.resolve('paymentMethodService'),
-      }),
-    }),
-    hubRepository: asClass(MongoHubRepository, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        model: HubModel,
-      }),
-    }),
-    hubService: asClass(HubService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        hubRepository: container.resolve('hubRepository'),
-        tenantRepository: container.resolve('tenantRepository'),
-      }),
-    }),
-    hubController: asClass(HubController, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        hubService: container.resolve('hubService'),
-        auditService: container.resolve('platformAuditService'),
-      }),
-    }),
-    hubMembershipRepository: asClass(MongoHubMembershipRepository, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        model: HubMembershipModel,
-      }),
-    }),
-    hubMembershipService: asClass(HubMembershipService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        deps: {
-          hubMembershipRepository: container.resolve('hubMembershipRepository'),
-          hubRepository: container.resolve('hubRepository'),
-          tenantRepository: container.resolve('tenantRepository'),
-          userRepository: container.resolve('userRepository'),
-          accessService: container.resolve('hubMemberAccessService'),
-        },
-      }),
-    }),
-    hubMemberTenantAccessRepository: asClass(MongoHubMemberTenantAccessRepository, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        model: HubMemberTenantAccessModel,
-      }),
-    }),
-    hubMemberAccessService: asClass(HubMemberAccessService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        deps: {
-          accessRepository: container.resolve('hubMemberTenantAccessRepository'),
-          hubMembershipRepository: container.resolve('hubMembershipRepository'),
-          hubRepository: container.resolve('hubRepository'),
-          tenantRepository: container.resolve('tenantRepository'),
-          outletRepository: container.resolve('outletRepository'),
-        },
-      }),
-    }),
-    hubMembershipController: asClass(HubMembershipController, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        hubMembershipService: container.resolve('hubMembershipService'),
-        auditService: container.resolve('platformAuditService'),
-        hubMemberAccessService: container.resolve('hubMemberAccessService'),
-      }),
-    }),
-    outletRepository: asClass(MongoOutletRepository, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        model: OutletModel,
-      }),
-    }),
-    outletService: asClass(OutletService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        outletRepository: container.resolve('outletRepository'),
-        warehouseRepository: container.resolve('warehouseRepository'),
-      }),
-    }),
-    outletController: asClass(OutletController, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        outletService: container.resolve('outletService'),
-      }),
-    }),
-    provisionTenantService: asClass(ProvisionTenantService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        deps: {
-          tenantRepository: container.resolve('tenantRepository'),
-          userRepository: container.resolve('userRepository'),
-          roleRepository: container.resolve('roleRepository'),
-          hubRepository: container.resolve('hubRepository'),
-          outletService: container.resolve('outletService'),
-          templateService: container.resolve('templateService'),
-          provisioningRunRepository: container.resolve('provisioningRunRepository'),
-        },
-      }),
-    }),
-    platformCleanupService: asClass(PlatformCleanupService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({ connection: systemConnection }),
-    }),
-    platformController: asClass(PlatformController, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        deps: {
-          hubService: container.resolve('hubService'),
-          tenantService: container.resolve('tenantService'),
-          outletService: container.resolve('outletService'),
-          shiftService: container.resolve('shiftService'),
-          paymentService: container.resolve('paymentService'),
-          tenantRepository: container.resolve('tenantRepository'),
-          hubRepository: container.resolve('hubRepository'),
-          provisionTenantService: container.resolve('provisionTenantService'),
-          auditService: container.resolve('platformAuditService'),
-          subscriptionService: container.resolve('subscriptionService'),
-          provisioningRunRepository: container.resolve('provisioningRunRepository'),
-          userRepository: container.resolve('userRepository'),
-          roleRepository: container.resolve('roleRepository'),
-          warehouseRepository: container.resolve('warehouseRepository'),
-          userService: container.resolve('userService'),
-          cleanupService: container.resolve('platformCleanupService'),
-          hubMembershipService: container.resolve('hubMembershipService'),
-        },
-      }),
-    }),
-    platformAuditLogRepository: asClass(MongoPlatformAuditLogRepository, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({ model: PlatformAuditLogModel }),
-    }),
-    platformAuditService: asClass(PlatformAuditService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        repository: container.resolve('platformAuditLogRepository'),
-      }),
-    }),
-    provisioningRunRepository: asClass(MongoProvisioningRunRepository, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({ model: ProvisioningRunModel }),
-    }),
-    planRepository: asClass(MongoPlanRepository, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({ model: PlanModel }),
-    }),
-    subscriptionRepository: asClass(MongoSubscriptionRepository, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({ model: SubscriptionModel }),
-    }),
-    planService: asClass(PlanService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        planRepository: container.resolve('planRepository'),
-      }),
-    }),
-    subscriptionService: asClass(SubscriptionService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        subscriptionRepository: container.resolve('subscriptionRepository'),
-        planRepository: container.resolve('planRepository'),
-        tenantRepository: container.resolve('tenantRepository'),
-        historyRepository: container.resolve('subscriptionHistoryRepository'),
-      }),
-    }),
-    subscriptionHistoryRepository: asClass(MongoSubscriptionHistoryRepository, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({ model: SubscriptionHistoryModel }),
-    }),
-    entitlementService: asClass(EntitlementService, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        subscriptionRepository: container.resolve('subscriptionRepository'),
-        planRepository: container.resolve('planRepository'),
-        tenantRepository: container.resolve('tenantRepository'),
-      }),
-    }),
-    planController: asClass(PlanController, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        planService: container.resolve('planService'),
-      }),
-    }),
-    subscriptionController: asClass(SubscriptionController, {
-      lifetime: Lifetime.SINGLETON,
-      injector: () => ({
-        subscriptionService: container.resolve('subscriptionService'),
-        entitlementService: container.resolve('entitlementService'),
-        auditService: container.resolve('platformAuditService'),
       }),
     }),
   });
