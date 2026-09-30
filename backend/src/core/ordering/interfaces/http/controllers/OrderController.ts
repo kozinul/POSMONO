@@ -1,30 +1,6 @@
 import { Request, Response } from 'express';
 import { BaseController } from '../../../../../@shared/interfaces/BaseController';
-import {
-  CreateOrderService,
-  UpdateOrderService,
-  ReplaceOrderItemsService,
-  VoidOrderService,
-  VoidItemService,
-  PayOrderService,
-  VoidPaymentService,
-  ReopenOrderService,
-  SplitItemService,
-  RemoveItemService,
-  UpdateItemQuantityService,
-  VoidAndRollbackService,
-  TopayService,
-  RefundService,
-  ApplyDiscountService,
-  SetServiceChargeService,
-  HoldOrderService,
-  RecallOrderService,
-  CloseBillService,
-} from '../../../application/services/OrderService';
-import { MongoOrderRepository } from '../../../infrastructure/persistence/MongoOrderRepository';
-import { MongoPaymentRepository } from '../../../../payment/infrastructure/persistence/MongoPaymentRepository';
-import { MongoTenantRepository } from '../../../../tenant/infrastructure/persistence/MongoTenantRepository';
-import { InvoiceRenderService } from '../../../../template/application/services/InvoiceRenderService';
+import type { OrderControllerDeps } from './OrderControllerDeps';
 import { z } from 'zod';
 import { ValidationError } from '../../../../../@shared/infrastructure/error/AppError';
 
@@ -180,31 +156,7 @@ const setServiceChargeSchema = z.object({
 });
 
 export class OrderController extends BaseController {
-  constructor(
-    private readonly createOrderService: CreateOrderService,
-    private readonly updateOrderService: UpdateOrderService,
-    private readonly replaceOrderItemsService: ReplaceOrderItemsService,
-    private readonly voidOrderService: VoidOrderService,
-    private readonly voidItemService: VoidItemService,
-    private readonly payOrderService: PayOrderService,
-    private readonly voidPaymentService: VoidPaymentService,
-    private readonly reopenOrderService: ReopenOrderService,
-    private readonly splitItemService: SplitItemService,
-    private readonly removeItemService: RemoveItemService,
-    private readonly updateItemQuantityService: UpdateItemQuantityService,
-    private readonly voidAndRollbackService: VoidAndRollbackService,
-    private readonly topayService: TopayService,
-    private readonly refundService: RefundService,
-    private readonly applyDiscountService: ApplyDiscountService,
-    private readonly setServiceChargeService: SetServiceChargeService,
-    private readonly holdOrderService: HoldOrderService,
-    private readonly recallOrderService: RecallOrderService,
-    private readonly closeBillService: CloseBillService,
-    private readonly orderRepository: MongoOrderRepository,
-    private readonly paymentRepository: MongoPaymentRepository,
-    private readonly tenantRepository: MongoTenantRepository,
-    private readonly invoiceRenderService: InvoiceRenderService,
-  ) {
+  constructor(private readonly deps: OrderControllerDeps) {
     super();
   }
 
@@ -213,7 +165,7 @@ export class OrderController extends BaseController {
     if (!parsed.success) throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
 
     const { items, customerId, customerName, tableNumber, cashierName, ...rest } = parsed.data;
-    const order = await this.createOrderService.execute({
+    const order = await this.deps.createOrderService.execute({
       tenantId: req.tenantId,
       cashierId: req.userId,
       cashierName: cashierName ?? '',
@@ -234,7 +186,7 @@ export class OrderController extends BaseController {
 
     const data = parsed.data || {};
     const { items, tableNumber, ...rest } = data;
-    const order = await this.updateOrderService.execute({
+    const order = await this.deps.updateOrderService.execute({
       id: req.params.id,
       tenantId: req.tenantId,
       items: items?.map((item) => ({ ...item, variantId: item.variantId ?? null })),
@@ -250,7 +202,7 @@ export class OrderController extends BaseController {
     const parsed = replaceOrderItemsSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
 
-    const order = await this.replaceOrderItemsService.execute({
+    const order = await this.deps.replaceOrderItemsService.execute({
       id: req.params.id,
       items: parsed.data.items.map((item) => ({ ...item, variantId: item.variantId ?? null })),
       tableNumber: parsed.data.tableNumber ?? null,
@@ -264,7 +216,7 @@ export class OrderController extends BaseController {
   async list(req: Request, res: Response): Promise<void> {
     const { status, page, limit, dateFrom, dateTo } = req.query;
 
-    const result = await this.orderRepository.findByTenant(req.tenantId, {
+    const result = await this.deps.orderRepository.findByTenant(req.tenantId, {
       status: status as string | undefined,
       dateFrom: dateFrom as string | undefined,
       dateTo: dateTo as string | undefined,
@@ -280,7 +232,7 @@ export class OrderController extends BaseController {
   }
 
   async getById(req: Request, res: Response): Promise<void> {
-    const order = await this.orderRepository.findById(req.params.id);
+    const order = await this.deps.orderRepository.findById(req.params.id);
     if (!order || order.serialize().tenantId !== req.tenantId) {
       throw new ValidationError('Order not found');
     }
@@ -288,19 +240,19 @@ export class OrderController extends BaseController {
   }
 
   async invoice(req: Request, res: Response): Promise<void> {
-    const order = await this.orderRepository.findById(req.params.id);
+    const order = await this.deps.orderRepository.findById(req.params.id);
     if (!order || order.serialize().tenantId !== req.tenantId) {
       throw new ValidationError('Order not found');
     }
 
-    const tenant = await this.tenantRepository.findById(req.tenantId);
+    const tenant = await this.deps.tenantRepository.findById(req.tenantId);
     if (!tenant) throw new ValidationError('Tenant not found');
 
     const orderData = order.serialize();
-    const payments = await this.paymentRepository.findByOrderId(req.tenantId, orderData.id);
+    const payments = await this.deps.paymentRepository.findByOrderId(req.tenantId, orderData.id);
     const payment = payments.find((p) => p.serialize().status === 'completed') ?? payments[0] ?? null;
 
-    const result = await this.invoiceRenderService.render({
+    const result = await this.deps.invoiceRenderService.render({
       tenantId: req.tenantId,
       order: orderData,
       payment: payment ? payment.serialize() : null,
@@ -323,7 +275,7 @@ export class OrderController extends BaseController {
     const parsed = voidOrderSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
 
-    const order = await this.voidOrderService.execute({
+    const order = await this.deps.voidOrderService.execute({
       id: req.params.id,
       tenantId: req.tenantId,
       voidedBy: req.userId,
@@ -339,7 +291,7 @@ export class OrderController extends BaseController {
     const parsed = closeBillSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
 
-    const order = await this.closeBillService.execute({
+    const order = await this.deps.closeBillService.execute({
       id: req.params.id,
       tenantId: req.tenantId,
       reason: parsed.data.reason,
@@ -352,7 +304,7 @@ export class OrderController extends BaseController {
     const parsed = voidItemSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
 
-    const order = await this.voidItemService.execute({
+    const order = await this.deps.voidItemService.execute({
       id: req.params.id,
       tenantId: req.tenantId,
       itemIndex: parsed.data.itemIndex,
@@ -370,7 +322,7 @@ export class OrderController extends BaseController {
     const parsed = payOrderSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
 
-    const order = await this.payOrderService.execute({
+    const order = await this.deps.payOrderService.execute({
       id: req.params.id,
       paymentBreakdown: parsed.data.paymentBreakdown,
       cashierId: req.userId,
@@ -384,7 +336,7 @@ export class OrderController extends BaseController {
     const parsed = splitItemSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
 
-    const order = await this.splitItemService.execute({
+    const order = await this.deps.splitItemService.execute({
       orderId: req.params.id,
       itemIndex: parsed.data.itemIndex,
       quantities: parsed.data.quantities,
@@ -397,7 +349,7 @@ export class OrderController extends BaseController {
     const parsed = voidPaymentSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
 
-    const order = await this.voidPaymentService.execute({
+    const order = await this.deps.voidPaymentService.execute({
       id: req.params.id,
       tenantId: req.tenantId,
       paymentIndex: parsed.data.paymentIndex,
@@ -411,7 +363,7 @@ export class OrderController extends BaseController {
   }
 
   async reopen(req: Request, res: Response): Promise<void> {
-    const order = await this.reopenOrderService.execute({
+    const order = await this.deps.reopenOrderService.execute({
       id: req.params.id,
       reopenedBy: req.userId,
     });
@@ -423,7 +375,7 @@ export class OrderController extends BaseController {
     const parsed = removeItemSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
 
-    const order = await this.removeItemService.execute({
+    const order = await this.deps.removeItemService.execute({
       id: req.params.id,
       itemIndex: parsed.data.itemIndex,
     });
@@ -435,7 +387,7 @@ export class OrderController extends BaseController {
     const parsed = updateItemQuantitySchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
 
-    const order = await this.updateItemQuantityService.execute({
+    const order = await this.deps.updateItemQuantityService.execute({
       id: req.params.id,
       itemIndex: parsed.data.itemIndex,
       quantity: parsed.data.quantity,
@@ -448,7 +400,7 @@ export class OrderController extends BaseController {
     const parsed = voidAndRollbackSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
 
-    const order = await this.voidAndRollbackService.execute({
+    const order = await this.deps.voidAndRollbackService.execute({
       id: req.params.id,
       tenantId: req.tenantId,
       reason: parsed.data.reason,
@@ -464,7 +416,7 @@ export class OrderController extends BaseController {
     const parsed = topaySchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
 
-    const order = await this.topayService.execute({
+    const order = await this.deps.topayService.execute({
       id: req.params.id,
       paymentBreakdown: parsed.data.paymentBreakdown,
       cashierId: req.userId,
@@ -478,7 +430,7 @@ export class OrderController extends BaseController {
     const parsed = refundSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
 
-    const order = await this.refundService.execute({
+    const order = await this.deps.refundService.execute({
       id: req.params.id,
       refundedBy: req.userId,
       refundedByName: parsed.data.refundedByName,
@@ -492,7 +444,7 @@ export class OrderController extends BaseController {
     const parsed = applyDiscountSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
 
-    const order = await this.applyDiscountService.execute({
+    const order = await this.deps.applyDiscountService.execute({
       id: req.params.id,
       discountBreakdown: parsed.data.discountBreakdown,
     });
@@ -504,7 +456,7 @@ export class OrderController extends BaseController {
     const parsed = setServiceChargeSchema.safeParse(req.body);
     if (!parsed.success) throw new ValidationError('Invalid input: ' + JSON.stringify(parsed.error.flatten().fieldErrors));
 
-    const order = await this.setServiceChargeService.execute({
+    const order = await this.deps.setServiceChargeService.execute({
       id: req.params.id,
       rate: parsed.data.rate,
     });
@@ -513,7 +465,7 @@ export class OrderController extends BaseController {
   }
 
   async hold(req: Request, res: Response): Promise<void> {
-    const order = await this.holdOrderService.execute({
+    const order = await this.deps.holdOrderService.execute({
       id: req.params.id,
     });
 
@@ -521,7 +473,7 @@ export class OrderController extends BaseController {
   }
 
   async recall(req: Request, res: Response): Promise<void> {
-    const order = await this.recallOrderService.execute({
+    const order = await this.deps.recallOrderService.execute({
       id: req.params.id,
     });
 

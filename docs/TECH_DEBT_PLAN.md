@@ -1,7 +1,8 @@
 # Rencana Pengurangan Kompleksitas (Technical Debt Plan)
 
 > Tanggal baseline: **2026-09-29** (setelah Fase 17 commit `ab80d14e`)
-> Status: 🟡 **aktif** — **2/9 item selesai (T0, T1 — 2026-09-30)**. Fase 18 **terblokir** sampai T2 selesai.
+> Status: 🟢 **gate Fase 18 TERPENUHI** — **3/9 item selesai (T0, T1, T2 — 2026-09-30)**. T0+T1+T2 sudah hijau, jadi
+> produk boleh lanjut Fase 18; debt pass tetap dilanjutkan (T3–T9) sebagai,P1–P3.
 > Catatan: dokumen ini adalah **satu-satunya** daftar pekerjaan pengurangan kompleksitas.
 > Kalau ada item refactor yang dikerjakan di luar daftar ini, tambahkan di sini lebih dulu.
 
@@ -56,7 +57,7 @@ Empat tingkat. Tiap item punya skor agar urutannya bisa dipertanggungjawabkan, b
 |---|---|---|---|---|---|---|
 | **T0** | Pagar regresi nyata: CI menjalankan suite sungguhan | 5 | 5 | **10** | S | **P0** ✅ |
 | **T1** | `PaymentService` 16 param `any` → 1 deps object bertipe | 5 | 5 | **10** | M | **P0** ✅ |
-| **T2** | `OrderController` 24 param → 1 deps object | 4 | 4 | **8** | S | **P0** |
+| **T2** | `OrderController` 24 param → 1 deps object | 4 | 4 | **8** | S | **P0** ✅ |
 | **T3** | `container.ts` 1.241 baris → wiring per domain | 5 | 4 | **9** | L | **P1** |
 | **T4** | `GeneralSettingsPage` 1.749 → shell + 9 section | 4 | 2 | **6** | M | **P1** |
 | **T5** | `TerminalCenterPage` 1.387 → 7 file section | 3 | 2 | **5** | S | **P1** |
@@ -320,6 +321,47 @@ mengubah call-site jadi `this.deps.useCases.x` di item ini; itu pekerjaan terpis
 **Risiko & mitigasi.** Rendah–sedang; mekanis total. `AGENTS.md` sudah merekam harness test
 pernah tersesat karena argumen bergeser — refactor ini justru menghapus penyebabnya.
 
+#### Hasil T2 — 2026-09-30 ✅
+
+| Yang diubah | Dari | Jadi |
+|---|---|---|
+| `OrderController.ts` ctor | **23** param positional (19 use-case + 4 infra) | `constructor(private readonly deps: OrderControllerDeps)` |
+| Tipe dependency | anotasi inline di ctor | `OrderControllerDeps.ts` (baru): `OrderUseCases` (19 × `Pick<Kelas, 'execute'>`) + 4 slot `Pick<Konkret, 'method'>`, 0 `any` |
+| `this.<x>` | 25 kemunculan | `this.deps.<x>` (diverifikasi: dari 76 baris berubah, 53 adalah `this.deps`/baris ctor dan 23 adalah deklarasi param yang dihapus — **nol** perubahan statements) |
+| Panjang file | 530 baris | **482** baris (import blok 19 baris pindah ke file deps) |
+| `container.ts` | `injector: () => ({ …23 slot… })` | `injector: () => ({ deps: { …23 slot bernama… } })` |
+| `tests/helpers/integration.ts` | `new OrderController(createOrderService, s.update, …)` 23 argumen | `new OrderController({ createOrderService, updateOrderService: s.update, … })` |
+| `OrderControllerDeps.ts` | — | `grep -c ': any'` = 0 (file baru); `OrderController.ts` juga 0 |
+
+**Dua keputusan yang menyimpang dari rencana awal — dan alasannya.**
+
+1. **Dua interface dengan `extends`, bukan 23 field datar.** Rencana memberi opsi ini dan melarang
+   `this.deps.useCases.x`. Yang dipakai: `OrderUseCases` berisi 19 use-case, lalu
+   `OrderControllerDeps extends OrderUseCases` menambah 4 slot infra. Call site tetap rata
+   (`this.deps.createOrderService.execute`) — jadi tidak ada hop tambahan, tapi 19 use-case
+   punya tempat sendiri di grep/IDE, dan bisa di-reuse kalau nanti ada controller lain
+   (mis. print/order split) yang butuh use-case yang sama.
+2. **`OrderController.ts` kehilangan 19 import use-case.** Setelah tipe pindah ke
+   `OrderControllerDeps.ts`, `tsc` akan menandai import itu unused; membiarkannya berarti
+   controller masih menarik seluruh modul use-case tanpa alasan. 530 → 482 baris.
+
+**Verifikasi (lokal, urutan sama dengan CI).**
+`npx tsc --noEmit` ✅ 0 error · `npx vitest run tests/integration` ✅ **133/133 (12 file)** ·
+`npx vitest run` ✅ **1.249/1.249 (103 file)** · `pnpm run build` ✅ · `pnpm run lint` ✅.
+Route `createOrderRoutes` tidak disentuh sama sekali, jadi kontrak HTTP tidak berubah; tidak ada
+test yang dihapus, di-`skip`, atau diberi ekspektasi baru.
+
+**Efek samping yang justru memperbaiki utang lama.** `AGENTS.md` merekam bahwa harness pernah
+menusuk argumen yang bergeser (mis. "OrderController 24 arg") dan itu baru ketahuan saat test merah
+dengan `undefined.execute`. Dengan named deps, argumen yang lupa diisi tidak mungkin lagi bergeser —
+nama yang salah akan jadi `TypeError` di `tsc`, bukan di produksi.
+
+**Utang yang tersisa dari T2 (sengaja, tidak diruvik di sini).**
+- Dua constructor 8-param tersisa (`AuthService`, `DatabaseService`) **tidak masuk** daftar T0–T9;
+  jumlahnya kecil dan di bawah ambang P0. Baru digabung kalau item berikutnya menyentuh file itu.
+- 19 use-case order masih dikelompokkan di **satu** file `OrderService.ts` (≈980 baris). Membelah
+  file itu = item tersendiri; `OrderUseCases` sengaja hanya typing, tidak mengubah isi file.
+
 ---
 
 ### T3 — `container.ts` 1.241 baris → wiring per domain · **P1** · D5 R4 · Effort L
@@ -475,7 +517,7 @@ pola lama creeping back begitu tidak ada yang menolak.
 | `GeneralSettingsPage.tsx` | 1.749 | ≤ 250 |
 | `TerminalCenterPage.tsx` | 1.387 | ≤ 300 |
 | `ReportPage.tsx` | 1.368 | ≤ 300 |
-| Constructor ≥ 8 param positional | 5 | 0 |
+| Constructor ≥ 8 param positional | 5 | 0 _(T1+T2: sisa 2)_ |
 | `backend/src` total `: any` | 289 | ≤ 120 (turunkan bertahap per T7) |
 | File `src` > 1.000 baris | 4 | 0 |
 
@@ -538,7 +580,7 @@ T3+T7 ≈ 10 sesi L). Setara ~2–3 minggu kerja terfokus, atau ~1–2 minggu ka
 
 | Metrik | Baseline (2026-09-29) | Target setelah plan |
 |---|---|---|
-| Constructor ≥ 8 param | 5 | **0** _(T1: 3 tersisa di `src` — `OrderController` 23, `AuthService` 8, `DatabaseService` 8)_ |
+| Constructor ≥ 8 param | 5 | **0** _(T1+T2: 2 tersisa di `src` — `AuthService` 8, `DatabaseService` 8)_ |
 | `container.ts` | 1.241 baris | ≤ 200 |
 | File `src` > 1.000 baris | 4 (`GeneralSettings`, `TerminalCenter`, `ReportPage`, `ReportAggregation`) | **0** |
 | `backend/src` `: any` | 289 | ≤ 120 |
@@ -552,7 +594,7 @@ Target test total naik karena T8 menambah test, bukan karena ada fitur baru.
 
 ## 8. Definition of Done — seluruh plan
 
-- [ ] T0–T2 selesai, CI hijau pada commit bersih (bukan hanya lokal). _(T0, T1 selesai 2026-09-30)_
+- [x] T0–T2 selesai, CI hijau pada commit bersih (bukan hanya lokal). _(T0, T1, T2 selesai 2026-09-30 — **gate Fase 18 terpenuhi**; CI di GitHub Actions sendiri masih belum pernah dieksekusi)_
 - [ ] T3–T6 selesai: `container.ts` ≤ 200; 3 god page ≤ 300 masing-masing.
 - [ ] T7–T9 selesai: `: any` ≤ 120; test frontend naik; `pnpm budget` hijau di CI.
 - [ ] `docs/HUB_ARCHITECTURE.md` Fase 18 dibuka (gate terpenuhi), `HUB_V2_FRONTEND_PLAN.md`

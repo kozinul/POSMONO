@@ -205,31 +205,31 @@ export async function buildIntegrationApp(options: IntegrationAppOptions = {}): 
   const invoiceRenderService = new InvoiceRenderService(templateService);
 
   const s = makeOrderServices();
-  const orderController = new OrderController(
+  const orderController = new OrderController({
     createOrderService,
-    s.update,
-    s.replaceItems,
-    s.voidOrder,
-    s.voidItem,
-    s.payOrder,
-    s.voidPayment,
-    s.reopen,
-    s.splitItem,
-    s.removeItem,
-    s.updateQty,
-    s.voidRollback,
-    s.topay,
-    s.refund,
-    s.applyDiscount,
-    s.setSC,
-    s.hold,
-    s.recall,
-    s.closeBill,
-    orderRepo,
-    paymentRepo,
-    tenantRepo,
+    updateOrderService: s.update,
+    replaceOrderItemsService: s.replaceItems,
+    voidOrderService: s.voidOrder,
+    voidItemService: s.voidItem,
+    payOrderService: s.payOrder,
+    voidPaymentService: s.voidPayment,
+    reopenOrderService: s.reopen,
+    splitItemService: s.splitItem,
+    removeItemService: s.removeItem,
+    updateItemQuantityService: s.updateQty,
+    voidAndRollbackService: s.voidRollback,
+    topayService: s.topay,
+    refundService: s.refund,
+    applyDiscountService: s.applyDiscount,
+    setServiceChargeService: s.setSC,
+    holdOrderService: s.hold,
+    recallOrderService: s.recall,
+    closeBillService: s.closeBill,
+    orderRepository: orderRepo,
+    paymentRepository: paymentRepo,
+    tenantRepository: tenantRepo,
     invoiceRenderService,
-  );
+  });
   const paymentController = new PaymentController(paymentService);
   const shiftController = new ShiftController(shiftService);
   const productService = new ProductService(productRepo, eventBus);
