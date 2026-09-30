@@ -13,30 +13,17 @@
     },
     "test": {
       "dependsOn": ["build"],
+      "cache": false,
       "inputs": ["src/**/*.ts", "src/**/*.tsx", "tests/**/*.ts"]
     },
-    "test:unit": {
-      "dependsOn": ["build"],
-      "inputs": ["src/**/*.ts", "src/**/*.tsx", "tests/**/*.unit.ts"]
-    },
-    "test:integration": {
-      "dependsOn": ["build"],
-      "inputs": ["src/**/*.ts", "src/**/*.tsx", "tests/**/*.integration.ts"]
-    },
     "lint": {
-      "outputs": []
-    },
-    "typecheck": {
-      "dependsOn": ["^build"],
+      "cache": false,
       "outputs": []
     },
     "clean": {
       "cache": false
     },
-    "db:migrate": {
-      "cache": false
-    },
-    "db:seed": {
+    "seed": {
       "cache": false
     }
   }

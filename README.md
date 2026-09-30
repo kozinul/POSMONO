@@ -181,21 +181,19 @@ pnpm dev              # Start all services
 pnpm dev:api          # Start backend only
 pnpm dev:web          # Start frontend only
 pnpm build            # Build all
-pnpm test             # Run all tests
-pnpm lint             # Lint all
-pnpm typecheck        # Type check all
+pnpm test             # Run all tests (backend + frontend)
+pnpm lint             # Type check all packages (tsc --noEmit)
 ```
 
 ### Testing
 
 ```bash
-# Backend tests (requires Docker for MongoDB)
-cd backend
+# Semua paket (backend + frontend) — command yang sama dipakai CI
 pnpm test
 
-# Frontend tests
-cd frontend
-pnpm test
+# Per paket
+cd backend && pnpm test     # butuh MONGO_URI? tidak — mongodb-memory-server bawaan
+cd frontend && pnpm test
 ```
 
 ## Deployment
@@ -204,7 +202,7 @@ pnpm test
 
 ```bash
 # Production
-docker compose -f docker/docker-compose.yml up -d
+docker compose -f docker/docker-compose.prod.yml up -d
 
 # Development
 docker compose -f docker/docker-compose.dev.yml up -d

@@ -44,8 +44,12 @@ jobs:
 
       - run: pnpm run build
 
+      # Sama persis dengan yang dijalankan manusia: satu proses per paket sehingga
+      # vitest.config.ts tiap paket terpakai (pool 'forks', maxForks 1 untuk
+      # mongodb-memory-server). Jalankan `pnpm vitest run` di root = tidak ada config
+      # di root, jadi config backend/frontend terabaikan.
       - name: Run tests
-        run: pnpm vitest run
+        run: pnpm run test
 
   lint:
     runs-on: ubuntu-latest
@@ -63,7 +67,11 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm run lint
+      # `lint` = `tsc --noEmit` per paket (repo tidak memakai ESLint).
+      # Backend punya project reference ke shared, jadi shared harus dibangun dulu —
+      # script `lint` backend sudah melakukannya sendiri (`tsc --build ../shared`).
+      - name: Type check
+        run: pnpm run lint
 
   docker:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'

@@ -41,8 +41,8 @@ Kerja kode yang harus selesai sebelum deploy. **Belum dieksekusi** — ini adala
 | # | Item | File | Catatan |
 |---|------|------|---------|
 | A1 | Fix trigger CI | `.github/workflows/ci.yml` | `push`/`pull_request` → `master` |
-| A2 | Job test tanpa Docker service | `.github/workflows/ci.yml` | `pnpm --filter backend test` (mongodb-memory-server) + frontend vitest + `tsc --noEmit` kedua sisi |
-| A3 | Ganti job `lint` (backend tanpa ESLint) | `.github/workflows/ci.yml` | jadi typecheck/gate; job `docker` publish tetap di push `master` |
+| A2 | Job test tanpa Docker service | `.github/workflows/ci.yml` | `pnpm test` di root (= `pnpm -r test`, mongodb-memory-server bila `MONGO_URI` kosong) + frontend vitest + `tsc --noEmit` kedua sisi |
+| A3 | Ganti job `lint` (backend tanpa ESLint) | `.github/workflows/ci.yml` | **selesai 2026-09-30 (T0)**: `pnpm run lint` = `tsc --noEmit` per paket; job `docker` publish tetap di push `main` |
 | A4 | Endpoint `GET /api/health` | `backend/src/bootstrap/routes.ts` + server | `{ status, mongo: 'ok'|'error', uptime }` — dipakai healthcheck & UptimeRobot |
 | A5 | Healthcheck di compose | `docker/docker-compose.prod.yml` | mongo `mongosh` ping · app `wget /api/health` · `depends_on.condition: service_healthy` |
 | A6 | Volume `uploads/` + logs | `docker/docker-compose.prod.yml` | mencegah hilangnya gambar produk saat container diganti |
@@ -50,7 +50,11 @@ Kerja kode yang harus selesai sebelum deploy. **Belum dieksekusi** — ini adala
 | A8 | Lengkapi `.env.example` + README deploy | `backend/.env.example` | encompassing `PORT`, `MONGO_URI`, `REDIS_URL`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `REFRESH_TOKEN_EXPIRES_IN` |
 | A9 | Multi-arch + tag image | job docker | `linux/amd64,linux/arm64`, tag `:latest` + `:v<semver>` via `docker/metadata-action` |
 
-> Catatan: root `package.json` berasal dari workspace berbeda (`@kuire/*`, jalur `infrastructure/docker/...`). **Jangan** mengubah struktur root ini untuk keperluan CI — semua perintah CI harus memakai jalur `backend/`/`frontend/`.
+> Catatan (diperbarui 2026-09-30, item T0): root `package.json` **sudah** jadi workspace POSMono
+> (`pnpm-workspace.yaml` → `backend` · `frontend` · `shared`; paket `@posmono/*`). Filter lama
+> `@kuire/*` dan jalur `infrastructure/docker/...` sudah dibuang karena tidak pernah ada di repo ini.
+> CI memakai script root yang sama dengan yang dipakai manusia: `pnpm run test` & `pnpm run lint`.
+> Trigernya masih `main` (bukan `master`) — lihat A1.
 
 ---
 

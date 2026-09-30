@@ -1,7 +1,7 @@
 # Rencana Pengurangan Kompleksitas (Technical Debt Plan)
 
 > Tanggal baseline: **2026-09-29** (setelah Fase 17 commit `ab80d14e`)
-> Status: 🟡 **aktif** — 0/9 item selesai. Fase 18 **terblokir** sampai T0–T2 selesai.
+> Status: 🟡 **aktif** — **1/9 item selesai (T0, 2026-09-30)**. Fase 18 **terblokir** sampai T1–T2 selesai.
 > Catatan: dokumen ini adalah **satu-satunya** daftar pekerjaan pengurangan kompleksitas.
 > Kalau ada item refactor yang dikerjakan di luar daftar ini, tambahkan di sini lebih dulu.
 
@@ -16,7 +16,7 @@ Masalahnya bukan fitur. Yang rusak adalah **pagar regresi** dan **batas konteks 
 | Composition root monolitik | `container.ts` 1.241 baris, 162 import, 36 deklarasi model | Satu tempat untuk salah urut; sulit direview |
 | Constructor tidak terlindungi tipe | `PaymentService` 16 param **semua `any`**; `OrderController` 24 param | 1 kelas bug **sudah terjadi**: argumen geser → HTTP 500 produksi |
 | File god | `GeneralSettingsPage` 1.749 · `TerminalCenterPage` 1.387 · `ReportPage` 1.368 · `ReportAggregation` 1.212 | Tidak muat di satu layar/context; perubahan = baca ulang semuanya |
-| Pagar regresi **tidak nyata di CI** | `ci.yml` jalankan `pnpm vitest run` tanpa config root; job lint panggil `eslint` yang tidak terpasang | 1.249 test hanya "hijau" secara lokal |
+| Pagar regresi **tidak nyata di CI** — **✅ diperbaiki T0** | `ci.yml` jalankan `pnpm vitest run` tanpa config root; job lint panggil `eslint` yang tidak terpasang | 1.249 test hanya "hijau" secara lokal |
 | Type safety tergerus | 289 `: any` + 134 cast (`strict: true` → semua opt-out sadar) | Salah nama lolos compile, mati saat runtime |
 | UI uang tanpa test | 17 file test untuk 141 file source; `PosPage`/`PaymentModal`/3 god page tanpa test | Refactor halaman = tanpa jaring pengaman |
 
@@ -54,7 +54,7 @@ Empat tingkat. Tiap item punya skor agar urutannya bisa dipertanggungjawabkan, b
 
 | ID | Item | D | R | Skor | Effort | P |
 |---|---|---|---|---|---|---|
-| **T0** | Pagar regresi nyata: CI menjalankan suite sungguhan | 5 | 5 | **10** | S | **P0** |
+| **T0** | Pagar regresi nyata: CI menjalankan suite sungguhan | 5 | 5 | **10** | S | **P0** ✅ |
 | **T1** | `PaymentService` 16 param `any` → 1 deps object bertipe | 5 | 5 | **10** | M | **P0** |
 | **T2** | `OrderController` 24 param → 1 deps object | 4 | 4 | **8** | S | **P0** |
 | **T3** | `container.ts` 1.241 baris → wiring per domain | 5 | 4 | **9** | L | **P1** |
@@ -102,6 +102,10 @@ shared 35 file / 1.288 LOC · test 67 file / 16.847 LOC · **1.249 test backend*
 **121 test frontend** (17 file) · 280 endpoint · 36 schema · 48 service · 98 file domain ·
 289 `: any` · 134 cast · 136 commit (48 Agu, 45 Sep).
 
+> Diverifikasi ulang **2026-09-30** (sebelum T0): `pnpm -r build` + `pnpm -r test` hijau dengan
+> angka identik — 1.249 (103 file) + 121 (17 file). Tidak ada angka baseline yang bergeser, jadi
+> T0 tidak mengubah baseline.
+
 ---
 
 ## 4. Item pekerjaan
@@ -141,6 +145,56 @@ tidak ada job CI yang bergantung pada tool yang tidak terpasang.
 **Risiko & mitigasi.** Rendah (hanya CI). Yang perlu diwaspadai: kalau `pnpm -r test` ternyata
 menjalankan dua mongod sekaligus dan RAM habis — itu sebabnya `vitest.config.ts` per paket dibatasi
 (`maxForks:1`): dipanggil sebagai satu proses per paket oleh turbo, bukan digabung.
+
+#### Hasil T0 — 2026-09-30 ✅
+
+Baseline diverifikasi ulang lebih dulu: `pnpm -r build` hijau, `pnpm -r test` hijau
+(**backend 1.249/1.249 (103 file)** · **frontend 121/121 (17 file)**, persis angka dokumen).
+
+| Yang diubah | Dari | Jadi |
+|---|---|---|
+| `ci.yml` step test | `pnpm vitest run` (di root) | `pnpm run test` → `pnpm -r --workspace-concurrency=1 test` |
+| `ci.yml` job `lint` | `pnpm run lint` → `eslint` (tidak terpasang) | `pnpm run lint` → `tsc --noEmit` per paket, step bernama "Type check" |
+| `backend` script `lint` | `eslint src/` | `tsc --build ../shared && tsc --noEmit` |
+| `frontend` script `lint` | `eslint src/` | `tsc --noEmit` |
+| Root `test` | `turbo run test -- --passWithNoTests` | `pnpm -r --workspace-concurrency=1 test` |
+| Root `lint` | `turbo run lint` | `pnpm -r --workspace-concurrency=1 lint` |
+| `turbo.json` | task `test`/`lint` bisa di-cache; task mati `test:unit`/`test:integration`/`typecheck`/`db:migrate`/`db:seed` | `test` & `lint` **`cache: false`** (agar tak ada "hijau" dari cache lokal), task mati dibuang, `seed` (`cache: false`) menggantikan `db:seed` |
+| Root script mati | `dev:pos`, `dev:opsc` (filter `@kuire/*`), `build:packages` (`./packages/*`), `test:unit`, `test:integration`, `typecheck`, `lint:fix`, `db:migrate` | dihapus — filter/prefix-nya tidak pernah ada di repo ini |
+| Root script salah arah | `dev:api`/`dev:web` filter `@kuire/api|web`; `db:seed` filter `@kuire/api`; `docker:*`/`infra:*` menunjuk `infrastructure/docker/…` | `@posmono/backend` · `@posmono/frontend`; `docker:up/down` → `docker/docker-compose.dev.yml`, `infra:up/down` → `docker/docker-compose.yml` (keduanya file itu memang ada) |
+
+**Tiga keputusan yang menyimpang dari rencana awal — dan alasannya.**
+
+1. **`--workspace-concurrency=1`.** Default `pnpm -r` menjalankan backend & frontend **bersamaan**
+   (terbukti dari log: keduanya start `02:35:39`). Selain boros RAM, itu memunculkan warning
+   `WebSocket server error: Port is already in use` dari dua instance vitest. Sekuensial: hilang,
+   dan total hanya ~45 dtk. Turbo **tidak** dipakai untuk `test`/`lint` karena cache-nya bisa
+   memunculkan "hijau" palsu tanpa eksekusi — justru yang harus dihapus oleh item ini.
+2. **`lint` backend ikut membangun `shared`.** `backend/tsconfig.json` punya project reference ke
+   `shared`, jadi `tsc --noEmit` tanpa `shared/dist` meledak **30 error `TS6305`** (terbukti).
+   `tsc -b --noEmit` tidak bisa dipakai (`TS6310: Referenced project may not disable emit`).
+   `tsc --build ../shared && tsc --noEmit` membuat `pnpm --filter @posmono/backend lint` jalan
+   sendiri di clone segar. **Test suite tidak butuh ini** — resolve lewat `src/`, dibuktikan dengan
+   suite penuh setelah `shared/dist` dihapus: tetap 1.249 + 121 hijau.
+3. **Ruang lingkup sedikit lebih luas dari 4 script `dev:*`.** Semuanya satu kelas bug yang sama
+   (script menunjuk sesuatu yang tidak pernah ada: filter paket, path compose, task turbo), jadi
+   dibersihkan sekalian pada commit yang sama — tidak dicampur dengan item lain.
+
+**Verifikasi (lokal, urutan sama dengan CI).**
+`pnpm install` (lockfile tak berubah — hanya script) · `pnpm run build` ✅ · `pnpm run test` ✅ 1.249 + 121
+· `pnpm run lint` ✅ · `pnpm run test` tanpa `shared/dist` ✅ · `git diff` hanya menyentuh
+`ci.yml`, 3 × `package.json`, `turbo.json`, `README.md`, `docs/DEPLOYMENT.md`, `AGENTS.md`, dokumen ini.
+
+**Utang yang tersisa dari T0 (sengaja, tidak diruvik di sini).**
+- **CI belum pernah dieksekusi dari repo ini** (env ini tanpa Docker/network). Run pertama di
+  GitHub Actions memakai Mongo **7.0** dari service, sedangkan lokal memakai mongod **7.3.4** dari
+  `mongodb-memory-server`. Bedanya hanya versi minor + persistensi; kalau suite merah di sana,
+  cek dulu `MONGO_URI`-related test, bukan asumsi.
+- Service `redis` di job `test` tidak dipakai siapa pun (backend tidak punya dependency Redis).
+  Dibiarkan: menghapus service container bukan bagian item ini.
+- `turbo run build` masih dipakai (cache aman untuk build), jadi `pnpm run build` ≠ `pnpm run test`
+  dalam hal cache — dan itu memang yang diinginkan.
+
 
 ---
 
@@ -385,14 +439,14 @@ sehingga_ci_marah di commit berikutnya; naikkan batas dengan alasan tertulis, ja
 ## 5. Urutan eksekusi
 
 ```
-T0 (pagar)  →  T1 (PaymentService)  →  T2 (OrderController)  →  T3 (container)
-                                                                   │
-                        ┌──────────────────────────────────────────┘
-                        ▼
-        T4 (Settings)  ·  T5 (Terminal Center)  ·  T6 (Reports)      ← boleh paralel
-                        │
-                        ▼
-        T7 (ketik jalur uang)  →  T8 (test money path)  →  T9 (budget)
+T0 (pagar) ✅ →  T1 (PaymentService)  →  T2 (OrderController)  →  T3 (container)
+                                                                    │
+                         ┌──────────────────────────────────────────┘
+                         ▼
+         T4 (Settings)  ·  T5 (Terminal Center)  ·  T6 (Reports)      ← boleh paralel
+                         │
+                         ▼
+         T7 (ketik jalur uang)  →  T8 (test money path)  →  T9 (budget)
 ```
 
 **Aturan main.**
@@ -432,7 +486,7 @@ T3+T7 ≈ 10 sesi L). Setara ~2–3 minggu kerja terfokus, atau ~1–2 minggu ka
 | `container.ts` | 1.241 baris | ≤ 200 |
 | File `src` > 1.000 baris | 4 (`GeneralSettings`, `TerminalCenter`, `ReportPage`, `ReportAggregation`) | **0** |
 | `backend/src` `: any` | 289 | ≤ 120 |
-| CI menjalankan test | ❌ tidak | ✅ ya |
+| CI menjalankan test | ❌ tidak | ✅ ya _(T0 — `pnpm run test`; belum pernah dijalankan di GitHub Actions)_ |
 | File test frontend | 17 | ≥ 23 |
 | Test total | 1.249 + 121 | ≥ 1.349 + 145 |
 
@@ -442,7 +496,7 @@ Target test total naik karena T8 menambah test, bukan karena ada fitur baru.
 
 ## 8. Definition of Done — seluruh plan
 
-- [ ] T0–T2 selesai, CI hijau pada commit bersih (bukan hanya lokal).
+- [ ] T0–T2 selesai, CI hijau pada commit bersih (bukan hanya lokal). _(T0 selesai 2026-09-30)_
 - [ ] T3–T6 selesai: `container.ts` ≤ 200; 3 god page ≤ 300 masing-masing.
 - [ ] T7–T9 selesai: `: any` ≤ 120; test frontend naik; `pnpm budget` hijau di CI.
 - [ ] `docs/HUB_ARCHITECTURE.md` Fase 18 dibuka (gate terpenuhi), `HUB_V2_FRONTEND_PLAN.md`
@@ -454,7 +508,19 @@ Target test total naik karena T8 menambah test, bukan karena ada fitur baru.
 ## 9. Catatan & jebakan yang sudah diketahui
 
 - **`shared/dist` harus di-rebuild** (`cd shared && npx tsc`) setiap kali `shared/src` berubah,
-  kalau tidak backend/frontend compile dari `.d.ts` basi dan muncul error palsu.
+  kalau tidak backend/frontend compile dari `.d.ts` basi dan muncul error palsu. Tiga jebakan
+  yang sudah terukur saat T0:
+  1. `tsc --noEmit` di backend **butuh** `shared/dist` (project reference) → 30 error `TS6305`
+     kalau hilang; karena itu script `lint` backend diawali `tsc --build ../shared`.
+  2. `tsc -b --noEmit` **tidak** bisa dipakai sebagai pengganti (`TS6310: Referenced project may
+     not disable emit`).
+  3. **Test suite tidak butuh `shared/dist`** (resolve lewat `src/`), jadi `pnpm test` aman di
+     clone segar — jangan ikut panik saat `dist` kosong.
+- **Jangan pernah `pnpm vitest run` di root.** Tidak ada `vitest.config.*` di root, jadi
+  `backend/vitest.config.ts` (`pool:'forks'`, `maxForks:1`) & config frontend **terabaikan** —
+  persis bug yang ditutup T0. Selalu `pnpm test` (root) atau `pnpm -r test`.
+- **Cache turbo bisa membuat "hijau" palsu** untuk `test`/`lint`; keduanya sudah `cache: false`
+  di `turbo.json`. Kalau suatu saat caching ditambahkan, jangan pernah di dua task ini.
 - **`PaymentService` 16 param bertanda `any` weil** repo pernah `strict: true` tapi DI-nya `any`
   semua — artinya slot order **tidak** dijaga tipe sama sekali. T1 menutup ini; sebelum itu, setiap
   perubahan ctor harus diuji `PaymentService.test.ts` + `e2e/critical-path-flows`.

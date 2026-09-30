@@ -457,7 +457,7 @@ Modular SaaS POS Platform (Node.js/Express + React/Tailwind). Multi-tenant, mult
 
 
 > [!IMPORTANT]
-> **Debt pass aktif.** `docs/TECH_DEBT_PLAN.md` — 9 item T0–T9, skala P0–P3. **Fase 18 terblokir sampai T0–T2 selesai.** Petaasan terukur per 2026-09-29: backend 367 file/36.978 LOC, frontend 141/28.529, 1.249+121 test, `container.ts` 1.241 baris, `PaymentService` 16 param `any`, `OrderController` 24 param, 289 `: any`, 17 file test frontend. **Penting: CI (`ci.yml`) belum menjalankan suite sungguhan** — test hijau = lokal (`cd backend && npx vitest run`), bukan `./ci.yml`.
+> **Debt pass aktif.** `docs/TECH_DEBT_PLAN.md` — 9 item T0–T9, skala P0–P3. **T0 selesai 2026-09-30** (CI sekarang menjalankan suite sungguhan); **Fase 18 masih terblokir sampai T1–T2 selesai.** Petaasan terukur per 2026-09-29: backend 367 file/36.978 LOC, frontend 141/28.529, 1.249+121 test, `container.ts` 1.241 baris, `PaymentService` 16 param `any`, `OrderController` 24 param, 289 `: any`, 17 file test frontend. `ci.yml`: step `Run tests` = `pnpm run test` (script root, `pnpm -r test`), job `lint` = `pnpm run lint` (`tsc --noEmit`/paket, bukan ESLint yang tidak terpasang) — hijau di sana berarti hijau sungguhan, bukan cache turbo (task `test` & `lint` di `turbo.json` sudah `cache: false`).
 
 ## Key Patterns
 - `useQueryClient()` for cache invalidation after mutations
@@ -466,7 +466,8 @@ Modular SaaS POS Platform (Node.js/Express + React/Tailwind). Multi-tenant, mult
 - `today = new Date().toISOString().split('T')[0]` — UTC date string used for daily queries
 
 ## Testing
-- Backend tests: `cd backend && pnpm test` (vitest, full suite runs without Docker via mongodb-memory-server)
-- Type check: `cd frontend && npx tsc --noEmit`; backend: `cd backend && npx tsc --noEmit`
-- No ESLint config found; rely on TypeScript checks
+- **Semua paket (command yang sama dipakai CI)**: `pnpm test` di root = `pnpm -r --workspace-concurrency=1 test` → satu proses per paket, jadi `backend/vitest.config.ts` (`pool:'forks'`, `maxForks:1` — wajib biar mongodb-memory-server tidak kehabisan RAM) & config frontend **dipakai**. Jangan pernah `pnpm vitest run` di root (tidak ada config di root).
+- Backend saja: `cd backend && pnpm test` · frontend saja: `cd frontend && pnpm test` (keduanya tanpa Docker — mongodb-memory-server pakai binary cache `~/.cache/mongodb-binaries`; set `MONGO_URI` untuk Mongo eksternal)
+- Type check: `pnpm lint` di root = `pnpm -r lint` → backend `tsc --build ../shared && tsc --noEmit`, frontend `tsc --noEmit`. **Tidak ada ESLint di repo ini** — `tsc` yang jadi linter. Jebakan: backend punya project reference ke `shared`, jadi tanpa `shared/dist` intervening `tsc --noEmit` meledak 30 error `TS6305`; script lint backend sudah membangunnya sendiri.
+- Test suite butuh shared/dist **tidak** — resolve lewat `src/` (vitest alias + `main: src/index.ts`), jadi `pnpm test` aman di clone segar.
 - Load test (needs running backend): `cd backend && pnpm loadtest --env BASE_URL=… --env EMAIL=… --env PASSWORD=… --env PRODUCT_ID=… --env VUS=…`
