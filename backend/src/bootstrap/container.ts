@@ -5,6 +5,7 @@ import {
   Lifetime,
 } from 'awilix';
 import mongoose from 'mongoose';
+import { buildModels, registerModels } from './wiring/models';
 import { EventBus } from '../@shared/infrastructure/eventBus/EventBus';
 import { ConnectionManager } from '../@shared/infrastructure/database/ConnectionManager';
 import { env } from '../@shared/config/env';
@@ -14,18 +15,9 @@ import { AuthService } from '../core/identity/application/services/AuthService';
 import { SessionService } from '../core/identity/application/services/SessionService';
 import { AuthController } from '../core/identity/interfaces/http/controllers/AuthController';
 import { MongoUserRepository } from '../core/identity/infrastructure/persistence/MongoUserRepository';
-import { UserSchema } from '../core/identity/infrastructure/persistence/schemas/UserSchema';
-import { RoleSchema } from '../core/identity/infrastructure/persistence/schemas/RoleSchema';
-import { migratePlatformHubPermissions } from '../core/platform/infrastructure/persistence/migratePlatformHubPermissions';
-import { SessionSchema } from '../core/identity/infrastructure/persistence/schemas/SessionSchema';
-import { TenantSchema } from '../core/tenant/infrastructure/persistence/schemas/TenantSchema';
 import { MongoTenantRepository } from '../core/tenant/infrastructure/persistence/MongoTenantRepository';
 import { TenantService } from '../core/tenant/application/services/TenantService';
 import { TenantController } from '../core/tenant/interfaces/http/controllers/TenantController';
-import { ProductSchema } from '../core/catalog/infrastructure/persistence/schemas/ProductSchema';
-import { CategorySchema } from '../core/catalog/infrastructure/persistence/schemas/CategorySchema';
-import { FamilySchema } from '../core/catalog/infrastructure/persistence/schemas/FamilySchema';
-import { ModifierSchema } from '../core/catalog/infrastructure/persistence/schemas/ModifierSchema';
 import { MongoProductRepository } from '../core/catalog/infrastructure/persistence/MongoProductRepository';
 import { MongoCategoryRepository } from '../core/catalog/infrastructure/persistence/MongoCategoryRepository';
 import { MongoFamilyRepository } from '../core/catalog/infrastructure/persistence/MongoFamilyRepository';
@@ -38,9 +30,6 @@ import { ProductController } from '../core/catalog/interfaces/http/controllers/P
 import { CategoryController } from '../core/catalog/interfaces/http/controllers/CategoryController';
 import { FamilyController } from '../core/catalog/interfaces/http/controllers/FamilyController';
 import { ModifierController } from '../core/catalog/interfaces/http/controllers/ModifierController';
-import { StockSchema } from '../core/inventory/infrastructure/persistence/schemas/StockSchema';
-import { StockMovementSchema } from '../core/inventory/infrastructure/persistence/schemas/StockMovementSchema';
-import { WarehouseSchema } from '../core/inventory/infrastructure/persistence/schemas/WarehouseSchema';
 import { MongoStockRepository } from '../core/inventory/infrastructure/persistence/MongoStockRepository';
 import { MongoStockMovementRepository } from '../core/inventory/infrastructure/persistence/MongoStockMovementRepository';
 import { MongoWarehouseRepository } from '../core/inventory/infrastructure/persistence/MongoWarehouseRepository';
@@ -54,66 +43,49 @@ import { UserService } from '../core/identity/application/services/UserService';
 import { RoleController } from '../core/identity/interfaces/http/controllers/RoleController';
 import { UserController } from '../core/identity/interfaces/http/controllers/UserController';
 import { PermissionController } from '../core/identity/interfaces/http/controllers/PermissionController';
-import { OrderSchema } from '../core/ordering/infrastructure/persistence/schemas/OrderSchema';
 import { MongoOrderRepository } from '../core/ordering/infrastructure/persistence/MongoOrderRepository';
 import { CreateOrderService, UpdateOrderService, ReplaceOrderItemsService, VoidOrderService, VoidItemService, PayOrderService, VoidPaymentService, ReopenOrderService, SplitItemService, RemoveItemService, UpdateItemQuantityService, VoidAndRollbackService, TopayService, RefundService, ApplyDiscountService, SetServiceChargeService, HoldOrderService, RecallOrderService, CloseBillService } from '../core/ordering/application/services/OrderService';
 import { VoidApprovalService } from '../core/ordering/application/services/VoidApprovalService';
 import { OrderController } from '../core/ordering/interfaces/http/controllers/OrderController';
-import { ShiftSchema } from '../core/pos/infrastructure/persistence/schemas/ShiftSchema';
 import { MongoShiftRepository } from '../core/pos/infrastructure/persistence/MongoShiftRepository';
 import { ShiftService } from '../core/pos/application/services/ShiftService';
 import { ShiftController } from '../core/pos/interfaces/http/controllers/ShiftController';
-import { PaymentSchema } from '../core/payment/infrastructure/persistence/schemas/PaymentSchema';
-import { RefundSchema } from '../core/payment/infrastructure/persistence/schemas/RefundSchema';
 import { MongoPaymentRepository } from '../core/payment/infrastructure/persistence/MongoPaymentRepository';
 import { MongoRefundRepository } from '../core/payment/infrastructure/persistence/MongoRefundRepository';
 import { PaymentService } from '../core/payment/application/services/PaymentService';
 import { QrisGatewayService } from '../core/payment/application/services/QrisGatewayService';
-import { QrisInvoiceSchema } from '../core/payment/infrastructure/persistence/schemas/QrisInvoiceSchema';
 import { MongoQrisInvoiceRepository } from '../core/payment/infrastructure/persistence/MongoQrisInvoiceRepository';
 import { PaymentController } from '../core/payment/interfaces/http/controllers/PaymentController';
 import { ReportService } from '../core/reporting/application/services/ReportService';
 import { ReportExportService } from '../core/reporting/application/services/ReportExportService';
 import { ReportController } from '../core/reporting/interfaces/http/controllers/ReportController';
-import { DailyMetricSchema } from '../core/reporting/infrastructure/persistence/schemas/DailyMetricSchema';
 import { MongoDailyMetricRepository } from '../core/reporting/infrastructure/persistence/MongoDailyMetricRepository';
 import { ReportAggregation } from '../core/reporting/infrastructure/aggregation/ReportAggregation';
-import { TaxConfigurationSchema } from '../core/tax/infrastructure/persistence/schemas/TaxConfigurationSchema';
 import { MongoTaxConfigurationRepository } from '../core/tax/infrastructure/persistence/MongoTaxConfigurationRepository';
 import { TaxServiceAdapter } from '../core/tax/application/services/TaxServiceAdapter';
-import { PricingProfileSchema } from '../core/pricing/infrastructure/persistence/schemas/PricingProfileSchema';
 import { MongoPricingProfileRepository } from '../core/pricing/infrastructure/persistence/MongoPricingProfileRepository';
-import { DiscountConfigurationSchema } from '../core/discount/infrastructure/persistence/schemas/DiscountConfigurationSchema';
-import { PromoCodeSchema } from '../core/discount/infrastructure/persistence/schemas/PromoCodeSchema';
 import { MongoDiscountConfigurationRepository } from '../core/discount/infrastructure/persistence/MongoDiscountConfigurationRepository';
 import { MongoPromoCodeRepository } from '../core/discount/infrastructure/persistence/MongoPromoCodeRepository';
 import { DiscountServiceAdapter } from '../core/discount/application/services/DiscountServiceAdapter';
 import { ManageDiscountRuleUseCase } from '../core/discount/application/services/ManageDiscountRuleUseCase';
 import { createDiscountRouter } from '../core/discount/api/discount.routes';
-import { CustomerSchema } from '../core/customer/infrastructure/persistence/schemas/CustomerSchema';
 import { MongoCustomerRepository } from '../core/customer/infrastructure/persistence/MongoCustomerRepository';
 import { CustomerService } from '../core/customer/application/services/CustomerService';
 import { CustomerController } from '../core/customer/interfaces/http/controllers/CustomerController';
-import { SettingSchema } from '../core/settings/infrastructure/persistence/schemas/SettingSchema';
 import { MongoSettingRepository } from '../core/settings/infrastructure/persistence/MongoSettingRepository';
 import { SettingService } from '../core/settings/application/services/SettingService';
 import { SettingController } from '../core/settings/interfaces/http/controllers/SettingController';
 import { UploadService } from '../core/upload/application/services/UploadService';
 import { UploadController } from '../core/upload/interfaces/http/controllers/UploadController';
-import { PromotionSchema } from '../core/promotion/infrastructure/persistence/schemas/PromotionSchema';
 import { MongoPromotionRepository } from '../core/promotion/infrastructure/persistence/MongoPromotionRepository';
 import { PromotionService } from '../core/promotion/application/services/PromotionService';
 import { PromotionController } from '../core/promotion/interfaces/http/controllers/PromotionController';
-import { PaymentMethodSchema } from '../core/payment/infrastructure/persistence/schemas/PaymentMethodSchema';
 import { MongoPaymentMethodRepository } from '../core/payment/infrastructure/persistence/MongoPaymentMethodRepository';
 import { PaymentMethodService } from '../core/payment/application/services/PaymentMethodService';
 import { PaymentMethodController } from '../core/payment/interfaces/http/controllers/PaymentMethodController';
-import { MenuTypeSchema } from '../core/catalog/infrastructure/persistence/schemas/MenuTypeSchema';
 import { MongoMenuTypeRepository } from '../core/catalog/infrastructure/persistence/MongoMenuTypeRepository';
 import { MenuTypeService } from '../core/catalog/application/services/MenuTypeService';
 import { MenuTypeController } from '../core/catalog/interfaces/http/controllers/MenuTypeController';
-import { TemplateSchema } from '../core/template/infrastructure/persistence/schemas/TemplateSchema';
-import { TemplateVersionSchema } from '../core/template/infrastructure/persistence/schemas/TemplateVersionSchema';
 import { MongoTemplateRepository } from '../core/template/infrastructure/persistence/MongoTemplateRepository';
 import { TemplateService } from '../core/template/application/services/TemplateService';
 import { RenderService } from '../core/template/application/services/RenderService';
@@ -124,16 +96,12 @@ import { TemplateController } from '../core/template/interfaces/http/controllers
 import { OnboardingService } from '../core/platform/application/services/OnboardingService';
 import { DatabaseService } from '../core/database/application/services/DatabaseService';
 import { DatabaseController } from '../core/database/interfaces/http/controllers/DatabaseController';
-import { PrinterSchema } from '../core/printing/infrastructure/persistence/schemas/PrinterSchema';
 import { MongoPrinterRepository } from '../core/printing/infrastructure/persistence/MongoPrinterRepository';
 import { PrinterService } from '../core/printing/application/services/PrinterService';
 import { PrintService } from '../core/printing/application/services/PrintService';
 import { DocumentPrintService } from '../core/printing/application/services/DocumentPrintService';
 import { PrinterController } from '../core/printing/interfaces/http/controllers/PrinterController';
 import { KotRenderService } from '../core/template/application/services/KotRenderService';
-import { HubSchema } from '../core/hub/infrastructure/persistence/schemas/HubSchema';
-import { HubMembershipSchema } from '../core/hub/infrastructure/persistence/schemas/HubMembershipSchema';
-import { HubMemberTenantAccessSchema } from '../core/hub/infrastructure/persistence/schemas/HubMemberTenantAccessSchema';
 import { MongoHubRepository } from '../core/hub/infrastructure/persistence/MongoHubRepository';
 import { MongoHubMembershipRepository } from '../core/hub/infrastructure/persistence/MongoHubMembershipRepository';
 import { MongoHubMemberTenantAccessRepository } from '../core/hub/infrastructure/persistence/MongoHubMemberTenantAccessRepository';
@@ -142,15 +110,12 @@ import { HubMembershipService } from '../core/hub/application/services/HubMember
 import { HubMemberAccessService } from '../core/hub/application/services/HubMemberAccessService';
 import { HubController } from '../core/hub/interfaces/http/controllers/HubController';
 import { HubMembershipController } from '../core/hub/interfaces/http/controllers/HubMembershipController';
-import { OutletSchema } from '../core/outlet/infrastructure/persistence/schemas/OutletSchema';
 import { MongoOutletRepository } from '../core/outlet/infrastructure/persistence/MongoOutletRepository';
 import { OutletService } from '../core/outlet/application/services/OutletService';
 import { OutletController } from '../core/outlet/interfaces/http/controllers/OutletController';
 import { PlatformController } from '../core/platform/interfaces/http/controllers/PlatformController';
 import { PlatformCleanupService } from '../core/platform/application/services/PlatformCleanupService';
 import { ProvisionTenantService } from '../core/platform/application/services/ProvisionTenantService';
-import { PlanSchema } from '../core/billing/infrastructure/persistence/schemas/PlanSchema';
-import { SubscriptionSchema } from '../core/billing/infrastructure/persistence/schemas/SubscriptionSchema';
 import { MongoPlanRepository } from '../core/billing/infrastructure/persistence/MongoPlanRepository';
 import { MongoSubscriptionRepository } from '../core/billing/infrastructure/persistence/MongoSubscriptionRepository';
 import { PlanService } from '../core/billing/application/services/PlanService';
@@ -158,12 +123,9 @@ import { SubscriptionService } from '../core/billing/application/services/Subscr
 import { EntitlementService } from '../core/billing/application/services/EntitlementService';
 import { PlanController } from '../core/billing/interfaces/http/controllers/PlanController';
 import { SubscriptionController } from '../core/billing/interfaces/http/controllers/SubscriptionController';
-import { PlatformAuditLogSchema } from '../core/platform/audit/infrastructure/persistence/schemas/PlatformAuditLogSchema';
 import { MongoPlatformAuditLogRepository } from '../core/platform/audit/infrastructure/persistence/MongoPlatformAuditLogRepository';
 import { PlatformAuditService } from '../core/platform/audit/application/services/PlatformAuditService';
-import { ProvisioningRunSchema } from '../core/platform/provisioning/infrastructure/persistence/schemas/ProvisioningRunSchema';
 import { MongoProvisioningRunRepository } from '../core/platform/provisioning/infrastructure/persistence/MongoProvisioningRunRepository';
-import { SubscriptionHistorySchema } from '../core/billing/infrastructure/persistence/schemas/SubscriptionHistorySchema';
 import { MongoSubscriptionHistoryRepository } from '../core/billing/infrastructure/persistence/MongoSubscriptionHistoryRepository';
 
 export type DIContainer = ReturnType<typeof buildContainer>;
@@ -173,58 +135,49 @@ export function buildContainer() {
 
   const systemConnection = mongoose.connection;
 
-  const UserModel = systemConnection.model('User', UserSchema);
-  const RoleModel = systemConnection.model('Role', RoleSchema);
-  // Hub V2 Fase 16: `hub:manage` → `platform.hubs.manage` in stored roles, so a
-  // deployed platform super-admin keeps hub access without a manual DB step.
-  migratePlatformHubPermissions(RoleModel).catch(() => {});
-  const SessionModel = systemConnection.model('Session', SessionSchema);
-  const TenantModel = systemConnection.model('Tenant', TenantSchema);
-  const ProductModel = systemConnection.model('Product', ProductSchema);
-  const CategoryModel = systemConnection.model('Category', CategorySchema);
-  const FamilyModel = systemConnection.model('Family', FamilySchema);
-  const ModifierModel = systemConnection.model('Modifier', ModifierSchema);
-  const StockModel = systemConnection.model('Stock', StockSchema);
-  const StockMovementModel = systemConnection.model('StockMovement', StockMovementSchema);
-  const WarehouseModel = systemConnection.model('Warehouse', WarehouseSchema);
-  const OrderModel = systemConnection.model('Order', OrderSchema);
-  const ShiftModel = systemConnection.model('Shift', ShiftSchema);
-  const PaymentModel = systemConnection.model('Payment', PaymentSchema);
-  const RefundModel = systemConnection.model('Refund', RefundSchema);
-  const QrisInvoiceModel = systemConnection.model('QrisInvoice', QrisInvoiceSchema);
-  const TaxConfigurationModel = systemConnection.model('TaxConfiguration', TaxConfigurationSchema);
-  const PricingProfileModel = systemConnection.model('PricingProfile', PricingProfileSchema);
-  const DiscountConfigurationModel = systemConnection.model('DiscountConfiguration', DiscountConfigurationSchema);
-  const PromoCodeModel = systemConnection.model('PromoCode', PromoCodeSchema);
-  const DailyMetricModel = systemConnection.model('DailyMetric', DailyMetricSchema);
-  const CustomerModel = systemConnection.model('Customer', CustomerSchema);
-  const SettingModel = systemConnection.model('Setting', SettingSchema);
-  const PromotionModel = systemConnection.model('Promotion', PromotionSchema);
-  PromotionModel.syncIndexes().catch(() => {});
-  ShiftModel.syncIndexes().catch(() => {});
-  const PaymentMethodModel = systemConnection.model('PaymentMethod', PaymentMethodSchema);
-  const MenuTypeModel = systemConnection.model('MenuType', MenuTypeSchema);
-  const TemplateModel = systemConnection.model('Template', TemplateSchema);
-  const TemplateVersionModel = systemConnection.model('TemplateVersion', TemplateVersionSchema);
-  const PrinterModel = systemConnection.model('Printer', PrinterSchema);
-  PrinterModel.syncIndexes().catch(() => {});
-  const HubModel = systemConnection.model('Hub', HubSchema);
-  const HubMembershipModel = systemConnection.model('HubMembership', HubMembershipSchema);
-  HubMembershipModel.syncIndexes().catch(() => {});
-  const HubMemberTenantAccessModel = systemConnection.model(
-    'HubMemberTenantAccess',
-    HubMemberTenantAccessSchema,
-  );
-  HubMemberTenantAccessModel.syncIndexes().catch(() => {});
-  const OutletModel = systemConnection.model('Outlet', OutletSchema);
-  OutletModel.syncIndexes().catch(() => {});
-  const PlanModel = systemConnection.model('Plan', PlanSchema);
-  PlanModel.syncIndexes().catch(() => {});
-  const SubscriptionModel = systemConnection.model('Subscription', SubscriptionSchema);
-  const PlatformAuditLogModel = systemConnection.model('PlatformAuditLog', PlatformAuditLogSchema);
-  const ProvisioningRunModel = systemConnection.model('ProvisioningRun', ProvisioningRunSchema);
-  const SubscriptionHistoryModel = systemConnection.model('SubscriptionHistory', SubscriptionHistorySchema);
-  SubscriptionModel.syncIndexes().catch(() => {});
+  const models = buildModels(systemConnection);
+  // Stage 1 of debt item T3: models live in `wiring/models.ts` now. The
+  // destructuring below only exists so the wiring block can be moved domain by
+  // domain afterwards (stages 2-4); the later stages consume `models.X` directly
+  // and this list disappears.
+  const {
+  UserModel,
+  RoleModel,
+  SessionModel,
+  TenantModel,
+  ProductModel,
+  CategoryModel,
+  FamilyModel,
+  ModifierModel,
+  StockModel,
+  StockMovementModel,
+  WarehouseModel,
+  OrderModel,
+  ShiftModel,
+  PaymentModel,
+  RefundModel,
+  QrisInvoiceModel,
+  TaxConfigurationModel,
+  PricingProfileModel,
+  DailyMetricModel,
+  CustomerModel,
+  SettingModel,
+  PromotionModel,
+  PaymentMethodModel,
+  MenuTypeModel,
+  TemplateModel,
+  TemplateVersionModel,
+  PrinterModel,
+  HubModel,
+  HubMembershipModel,
+  HubMemberTenantAccessModel,
+  OutletModel,
+  PlanModel,
+  SubscriptionModel,
+  PlatformAuditLogModel,
+  ProvisioningRunModel,
+  SubscriptionHistoryModel,
+  } = models;
 
   const eventBus = new EventBus();
 
@@ -236,37 +189,11 @@ export function buildContainer() {
         mongoUri: env.MONGO_URI,
       }),
     }),
-    userModel: asValue(UserModel),
-    roleModel: asValue(RoleModel),
-    sessionModel: asValue(SessionModel),
-    tenantModel: asValue(TenantModel),
-    productModel: asValue(ProductModel),
-    categoryModel: asValue(CategoryModel),
-    familyModel: asValue(FamilyModel),
-    modifierModel: asValue(ModifierModel),
-    stockModel: asValue(StockModel),
-    stockMovementModel: asValue(StockMovementModel),
-    warehouseModel: asValue(WarehouseModel),
-    orderModel: asValue(OrderModel),
-    shiftModel: asValue(ShiftModel),
-    paymentModel: asValue(PaymentModel),
-    refundModel: asValue(RefundModel),
-    taxConfigurationModel: asValue(TaxConfigurationModel),
-    pricingProfileModel: asValue(PricingProfileModel),
-    customerModel: asValue(CustomerModel),
-    settingModel: asValue(SettingModel),
-    promotionModel: asValue(PromotionModel),
-    paymentMethodModel: asValue(PaymentMethodModel),
-    menuTypeModel: asValue(MenuTypeModel),
-    templateModel: asValue(TemplateModel),
-    templateVersionModel: asValue(TemplateVersionModel),
-    printerModel: asValue(PrinterModel),
-    hubModel: asValue(HubModel),
-    hubMembershipModel: asValue(HubMembershipModel),
-    hubMemberTenantAccessModel: asValue(HubMemberTenantAccessModel),
-    outletModel: asValue(OutletModel),
-    planModel: asValue(PlanModel),
-    subscriptionModel: asValue(SubscriptionModel),
+  });
+
+  registerModels(container, models);
+
+  container.register({
     userRepository: asClass(MongoUserRepository, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
