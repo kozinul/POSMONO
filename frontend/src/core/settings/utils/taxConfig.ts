@@ -6,13 +6,13 @@ import type {
 
 export function getActiveRules(taxConfig: ITaxConfiguration | undefined): ITaxRule[] {
   if (!taxConfig) return [];
-  const activeVer = taxConfig.versions.find((v) => v.id === taxConfig.activeVersionId);
+  const activeVer = taxConfig.versions?.find((v) => v.id === taxConfig.activeVersionId);
   return activeVer?.rules ?? [];
 }
 
 export function getActiveCharges(taxConfig: ITaxConfiguration | undefined): IChargeConfig[] {
   if (!taxConfig) return [];
-  const activeVer = taxConfig.versions.find((v) => v.id === taxConfig.activeVersionId);
+  const activeVer = taxConfig.versions?.find((v) => v.id === taxConfig.activeVersionId);
   return activeVer?.charges ?? [];
 }
 

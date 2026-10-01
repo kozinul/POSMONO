@@ -248,4 +248,33 @@ describe('POS Store (free-item cart flow)', () => {
     expect(state.splitNumber).toBe(0);
     expect(state.splitBaseOrderNumber).toBeNull();
   });
+
+  it('closeBillAfterPayment calls /orders/:id/close-bill and clears activeBillId when paying an existing bill', async () => {
+    usePOSStore.setState({
+      activeBillId: 'bill-held-1',
+      activeBillNumber: 'BILL-100',
+      heldOrders: [
+        {
+          id: 'bill-held-1',
+          orderNumber: 'BILL-100',
+          items: [],
+          total: 50000,
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    } as any);
+
+    mockPricing.mockResolvedValueOnce({ data: {} });
+    await usePOSStore.getState().closeBillAfterPayment();
+
+    expect(mockPricing).toHaveBeenCalledWith(
+      '/orders/bill-held-1/close-bill',
+      { reason: 'Bill ditutup setelah pembayaran' },
+    );
+
+    const state = usePOSStore.getState();
+    expect(state.activeBillId).toBeNull();
+    expect(state.activeBillNumber).toBeNull();
+    expect(state.heldOrders).toHaveLength(0);
+  });
 });

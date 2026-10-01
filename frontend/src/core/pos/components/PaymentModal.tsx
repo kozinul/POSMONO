@@ -533,9 +533,9 @@ export function PaymentModal() {
                     </button>
                   </div>
                 </div>
-                {pricing && (pricing.promotionDiscount > 0 || pricing.appliedRules.length > 0) && (
+                {pricing && (pricing.promotionDiscount > 0 || (pricing.appliedRules?.length ?? 0) > 0) && (
                   <div className="bg-green-50 rounded-lg p-3 border border-green-200 space-y-1">
-                    {pricing.appliedRules.map((r) => (
+                    {(pricing.appliedRules ?? []).map((r) => (
                       <div key={r.ruleId} className="flex justify-between text-xs">
                         <span className="text-green-700">{r.ruleName}</span>
                         <span className="text-green-700 font-medium">{r.description}</span>
