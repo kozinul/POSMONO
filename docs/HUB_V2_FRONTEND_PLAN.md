@@ -5,9 +5,16 @@
 > [`HUB_ARCHITECTURE.md`](HUB_ARCHITECTURE.md) (phase ledger Fase 16–20).
 > Predecessor (sudah selesai & **beku**): [`HUB_FRONTEND_PLAN.md`](HUB_FRONTEND_PLAN.md) — Fase 15, tab `Hub & Anggota` F1–F9.
 >
-> **Status: RENCANA (belum ada kode).** Keputusan arsitektur sudah terkunci di `HUB_V2_DECISIONS.md`;
-> implementasi dimulai dari **Fase 16 (backend: namespace permission)** — dokumen ini baru relevan
-> secara kode mulai Fase 17.
+> **Status: Fase 16 & 17 sudah diimplementasikan (2026-09-29); Fase 18 dibuka 2026-09-30** —
+> gate debt pass T0–T9 ([`TECH_DEBT_PLAN.md`](TECH_DEBT_PLAN.md)) terpenuhi, jadi dokumen ini
+> bukan lagi rencana pasif mulai Fase 18. Keputusan arsitektur sudah terkunci di
+> `HUB_V2_DECISIONS.md`.
+>
+> **Cara memakai dokumen ini.** Bagian yang sudah jadi kode (Fase 17 access matrix §4.1, Fase 18
+> profil hub §4.2) adalah acuan, bukan target — kalau implementasi menyimpang, yang salah
+> dokumennya dan harus diperbarui di sini. Fase 19–20 masih target. Test wajib Fase 18 sudah
+> tercatat di § test plan: `HubsSection.test.tsx` & `usePlatformHubs.test.tsx` dipecah per
+> `isActive` → `status` dan tambah `code`.
 
 Fase 15 membuat **UI Kelola Hub & Anggota** utuh di Terminal Center. Fase 17–20 menambah dua
 kemampuan yang **belum ada sama sekali** dan mengubah perilaku yang sudah dipakai:

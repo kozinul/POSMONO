@@ -289,7 +289,7 @@ Frontend Terminal Center sekarang punya tab **Hub & Anggota** yang utuh: buat/ed
 
 > Keputusan arsitektur yang mengunci fase-fase ini: **[`HUB_V2_DECISIONS.md`](HUB_V2_DECISIONS.md)** (D1–D4 + opsi yang ditolak).
 > Rencana frontend: **[`HUB_V2_FRONTEND_PLAN.md`](HUB_V2_FRONTEND_PLAN.md)**.
-> Status: **Fase 16 & 17 selesai 2026-09-29**. Fase 18–20 masih rencana.
+> Status: **Fase 16 & 17 selesai 2026-09-29**; **Fase 18 dibuka 2026-09-30** (gate debt pass T0–T9 terpenuhi). Fase 19–20 masih rencana.
 > Fase 1–15 tetap utuh; Fase 16 tidak mengubah perilaku apa pun.
 
 ### Konteks (recon 2026-09-28)
@@ -357,7 +357,17 @@ masa depan, karena itu access model (Fase 17) didahulukan.
 | `PUT` tanpa `status` menghidupkan kembali grant suspended. | Menangguhkan selalu eksplisit di body; `PUT` berarti "ini konfigurasi yang saya mau". |
 | **Batasan diketahui**: hub yang **belum punya tenant** saat anggota ditambahkan → nol baris grant → anggota tetap di mode fallback sampai grant pertama ditulis. | Diperbaiki di Fase 18/20 (status hub + seeding saat tenant masuk hub), tidak diperluas di fase ini. |
 
-> ⛔ **Gate**: Fase 18 **terblokir** sampai T0–T2 di [`TECH_DEBT_PLAN.md`](TECH_DEBT_PLAN.md) selesai (pagar regresi CI + `PaymentService`/`OrderController` jadi deps object). Alasannya di §1 dokumen itu: composition root adalah tempat semua salah-urut terjadi, dan menambah 3 fase baru di atasnya tanpa pagar hanya memperbesar masalah.
+> ✅ **Gate terpenuhi 2026-09-30.** Fase 18 **tidak lagi terblokir**: T0–T9 di
+> [`TECH_DEBT_PLAN.md`](TECH_DEBT_PLAN.md) selesai — pagar regresi CI benar-benar jalan
+> (`pnpm run test` + `pnpm run lint` + `pnpm budget` di `.github/workflows/ci.yml`),
+> `PaymentService`/`OrderController`/`DatabaseService` jadi named deps object, tiga god page
+> dipecah, dan 1.249+147 test hijau di commit bersih.
+>
+> Alasan pemblokiran itu (§1 `TECH_DEBT_PLAN.md` — composition root adalah tempat semua
+> salah-urut terjadi) **tidak kedaluwarsa**, hanya syaratnya yang sudah terpenuhi. Yang menggantikan
+> gate sebagai syarat ke depan: Fase 18 mengubah `isActive` → `status`, dan `isActive` itu sedang
+> dipakai `HubsSection.test.tsx` & `HubMemberPanel` — jadi test wajib fase ini harus ditulis
+> **bersamaan** dengan perubahan field, bukan sesudahnya.
 
 ### Fase 18 — Hub identity
 - [ ] `Hub`: `code` (unique, uppercase, backfill dari `name`), `status: 'active'|'suspended'|'archived'` (menggantikan `isActive`; `isActive` jadi field derived sementara agar UI lama tidak rusak), `ownerUserId` (**display only** — otoritas tetap `HubMembership.role`).
