@@ -25,7 +25,22 @@ export interface ModifierGroupDoc {
 }
 
 export class ModifierValidationService {
-  constructor(private readonly modifierRepository: any) {}
+  constructor(
+    private readonly modifierRepository: Pick<
+      import('../../infrastructure/persistence/MongoModifierRepository').MongoModifierRepository,
+      'findByIds' | 'findByProduct' | 'findByFamily'
+    >,
+  ) {}
+
+  /**
+   * `findByIds` mengembalikan domain `Modifier` (punya `serialize()`), sementara stub test
+   * bisa mengembalikan objek polos — dua bentuk itu tetap diterima di sini.
+   */
+  private toGroupDoc(group: unknown): ModifierGroupDoc {
+    const candidate = group as { serialize?: () => unknown };
+    const data = typeof candidate?.serialize === 'function' ? candidate.serialize() : group;
+    return data as ModifierGroupDoc;
+  }
 
   async validateAndResolve(
     tenantId: string,
@@ -68,8 +83,7 @@ export class ModifierValidationService {
 
     const groupMap = new Map<string, ModifierGroupDoc>();
     for (const g of groups) {
-      const data = (g as any).serialize ? (g as any).serialize() : g;
-      groupMap.set(data.id, data as ModifierGroupDoc);
+      groupMap.set(this.toGroupDoc(g).id, this.toGroupDoc(g));
     }
 
     for (const groupId of clientGroupIds) {
@@ -139,7 +153,7 @@ export class ModifierValidationService {
     groupIds: string[],
   ): Promise<ModifierGroupDoc[]> {
     const groups = await this.modifierRepository.findByIds(tenantId, groupIds);
-    const normalized = groups.map((g: any) => (g.serialize ? g.serialize() : g));
-    return normalized.filter((g: ModifierGroupDoc) => g.required && g.minSelections > 0);
+    const normalized = groups.map((g) => this.toGroupDoc(g));
+    return normalized.filter((g) => g.required && g.minSelections > 0);
   }
 }

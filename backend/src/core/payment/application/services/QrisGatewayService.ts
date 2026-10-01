@@ -36,8 +36,8 @@ function redactApiKey(params: Record<string, string>): Record<string, string> {
 
 export class QrisGatewayService {
   constructor(
-    private readonly tenantRepository: any,
-    private readonly qrisInvoiceRepository?: any,
+    private readonly tenantRepository: import("../../../tenant/infrastructure/persistence/MongoTenantRepository").MongoTenantRepository,
+    private readonly qrisInvoiceRepository?: import("../../infrastructure/persistence/MongoQrisInvoiceRepository").MongoQrisInvoiceRepository,
   ) {}
 
   private async resolveConfig(tenantId: string): Promise<{ baseUrl: string; apiKey: string; merchantId: string }> {
@@ -56,29 +56,45 @@ export class QrisGatewayService {
     return { baseUrl, apiKey, merchantId };
   }
 
-  private async callGateway(baseUrl: string, params: Record<string, string>, endpoint: string = DEFAULT_ENDPOINT): Promise<any> {
+  private async callGateway(
+    baseUrl: string,
+    params: Record<string, string>,
+    endpoint: string = DEFAULT_ENDPOINT,
+  ): Promise<Record<string, unknown>> {
     const url = `${baseUrl}/restapi/qris/${endpoint}?${new URLSearchParams(params).toString()}`;
     logger.info({ endpoint, params: redactApiKey(params) }, '[QRIS] → gateway request');
-    let json: any;
+    let json: Record<string, unknown>;
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      json = await res.json();
-      logger.info({ endpoint, status: res.status, keys: Object.keys(json ?? {}), dataKeys: json?.data ? Object.keys(json.data) : [] }, '[QRIS] ← gateway response');
-    } catch (err: any) {
-      const reason = err?.name === 'TimeoutError' ? 'timeout' : err?.message || String(err);
+      json = (await res.json()) as Record<string, unknown>;
+      logger.info(
+        {
+          endpoint,
+          status: res.status,
+          keys: Object.keys(json ?? {}),
+          dataKeys: json?.data && typeof json.data === 'object' ? Object.keys(json.data as object) : [],
+        },
+        '[QRIS] ← gateway response',
+      );
+    } catch (err: unknown) {
+      const e = err as { name?: string; message?: string } | undefined;
+      const reason = e?.name === 'TimeoutError' ? 'timeout' : e?.message || String(err);
       logger.error({ err, endpoint, reason }, '[QRIS] gateway call failed');
       throw new ValidationError(`Tidak dapat menghubungi QRIS Gateway (${reason})`);
     }
     return json;
   }
 
-  private assertSuccess(json: any, fallbackMessage: string): any {
+  private assertSuccess(
+    json: Record<string, unknown> | null,
+    fallbackMessage: string,
+  ): Record<string, any> {
     if (!json || json.status !== 'success' || !json.data) {
       logger.warn({ response: json }, '[QRIS] gateway returned non-success');
-      throw new ValidationError(json?.message || fallbackMessage);
+      throw new ValidationError((json?.message as string) || fallbackMessage);
     }
-    return json.data;
+    return json.data as Record<string, any>;
   }
 
   async createInvoice(tenantId: string, amount: number): Promise<QrisInvoiceResult> {
@@ -119,8 +135,9 @@ export class QrisGatewayService {
         amount,
         trxDate,
         createdAt: new Date(),
-      }).catch((err: any) => {
-        logger.error({ err, referenceNumber, tenantId, invid, amount, trxDate }, '[QRIS] FAILED to persist invoice mapping — status checks will return unknown');
+      }).catch((err: unknown) => {
+        const e = err as { message?: string } | undefined;
+        logger.error({ err, referenceNumber, tenantId, invid, amount, trxDate, errorMsg: e?.message }, '[QRIS] FAILED to persist invoice mapping — status checks will return unknown');
       });
     }
 
@@ -154,8 +171,9 @@ export class QrisGatewayService {
               errorCorrectionLevel: 'L',
             });
             logger.info({ payloadLength: raw.length, imageLength: qrImage?.length }, '[QRIS] server-side QR generation succeeded');
-          } catch (qrErr: any) {
-            logger.warn({ payloadLength: raw.length, error: qrErr?.message }, '[QRIS] server-side QR generation failed, frontend will attempt');
+          } catch (qrErr: unknown) {
+            const qe = qrErr as { message?: string } | undefined;
+            logger.warn({ payloadLength: raw.length, error: qe?.message }, '[QRIS] server-side QR generation failed, frontend will attempt');
             qrImage = null;
           }
         } else {
@@ -186,7 +204,7 @@ export class QrisGatewayService {
 
     logger.info({ referenceNumber, hasInvid: !!invoiceRecord?.invid, invid: invoiceRecord?.invid }, '[QRIS] checkStatus started');
 
-    let data: any;
+    let data: Record<string, any>;
 
     if (invoiceRecord?.invid) {
       data = this.assertSuccess(
@@ -249,8 +267,9 @@ export class QrisGatewayService {
       cliTrxAmount: '10000',
       useTip: 'no',
     });
-    await this.callGateway(baseUrl, { do: 'void', apikey: apiKey, cliTrxNumber: probeRef }).catch((err: any) => {
-      logger.warn({ probeRef, error: err?.message }, '[QRIS] testConnection probe void failed (best-effort)');
+    await this.callGateway(baseUrl, { do: 'void', apikey: apiKey, cliTrxNumber: probeRef }).catch((err: unknown) => {
+      const e = err as { message?: string } | undefined;
+      logger.warn({ probeRef, error: e?.message }, '[QRIS] testConnection probe void failed (best-effort)');
     });
     logger.info({ probeRef }, '[QRIS] testConnection succeeded');
     return { ok: true, message: `Koneksi ke QRIS Gateway berhasil (${baseUrl})` };

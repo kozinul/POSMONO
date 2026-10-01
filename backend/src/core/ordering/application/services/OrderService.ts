@@ -15,9 +15,18 @@ import {
   VOID_PAYMENT_PERMISSION,
 } from './VoidApprovalService';
 import { ModifierValidationService } from '../../../catalog/application/services/ModifierValidationService';
+import type {
+  OrderRepositoryDep,
+  EventBusDep,
+  UserRepositoryDep,
+  ShiftRepositoryDep,
+  ProductRepositoryDep,
+  ModifierRepositoryDep,
+  InventoryServiceDep,
+} from './OrderServiceDeps';
 
 async function resolveCashierName(
-  userRepository: any,
+  userRepository: UserRepositoryDep | undefined,
   cashierId: string,
   tenantId: string,
   fallback: string,
@@ -209,8 +218,8 @@ function appendVoidApproval(
 }
 
 async function restoreVoidedStock(
-  inventoryService: any,
-  orderData: any,
+  inventoryService: InventoryServiceDep | undefined,
+  orderData: import('../../domain/Order').IOrder,
   item: { productId: string; quantity: number; isFreeItem?: boolean },
   ctx: { reason: string; userId: string },
 ): Promise<void> {
@@ -247,12 +256,12 @@ async function restoreVoidedStock(
 
 export class CreateOrderService implements UseCase<CreateOrderInput, Order> {
   constructor(
-    private readonly orderRepository: any,
-    private readonly eventBus: any,
-    private readonly userRepository?: any,
-    private readonly shiftRepository?: any,
-    private readonly productRepository?: any,
-    private readonly modifierRepository?: any,
+    private readonly orderRepository: OrderRepositoryDep,
+    private readonly eventBus: EventBusDep,
+    private readonly userRepository?: UserRepositoryDep,
+    private readonly shiftRepository?: ShiftRepositoryDep,
+    private readonly productRepository?: ProductRepositoryDep,
+    private readonly modifierRepository?: ModifierRepositoryDep,
   ) {}
 
   async execute(input: CreateOrderInput): Promise<Order> {
@@ -334,9 +343,10 @@ export class CreateOrderService implements UseCase<CreateOrderInput, Order> {
   }
 
   private async resolveItemsFromServer(input: CreateOrderInput, items: IOrderItem[]): Promise<IOrderItem[]> {
+    if (!this.modifierRepository || !this.productRepository) return items;
     const validator = new ModifierValidationService(this.modifierRepository);
 
-    const products = new Map<string, any>();
+    const products = new Map<string, import('../../../catalog/domain/Product').IProduct>();
     for (const item of items) {
       if (products.has(item.productId)) continue;
       const product = await this.productRepository.findById(item.productId);
@@ -371,8 +381,8 @@ export class CreateOrderService implements UseCase<CreateOrderInput, Order> {
 
 export class UpdateOrderService implements UseCase<UpdateOrderInput, Order> {
   constructor(
-    private readonly orderRepository: any,
-    private readonly eventBus: any,
+    private readonly orderRepository: OrderRepositoryDep,
+    private readonly eventBus: EventBusDep,
   ) {}
 
   async execute(input: UpdateOrderInput): Promise<Order> {
@@ -407,8 +417,8 @@ export class UpdateOrderService implements UseCase<UpdateOrderInput, Order> {
 
 export class ReplaceOrderItemsService implements UseCase<ReplaceOrderItemsInput, Order> {
   constructor(
-    private readonly orderRepository: any,
-    private readonly eventBus: any,
+    private readonly orderRepository: OrderRepositoryDep,
+    private readonly eventBus: EventBusDep,
   ) {}
 
   async execute(input: ReplaceOrderItemsInput): Promise<Order> {
@@ -434,10 +444,10 @@ export class ReplaceOrderItemsService implements UseCase<ReplaceOrderItemsInput,
 
 export class VoidOrderService implements UseCase<VoidOrderInput, Order> {
   constructor(
-    private readonly orderRepository: any,
-    private readonly eventBus: any,
+    private readonly orderRepository: OrderRepositoryDep,
+    private readonly eventBus: EventBusDep,
     private readonly voidApprovalService?: VoidApprovalService,
-    private readonly inventoryService?: any,
+    private readonly inventoryService?: InventoryServiceDep,
   ) {}
 
   async execute(input: VoidOrderInput): Promise<Order> {
@@ -472,10 +482,10 @@ export class VoidOrderService implements UseCase<VoidOrderInput, Order> {
 
 export class VoidItemService implements UseCase<VoidItemInput, Order> {
   constructor(
-    private readonly orderRepository: any,
-    private readonly eventBus: any,
+    private readonly orderRepository: OrderRepositoryDep,
+    private readonly eventBus: EventBusDep,
     private readonly voidApprovalService?: VoidApprovalService,
-    private readonly inventoryService?: any,
+    private readonly inventoryService?: InventoryServiceDep,
   ) {}
 
   async execute(input: VoidItemInput): Promise<Order> {
@@ -508,9 +518,9 @@ export class VoidItemService implements UseCase<VoidItemInput, Order> {
 
 export class PayOrderService implements UseCase<PayOrderInput, Order> {
   constructor(
-    private readonly orderRepository: any,
-    private readonly eventBus: any,
-    private readonly userRepository?: any,
+    private readonly orderRepository: OrderRepositoryDep,
+    private readonly eventBus: EventBusDep,
+    private readonly userRepository?: UserRepositoryDep,
   ) {}
 
   async execute(input: PayOrderInput): Promise<Order> {
@@ -533,8 +543,8 @@ export class PayOrderService implements UseCase<PayOrderInput, Order> {
 
 export class VoidPaymentService implements UseCase<VoidPaymentInput, Order> {
   constructor(
-    private readonly orderRepository: any,
-    private readonly eventBus: any,
+    private readonly orderRepository: OrderRepositoryDep,
+    private readonly eventBus: EventBusDep,
     private readonly voidApprovalService?: VoidApprovalService,
   ) {}
 
@@ -558,8 +568,8 @@ export class VoidPaymentService implements UseCase<VoidPaymentInput, Order> {
 
 export class ReopenOrderService implements UseCase<ReopenOrderInput, Order> {
   constructor(
-    private readonly orderRepository: any,
-    private readonly eventBus: any,
+    private readonly orderRepository: OrderRepositoryDep,
+    private readonly eventBus: EventBusDep,
   ) {}
 
   async execute(input: ReopenOrderInput): Promise<Order> {
@@ -580,8 +590,8 @@ export class ReopenOrderService implements UseCase<ReopenOrderInput, Order> {
 
 export class SplitItemService implements UseCase<SplitItemInput, Order> {
   constructor(
-    private readonly orderRepository: any,
-    private readonly eventBus: any,
+    private readonly orderRepository: OrderRepositoryDep,
+    private readonly eventBus: EventBusDep,
     private readonly createOrderService: CreateOrderService,
   ) {}
 
@@ -649,8 +659,8 @@ export class SplitItemService implements UseCase<SplitItemInput, Order> {
 
 export class RemoveItemService implements UseCase<RemoveItemInput, Order> {
   constructor(
-    private readonly orderRepository: any,
-    private readonly eventBus: any,
+    private readonly orderRepository: OrderRepositoryDep,
+    private readonly eventBus: EventBusDep,
   ) {}
 
   async execute(input: RemoveItemInput): Promise<Order> {
@@ -671,8 +681,8 @@ export class RemoveItemService implements UseCase<RemoveItemInput, Order> {
 
 export class UpdateItemQuantityService implements UseCase<UpdateItemQuantityInput, Order> {
   constructor(
-    private readonly orderRepository: any,
-    private readonly eventBus: any,
+    private readonly orderRepository: OrderRepositoryDep,
+    private readonly eventBus: EventBusDep,
   ) {}
 
   async execute(input: UpdateItemQuantityInput): Promise<Order> {
@@ -693,10 +703,10 @@ export class UpdateItemQuantityService implements UseCase<UpdateItemQuantityInpu
 
 export class VoidAndRollbackService implements UseCase<VoidAndRollbackInput, Order> {
   constructor(
-    private readonly orderRepository: any,
-    private readonly eventBus: any,
+    private readonly orderRepository: OrderRepositoryDep,
+    private readonly eventBus: EventBusDep,
     private readonly voidApprovalService?: VoidApprovalService,
-    private readonly inventoryService?: any,
+    private readonly inventoryService?: InventoryServiceDep,
   ) {}
 
   async execute(input: VoidAndRollbackInput): Promise<Order> {
@@ -731,9 +741,9 @@ export class VoidAndRollbackService implements UseCase<VoidAndRollbackInput, Ord
 
 export class TopayService implements UseCase<TopayInput, Order> {
   constructor(
-    private readonly orderRepository: any,
-    private readonly eventBus: any,
-    private readonly userRepository?: any,
+    private readonly orderRepository: OrderRepositoryDep,
+    private readonly eventBus: EventBusDep,
+    private readonly userRepository?: UserRepositoryDep,
   ) {}
 
   async execute(input: TopayInput): Promise<Order> {
@@ -756,8 +766,8 @@ export class TopayService implements UseCase<TopayInput, Order> {
 
 export class RefundService implements UseCase<RefundInput, Order> {
   constructor(
-    private readonly orderRepository: any,
-    private readonly eventBus: any,
+    private readonly orderRepository: OrderRepositoryDep,
+    private readonly eventBus: EventBusDep,
   ) {}
 
   async execute(input: RefundInput): Promise<Order> {
@@ -778,8 +788,8 @@ export class RefundService implements UseCase<RefundInput, Order> {
 
 export class ApplyDiscountService implements UseCase<ApplyDiscountInput, Order> {
   constructor(
-    private readonly orderRepository: any,
-    private readonly eventBus: any,
+    private readonly orderRepository: OrderRepositoryDep,
+    private readonly eventBus: EventBusDep,
   ) {}
 
   async execute(input: ApplyDiscountInput): Promise<Order> {
@@ -800,8 +810,8 @@ export class ApplyDiscountService implements UseCase<ApplyDiscountInput, Order> 
 
 export class SetServiceChargeService implements UseCase<SetServiceChargeInput, Order> {
   constructor(
-    private readonly orderRepository: any,
-    private readonly eventBus: any,
+    private readonly orderRepository: OrderRepositoryDep,
+    private readonly eventBus: EventBusDep,
   ) {}
 
   async execute(input: SetServiceChargeInput): Promise<Order> {
@@ -822,9 +832,9 @@ export class SetServiceChargeService implements UseCase<SetServiceChargeInput, O
 
 export class HoldOrderService implements UseCase<HoldOrderInput, Order> {
   constructor(
-    private readonly orderRepository: any,
-    private readonly eventBus: any,
-    private readonly inventoryService?: any,
+    private readonly orderRepository: OrderRepositoryDep,
+    private readonly eventBus: EventBusDep,
+    private readonly inventoryService?: InventoryServiceDep,
   ) {}
 
   async execute(input: HoldOrderInput): Promise<Order> {
@@ -862,9 +872,9 @@ export class HoldOrderService implements UseCase<HoldOrderInput, Order> {
 
 export class RecallOrderService implements UseCase<RecallOrderInput, Order> {
   constructor(
-    private readonly orderRepository: any,
-    private readonly eventBus: any,
-    private readonly inventoryService?: any,
+    private readonly orderRepository: OrderRepositoryDep,
+    private readonly eventBus: EventBusDep,
+    private readonly inventoryService?: InventoryServiceDep,
   ) {}
 
   async execute(input: RecallOrderInput): Promise<Order> {
@@ -915,9 +925,9 @@ export interface CloseBillInput {
  */
 export class CloseBillService implements UseCase<CloseBillInput, Order> {
   constructor(
-    private readonly orderRepository: any,
-    private readonly eventBus: any,
-    private readonly inventoryService?: any,
+    private readonly orderRepository: OrderRepositoryDep,
+    private readonly eventBus: EventBusDep,
+    private readonly inventoryService?: InventoryServiceDep,
   ) {}
 
   async execute(input: CloseBillInput): Promise<Order> {

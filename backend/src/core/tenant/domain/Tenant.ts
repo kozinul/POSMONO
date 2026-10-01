@@ -48,6 +48,10 @@ export interface TenantConfig {
   roundingDenomination: number;
   autoPrintReceipt: boolean;
   autoPrintKot: boolean;
+  qrisGatewayEnabled?: boolean;
+  qrisGatewayBaseUrl?: string;
+  qrisGatewayApiKey?: string;
+  qrisGatewayMerchantId?: string;
 }
 
 export class Tenant extends AggregateRoot<TenantId> {

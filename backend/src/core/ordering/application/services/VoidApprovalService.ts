@@ -19,8 +19,8 @@ interface VerifyApproverInput {
 
 export class VoidApprovalService {
   constructor(
-    private readonly userRepository: any,
-    private readonly roleRepository: any,
+    private readonly userRepository: import("../../../identity/infrastructure/persistence/MongoUserRepository").MongoUserRepository,
+    private readonly roleRepository: import("../../../identity/infrastructure/persistence/MongoRoleRepository").MongoRoleRepository,
     private readonly passwordService: PasswordService,
   ) {}
 
@@ -70,11 +70,12 @@ export class VoidApprovalService {
     tenantId: string,
     managerPin: string,
     requiredPermission: string,
-  ): Promise<{ user: any } | null> {
+  ): Promise<{ user: import('../../../identity/domain/User').User } | null> {
     const users = await this.userRepository.findByTenant(tenantId);
-    const candidates = users.filter((u: any) => u.pinValue);
+    const candidates = users.filter((u) => Boolean(u.pinValue));
 
     for (const user of candidates) {
+      if (!user.pinValue) continue;
       const match = await this.passwordService.compare(managerPin, user.pinValue);
       if (!match) continue;
 

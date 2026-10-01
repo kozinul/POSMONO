@@ -83,11 +83,17 @@ export class PaymentService {
     const productCache = new Map<string, any>();
     const resolvedItems: PaymentItemInput[] = [];
 
-    const groupIdOf = (g: any): string => {
+    const groupIdOf = (g: unknown): string => {
       if (!g) return '';
-      if (typeof g.id === 'object' && g.id && typeof g.id.toValue === 'function') return g.id.toValue();
-      if (typeof g.serialize === 'function') { const d = g.serialize(); return d.id || ''; }
-      return g.id || g._id || '';
+      const obj = g as Record<string, unknown>;
+      if (typeof obj.id === 'object' && obj.id && typeof (obj.id as { toValue?: () => string }).toValue === 'function') {
+        return (obj.id as { toValue: () => string }).toValue();
+      }
+      if (typeof obj.serialize === 'function') {
+        const d = (obj as { serialize: () => { id?: string } }).serialize();
+        return d.id || '';
+      }
+      return (obj.id as string) || (obj._id as string) || '';
     };
 
     for (const item of items) {
@@ -185,7 +191,7 @@ export class PaymentService {
     shiftId?: string | null;
     outletId?: string | null;
     cashierName?: string;
-  }): Promise<{ payment: Payment; order: any; receipt: ReceiptRenderResult | null; pending?: boolean }> {
+  }): Promise<{ payment: Payment; order: Order; receipt: ReceiptRenderResult | null; pending?: boolean }> {
     const { shiftId, outletId: shiftOutletId } = await this.assertOpenShift(input.tenantId, input.cashierId, input.outletId, input.shiftId);
     const outletId = input.outletId ?? shiftOutletId ?? null;
     const roundMoney = (value: number) => Math.round(value);
@@ -214,14 +220,14 @@ export class PaymentService {
 
       if (discountResult.totalDiscount > 0) {
         promoDiscount = discountResult.totalDiscount;
-        promotionBreakdown = discountResult.appliedRules.map((rule: any) => ({
+        promotionBreakdown = discountResult.appliedRules.map((rule) => ({
           id: rule.ruleId,
           name: rule.ruleName,
           code: input.promoCode ?? '',
           totalDiscount: rule.discountAmount,
           description: rule.description,
         }));
-        discountBreakdownList = discountResult.appliedRules.map((rule: any) => ({
+        discountBreakdownList = discountResult.appliedRules.map((rule) => ({
           id: rule.ruleId,
           name: rule.ruleName,
           type: 'percentage' as const,
@@ -569,7 +575,15 @@ export class PaymentService {
 
   async listPendingTransfers(tenantId: string) {
     const payments = await this.deps.paymentRepository.findPending(tenantId);
-    const result: Array<{ payment: any; order: any }> = [];
+    type OrderPendingSummary = {
+      id: string;
+      orderNumber: string;
+      status: string;
+      total: number;
+      roundedPayable: number;
+      cashierName: string;
+    };
+    const result: Array<{ payment: import('../../domain/Payment').IPayment; order: OrderPendingSummary | null }> = [];
     for (const p of payments) {
       const paymentData = p.serialize();
       let orderInfo = null;

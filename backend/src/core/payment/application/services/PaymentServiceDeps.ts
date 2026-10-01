@@ -59,6 +59,6 @@ export interface PaymentServiceDeps {
   printService?: Pick<PrintService, 'printEscPos'>;
   qrisGatewayService?: Pick<QrisGatewayService, 'checkStatus'>;
   productRepository?: Pick<MongoProductRepository, 'findById'>;
-  modifierRepository?: Pick<MongoModifierRepository, 'findByProduct' | 'findByFamily'>;
+  modifierRepository?: Pick<MongoModifierRepository, 'findByProduct' | 'findByFamily' | 'findByIds'>;
   categoryRepository?: Pick<MongoCategoryRepository, 'findById'>;
 }

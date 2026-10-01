@@ -25,7 +25,7 @@ interface UpdatePaymentMethodInput {
 }
 
 export class PaymentMethodService {
-  constructor(private readonly paymentMethodRepository: any) {}
+  constructor(private readonly paymentMethodRepository: import("../../infrastructure/persistence/MongoPaymentMethodRepository").MongoPaymentMethodRepository) {}
 
   async create(input: CreatePaymentMethodInput): Promise<PaymentMethod> {
     const existing = await this.paymentMethodRepository.findByCode(input.tenantId, input.code);
