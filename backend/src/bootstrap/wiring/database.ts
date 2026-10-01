@@ -17,14 +17,16 @@ export function registerDatabaseWiring({ container, models }: WiringContext): vo
     databaseService: asClass(DatabaseService, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
-        orderModel: models.OrderModel,
-        paymentModel: models.PaymentModel,
-        refundModel: models.RefundModel,
-        dailyMetricModel: models.DailyMetricModel,
-        shiftModel: models.ShiftModel,
-        shiftRepository: container.resolve('shiftRepository'),
-        shiftService: container.resolve('shiftService'),
-        reportAggregation: container.resolve('reportAggregation'),
+        deps: {
+          orderModel: models.OrderModel,
+          paymentModel: models.PaymentModel,
+          refundModel: models.RefundModel,
+          dailyMetricModel: models.DailyMetricModel,
+          shiftModel: models.ShiftModel,
+          shiftRepository: container.resolve('shiftRepository'),
+          shiftService: container.resolve('shiftService'),
+          reportAggregation: container.resolve('reportAggregation'),
+        },
       }),
     }),
     databaseController: asClass(DatabaseController, {

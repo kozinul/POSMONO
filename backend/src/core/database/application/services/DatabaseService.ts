@@ -1,4 +1,7 @@
-import { Types } from 'mongoose';
+import { Types, Model } from 'mongoose';
+import type { MongoShiftRepository } from '../../../pos/infrastructure/persistence/MongoShiftRepository';
+import type { ShiftService } from '../../../pos/application/services/ShiftService';
+import type { ReportAggregation } from '../../../reporting/infrastructure/aggregation/ReportAggregation';
 
 interface BackupCollection {
   orders: unknown[];
@@ -19,17 +22,19 @@ interface DeleteResult {
   dailyMetrics: number;
 }
 
+export interface DatabaseServiceDeps {
+  orderModel: Model<unknown>;
+  paymentModel: Model<unknown>;
+  refundModel: Model<unknown>;
+  dailyMetricModel: Model<unknown>;
+  shiftModel: Model<unknown>;
+  shiftRepository?: Pick<MongoShiftRepository, 'findActiveShifts'>;
+  shiftService?: Pick<ShiftService, 'refreshSales'>;
+  reportAggregation?: Pick<ReportAggregation, 'getShiftSalesAggregation'>;
+}
+
 export class DatabaseService {
-  constructor(
-    private readonly orderModel: any,
-    private readonly paymentModel: any,
-    private readonly refundModel: any,
-    private readonly dailyMetricModel: any,
-    private readonly shiftModel: any,
-    private readonly shiftRepository?: any,
-    private readonly shiftService?: any,
-    private readonly reportAggregation?: any,
-  ) {}
+  constructor(private readonly deps: DatabaseServiceDeps) {}
 
   private dateRange(from?: string, to?: string): Record<string, Date> {
     const range: Record<string, Date> = {};
@@ -68,9 +73,9 @@ export class DatabaseService {
     const refundRange = this.dateRange(from, to);
 
     const [orders, payments, refunds] = await Promise.all([
-      this.orderModel.countDocuments({ tenantId, ...orderRange }),
-      this.paymentModel.countDocuments({ tenantId, ...paymentRange }),
-      this.refundModel.countDocuments({ tenantId, ...refundRange }),
+      this.deps.orderModel.countDocuments({ tenantId, ...orderRange }),
+      this.deps.paymentModel.countDocuments({ tenantId, ...paymentRange }),
+      this.deps.refundModel.countDocuments({ tenantId, ...refundRange }),
     ]);
 
     return { orders, payments, refunds };
@@ -82,9 +87,9 @@ export class DatabaseService {
     const refundRange = this.dateRange(from, to);
 
     const [orders, payments, refunds] = await Promise.all([
-      this.orderModel.find({ tenantId, ...orderRange }).lean(),
-      this.paymentModel.find({ tenantId, ...paymentRange }).lean(),
-      this.refundModel.find({ tenantId, ...refundRange }).lean(),
+      this.deps.orderModel.find({ tenantId, ...orderRange }).lean(),
+      this.deps.paymentModel.find({ tenantId, ...paymentRange }).lean(),
+      this.deps.refundModel.find({ tenantId, ...refundRange }).lean(),
     ]);
 
     return {
@@ -96,10 +101,10 @@ export class DatabaseService {
   }
 
   async restore(tenantId: string, input: RestoreInput): Promise<{ orders: number; payments: number; refunds: number }> {
-    const collections: Array<[keyof RestoreInput, any, unknown[] | undefined]> = [
-      ['orders', this.orderModel, input.orders],
-      ['payments', this.paymentModel, input.payments],
-      ['refunds', this.refundModel, input.refunds],
+    const collections: Array<[keyof RestoreInput, Model<unknown>, unknown[] | undefined]> = [
+      ['orders', this.deps.orderModel, input.orders],
+      ['payments', this.deps.paymentModel, input.payments],
+      ['refunds', this.deps.refundModel, input.refunds],
     ];
 
     const results = { orders: 0, payments: 0, refunds: 0 };
@@ -142,7 +147,7 @@ export class DatabaseService {
     const paymentRange = this.dateRange(from, to);
 
     const orderMatch: Record<string, unknown> = { tenantId, ...orderRange };
-    const orderIds = await this.orderModel.distinct('_id', orderMatch);
+    const orderIds = await this.deps.orderModel.distinct('_id', orderMatch);
 
     const paymentMatch: Record<string, unknown> = { tenantId };
     if (orderIds.length > 0) paymentMatch.orderId = { $in: orderIds };
@@ -154,28 +159,28 @@ export class DatabaseService {
     if (orderIds.length > 0) refundMatch.orderId = { $in: orderIds };
 
     const [orders, payments, refunds] = await Promise.all([
-      this.orderModel.deleteMany(orderMatch),
-      this.paymentModel.deleteMany(paymentMatch),
-      this.refundModel.deleteMany(refundMatch),
+      this.deps.orderModel.deleteMany(orderMatch),
+      this.deps.paymentModel.deleteMany(paymentMatch),
+      this.deps.refundModel.deleteMany(refundMatch),
     ]);
 
     let dailyMetrics = 0;
     if (from && to) {
       const dates = this.enumerateDates(from, to);
       if (dates.length > 0) {
-        const dm = await this.dailyMetricModel.deleteMany({ tenantId, date: { $in: dates } });
+        const dm = await this.deps.dailyMetricModel.deleteMany({ tenantId, date: { $in: dates } });
         dailyMetrics = dm.deletedCount ?? 0;
       }
     } else if (!from && !to) {
-      const dm = await this.dailyMetricModel.deleteMany({ tenantId });
+      const dm = await this.deps.dailyMetricModel.deleteMany({ tenantId });
       dailyMetrics = dm.deletedCount ?? 0;
     }
 
-    if (this.shiftRepository && this.shiftService) {
+    if (this.deps.shiftRepository && this.deps.shiftService) {
       try {
-        const openShifts = await this.shiftRepository.findActiveShifts(tenantId);
+        const openShifts = await this.deps.shiftRepository.findActiveShifts(tenantId);
         for (const shift of openShifts) {
-          await this.shiftService.refreshSales(shift);
+          await this.deps.shiftService.refreshSales(shift);
         }
       } catch {
         // ignore refresh failures
