@@ -1,7 +1,7 @@
+import { makeHub } from '../fixtures/hub.fixtures';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ProvisionTenantService, ProvisionTenantInput } from '../../src/core/platform/application/services/ProvisionTenantService';
 import { Tenant } from '../../src/core/tenant/domain/Tenant';
-import { Hub } from '../../src/core/hub/domain/Hub';
 import { Outlet } from '../../src/core/outlet/domain/Outlet';
 import { Warehouse } from '../../src/core/inventory/domain/Warehouse';
 import { ValidationError, NotFoundError, ConflictError } from '../../src/@shared/infrastructure/error/AppError';
@@ -128,16 +128,7 @@ describe('ProvisionTenantService', () => {
   });
 
   it('provisions tenant with existing hub when hubId is provided', async () => {
-    const hub = Hub.hydrate({
-      id: 'hub-abc',
-      name: 'ABC Hospitality',
-      description: null,
-      isActive: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    } as any);
-
-    hubRepo.findById.mockResolvedValue(hub);
+        hubRepo.findById.mockResolvedValue(makeHub({ id: 'hub-abc', name: 'ABC Hospitality' }));
 
     const result = await service.execute({
       ...sampleInput,

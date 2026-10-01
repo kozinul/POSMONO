@@ -23,34 +23,57 @@ export class HubController extends BaseController {
   }
 
   async create(req: Request, res: Response): Promise<void> {
-    const { name, description } = req.body;
+    const { name, description, code } = req.body;
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
       throw new ValidationError('Name is required');
     }
-    const hub = await this.hubService.create(name.trim(), description);
+    if (code !== undefined && typeof code !== 'string') {
+      throw new ValidationError('Code must be a string');
+    }
+    const hub = await this.hubService.create({ name: name.trim(), description, code });
+    const data = hub.serialize();
     await this.audit(req, {
       action: 'HUB_CREATED',
       description: `Hub "${name.trim()}" dibuat`,
-      after: { hubId: hub.serialize().id, hubName: hub.serialize().name },
+      after: { hubId: data.id, hubName: data.name, code: data.code },
     });
-    this.created(res, hub.serialize());
+    this.created(res, data);
   }
 
   async update(req: Request, res: Response): Promise<void> {
-    const { name, description, isActive } = req.body;
+    const { name, description, code, status, ownerUserId } = req.body;
+    if (name !== undefined && typeof name !== 'string') {
+      throw new ValidationError('Name must be a string');
+    }
+    if (code !== undefined && typeof code !== 'string') {
+      throw new ValidationError('Code must be a string');
+    }
+    if (ownerUserId !== undefined && ownerUserId !== null && typeof ownerUserId !== 'string') {
+      throw new ValidationError('ownerUserId must be a string or null');
+    }
+
     const before = await this.hubService.getById(req.params.id);
+    const beforeData = before.serialize();
     const hub = await this.hubService.update(req.params.id, {
       name: name?.trim(),
       description,
-      isActive,
+      code,
+      status,
+      ownerUserId,
     });
+    const after = hub.serialize();
     await this.audit(req, {
       action: 'HUB_UPDATED',
-      description: `Hub "${before.serialize().name}" diperbarui`,
-      before: { name: before.serialize().name, isActive: before.serialize().isActive },
-      after: { name: hub.serialize().name, isActive: hub.serialize().isActive },
+      description: `Hub "${beforeData.name}" diperbarui`,
+      before: {
+        name: beforeData.name,
+        code: beforeData.code,
+        status: beforeData.status,
+        ownerUserId: beforeData.ownerUserId,
+      },
+      after: { name: after.name, code: after.code, status: after.status, ownerUserId: after.ownerUserId },
     });
-    this.ok(res, hub.serialize());
+    this.ok(res, after);
   }
 
   async delete(req: Request, res: Response): Promise<void> {

@@ -3,6 +3,7 @@ import mongoose, { Model } from 'mongoose';
 import request from 'supertest';
 import express, { Express, Request, Response, NextFunction, Router } from 'express';
 import jwt from 'jsonwebtoken';
+import { makeHub } from '../fixtures/hub.fixtures';
 import { setupTestDb, teardownTestDb, clearCollections } from '../helpers/db';
 import { TEST_SECRET } from '../helpers/auth';
 
@@ -256,8 +257,8 @@ beforeEach(async () => {
   await seedOutlet(ctx.outletRepo, OUTLET_A2, TENANT_A, 'Outlet Alpha 2');
   await seedOutlet(ctx.outletRepo, OUTLET_B1, TENANT_B, 'Outlet Beta 1');
 
-  await ctx.hubRepo.save(Hub.hydrate({ id: HUB, name: 'Group One', description: null, isActive: true, createdAt: new Date(), updatedAt: new Date() } as any));
-  await ctx.hubRepo.save(Hub.hydrate({ id: HUB_2, name: 'Group Two', description: null, isActive: true, createdAt: new Date(), updatedAt: new Date() } as any));
+  await ctx.hubRepo.save(makeHub({ id: HUB, name: 'Group One' }));
+  await ctx.hubRepo.save(makeHub({ id: HUB_2, name: 'Group Two' }));
 
   await ctx.userRepo.save(
     User.hydrate({

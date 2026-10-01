@@ -5,3 +5,4 @@ export * from './tenant.fixtures';
 export * from './catalog.fixtures';
 export * from './inventory.fixtures';
 export * from './pos.fixtures';
+export * from './hub.fixtures';

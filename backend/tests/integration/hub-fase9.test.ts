@@ -26,13 +26,13 @@ import { MongoShiftRepository } from '../../src/core/pos/infrastructure/persiste
 import { MongoPaymentRepository } from '../../src/core/payment/infrastructure/persistence/MongoPaymentRepository';
 
 import { Tenant } from '../../src/core/tenant/domain/Tenant';
-import { Hub } from '../../src/core/hub/domain/Hub';
 import { User } from '../../src/core/identity/domain/User';
 import { Outlet } from '../../src/core/outlet/domain/Outlet';
 import { Shift } from '../../src/core/pos/domain/Shift';
 import { Payment } from '../../src/core/payment/domain/Payment';
 
 import { HubService } from '../../src/core/hub/application/services/HubService';
+import { makeHub } from '../fixtures/hub.fixtures';
 import { HubMembershipService } from '../../src/core/hub/application/services/HubMembershipService';
 import { TenantService } from '../../src/core/tenant/application/services/TenantService';
 import { OutletService } from '../../src/core/outlet/application/services/OutletService';
@@ -94,15 +94,7 @@ function seedTenant(repo: MongoTenantRepository, id: string, name: string, slug:
 }
 
 function seedHub(repo: MongoHubRepository, id: string, name: string) {
-  const hub = Hub.hydrate({
-    id,
-    name,
-    description: null,
-    isActive: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  } as any);
-  return repo.save(hub);
+  return repo.save(makeHub({ id, name }));
 }
 
 function seedUser(repo: MongoUserRepository, id: string, tenantId: string, email: string, displayName: string) {

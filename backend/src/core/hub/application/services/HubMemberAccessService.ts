@@ -91,7 +91,7 @@ export class HubMemberAccessService {
   }
 
   async grantAccess(input: GrantInput): Promise<HubMemberTenantAccess> {
-    await this.assertValidTarget(input.hubId, input.userId, input.tenantId);
+    await this.assertValidTarget(input.hubId, input.userId, input.tenantId, { writable: true });
     this.assertTenantRole(input.tenantRole);
 
     const outletIds = input.outletIds ?? [];
@@ -128,6 +128,7 @@ export class HubMemberAccessService {
     if (!grant) {
       throw new NotFoundError('HubMemberTenantAccess');
     }
+    await this.assertHubNotArchived(hubId);
 
     if (input.tenantRole !== undefined) this.assertTenantRole(input.tenantRole);
     if (input.outletIds !== undefined) {
@@ -147,7 +148,7 @@ export class HubMemberAccessService {
    * platform-admin typo that would have handed out real access.
    */
   async setAccess(input: GrantInput & { status?: HubAccessStatus }): Promise<HubMemberTenantAccess> {
-    await this.assertValidTarget(input.hubId, input.userId, input.tenantId);
+    await this.assertValidTarget(input.hubId, input.userId, input.tenantId, { writable: true });
     this.assertTenantRole(input.tenantRole);
     await this.assertOutletsBelongToTenant(input.tenantId, input.outletIds ?? []);
 
@@ -307,7 +308,7 @@ export class HubMemberAccessService {
     tenantId: string,
   ): Promise<boolean> {
     const hub = await this.deps.hubRepository.findById(hubId);
-    if (!hub || !hub.serialize().isActive) return false;
+    if (!hub || !hub.isOperational()) return false;
 
     const membership = await this.deps.hubMembershipRepository.findByHubAndUser(hubId, userId);
     if (!membership) return false;
@@ -327,7 +328,7 @@ export class HubMemberAccessService {
       if (!HUB_MEMBER_ROLES.includes(membershipData.role)) continue;
 
       const hub = await this.deps.hubRepository.findById(membershipData.hubId);
-      if (!hub || !hub.serialize().isActive) continue;
+      if (!hub || !hub.isOperational()) continue;
 
       const tenants = await this.deps.tenantRepository.findByHubId(membershipData.hubId);
       const owns = tenants.some((t: any) => t.serialize().id === tenantId);
@@ -378,7 +379,7 @@ export class HubMemberAccessService {
       if (!grant.isActive()) continue;
 
       const hub = await this.deps.hubRepository.findById(data.hubId);
-      if (!hub || !hub.serialize().isActive) continue;
+      if (!hub || !hub.isOperational()) continue;
 
       let tenantName: string | null = null;
       let ownsTenant = false;
@@ -417,7 +418,7 @@ export class HubMemberAccessService {
     for (const membership of memberships) {
       const data = membership.serialize();
       const hub = await this.deps.hubRepository.findById(data.hubId);
-      if (!hub || !hub.serialize().isActive) continue;
+      if (!hub || !hub.isOperational()) continue;
 
       const tenants = await this.deps.tenantRepository.findByHubId(data.hubId);
       for (const tenant of tenants) {
@@ -479,7 +480,18 @@ export class HubMemberAccessService {
       try {
         const hub = await this.deps.hubRepository.findById(hubId);
         if (!hub) continue;
-        hubs.push({ id: hubId, name: hub.serialize().name, isActive: hub.serialize().isActive });
+        // Grants survive a suspension (that is how reactivation restores access),
+        // but a hub you cannot enter must not be offered as context — it would
+        // show in the switcher while granting nothing. `grants` still lists them.
+        if (!hub.isOperational()) continue;
+        const data = hub.serialize();
+        hubs.push({
+          id: hubId,
+          code: data.code,
+          name: data.name,
+          status: data.status,
+          isActive: true,
+        });
       } catch {
         // hub deleted — skip
       }
@@ -512,9 +524,15 @@ export class HubMemberAccessService {
   }
 
   /** A grant must point at a live hub, a real member, and a tenant of that hub. */
-  private async assertValidTarget(hubId: string, userId: string, tenantId: string): Promise<void> {
+  private async assertValidTarget(
+    hubId: string,
+    userId: string,
+    tenantId: string,
+    opts: { writable?: boolean } = {},
+  ): Promise<void> {
     const hub = await this.deps.hubRepository.findById(hubId);
     if (!hub) throw new NotFoundError('Hub', hubId);
+    if (opts.writable) this.assertHubNotArchivedRef(hub);
 
     const membership = await this.deps.hubMembershipRepository.findByHubAndUser(hubId, userId);
     if (!membership) {
@@ -540,6 +558,29 @@ export class HubMemberAccessService {
     if (unknown.length > 0) {
       throw new ValidationError(
         `Outlet does not belong to this tenant: ${unknown.join(', ')}`,
+      );
+    }
+  }
+
+  /**
+   * An archived hub is frozen (Fase 18): its access matrix is part of the record
+   * the archive preserves. Suspending instead leaves the matrix editable while
+   * still cutting every member's access.
+   */
+  private async assertHubNotArchived(hubId: string): Promise<void> {
+    // A missing hub is not an error here: `grantAccess`/`setAccess` already
+    // require the hub to exist, and `updateAccess` only needs to know that the
+    // hub is not frozen. An orphaned row is unusable anyway (see
+    // `isGrantStillLinked`), so refusing the edit would only strand it.
+    const hub = await this.deps.hubRepository.findById(hubId);
+    if (!hub) return;
+    this.assertHubNotArchivedRef(hub);
+  }
+
+  private assertHubNotArchivedRef(hub: { isArchived(): boolean }): void {
+    if (hub.isArchived()) {
+      throw new ValidationError(
+        'Hub berstatus archived tidak dapat diubah. Kembalikan statusnya ke Aktif atau Ditangguhkan terlebih dahulu.',
       );
     }
   }

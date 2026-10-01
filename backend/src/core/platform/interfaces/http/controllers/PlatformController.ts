@@ -83,7 +83,25 @@ export class PlatformController extends BaseController {
       ...hubData,
       tenants: tenants.map((t) => t.serialize()),
       tenantCount: tenants.length,
+      owner: await this.resolveHubOwner(hubData.ownerUserId),
     });
+  }
+
+  /**
+   * Fase 18: `Hub.ownerUserId` is display only. Resolving it to a name here —
+   * best effort, and null when the user is gone — keeps the hub profile from
+   * showing a raw id in the UI.
+   */
+  private async resolveHubOwner(ownerUserId: string | null): Promise<{ id: string; name: string; email: string } | null> {
+    if (!ownerUserId || !this.deps.userRepository) return null;
+    try {
+      const user = await this.deps.userRepository.findByIdRaw(ownerUserId);
+      const data = user?.serialize?.();
+      if (!data) return null;
+      return { id: data.id, name: data.displayName, email: data.email };
+    } catch {
+      return null;
+    }
   }
 
   // Tenant provisioning (read-only cross-tenant)

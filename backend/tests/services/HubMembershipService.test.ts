@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { HubMembershipService } from '../../src/core/hub/application/services/HubMembershipService';
-import { Hub } from '../../src/core/hub/domain/Hub';
 import { HubMembership } from '../../src/core/hub/domain/HubMembership';
+import { makeHub, type HubStatus } from '../fixtures/hub.fixtures';
 import { ConflictError, NotFoundError, ValidationError } from '../../src/@shared/infrastructure/error/AppError';
 
 const HUB_ID = 'hub-1';
@@ -9,15 +9,8 @@ const USER_A = 'user-a';
 const USER_B = 'user-b';
 const USER_C = 'user-c';
 
-function createHub(id: string, name = 'BCA Hospitality', isActive = true) {
-  return Hub.hydrate({
-    id,
-    name,
-    description: null,
-    isActive,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  } as any);
+function createHub(id: string, name = 'BCA Hospitality', status: HubStatus = 'active') {
+  return makeHub({ id, name, code: name.toUpperCase().replace(/\W+/g, '-'), status });
 }
 
 function createMembership(hubId: string, userId: string, role: string, id = `m-${userId}`) {
@@ -46,8 +39,9 @@ function createMockRepos() {
   };
   const hubRepository = {
     save: vi.fn(),
-    findById: vi.fn(),
+    findById: vi.fn(async () => createHub(HUB_ID)),
     findByName: vi.fn(),
+    findByCode: vi.fn(),
     findAll: vi.fn(),
     delete: vi.fn(),
   };
@@ -280,8 +274,8 @@ describe('HubMembershipService', () => {
         createMembership('hub-gone', USER_A, 'admin'),
       ]);
       repos.hubRepository.findById.mockImplementation(async (id: string) => {
-        if (id === 'hub-active') return createHub('hub-active', 'Aktif', true);
-        if (id === 'hub-inactive') return createHub('hub-inactive', 'Nonaktif', false);
+        if (id === 'hub-active') return createHub('hub-active', 'Aktif', 'active');
+        if (id === 'hub-inactive') return createHub('hub-inactive', 'Nonaktif', 'suspended');
         return null;
       });
       repos.tenantRepository.findByHubId.mockResolvedValue([]);

@@ -1,6 +1,7 @@
 import { asValue, type AwilixContainer } from 'awilix';
 import type { Connection } from 'mongoose';
 import { migratePlatformHubPermissions } from '../../core/platform/infrastructure/persistence/migratePlatformHubPermissions';
+import { migrateHubIdentity } from '../../core/hub/infrastructure/persistence/migrateHubIdentity';
 import { CategorySchema } from '../../core/catalog/infrastructure/persistence/schemas/CategorySchema';
 import { CustomerSchema } from '../../core/customer/infrastructure/persistence/schemas/CustomerSchema';
 import { DailyMetricSchema } from '../../core/reporting/infrastructure/persistence/schemas/DailyMetricSchema';
@@ -88,6 +89,12 @@ export function buildModels(connection: Connection) {
   const PrinterModel = connection.model('Printer', PrinterSchema);
   PrinterModel.syncIndexes().catch(() => {});
   const HubModel = connection.model('Hub', HubSchema);
+  // Hub V2 Fase 18: hubs created before `code`/`status` existed get them here,
+  // so the unique index on `code` can be built from real, de-duplicated values
+  // and a hub deactivated the old way still reads back as `suspended`.
+  migrateHubIdentity(HubModel)
+    .catch(() => {})
+    .then(() => HubModel.syncIndexes().catch(() => {}));
   const HubMembershipModel = connection.model('HubMembership', HubMembershipSchema);
   HubMembershipModel.syncIndexes().catch(() => {});
   const HubMemberTenantAccessModel = connection.model(

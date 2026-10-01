@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { HubMemberAccessService } from '../../src/core/hub/application/services/HubMemberAccessService';
 import { HubMemberTenantAccess } from '../../src/core/hub/domain/HubMemberTenantAccess';
-import { Hub } from '../../src/core/hub/domain/Hub';
 import { HubMembership } from '../../src/core/hub/domain/HubMembership';
+import { makeHub, type HubStatus } from '../fixtures/hub.fixtures';
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../src/@shared/infrastructure/error/AppError';
 import { TENANT_ACCESS_ROLE_PERMS } from '../../src/core/platform/defaults/roles';
 
@@ -13,15 +13,8 @@ const TENANT_A = 'tenant-a';
 const TENANT_B = 'tenant-b';
 const TENANT_OTHER_HUB = 'tenant-c';
 
-function createHub(id: string, isActive = true) {
-  return Hub.hydrate({
-    id,
-    name: `Hub ${id}`,
-    description: null,
-    isActive,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  } as any);
+function createHub(id: string, status: HubStatus = 'active') {
+  return makeHub({ id, name: `Hub ${id}`, code: id.toUpperCase(), status });
 }
 
 function createMembership(hubId: string, userId: string, role: string) {
@@ -84,7 +77,7 @@ function linkGrant(
   userId = USER,
   isActive = true,
 ) {
-  mocks.hubRepository.findById.mockResolvedValue(createHub(hubId, isActive));
+  mocks.hubRepository.findById.mockResolvedValue(createHub(hubId, isActive ? 'active' : 'suspended'));
   mocks.hubMembershipRepository.findByHubAndUser.mockResolvedValue(
     createMembership(hubId, userId, 'admin'),
   );
@@ -385,12 +378,12 @@ describe('HubMemberAccessService', () => {
       expect(session!.permissions).toEqual(expect.arrayContaining(['settings:write', 'users:write']));
     });
 
-    it('does not fall back to an inactive hub', async () => {
+    it('does not fall back to a suspended hub', async () => {
       mocks.accessRepository.findByUser.mockResolvedValue([]);
       mocks.hubMembershipRepository.findByUser.mockResolvedValue([
         createMembership(HUB_ID, USER, 'owner'),
       ]);
-      mocks.hubRepository.findById.mockResolvedValue(createHub(HUB_ID, false));
+      mocks.hubRepository.findById.mockResolvedValue(createHub(HUB_ID, 'suspended'));
       mocks.tenantRepository.findByHubId.mockResolvedValue([createTenant(TENANT_A, 'Alpha', HUB_ID)]);
 
       expect(await service.resolveSessionFor(USER, TENANT_A)).toBeNull();
@@ -697,7 +690,9 @@ describe('HubMemberAccessService', () => {
       );
 
       const context = await service.getContext(USER);
-      expect(context.hubs).toEqual([{ id: HUB_ID, name: 'Hub hub-1', isActive: true }]);
+      expect(context.hubs).toEqual([
+      { id: HUB_ID, code: 'HUB-1', name: 'Hub hub-1', status: 'active', isActive: true },
+    ]);
       expect(context.grants).toHaveLength(1);
       expect(context.grants[0].tenantRoleLabel).toBe('Manager');
       expect(context.grants[0].allOutlets).toBe(true);

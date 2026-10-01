@@ -43,6 +43,7 @@ export class HubMembershipService {
     if (!hub) {
       throw new NotFoundError('Hub', hubId);
     }
+    this.assertHubNotArchivedRef(hub);
 
     const user = await this.deps.userRepository.findByIdRaw(userId);
     if (!user) {
@@ -81,6 +82,7 @@ export class HubMembershipService {
     if (!membership) {
       throw new NotFoundError('HubMembership');
     }
+    await this.assertHubNotArchived(hubId);
 
     membership.updateRole(role);
     await this.deps.hubMembershipRepository.save(membership);
@@ -88,6 +90,8 @@ export class HubMembershipService {
   }
 
   async removeMembership(hubId: string, userId: string): Promise<void> {
+    await this.assertHubNotArchived(hubId);
+
     const deleted = await this.deps.hubMembershipRepository.deleteByHubAndUser(hubId, userId);
     if (!deleted) {
       throw new NotFoundError('HubMembership');
@@ -181,7 +185,7 @@ export class HubMembershipService {
     for (const membership of memberships) {
       const data = membership.serialize();
       const hub = await this.deps.hubRepository.findById(data.hubId);
-      if (!hub || !hub.serialize().isActive) continue;
+      if (!hub || !hub.isOperational()) continue;
       const hubName = hub.serialize().name;
 
       const tenants = await this.deps.tenantRepository.findByHubId(data.hubId);
@@ -208,5 +212,26 @@ export class HubMembershipService {
     const accessible = await this.findAccessibleTenants(userId);
     const target = accessible.find((t) => t.tenantId === tenantId);
     return target?.role ?? null;
+  }
+
+  /**
+   * An archived hub is a tombstone (Fase 18): its membership is frozen, because
+   * the record of who was in the group at the time is part of what archiving
+   * preserves. Revoking access still works on a suspended hub — that is the
+   * cheaper lever than deleting rows.
+   */
+  private async assertHubNotArchived(hubId: string): Promise<void> {
+    const hub = await this.deps.hubRepository.findById(hubId);
+    if (!hub) return;
+    this.assertHubNotArchivedRef(hub);
+  }
+
+  /** Synchronous variant for call sites that already hold the hub. */
+  private assertHubNotArchivedRef(hub: Hub): void {
+    if (hub.isArchived()) {
+      throw new ValidationError(
+        'Hub berstatus archived tidak dapat diubah. Kembalikan statusnya ke Aktif atau Ditangguhkan terlebih dahulu.',
+      );
+    }
   }
 }

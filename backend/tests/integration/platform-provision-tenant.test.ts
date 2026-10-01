@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import mongoose from 'mongoose';
 import request from 'supertest';
 import express, { Express } from 'express';
+import { makeHub } from '../fixtures/hub.fixtures';
 import { setupTestDb, teardownTestDb, clearCollections } from '../helpers/db';
 import { generateTestToken } from '../helpers/auth';
 import { PLATFORM_ROLE_PERMS } from '../../src/core/platform/defaults/roles';
@@ -27,7 +28,6 @@ import { TemplateSchema } from '../../src/core/template/infrastructure/persisten
 import { MongoTemplateRepository } from '../../src/core/template/infrastructure/persistence/MongoTemplateRepository';
 import { TemplateService } from '../../src/core/template/application/services/TemplateService';
 
-import { Hub } from '../../src/core/hub/domain/Hub';
 import { HubService } from '../../src/core/hub/application/services/HubService';
 import { TenantService } from '../../src/core/tenant/application/services/TenantService';
 import { OutletService } from '../../src/core/outlet/application/services/OutletService';
@@ -147,15 +147,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await clearCollections();
-  const hub = Hub.hydrate({
-    id: HUB_ID,
-    name: 'Bali Hospitality Group',
-    description: null,
-    isActive: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  } as any);
-  await ctx.hubRepo.save(hub);
+  await ctx.hubRepo.save(makeHub({ id: HUB_ID, name: 'Bali Hospitality Group' }));
 });
 
 const platformAuth = () => `Bearer ${ctx.platformToken}`;

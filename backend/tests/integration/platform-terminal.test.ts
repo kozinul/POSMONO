@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import mongoose, { Model } from 'mongoose';
 import request from 'supertest';
 import express, { Express } from 'express';
+import { makeHub } from '../fixtures/hub.fixtures';
 import { setupTestDb, teardownTestDb, clearCollections } from '../helpers/db';
 import { generateTestToken } from '../helpers/auth';
 import { PLATFORM_ROLE_PERMS } from '../../src/core/platform/defaults/roles';
@@ -27,7 +28,6 @@ import { RoleSchema } from '../../src/core/identity/infrastructure/persistence/s
 import { HubMembershipSchema } from '../../src/core/hub/infrastructure/persistence/schemas/HubMembershipSchema';
 
 import { Tenant } from '../../src/core/tenant/domain/Tenant';
-import { Hub } from '../../src/core/hub/domain/Hub';
 import { Outlet } from '../../src/core/outlet/domain/Outlet';
 import { Warehouse } from '../../src/core/inventory/domain/Warehouse';
 import { Shift } from '../../src/core/pos/domain/Shift';
@@ -145,15 +145,7 @@ function seedMembership(
 }
 
 function seedHub(repo: MongoHubRepository, id: string, name: string) {
-  const hub = Hub.hydrate({
-    id,
-    name,
-    description: null,
-    isActive: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  } as any);
-  return repo.save(hub);
+  return repo.save(makeHub({ id, name }));
 }
 
 beforeAll(async () => {
