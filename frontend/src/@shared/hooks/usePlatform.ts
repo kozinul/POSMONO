@@ -1,11 +1,33 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 
+/**
+ * Fase 18. `status` is the field to read and to mutate. `isActive` stays on the
+ * payload as a derived `status === 'active'` mirror so older readers keep
+ * working — but sending it back as a mutation is a silent no-op, because the
+ * API reads `status`.
+ */
+export type HubStatus = 'active' | 'suspended' | 'archived';
+
+export const HUB_STATUS_LABELS: Record<HubStatus, string> = {
+  active: 'Aktif',
+  suspended: 'Ditangguhkan',
+  archived: 'Diarsipkan',
+};
+
+export const HUB_STATUS_OPTIONS: HubStatus[] = ['active', 'suspended', 'archived'];
+
 export interface PlatformHub {
   id: string;
   name: string;
   description: string | null;
+  /** Fase 18 — short unique handle, uppercase A-Z0-9-. */
+  code: string;
+  status: HubStatus;
+  /** Derived from `status`. Read-only; never send it as a mutation. */
   isActive: boolean;
+  /** Display only. */
+  ownerUserId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -23,6 +45,8 @@ interface PlatformTenantBrief {
 export interface PlatformHubDetail extends PlatformHub {
   tenants: PlatformTenantBrief[];
   tenantCount: number;
+  /** Resolved display owner, or null when unset/unresolvable. */
+  owner: { id: string; name: string; email: string } | null;
 }
 
 export interface PlatformTenantRow extends PlatformTenantBrief {
@@ -238,12 +262,15 @@ export function usePlatformTenant(tenantId: string | null) {
 export interface CreateHubInput {
   name: string;
   description?: string;
+  /** Optional — the API derives it from `name` when omitted. */
+  code?: string;
 }
 
 export interface UpdateHubInput {
   name?: string;
   description?: string;
-  isActive?: boolean;
+  code?: string;
+  status?: HubStatus;
 }
 
 function invalidateHubScope(queryClient: ReturnType<typeof useQueryClient>, hubId?: string) {

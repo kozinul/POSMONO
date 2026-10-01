@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
+import type { HubStatus } from './usePlatform';
 
 export type HubMemberRole = 'owner' | 'admin' | 'manager' | 'viewer';
 
@@ -139,7 +140,8 @@ export interface SaveHubMemberAccessInput {
 
 /** Row of `/api/hub-context/me` — what the signed-in user can reach. */
 export interface HubContext {
-  hubs: { id: string; name: string; isActive: boolean }[];
+  /** Fase 18 adds `code`/`status`; `isActive` is the derived mirror. */
+  hubs: { id: string; name: string; code?: string; status?: HubStatus; isActive: boolean }[];
   grants: HubMemberAccessGrant[];
   tenants: AccessibleTenant[];
   effectivePermissions: string[];

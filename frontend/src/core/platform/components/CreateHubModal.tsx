@@ -12,7 +12,9 @@ import {
 
 function hubErrorMessage(e: unknown): string {
   const msg = apiErrorMessage(e, 'Gagal membuat hub');
-  if (/already exists/i.test(msg)) return 'Nama hub sudah dipakai.';
+  if (/code already exists/i.test(msg)) return 'Kode hub sudah dipakai hub lain.';
+  if (/name already exists/i.test(msg)) return 'Nama hub sudah dipakai.';
+  if (/tidak menghasilkan kode/i.test(msg)) return 'Nama/Kode tidak menghasilkan kode yang valid.';
   return msg;
 }
 
@@ -27,6 +29,7 @@ export default function CreateHubModal({
 }) {
   const createHub = usePlatformCreateHub();
   const [name, setName] = useState('');
+  const [code, setCode] = useState('');
   const [description, setDescription] = useState('');
   const [error, setError] = useState('');
 
@@ -34,6 +37,7 @@ export default function CreateHubModal({
 
   const reset = () => {
     setName('');
+    setCode('');
     setDescription('');
     setError('');
   };
@@ -52,8 +56,9 @@ export default function CreateHubModal({
       const hub = await createHub.mutateAsync({
         name: name.trim(),
         description: description.trim() || undefined,
+        code: code.trim() || undefined,
       });
-      toast({ title: `Hub "${hub.name}" dibuat`, icon: 'success' });
+      toast({ title: `Hub "${hub.name}" dibuat (${hub.code})`, icon: 'success' });
       reset();
       onClose();
       onCreated?.(hub);
@@ -80,8 +85,9 @@ export default function CreateHubModal({
       <form id="create-hub-form" onSubmit={handleSubmit} className="p-6 space-y-4">
         {error && <ErrorNote>{error}</ErrorNote>}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Nama Hub *</label>
+          <label htmlFor="create-hub-name" className="block text-sm font-medium text-gray-700 mb-1">Nama Hub *</label>
           <input
+            id="create-hub-name"
             className={inputCls}
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -91,8 +97,27 @@ export default function CreateHubModal({
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Deskripsi</label>
+          <label htmlFor="create-hub-code" className="block text-sm font-medium text-gray-700 mb-1">
+            Kode Hub
+          </label>
           <input
+            id="create-hub-code"
+            className={inputCls + ' font-mono'}
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            placeholder="Kosongkan — dibuat otomatis dari nama"
+            disabled={createHub.isPending}
+          />
+          <p className="text-xs text-gray-400 mt-1">
+            Huruf besar, angka, dan tanda hubung, maksimal 24 karakter. Kalau dikosongkan, kode dibuat dari nama hub.
+          </p>
+        </div>
+        <div>
+          <label htmlFor="create-hub-description" className="block text-sm font-medium text-gray-700 mb-1">
+            Deskripsi
+          </label>
+          <input
+            id="create-hub-description"
             className={inputCls}
             value={description}
             onChange={(e) => setDescription(e.target.value)}

@@ -5,6 +5,7 @@ import {
   type PlatformHubDetail,
 } from '../../../@shared/hooks/usePlatform';
 import { toast } from '../../../@shared/hooks/useToast';
+import { ArchivedNotice } from './platformUi';
 import {
   Badge,
   EmptyState,
@@ -35,6 +36,8 @@ export default function HubTenantPanel({
 }) {
   const unassign = usePlatformUnassignTenantFromHub();
   const [error, setError] = useState('');
+  // Assign/-detach is structural, so the server refuses it on an archived hub.
+  const locked = hub.status === 'archived';
 
   const handleUnassign = async (tenantId: string, tenantName: string) => {
     setError('');
@@ -88,18 +91,23 @@ export default function HubTenantPanel({
             </button>
           )}
           {canManage && (
-            <button onClick={onAssign} className={smallPillBtnCls}>
+            <button onClick={onAssign} disabled={locked} className={smallPillBtnCls}>
               + Assign Tenant ke Hub
             </button>
           )}
         </div>
       </div>
 
+      {locked && (
+        <ArchivedNotice>Hub diarsipkan, jadi tenant tidak bisa ditambahkan atau dilepas sampai statusnya dipulihkan.</ArchivedNotice>
+      )}
+
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       {hub.tenants.length === 0 ? (
         <EmptyState>
-          Belum ada tenant di hub ini. {canManage ? 'Gunakan "Assign Tenant ke Hub" untuk menambahkan.' : ''}
+          Belum ada tenant di hub ini.{' '}
+          {canManage && !locked ? 'Gunakan "Assign Tenant ke Hub" untuk menambahkan.' : ''}
         </EmptyState>
       ) : (
         <div className="border rounded-lg overflow-x-auto">
@@ -129,7 +137,7 @@ export default function HubTenantPanel({
                     <td className="px-3 py-2 text-right">
                       <button
                         onClick={() => handleUnassign(t.id, t.name)}
-                        disabled={unassign.isPending}
+                        disabled={unassign.isPending || locked}
                         className={dangerBtnCls}
                       >
                         Lepas

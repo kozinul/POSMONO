@@ -57,7 +57,11 @@ describe('usePlatformCreateHub', () => {
     const { result } = renderHook(() => usePlatformCreateHub(), { wrapper });
     const hub = await result.current.mutateAsync({ name: ' Maju ', description: 'Grup baru' });
 
-    expect(mockPost).toHaveBeenCalledWith('/hubs', { name: ' Maju ', description: 'Grup baru' });
+    expect(mockPost).toHaveBeenCalledWith('/hubs', {
+      name: ' Maju ',
+      description: 'Grup baru',
+      code: undefined,
+    });
     expect(hub.id).toBe('hub-2');
     await waitFor(() => {
       expect(queryClient.getQueryState(['platform-hubs'])?.isInvalidated).toBe(true);
@@ -69,15 +73,35 @@ describe('usePlatformCreateHub', () => {
 describe('usePlatformUpdateHub', () => {
   it('puts profile changes and invalidates the hub detail', async () => {
     seedCache();
-    mockPut.mockResolvedValueOnce({ data: { success: true, data: { id: 'hub-1', isActive: false } } });
+    mockPut.mockResolvedValueOnce({ data: { success: true, data: { id: 'hub-1', status: 'active' } } });
 
     const { result } = renderHook(() => usePlatformUpdateHub(), { wrapper });
-    await result.current.mutateAsync({ hubId: 'hub-1', name: 'BCA Grup', isActive: false });
+    await result.current.mutateAsync({
+      hubId: 'hub-1',
+      name: 'BCA Grup',
+      code: 'BCA-GRUP',
+      status: 'suspended',
+    });
 
-    expect(mockPut).toHaveBeenCalledWith('/hubs/hub-1', { name: 'BCA Grup', isActive: false });
+    expect(mockPut).toHaveBeenCalledWith('/hubs/hub-1', {
+      name: 'BCA Grup',
+      code: 'BCA-GRUP',
+      status: 'suspended',
+    });
     await waitFor(() => {
       expect(queryClient.getQueryState(['platform-hub', 'hub-1'])?.isInvalidated).toBe(true);
     });
+  });
+
+  it('never puts isActive — the API ignores the derived mirror', async () => {
+    seedCache();
+    mockPut.mockResolvedValueOnce({ data: { success: true, data: { id: 'hub-1' } } });
+
+    const { result } = renderHook(() => usePlatformUpdateHub(), { wrapper });
+    await result.current.mutateAsync({ hubId: 'hub-1', name: 'BCA Grup', status: 'archived' });
+
+    const [, body] = mockPut.mock.calls[0];
+    expect(Object.keys(body)).not.toContain('isActive');
   });
 });
 

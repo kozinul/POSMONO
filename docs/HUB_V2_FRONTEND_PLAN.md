@@ -5,7 +5,7 @@
 > [`HUB_ARCHITECTURE.md`](HUB_ARCHITECTURE.md) (phase ledger Fase 16–20).
 > Predecessor (sudah selesai & **beku**): [`HUB_FRONTEND_PLAN.md`](HUB_FRONTEND_PLAN.md) — Fase 15, tab `Hub & Anggota` F1–F9.
 >
-> **Status: Fase 16 & 17 sudah diimplementasikan (2026-09-29); Fase 18 dibuka 2026-09-30** —
+> **Status: Fase 16, 17 & 18 sudah diimplementasikan** (16–17: 2026-09-29 · 18: 2026-09-30) —
 > gate debt pass T0–T9 ([`TECH_DEBT_PLAN.md`](TECH_DEBT_PLAN.md)) terpenuhi, jadi dokumen ini
 > bukan lagi rencana pasif mulai Fase 18. Keputusan arsitektur sudah terkunci di
 > `HUB_V2_DECISIONS.md`.
@@ -57,16 +57,18 @@ Belum ada:
   ✗ matriks akses tenant/outlet per anggota
   ✗ ringkasan/overview hub
   ✗ undangan (invite by email)
-  ✗ field code/status hub
+  ✓ field code/status hub (Fase 18, 2026-09-30)
   ✗ UI apa pun untuk "user biasa yang punya akses lintas-tenant" (selain tenant switcher di top bar)
 ```
 
-Perilaku yang **berubah** dan harusotron diperbarui test-nya:
+Perilaku yang **berubah** dan harus memperbarui test-nya:
 
 - `HubTenantSwitcher` (top bar) — setelah Fase 17 hanya menampilkan tenant **ber-grant**.
-- `HubsSection.test.tsx` (10 test) & `usePlatformHubs.test.tsx` (6 test) — field hub berubah
-  (`isActive` → `status`, tambah `code`).
+- `HubsSection.test.tsx` (10 → **14 test**) & `usePlatformHubs.test.tsx` (6 → **7 test**) — field hub
+  berubah (`isActive` → `status`, tambah `code`); ini yang menangkap no-op senyap `isActive`.
 - `useHubMemberships` — role hub jadi 4 (`owner`/`admin`/`manager`/`viewer`) + `status`.
+- `HubMemberAccessModal.test.tsx` (Fase 17, sudah ada) — namanya dalam rencana ini tetap
+  `HubMemberAccess.test.tsx` di disk; ikut terpecah saat Fase 18 menambah gate archived.
 
 ## 3. Keputusan desain
 
@@ -130,6 +132,15 @@ Kopi Nusantara Group            KOPI-NUSANTARA            [Aktif ▾]
 Peringatan saat memilih `suspended`/`archived`: seluruh anggota kehilangan akses lintas-tenant
 (lama) → konfirmasi Swal dengan jumlah anggota terdampak, seperti pola toggle `isActive` yang sudah
 ada di `HubProfileCard`.
+
+> **Hasil implementasi (2026-09-30) — beda dari wireframe di atas, dan alasannya.**
+>
+> 1. Checkbox "Aktif" **diganti dropdown** (`HUB_STATUS_LABELS` + `HUB_STATUS_OPTIONS` di `usePlatform.ts`). Alasannya bukan selera: `isActive` masih ada di response sebagai mirror derived dan `HubController.update` **mengabaikannya**, jadi checkbox lama jadi no-op senyap yang tetap menampilkan toast sukses.
+> 2. Kolom **Owner display-only** (tanpa tombol ubah) + hint eksplisit kalau `ownerUserId` kosong. Sumber: `owner` dari detail hub, fallback ke anggota pertama ber-role `owner` (`HubsSection` `useMemo`). Otoritas tetap `HubMembership.role`, jadi tidak ada jalur untuk elevate diri sendiri lewat form ini.
+> 3. `archived` = **read-only penuh**: banner di profil **dan** di panel Tenant/Anggota, field profil + tombol assign/lepas/tambah/ubah-role/hapus/atur akses semuanya `disabled`, **tapi `select` status tetap aktif** — kalau tidak, hub yang terarsip tidak punya jalan kembali. Copy ditulis ulang supaya tidak menjanjikan bahwa suspend = read-only.
+> 4. Konfirmasi **hanya** muncul untuk `active → suspended/archived` (menyebut jumlah anggota terdampak). `archived → active` justru **tidak** asking: itu pemulihan, jadi mengonfirmasi "seluruh anggota kehilangan akses" padanya akan berbohong.
+> 5. **Dikeputusan tanpa ditanyakan** (silakan direview): `Hapus Hub` **tetap aktif** saat archived selama `tenantCount === 0`, karena backend hanya menolak delete bila masih ada tenant. Plus satu penyimpangan dari wireframe: placeholder search jadi "Cari nama atau kode hub…", dan label chip kode memakai font `mono`.
+> 6. **Batas yang diketahui**: tabel anggota tidak menampilkan ringkasan grant ("N dari M tenant") — butuh endpoint bulk baru, sengaja **ditunda** (bukan N+1 per baris).
 
 ### 4.3 Sub-tab "Overview" (Fase 19)
 
@@ -263,7 +274,7 @@ mengembalikan daftar itu.
 
 | File | Test baru | Total estimasi |
 |---|---|---|
-| `HubsSection.test.tsx` (existing) | Update fixture `isActive`→`status`; tambah `code` | 12 |
+| `HubsSection.test.tsx` (existing) | **✅ 14** — fixture `isActive`→`status`; tambah `code`; search by code; payload `status` bukan `isActive`; archived lock | 14 |
 | `HubMemberAccessModal.test.tsx` (baru) | uncheck tenant → role/outlet disabled; submit payload benar; error API → `ErrorNote`; disabled saat mutasi | 6 |
 | `HubOverviewPanel.test.tsx` (baru) | 5 kartu terisi; `Rp 0` untuk nol; `—` untuk data hilang; loading skeleton; ganti rentang → refetch | 6 |
 | `HubInvitationPanel.test.tsx` (baru) | kirim undangan (validasi email), email sudah terdaftar, batalkan, daftar pending | 5 |
@@ -285,8 +296,8 @@ mengembalikan daftar itu.
 ### Verifikasi wajib per fase
 
 ```bash
-cd backend  && npx tsc --noEmit && npx vitest run     # baseline 1158 test / 99 file
-cd frontend && npx tsc --noEmit && npx vitest run     # baseline 106 test / 15 file
+cd backend  && npx tsc --noEmit && npx vitest run     # 1309 test / 107 file (Fase 18)
+cd frontend && npx tsc --noEmit && npx vitest run     # 152 test / 23 file (Fase 18)
 cd frontend && npx vite build
 # smoke HTTP alur hub (dev stack mongodb:27017) — incl. kasus DENY
 ```

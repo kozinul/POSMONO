@@ -289,7 +289,7 @@ Frontend Terminal Center sekarang punya tab **Hub & Anggota** yang utuh: buat/ed
 
 > Keputusan arsitektur yang mengunci fase-fase ini: **[`HUB_V2_DECISIONS.md`](HUB_V2_DECISIONS.md)** (D1–D4 + opsi yang ditolak).
 > Rencana frontend: **[`HUB_V2_FRONTEND_PLAN.md`](HUB_V2_FRONTEND_PLAN.md)**.
-> Status: **Fase 16 & 17 selesai 2026-09-29**; **Fase 18 dibuka 2026-09-30** (gate debt pass T0–T9 terpenuhi). Fase 19–20 masih rencana.
+> Status: **Fase 16 & 17 selesai 2026-09-29**; **Fase 18 selesai 2026-09-30** (gate debt pass T0–T9 terpenuhi). Fase 19–20 masih rencana.
 > Fase 1–15 tetap utuh; Fase 16 tidak mengubah perilaku apa pun.
 
 ### Konteks (recon 2026-09-28)
@@ -369,11 +369,17 @@ masa depan, karena itu access model (Fase 17) didahulukan.
 > dipakai `HubsSection.test.tsx` & `HubMemberPanel` — jadi test wajib fase ini harus ditulis
 > **bersamaan** dengan perubahan field, bukan sesudahnya.
 
-### Fase 18 — Hub identity
-- [ ] `Hub`: `code` (unique, uppercase, backfill dari `name`), `status: 'active'|'suspended'|'archived'` (menggantikan `isActive`; `isActive` jadi field derived sementara agar UI lama tidak rusak), `ownerUserId` (**display only** — otoritas tetap `HubMembership.role`).
-- [ ] `status: suspended|archived` → `findAccessibleTenants` kosong untuk anggotanya; Terminal Center tetap bisa melihat detail hub (diagnostics), dengan konfirmasi yang menyebut jumlah anggota terdampak.
-- [ ] `logo`/`contact`/`settings` **ditunda** (D4 & opsi ditolak) — jebakan config-bag yang sama seperti `TenantConfig`/QRIS.
-- [ ] Frontend: `HubProfileCard` + field `code`, dropdown `status`, baris owner.
+### Fase 18 — Hub identity — ✅ selesai 2026-09-30
+- [x] `Hub`: `code` (unique, uppercase, backfill dari `name`), `status: 'active'|'suspended'|'archived'` (menggantikan `isActive`; `isActive` jadi field derived sementara agar UI lama tidak rusak), `ownerUserId` (**display only** — otoritas tetap `HubMembership.role`). Normalisasi kode di `hubCode.ts` (NFKD, uppercase, dash collapse, maks 24).
+- [x] `status: suspended|archived` → `findAccessibleTenants` kosong untuk anggotanya, `switch-tenant` **403**, dan hub ikut hilang dari `/hub-context/me` (`getContext` menyaring non-operasional) — Terminal Center tetap bisa melihat detail hub (diagnostics), konfirmasi menyebut jumlah anggota terdampak.
+- [x] **`archived` = tombstone read-only**: profil/tenant/anggota/grant dikunci, tapi `status` sendiri tetap bisa diubah (satu-satunya jalan keluar). `suspended` masih bisa diedit & direvoke — itu lever yang lebih murah daripada menghapus baris grant.
+- [x] Migration `migrateHubIdentity()` (idempotent, jalan sebelum `HubModel.syncIndexes()`): backfill `code` (suffix `-2`,`-3` untuk collision, fallback `HUB-<id>`) + `status` dari legacy `isActive`. **Tanpa default di schema** untuk `code`/`status` — kalau `status` punya `default:'active'`, hub legacy yang `isActive:false` akan aktif lagi diam-diam.
+- [x] `logo`/`contact`/`settings` **ditunda** (D4 & opsi ditolak) — jebakan config-bag yang sama seperti `TenantConfig`/QRIS.
+- [x] Frontend: `HubProfileCard` (field `code`, dropdown `status`, baris owner read-only + fallback ke anggota ber-role `owner`), badge 3 warna + chip `code` di daftar hub, pencarian by kode, panel Tenant/Anggota terkunci + banner saat archived.
+
+> **Jebakan yang dibayar mahal di Fase 18 (frontend).** `isActive` sengaja **tetap ada** di payload API sebagai mirror derived, tapi ia **read-only** — `HubController.update` membaca `status`. Checkbox "Aktif" yang masih mengirim `isActive` karena itu jadi **no-op senyap**: toast sukses tampil, tidak ada yang berubah. Jadi: UI membaca `status`, dan `isActive` tidak boleh pernah dikirim sebagai mutasi. Ada regression test-nya (`HubsSection.test.tsx`, `usePlatformHubs.test.tsx`).
+>
+> **Keputusan yang diambil tanpa ditanyakan (bisakah direview):** `archived` diperlakukan read-only, dan `delete` tetap boleh selama tidak ada tenant. Batasan diketahui: belum ada bulk endpoint grant, jadi tabel anggota tidak menampilkan ringkasan "N dari M tenant" (satu query per anggota = N+1).
 
 ### Fase 19 — Hub Overview (read model)
 - [ ] `ReportService.getPlatformSalesByTenant(tenantIds, { dateFrom, dateTo })` mengikuti pola `getPlatformShiftsSummary` (**satu** agregasi grouped `tenantId` — bukan `getFinanceAggregation` per tenant yang N+1), sumber **`orders`** (bukan shift sales).

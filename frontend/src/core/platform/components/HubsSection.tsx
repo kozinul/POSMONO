@@ -8,7 +8,7 @@ import HubMemberPanel from './HubMemberPanel';
 import HubProfileCard from './HubProfileCard';
 import HubTenantPanel from './HubTenantPanel';
 import {
-  Badge,
+  HubStatusBadge,
   EmptyState,
   Loading,
   inputCls,
@@ -57,7 +57,11 @@ export default function HubsSection({
   const filtered = hubs.filter((h) => {
     const q = search.trim().toLowerCase();
     if (!q) return true;
-    return h.name.toLowerCase().includes(q) || (h.description ?? '').toLowerCase().includes(q);
+    return (
+      h.name.toLowerCase().includes(q) ||
+      (h.code ?? '').toLowerCase().includes(q) ||
+      (h.description ?? '').toLowerCase().includes(q)
+    );
   });
 
   const selectedHub: PlatformHub | undefined = hubs.find((h) => h.id === selectedHubId);
@@ -71,6 +75,13 @@ export default function HubsSection({
     () => (hubDetail?.tenants ?? []).map((t) => ({ id: t.id, name: t.name })),
     [hubDetail?.tenants],
   );
+  // `ownerUserId` is rarely set (Fase 18 has no owner picker), so the useful
+  // answer is usually "who holds the hub owner role" instead of a dash.
+  const fallbackOwnerName = useMemo(() => {
+    const owner = members.find((m) => m.role === 'owner');
+    return owner ? (owner.displayName ?? owner.email ?? owner.userId) : null;
+  }, [members]);
+  const ownerName = hubDetail?.owner?.name ?? fallbackOwnerName;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 items-start">
@@ -78,7 +89,7 @@ export default function HubsSection({
         <div className="flex items-center gap-2">
           <input
             className={inputCls}
-            placeholder="Cari hub..."
+            placeholder="Cari nama atau kode hub..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -110,9 +121,12 @@ export default function HubsSection({
                   selectedHubId === hub.id ? 'bg-blue-50 border-l-2 border-l-blue-600' : ''
                 }`}
               >
-                <span className="flex items-center gap-2">
+                <span className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-semibold text-gray-900">{hub.name}</span>
-                  <Badge tone={hub.isActive ? 'green' : 'gray'}>{hub.isActive ? 'Aktif' : 'Nonaktif'}</Badge>
+                  <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
+                    {hub.code}
+                  </span>
+                  <HubStatusBadge status={hub.status} />
                 </span>
                 {hub.description && <span className="block text-xs text-gray-500 mt-0.5">{hub.description}</span>}
               </button>
@@ -157,6 +171,7 @@ export default function HubsSection({
               <HubProfileCard
                 hub={hubDetail}
                 memberCount={members.length}
+                ownerName={ownerName}
                 canManage={canManage}
                 onDeleted={() => onSelectHub(null)}
                 onViewConsolidated={onViewConsolidated}
@@ -177,6 +192,7 @@ export default function HubsSection({
               <HubMemberPanel
                 hubId={hubDetail.id}
                 hubName={hubDetail.name}
+                hubStatus={hubDetail.status}
                 canManage={canManage}
                 tenantNamesById={tenantNamesById}
                 tenants={accessTenants}

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { HUB_STATUS_LABELS, type HubStatus } from '../../../@shared/hooks/usePlatform';
 
 export const inputCls =
   'block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50';
@@ -45,6 +46,30 @@ export function apiErrorMessage(e: unknown, fallback: string): string {
     err?.response?.data?.message ||
     err?.message ||
     fallback
+  );
+}
+
+type BadgeTone = 'green' | 'gray' | 'red' | 'amber' | 'blue';
+
+/** Fase 18 hub status → tone. Lives here because the list and the profile card
+ *  both render it, and duplicating it is how the two drift apart. */
+const HUB_STATUS_TONE: Record<HubStatus, BadgeTone> = {
+  active: 'green',
+  suspended: 'amber',
+  archived: 'gray',
+};
+
+export function HubStatusBadge({ status }: { status: HubStatus }) {
+  return <Badge tone={HUB_STATUS_TONE[status] ?? 'gray'}>{HUB_STATUS_LABELS[status] ?? status}</Badge>;
+}
+
+/** An archived hub is a read-only tombstone — say so instead of just greying out. */
+export function ArchivedNotice({ children }: { children?: ReactNode }) {
+  return (
+    <div className="p-3 bg-gray-50 border border-gray-200 text-gray-600 rounded-lg text-sm">
+      <b>Hub diarsipkan — read-only.</b>{' '}
+      {children ?? 'Profil, tenant, anggota, dan aturan akses terkunci. Kembalikan status untuk mengubah.'}
+    </div>
   );
 }
 

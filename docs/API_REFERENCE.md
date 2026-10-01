@@ -1031,7 +1031,15 @@ Hub = grouping non-tenant di atas tenant (`hubId` di Tenant; null = standalone).
 | DELETE | `/api/hubs/:hubId/tenants/:tenantId` | ✓ | `platform.hubs.manage` (unassign) |
 | GET | `/api/hubs/:hubId/tenants` | ✓ | `platform.hubs.manage` |
 
-**Body** POST/PUT: `{ name, description? }`. Assign tenant = set `tenant.hubId` (via `HubService.assignTenant`).
+**Body** POST/PUT: `{ name, description?, code?, status? }`. Assign tenant = set `tenant.hubId` (via `HubService.assignTenant`).
+
+> **Fase 18 (2026-09-30) — kontrak `Hub` berubah.** `isActive` **tidak lagi bisa dipakai untuk menulis**: ia tetap ada di response hanya sebagai mirror derived (`status === 'active'`) supaya UI lama tidak pecah, dan `HubController.update` **mengabaikannya**. Kalau UI lama mengirim `isActive`, hasilnya **no-op senyap** (200, tidak ada yang berubah) — kirim `status`, bukan `isActive`.
+>
+> - `code` — string unik uppercase `[A-Z0-9-]`, maks 24 karakter. Kosong → auto-derived dari `name`. Duplikat (oleh tenant **atau** platform) → `409`.
+> - `status` — `'active' | 'suspended' | 'archived'` (default `'active'`). `suspended`/`archived` = **non-operasional**: `findAccessibleTenants` kosong, `switch-tenant` **403**, dan hub tidak muncul di `/api/hub-context/me`. `archived` tidak dapat di-*delete* selama masih punya tenant, dan hanya bisa diubah lewat `status`.
+> - `ownerUserId` — **display only**. Otoritas akses tetap `HubMembership.role`; nilai `null` berarti "belum ditetapkan", UI boleh mem-fallback ke anggota ber-role `owner`.
+>
+> Response hub (`GET /api/platform/hubs/:hubId` / `GET /api/hubs/:id`) menambah `owner` resolved (`{ id, displayName, email }` atau `null`) — hasil `ownerUserId` bila user masih ada, kalau tidak `null`.
 
 ---
 
@@ -1045,7 +1053,7 @@ Hub = grouping non-tenant di atas tenant (`hubId` di Tenant; null = standalone).
 |--------|------|------|------------|
 | GET | `/api/platform/health` | platform | — (diagnostik) |
 | GET | `/api/platform/hubs` | platform | `platform.hubs.manage` |
-| GET | `/api/platform/hubs/:hubId` | platform | `platform.hubs.manage` |
+| GET | `/api/platform/hubs/:hubId` | platform | `platform.hubs.manage` (＋ resolved `owner`) |
 | GET | `/api/platform/tenants` | platform | `platform.tenants.read` |
 | GET | `/api/platform/tenants/:tenantId` | platform | `platform.tenants.read` |
 | GET | `/api/platform/users` | platform | `platform.tenants.read` |

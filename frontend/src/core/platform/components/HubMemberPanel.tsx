@@ -10,6 +10,8 @@ import {
   type HubMemberRole,
 } from '../../../@shared/hooks/useHubMemberships';
 import { toast } from '../../../@shared/hooks/useToast';
+import { ArchivedNotice } from './platformUi';
+import type { HubStatus } from '../../../@shared/hooks/usePlatform';
 import {
   Badge,
   EmptyState,
@@ -31,6 +33,7 @@ const ROLE_TONE: Record<HubMemberRole, 'blue' | 'green' | 'gray'> = {
 export default function HubMemberPanel({
   hubId,
   hubName,
+  hubStatus,
   canManage,
   tenantNamesById,
   tenants,
@@ -39,6 +42,7 @@ export default function HubMemberPanel({
 }: {
   hubId: string;
   hubName: string;
+  hubStatus: HubStatus;
   canManage: boolean;
   tenantNamesById: Record<string, string>;
   tenants: AccessTenantOption[];
@@ -50,6 +54,9 @@ export default function HubMemberPanel({
   const removeMember = useRemoveHubMembership();
   const [error, setError] = useState('');
   const [accessUserId, setAccessUserId] = useState<string | null>(null);
+  // An archived hub freezes its membership on the server too; disabling here
+  // avoids offering buttons whose only possible answer is a 400.
+  const locked = hubStatus === 'archived';
   const isBusy = updateMember.isPending || removeMember.isPending;
 
   const handleRoleChange = async (userId: string, currentRole: HubMemberRole, nextRole: HubMemberRole) => {
@@ -127,15 +134,20 @@ export default function HubMemberPanel({
             </button>
           )}
           {canManage && (
-            <button onClick={onAdd} className={smallPillBtnCls}>
+            <button onClick={onAdd} disabled={locked} className={smallPillBtnCls}>
               + Tambah Anggota
             </button>
           )}
         </div>
       </div>
 
+      {locked && (
+        <ArchivedNotice>Anggota dan aturan aksesnya dibekukan. Kembalikan status hub untuk menambah atau mengubahnya.</ArchivedNotice>
+      )}
+
       <p className="text-xs text-gray-500">
-        Anggota adalah user yang boleh berpindah ke seluruh tenant dalam hub ini lewat tenant switcher.
+        Anggota adalah user yang boleh berpindah tenant lewat tenant switcher. Tenant yang bisa dicapai tiap anggota
+        diatur per-tenant di kolom <b>Akses</b> — bukan otomatis ke seluruh hub.
       </p>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
@@ -178,7 +190,7 @@ export default function HubMemberPanel({
                         <select
                           className="text-xs px-1.5 py-0.5 rounded-md border border-gray-300 bg-white disabled:opacity-50"
                           value={m.role}
-                          disabled={isBusy}
+                          disabled={isBusy || locked}
                           onChange={(e) => handleRoleChange(m.userId, m.role, e.target.value as HubMemberRole)}
                         >
                           {HUB_MEMBER_ROLES.map((r) => (
@@ -196,12 +208,17 @@ export default function HubMemberPanel({
                         <div className="inline-flex items-center gap-2">
                           <button
                             onClick={() => setAccessUserId(m.userId)}
+                            disabled={locked}
                             className={subtleBtnCls}
                             title="Batasi tenant & outlet yang boleh diakses anggota ini"
                           >
                             Akses
                           </button>
-                          <button onClick={() => handleRemove(m.userId)} disabled={isBusy} className={dangerBtnCls}>
+                          <button
+                            onClick={() => handleRemove(m.userId)}
+                            disabled={isBusy || locked}
+                            className={dangerBtnCls}
+                          >
                             Hapus
                           </button>
                         </div>

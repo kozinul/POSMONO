@@ -35,14 +35,53 @@ vi.mock('sweetalert2', () => ({
 import { api } from '../../src/@shared/services/api';
 
 const hubs = [
-  { id: 'hub-1', name: 'BCA Hospitality', description: 'Grup ritel', isActive: true, createdAt: '2026-09-01', updatedAt: '2026-09-01' },
-  { id: 'hub-2', name: 'Maju Grup', description: null, isActive: false, createdAt: '2026-09-02', updatedAt: '2026-09-02' },
+  {
+    id: 'hub-1',
+    name: 'BCA Hospitality',
+    description: 'Grup ritel',
+    code: 'BCA-HOSPITALITY',
+    status: 'active' as const,
+    isActive: true,
+    ownerUserId: null,
+    createdAt: '2026-09-01',
+    updatedAt: '2026-09-01',
+  },
+  {
+    id: 'hub-2',
+    name: 'Maju Grup',
+    description: null,
+    code: 'MAJU-GRUP',
+    status: 'suspended' as const,
+    isActive: false,
+    ownerUserId: null,
+    createdAt: '2026-09-02',
+    updatedAt: '2026-09-02',
+  },
+  {
+    id: 'hub-3',
+    name: 'Bali Legacy',
+    description: 'Sudah ditutup',
+    code: 'BALI-LEGACY',
+    status: 'archived' as const,
+    isActive: false,
+    ownerUserId: null,
+    createdAt: '2026-09-03',
+    updatedAt: '2026-09-03',
+  },
 ];
 
 const hubDetail = {
   ...hubs[0],
   tenants: [{ id: 'tenant-1', name: 'Kopi Bali', slug: 'kopi-bali', businessType: 'cafe', status: 'active', plan: 'Pro', hubId: 'hub-1' }],
   tenantCount: 1,
+  owner: null,
+};
+
+const archivedHubDetail = {
+  ...hubs[2],
+  tenants: hubDetail.tenants,
+  tenantCount: 1,
+  owner: null,
 };
 
 const members = [
@@ -66,13 +105,19 @@ function tenantPage(rows: unknown[]) {
   });
 }
 
-function mockApi(usersSummary?: unknown[]) {
+function mockApi(usersSummary?: unknown[], detail = hubDetail) {
+  const byId: Record<string, typeof hubDetail> = { 'hub-1': hubDetail, 'hub-3': archivedHubDetail };
   vi.mocked(api.get).mockImplementation((url: string) => {
     if (url === '/platform/hubs') return Promise.resolve({ data: { success: true, data: hubs } });
-    if (url === '/platform/hubs/hub-1') {
-      return Promise.resolve({ data: { success: true, data: usersSummary ? { ...hubDetail, usersSummary } : hubDetail } });
+    const detailMatch = url.match(/^\/platform\/hubs\/(hub-\d+)$/);
+    if (detailMatch) {
+      // The test picks which hub is being viewed by passing its detail in.
+      const row = byId[detailMatch[1]] ?? detail;
+      return Promise.resolve({ data: { success: true, data: usersSummary ? { ...row, usersSummary } : row } });
     }
-    if (url === '/hub-memberships/hub/hub-1') return Promise.resolve({ data: { success: true, data: members } });
+    if (/^\/hub-memberships\/hub\/hub-\d+$/.test(url)) {
+      return Promise.resolve({ data: { success: true, data: members } });
+    }
     if (url.startsWith('/platform/users')) {
       return Promise.resolve({
         data: {
@@ -118,7 +163,10 @@ function mockApi(usersSummary?: unknown[]) {
   vi.mocked(api.delete).mockResolvedValue({ data: { success: true, data: { success: true } } });
 }
 
-function renderSection(overrides: Partial<React.ComponentProps<typeof HubsSection>> = {}) {
+function renderSection(
+  overrides: Partial<React.ComponentProps<typeof HubsSection>> = {},
+  detail = hubDetail,
+) {
   const props: React.ComponentProps<typeof HubsSection> = {
     selectedHubId: 'hub-1',
     onSelectHub: vi.fn(),
@@ -127,6 +175,7 @@ function renderSection(overrides: Partial<React.ComponentProps<typeof HubsSectio
     onViewTenants: vi.fn(),
     ...overrides,
   };
+  mockApi(undefined, detail);
   return { props, ...render(<TestQueryProvider><HubsSection {...props} /></TestQueryProvider>) };
 }
 
@@ -144,16 +193,32 @@ describe('HubsSection', () => {
     expect(await hubList().findByText('BCA Hospitality')).toBeInTheDocument();
     expect(hubList().getByText('Maju Grup')).toBeInTheDocument();
     expect(hubList().getByText('Aktif')).toBeInTheDocument();
-    expect(hubList().getByText('Nonaktif')).toBeInTheDocument();
+    expect(hubList().getByText('Ditangguhkan')).toBeInTheDocument();
+    expect(hubList().getByText('Diarsipkan')).toBeInTheDocument();
+
+    // The unique code is a first-class part of the row, not derived on screen.
+    expect(hubList().getByText('BCA-HOSPITALITY')).toBeInTheDocument();
 
     expect(await screen.findByDisplayValue('BCA Hospitality')).toBeInTheDocument();
+    expect(await screen.findByDisplayValue('BCA-HOSPITALITY')).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText(/1 tenant · 1 anggota/)).toBeInTheDocument());
+  });
+
+  it('searches hubs by code, not only by name', async () => {
+    renderSection();
+
+    await userEvent.type(await screen.findByPlaceholderText(/Cari nama atau kode hub/), 'bali-leg');
+
+    await waitFor(() => {
+      expect(hubList().queryByText('BCA Hospitality')).not.toBeInTheDocument();
+    });
+    expect(hubList().getByText('Bali Legacy')).toBeInTheDocument();
   });
 
   it('filters the hub list by search term', async () => {
     renderSection();
 
-    await userEvent.type(await screen.findByPlaceholderText('Cari hub...'), 'maju');
+    await userEvent.type(await screen.findByPlaceholderText(/Cari nama atau kode hub/), 'maju');
 
     await waitFor(() => {
       expect(hubList().queryByText('BCA Hospitality')).not.toBeInTheDocument();
@@ -182,9 +247,59 @@ describe('HubsSection', () => {
       expect(api.put).toHaveBeenCalledWith('/hubs/hub-1', {
         name: 'BCA Grup',
         description: 'Grup ritel',
-        isActive: true,
+        code: 'BCA-HOSPITALITY',
+        status: 'active',
       }),
     );
+    // Regression: `isActive` is a derived mirror. Sending it was a silent no-op
+    // that still reported success, so it must never appear in the payload.
+    expect(JSON.stringify(vi.mocked(api.put).mock.calls[0])).not.toContain('isActive');
+  });
+
+  it('sends status — not the derived isActive — when suspending a hub', async () => {
+    renderSection();
+
+    await userEvent.selectOptions(await screen.findByLabelText('Status'), 'suspended');
+    await userEvent.click(screen.getByText('Simpan Perubahan'));
+
+    await waitFor(() =>
+      expect(api.put).toHaveBeenCalledWith('/hubs/hub-1', {
+        name: 'BCA Hospitality',
+        description: 'Grup ritel',
+        code: 'BCA-HOSPITALITY',
+        status: 'suspended',
+      }),
+    );
+  });
+
+  it('shows the owner, falling back to the hub owner-role member when ownerUserId is unset', async () => {
+    renderSection();
+
+    // hubDetail.owner is null, so Budi (role owner) is the fallback.
+    await waitFor(() => expect(screen.getByText(/Pemilik Hub:/)).toBeInTheDocument());
+    expect(screen.getByText('Budi')).toBeInTheDocument();
+  });
+
+  it('locks an archived hub: read-only notice, frozen fields, and no tenant/member mutations', async () => {
+    renderSection({ selectedHubId: 'hub-3' }, archivedHubDetail);
+
+    await waitFor(() => expect(screen.getAllByText(/read-only/i).length).toBeGreaterThan(0));
+
+    expect(screen.getByLabelText('Nama Hub *')).toBeDisabled();
+    expect(screen.getByLabelText('Kode Hub *')).toBeDisabled();
+    expect(screen.getByLabelText('Deskripsi')).toBeDisabled();
+    // The status itself must stay editable — that is the only way back.
+    expect(screen.getByLabelText('Status')).toBeEnabled();
+
+    await userEvent.click(screen.getByRole('button', { name: /Tenant/ }));
+    expect(screen.getByRole('button', { name: '+ Assign Tenant ke Hub' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Lepas' })).toBeDisabled();
+
+    await userEvent.click(screen.getByRole('button', { name: /Anggota/ }));
+    expect(screen.getByRole('button', { name: '+ Tambah Anggota' })).toBeDisabled();
+    // Query by role: the explainer copy also mentions the word "Akses".
+    expect(screen.getByRole('button', { name: 'Akses' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Hapus' })).toBeDisabled();
   });
 
   it('assigns a tenant from the Tenant sub-tab', async () => {
