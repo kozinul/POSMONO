@@ -10,6 +10,7 @@
     "build": "turbo run build",
     "test": "pnpm -r --workspace-concurrency=1 test",
     "lint": "pnpm -r --workspace-concurrency=1 lint",
+    "budget": "node scripts/complexity-budget.mjs",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
     "clean": "turbo run clean",
     "reset": "pnpm run clean && rm -rf node_modules && pnpm install",

@@ -73,6 +73,10 @@ jobs:
       - name: Type check
         run: pnpm run lint
 
+      # Anti-regresi kompleksitas kode (TECH_DEBT_PLAN T9)
+      - name: Complexity budget
+        run: pnpm run budget
+
   docker:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
