@@ -29,6 +29,13 @@ interface ShiftDoc extends Document<string> {
   updatedAt: Date;
 }
 
+/** Group row of `findOutletActivityByTenantIds` (one row per tenant+outlet). */
+interface OutletActivityGroupRow {
+  _id: { tenantId: string; outletId: string | null };
+  openShifts: number;
+  lastShiftAt: Date | null;
+}
+
 export class MongoShiftRepository {
   constructor(private readonly model: Model<any>) {}
 
@@ -154,6 +161,37 @@ export class MongoShiftRepository {
   async findActiveShifts(tenantId: string): Promise<Shift[]> {
     const docs = await this.model.find({ tenantId, status: 'open' }).exec();
     return docs.map((d: ShiftDoc) => this.toDomain(d));
+  }
+
+  /**
+   * Hub V2 Fase 19 — per-outlet shift activity for many tenants at once.
+   *
+   * Aggregated in Mongo rather than by loading every shift document: an outlet
+   * that has been idle for months can hold thousands of shifts, and the hub
+   * overview only needs "is a shift open" plus "when was the last activity".
+   */
+  async findOutletActivityByTenantIds(
+    tenantIds: string[],
+  ): Promise<Array<{ tenantId: string; outletId: string | null; openShifts: number; lastShiftAt: Date | null }>> {
+    if (tenantIds.length === 0) return [];
+
+    const rows = await this.model.aggregate([
+      { $match: { tenantId: { $in: tenantIds } } },
+      {
+        $group: {
+          _id: { tenantId: '$tenantId', outletId: { $ifNull: ['$outletId', null] } },
+          openShifts: { $sum: { $cond: [{ $eq: ['$status', 'open'] }, 1, 0] } },
+          lastShiftAt: { $max: '$openedAt' },
+        },
+      },
+    ]);
+
+    return rows.map((row: OutletActivityGroupRow) => ({
+      tenantId: String(row._id.tenantId),
+      outletId: row._id.outletId ?? null,
+      openShifts: Number(row.openShifts ?? 0),
+      lastShiftAt: row.lastShiftAt ?? null,
+    }));
   }
 
   async findByTenantIds(

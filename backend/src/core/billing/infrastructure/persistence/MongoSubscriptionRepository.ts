@@ -73,6 +73,13 @@ export class MongoSubscriptionRepository {
     return doc ? this.toDomain(doc) : null;
   }
 
+  /** Hub V2 Fase 19 — bulk read so a hub overview is not one query per tenant. */
+  async findByTenantIds(tenantIds: string[]): Promise<Subscription[]> {
+    if (tenantIds.length === 0) return [];
+    const docs = await this.model.find({ tenantId: { $in: tenantIds } }).exec();
+    return docs.map((doc: SubscriptionDoc) => this.toDomain(doc));
+  }
+
   async save(sub: Subscription): Promise<void> {
     const persistence = this.toPersistence(sub);
     await this.model.findByIdAndUpdate(persistence._id, persistence, { upsert: true, new: true });

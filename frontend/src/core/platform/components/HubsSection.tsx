@@ -7,6 +7,7 @@ import CreateHubModal from './CreateHubModal';
 import HubMemberPanel from './HubMemberPanel';
 import HubProfileCard from './HubProfileCard';
 import HubTenantPanel from './HubTenantPanel';
+import HubOverviewPanel from './HubOverviewPanel';
 import {
   HubStatusBadge,
   EmptyState,
@@ -15,18 +16,22 @@ import {
   primaryBtnCls,
 } from './platformUi';
 
-type HubSubTab = 'profil' | 'tenant' | 'anggota';
+type HubSubTab = 'profil' | 'tenant' | 'anggota' | 'overview';
 
-const SUB_TABS: { id: HubSubTab; label: string }[] = [
+// `overview` is a read model of tenant data, so it needs its own permission;
+// without `platform.reports.read` the tab is hidden rather than shown empty.
+const SUB_TABS: { id: HubSubTab; label: string; needsReports?: boolean }[] = [
   { id: 'profil', label: 'Profil' },
   { id: 'tenant', label: 'Tenant' },
   { id: 'anggota', label: 'Anggota' },
+  { id: 'overview', label: 'Overview', needsReports: true },
 ];
 
 export default function HubsSection({
   selectedHubId,
   onSelectHub,
   canManage,
+  canViewReports,
   onViewConsolidated,
   onViewTenants,
   onViewAudit,
@@ -34,6 +39,7 @@ export default function HubsSection({
   selectedHubId: string | null;
   onSelectHub: (hubId: string | null) => void;
   canManage: boolean;
+  canViewReports: boolean;
   onViewConsolidated: (hubId: string) => void;
   onViewTenants: (hubId: string, hubName: string) => void;
   onViewAudit?: (action: string) => void;
@@ -44,6 +50,19 @@ export default function HubsSection({
   const [assignOpen, setAssignOpen] = useState(false);
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [subTab, setSubTab] = useState<HubSubTab>('profil');
+
+  const visibleSubTabs = useMemo(
+    () => SUB_TABS.filter((t) => !t.needsReports || canViewReports),
+    [canViewReports],
+  );
+
+  // The active tab can disappear when the permission changes (or on mount with
+  // a narrower role), which would otherwise leave the panel blank.
+  useEffect(() => {
+    if (!visibleSubTabs.some((t) => t.id === subTab)) {
+      setSubTab(visibleSubTabs[0]?.id ?? 'profil');
+    }
+  }, [visibleSubTabs, subTab]);
 
   const { data: hubDetail, isLoading: hubLoading } = usePlatformHub(selectedHubId);
   const { data: members = [] } = useHubMembers(selectedHubId);
@@ -153,7 +172,7 @@ export default function HubsSection({
         ) : (
           <>
             <div className="flex flex-wrap gap-2 border-b border-gray-200 pb-2">
-              {SUB_TABS.map((t) => (
+              {visibleSubTabs.map((t) => (
                 <button
                   key={t.id}
                   onClick={() => setSubTab(t.id)}
@@ -177,6 +196,8 @@ export default function HubsSection({
                 onViewConsolidated={onViewConsolidated}
               />
             )}
+
+            {subTab === 'overview' && <HubOverviewPanel hubId={hubDetail.id} />}
 
             {subTab === 'tenant' && (
               <HubTenantPanel

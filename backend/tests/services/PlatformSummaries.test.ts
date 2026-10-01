@@ -82,6 +82,35 @@ describe('ShiftService.getPlatformShiftsSummary', () => {
   });
 });
 
+describe('ShiftService.getPlatformOutletActivity (Hub V2 Fase 19)', () => {
+  it('passes every tenant through in one repository call and flags open shifts', async () => {
+    const openedAt = new Date('2026-08-01T08:00:00.000Z');
+    const shiftRepo = {
+      findOutletActivityByTenantIds: vi.fn(async () => [
+        { tenantId: 't-a', outletId: 'out-a', openShifts: 2, lastShiftAt: openedAt },
+        { tenantId: 't-b', outletId: null, openShifts: 0, lastShiftAt: null },
+      ]),
+    };
+    const service = new ShiftService(shiftRepo as any);
+
+    const activity = await service.getPlatformOutletActivity(['t-a', 't-b']);
+
+    expect(shiftRepo.findOutletActivityByTenantIds).toHaveBeenCalledTimes(1);
+    expect(shiftRepo.findOutletActivityByTenantIds).toHaveBeenCalledWith(['t-a', 't-b']);
+    expect(activity.outlets).toEqual([
+      { tenantId: 't-a', outletId: 'out-a', openShifts: 2, hasOpenShift: true, lastShiftAt: openedAt },
+      { tenantId: 't-b', outletId: null, openShifts: 0, hasOpenShift: false, lastShiftAt: null },
+    ]);
+  });
+
+  it('returns an empty list when no outlet has shift activity', async () => {
+    const shiftRepo = { findOutletActivityByTenantIds: vi.fn(async () => []) };
+    const service = new ShiftService(shiftRepo as any);
+
+    expect((await service.getPlatformOutletActivity(['t-a'])).outlets).toEqual([]);
+  });
+});
+
 describe('PaymentService.getPlatformPaymentsSummary', () => {
   function makePayment(tenantId: string, amount: number, method: 'cash' | 'qris', orderId: string) {
     const payment = Payment.create({ tenantId, orderId, amount, status: 'pending', method, referenceNumber: `REF-${orderId}`, metadata: {}, paidAt: null });

@@ -145,3 +145,81 @@ describe('SubscriptionService ledger', () => {
     expect(await svc.getTenantSubscriptionHistory('t1')).toEqual([]);
   });
 });
+describe('SubscriptionService.getTenantSubscriptions (Hub V2 Fase 19)', () => {
+  function makeBulkRepo(store: Map<string, any>) {
+    return {
+      findByTenantIds: vi.fn(async (tenantIds: string[]) =>
+        tenantIds.filter((id) => store.has(id)).map((id) => Subscription.hydrate({ ...store.get(id) })),
+      ),
+    };
+  }
+
+  function makeBulkPlanRepo() {
+    return {
+      findByIds: vi.fn(async (ids: string[]) =>
+        ids
+          .filter((id) => id === 'plan-pro')
+          .map((id) => ({ serialize: () => ({ id, name: 'Pro', billingCycle: 'monthly' }) })),
+      ),
+    };
+  }
+
+  const inDays = (days: number) => new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+
+  function build(store: Map<string, any>) {
+    const subRepo = makeBulkRepo(store);
+    const planRepo = makeBulkPlanRepo();
+    return {
+      subRepo,
+      planRepo,
+      service: new SubscriptionService(subRepo as any, planRepo as any, makeTenantRepo(new Map()) as any),
+    };
+  }
+
+  it('reads many tenants in one bulk query per repository', async () => {
+    const store = new Map<string, any>([
+      ['t1', makeBaseSub({ tenantId: 't1', planId: 'plan-pro', currentPeriodEnd: inDays(12) })],
+      ['t2', makeBaseSub({ tenantId: 't2', planId: 'plan-pro', currentPeriodEnd: inDays(3) })],
+    ]);
+    const { service, subRepo, planRepo } = build(store);
+
+    const rows = await service.getTenantSubscriptions(['t1', 't2']);
+
+    expect(rows).toHaveLength(2);
+    expect(subRepo.findByTenantIds).toHaveBeenCalledTimes(1);
+    expect(planRepo.findByIds).toHaveBeenCalledTimes(1);
+    // Same plan for both tenants → one lookup, not one per row.
+    expect(planRepo.findByIds.mock.calls[0][0]).toEqual(['plan-pro']);
+    expect(rows.find((r) => r.tenantId === 't1')).toMatchObject({ planName: 'Pro', status: 'active', daysRemaining: 12 });
+    expect(rows.find((r) => r.tenantId === 't2')?.daysRemaining).toBe(3);
+  });
+
+  it('omits tenants without a subscription instead of inventing a row', async () => {
+    const store = new Map<string, any>([['t1', makeBaseSub({ tenantId: 't1' })]]);
+    const { service, planRepo } = build(store);
+
+    const rows = await service.getTenantSubscriptions(['t1', 't-tanpa-sub']);
+
+    expect(rows.map((r) => r.tenantId)).toEqual(['t1']);
+    expect(planRepo.findByIds).toHaveBeenCalledTimes(1);
+  });
+
+  it('clamps an expired period to zero days and tolerates a missing plan document', async () => {
+    const store = new Map<string, any>([
+      ['t1', makeBaseSub({ tenantId: 't1', planId: 'plan-hilang', currentPeriodEnd: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000) })],
+    ]);
+    const { service } = build(store);
+
+    const rows = await service.getTenantSubscriptions(['t1']);
+
+    expect(rows[0].daysRemaining).toBe(0);
+    expect(rows[0].planName).toBeNull();
+  });
+
+  it('does not hit the repositories for an empty tenant list', async () => {
+    const { service, subRepo } = build(new Map());
+
+    expect(await service.getTenantSubscriptions([])).toEqual([]);
+    expect(subRepo.findByTenantIds).not.toHaveBeenCalled();
+  });
+});

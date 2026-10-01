@@ -31,6 +31,51 @@ export class SubscriptionService {
     };
   }
 
+  /**
+   * Hub V2 Fase 19 — subscription rollup for many tenants in two queries.
+   *
+   * `getTenantSubscription` per tenant would be 2N queries plus an N-sized array
+   * in the caller; tenants without a subscription are omitted entirely (they
+   * have nothing to roll up), matching that method's `null, null` contract.
+   */
+  async getTenantSubscriptions(tenantIds: string[]): Promise<
+    Array<{
+      tenantId: string;
+      planId: string;
+      planName: string | null;
+      status: string;
+      billingCycle: string;
+      currentPeriodEnd: Date;
+      daysRemaining: number;
+    }>
+  > {
+    if (tenantIds.length === 0) return [];
+
+    const subs = await this.subscriptionRepository.findByTenantIds(tenantIds);
+    if (subs.length === 0) return [];
+
+    const serialized = subs.map((s) => s.serialize());
+    const plans = await this.planRepository.findByIds([...new Set(serialized.map((s) => s.planId))]);
+    const planNameById = new Map(plans.map((p) => [p.serialize().id, p.serialize().name]));
+
+    const now = Date.now();
+    return serialized.map((s) => {
+      const daysRemaining = Math.max(
+        Math.ceil((s.currentPeriodEnd.getTime() - now) / (24 * 60 * 60 * 1000)),
+        0,
+      );
+      return {
+        tenantId: s.tenantId,
+        planId: s.planId,
+        planName: planNameById.get(s.planId) ?? null,
+        status: s.status,
+        billingCycle: s.billingCycle,
+        currentPeriodEnd: s.currentPeriodEnd,
+        daysRemaining,
+      };
+    });
+  }
+
   async assignPlan(
     tenantId: string,
     planId: string,

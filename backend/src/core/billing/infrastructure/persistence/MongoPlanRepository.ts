@@ -74,6 +74,13 @@ export class MongoPlanRepository {
     return doc ? this.toDomain(doc) : null;
   }
 
+  /** Hub V2 Fase 19 — bulk read so plan names resolve in one query, not per tenant. */
+  async findByIds(ids: string[]): Promise<Plan[]> {
+    if (ids.length === 0) return [];
+    const docs = await this.model.find({ _id: { $in: ids } }).exec();
+    return docs.map((doc: PlanDoc) => this.toDomain(doc));
+  }
+
   async findByName(name: string): Promise<Plan | null> {
     const doc = await this.model.findOne({ name }).exec();
     return doc ? this.toDomain(doc) : null;

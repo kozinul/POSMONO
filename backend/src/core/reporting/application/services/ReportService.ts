@@ -239,6 +239,46 @@ export class ReportService {
     };
   }
 
+  /**
+   * Hub V2 Fase 19 — sales per tenant for every tenant of a hub, in one pass.
+   *
+   * Tenants with no paid order in the window are returned as zero rows by the
+   * caller (the platform controller unions them in), so the caller can decide
+   * whether "no sales" means "omit" or "show Rp 0".
+   */
+  async getPlatformSalesByTenant(
+    tenantIds: string[],
+    options?: { dateFrom?: Date; dateTo?: Date },
+  ) {
+    const dateFrom = options?.dateFrom ?? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const dateTo = options?.dateTo ?? new Date();
+
+    const byTenant = await this.reportAggregation.getPlatformSalesByTenantAggregation(tenantIds, {
+      from: dateFrom,
+      to: dateTo,
+    });
+
+    const totals = byTenant.reduce(
+      (acc, t) => ({
+        totalOrders: acc.totalOrders + t.totalOrders,
+        totalRevenue: acc.totalRevenue + t.totalRevenue,
+        totalTax: acc.totalTax + t.totalTax,
+        totalDiscount: acc.totalDiscount + t.totalDiscount,
+        totalRounding: acc.totalRounding + t.totalRounding,
+      }),
+      { totalOrders: 0, totalRevenue: 0, totalTax: 0, totalDiscount: 0, totalRounding: 0 },
+    );
+
+    return {
+      dateFrom: dateFrom.toISOString(),
+      dateTo: dateTo.toISOString(),
+      generatedAt: new Date().toISOString(),
+      currency: 'IDR' as const,
+      totals,
+      byTenant,
+    };
+  }
+
   async getProfitLoss(tenantId: string, dateFrom: string, dateTo: string) {
     const [finance, cogs] = await Promise.all([
       this.reportAggregation.getFinanceAggregation(tenantId, dateFrom, dateTo),

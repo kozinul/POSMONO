@@ -99,6 +99,58 @@ const otherTenant = {
   hubName: 'Maju Grup',
 };
 
+const hubOverview = {
+  hub: hubs[0],
+  dateFrom: '2026-09-01T00:00:00.000Z',
+  dateTo: '2026-09-30T23:59:59.999Z',
+  generatedAt: '2026-09-30T10:00:00.000Z',
+  counts: { tenants: 2, outlets: 3, activeOutlets: 2, members: 2 },
+  operational: {
+    staleHours: 24,
+    outletsWithOpenShift: 1,
+    outletsStale: 1,
+    outletsWithoutShift: 1,
+    outlets: [
+      {
+        outletId: 'outlet-1',
+        outletName: 'Sanur',
+        tenantId: 'tenant-1',
+        tenantName: 'Kopi Bali',
+        isActive: true,
+        openShifts: 1,
+        lastShiftAt: '2026-09-30T09:00:00.000Z',
+        hasOpenShift: true,
+        isStale: false,
+        idleHours: 1,
+      },
+      {
+        outletId: 'outlet-3',
+        outletName: 'Kemang',
+        tenantId: 'tenant-2',
+        tenantName: 'Roti Manis',
+        isActive: true,
+        openShifts: 0,
+        lastShiftAt: null,
+        hasOpenShift: false,
+        isStale: true,
+        idleHours: null,
+      },
+    ],
+  },
+  sales: {
+    currency: 'IDR',
+    total: 1_400_000,
+    transactions: 14,
+    byTenant: [
+      { tenantId: 'tenant-1', tenantName: 'Kopi Bali', total: 1_000_000, transactions: 10 },
+      { tenantId: 'tenant-2', tenantName: 'Roti Manis', total: 400_000, transactions: 4 },
+    ],
+  },
+  subscription: [
+    { tenantId: 'tenant-1', tenantName: 'Kopi Bali', planName: 'Pro', status: 'active', daysRemaining: 12 },
+  ],
+};
+
 function tenantPage(rows: unknown[]) {
   return Promise.resolve({
     data: { success: true, data: { data: rows, total: rows.length, page: 1, limit: 20 } },
@@ -154,6 +206,7 @@ function mockApi(usersSummary?: unknown[], detail = hubDetail) {
         },
       });
     }
+    if (url.startsWith('/platform/hubs/hub-')) return Promise.resolve({ data: { success: true, data: hubOverview } });
     if (url.startsWith('/platform/tenants?')) return tenantPage([hubDetail.tenants[0], otherTenant]);
     if (url === '/platform/tenants') return tenantPage([hubDetail.tenants[0]]);
     return Promise.resolve({ data: { success: true, data: [] } });
@@ -171,6 +224,7 @@ function renderSection(
     selectedHubId: 'hub-1',
     onSelectHub: vi.fn(),
     canManage: true,
+    canViewReports: true,
     onViewConsolidated: vi.fn(),
     onViewTenants: vi.fn(),
     ...overrides,
@@ -385,5 +439,69 @@ describe('HubsSection', () => {
     await userEvent.click(await screen.findByText('Hapus'));
 
     await waitFor(() => expect(api.delete).toHaveBeenCalledWith('/hub-memberships/hub-1/u1'));
+  });
+
+  describe('Overview sub-tab (Hub V2 Fase 19)', () => {
+    it('shows counts, sales per tenant and subscription rollup', async () => {
+      renderSection();
+
+      await userEvent.click(await screen.findByRole('button', { name: /Overview/ }));
+
+      expect(await screen.findByText('Status Outlet')).toBeInTheDocument();
+      expect(screen.getByText('2 / 3')).toBeInTheDocument(); // aktif / total outlet
+      expect(screen.getByText('Rp 1.400.000')).toBeInTheDocument();
+      // Every tenant of the hub gets a sales row, not only the ones that sold.
+      expect(screen.getByText('Rp 1.000.000')).toBeInTheDocument();
+      expect(screen.getByText('Rp 400.000')).toBeInTheDocument();
+      expect(screen.getByText('Pro')).toBeInTheDocument();
+      expect(screen.getByText('12')).toBeInTheDocument(); // sisa hari langganan
+    });
+
+    it('calls the hub-scoped overview endpoint for the selected hub only', async () => {
+      renderSection();
+
+      await userEvent.click(await screen.findByRole('button', { name: /Overview/ }));
+
+      await waitFor(() =>
+        expect(api.get).toHaveBeenCalledWith(expect.stringContaining('/platform/hubs/hub-1/overview')),
+      );
+      const overviewCalls = vi.mocked(api.get).mock.calls.filter((c) => String(c[0]).includes('/overview'));
+      expect(overviewCalls).toHaveLength(1);
+    });
+
+    it('flags an outlet that never opened a shift instead of hiding it', async () => {
+      renderSection();
+
+      await userEvent.click(await screen.findByRole('button', { name: /Overview/ }));
+
+      expect(await screen.findByText('Kemang')).toBeInTheDocument();
+      expect(screen.getByText('perhatian')).toBeInTheDocument();
+      expect(screen.getByText(/1 outlet tidak punya shift buka/)).toBeInTheDocument();
+      expect(screen.getByText('belum pernah')).toBeInTheDocument();
+    });
+
+    it('hides the sub-tab without platform.reports.read and never fetches it', async () => {
+      renderSection({ canViewReports: false });
+
+      await hubList().findByText('BCA Hospitality');
+      expect(screen.queryByRole('button', { name: /Overview/ })).not.toBeInTheDocument();
+      expect(vi.mocked(api.get).mock.calls.some((c) => String(c[0]).includes('/overview'))).toBe(false);
+    });
+
+    it('re-queries with an explicit date range when the preset changes', async () => {
+      renderSection();
+
+      await userEvent.click(await screen.findByRole('button', { name: /Overview/ }));
+      await screen.findByText('Status Outlet');
+      vi.mocked(api.get).mockClear();
+
+      await userEvent.click(screen.getByRole('button', { name: '7 hari' }));
+
+      await waitFor(() => {
+        const call = vi.mocked(api.get).mock.calls.find((c) => String(c[0]).includes('/overview'));
+        expect(String(call?.[0])).toContain('dateFrom=');
+        expect(String(call?.[0])).toContain('dateTo=');
+      });
+    });
   });
 });

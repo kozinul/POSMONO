@@ -289,7 +289,7 @@ Frontend Terminal Center sekarang punya tab **Hub & Anggota** yang utuh: buat/ed
 
 > Keputusan arsitektur yang mengunci fase-fase ini: **[`HUB_V2_DECISIONS.md`](HUB_V2_DECISIONS.md)** (D1–D4 + opsi yang ditolak).
 > Rencana frontend: **[`HUB_V2_FRONTEND_PLAN.md`](HUB_V2_FRONTEND_PLAN.md)**.
-> Status: **Fase 16 & 17 selesai 2026-09-29**; **Fase 18 selesai 2026-09-30** (gate debt pass T0–T9 terpenuhi). Fase 19–20 masih rencana.
+> Status: **Fase 16 & 17 selesai 2026-09-29**; **Fase 18 selesai 2026-09-30**; **Fase 19 selesai 2026-10-01** (gate debt pass T0–T9 terpenuhi). Fase 20 masih rencana.
 > Fase 1–15 tetap utuh; Fase 16 tidak mengubah perilaku apa pun.
 
 ### Konteks (recon 2026-09-28)
@@ -381,11 +381,31 @@ masa depan, karena itu access model (Fase 17) didahulukan.
 >
 > **Keputusan yang diambil tanpa ditanyakan (bisakah direview):** `archived` diperlakukan read-only, dan `delete` tetap boleh selama tidak ada tenant. Batasan diketahui: belum ada bulk endpoint grant, jadi tabel anggota tidak menampilkan ringkasan "N dari M tenant" (satu query per anggota = N+1).
 
-### Fase 19 — Hub Overview (read model)
-- [ ] `ReportService.getPlatformSalesByTenant(tenantIds, { dateFrom, dateTo })` mengikuti pola `getPlatformShiftsSummary` (**satu** agregasi grouped `tenantId` — bukan `getFinanceAggregation` per tenant yang N+1), sumber **`orders`** (bukan shift sales).
-- [ ] `GET /api/platform/hubs/:hubId/overview` (`platform.reports.read`) → `{ hub, counts, operational, sales.byTenant[], subscription[] }`.
-- [ ] **Tanpa koleksi baru** — Hub tidak menyimpan data bisnis; semua agregasi dari `orders`/`payments`/`shifts`/`outlets` yang sudah tenant-scoped (`tenantId: {$in: [...]}`).
-- [ ] Frontend: sub-tab "Overview" (`HubOverviewPanel`) — 5 kartu, penjualan per tenant, status outlet (open shift/stale), rollup langganan. Nol → `Rp 0`; tidak ada data → `—`.
+### Fase 19 — Hub Overview (read model) ✅ (2026-10-01)
+- [x] `ReportService.getPlatformSalesByTenant(tenantIds, { dateFrom, dateTo })` mengikuti pola `getPlatformShiftsSummary` (**satu** agregasi grouped `tenantId` — bukan `getFinanceAggregation` per tenant yang N+1), sumber **`orders`** (bukan shift sales). Default range 30 hari terakhir.
+- [x] `GET /api/platform/hubs/:hubId/overview` (`platform.reports.read`) → `{ hub, dateFrom, dateTo, generatedAt, counts, operational, sales.byTenant[], subscription[] }`.
+- [x] **Tanpa koleksi baru** — Hub tidak menyimpan data bisnis; semua agregasi dari `orders`/`shifts`/`outlets`/`subscriptions` yang sudah tenant-scoped (`tenantId: {$in: [...]}`).
+- [x] Frontend: sub-tab "Overview" (`HubOverviewPanel`) di dalam tab Hub & Anggota — kartu ringkas, penjualan per tenant, status outlet (open shift/stale), rollup langganan. Nol → `Rp 0`; tidak ada data → `—`.
+
+**Bentuk response**
+```
+counts:      { tenants, outlets, activeOutlets, members }
+operational: { staleHours, outletsWithOpenShift, outletsStale, outletsWithoutShift,
+               outlets[]: { outletId, outletName, tenantId, tenantName, isActive,
+                             openShifts, lastShiftAt, hasOpenShift, isStale, idleHours } }
+sales:       { currency: 'IDR', total, transactions, byTenant[]: { tenantId, tenantName, total, transactions } }
+subscription:[ { tenantId, tenantName, planName, status, daysRemaining } ]
+```
+`pendingInvitations` **sengaja tidak ada** di Fase 19 (butuh domain `HubInvitation`, Fase 20).
+
+**Tiga keputusan yang dibayar mahal di Fase 19**
+1. **Baris outlet_supply dari daftar outlet, bukan dari aktivitas shift.** `findOutletActivityByTenantIds` hanya menghasilkan row untuk outlet yang **punya** shift; kalau baris dibangun dari sana, outlet yang belum pernah buka shift **tidak akan muncul sama sekali** — persis kasus yang paling perlu dilihat operator. `outletsWithoutShift` pun jadi kode mati. Jadi `buildHubOverview` melakukan union: semua dokumen outlet + row aktivitas tanpa dokumen outlet (outlet dihapus / shift legacy tanpa `outletId`).
+2. **Aturan stale punya satu pemilik.** `ShiftService.getPlatformOutletOperationalStatus` sebelumnya ikut menghitung `isStale`, padahal keputusan itu butuh daftar outlet lengkap yang hanya dimiliki pemanggil. Dua pemilik = aturan bisa melenceng. Sekarang service mengembalikan **aktivitas mentah** (`openShifts`, `lastShiftAt`, `hasOpenShift`) dan `buildHubOverview` satu-satunya yang menetapkan `isStale` (`!hasOpenShift && (idle > staleHours || belum pernah)`).
+3. **Read model dipisah dari controller** (`core/platform/application/read-models/HubOverviewReadModel.ts`). `PlatformController` sempat melewati batas 1.000 baris & Budget kompleksitas merah; komposisi ini aturan bisnis (outlet mana yang muncul, kapan dianggap stale, tenant nol penjualan ditampilkan sebagai apa) dan harus bisa diuji tanpa Express. Modul ini mendeklarasikan kebutuhannya secara struktural (`OutletSource`, `ActivitySource`, …), bukan mengimpor 4 kelas konkret.
+
+**Batas yang diketahui (sengaja ditunda)**
+- `counts.members` masih lewat `hubMembershipService.listMembers()` (N+1 `findById` user per anggota). Batch `countByHub` dibutuhkan; endpoint ini sudah jadi tempatnya.
+- Overview read-only: tidak ada export/scheduled report (di luar scope, terkunci di `HUB_V2_DECISIONS.md`).
 
 ### Fase 20 — Hub Invitation & suspend member
 - [ ] Domain `HubInvitation { id, hubId, email, role, tokenHash, expiresAt, invitedBy, status: pending|accepted|expired|revoked }` + repo/schema/service.

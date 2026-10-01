@@ -1064,6 +1064,7 @@ Hub = grouping non-tenant di atas tenant (`hubId` di Tenant; null = standalone).
 | GET | `/api/platform/shifts/summary` | platform | `platform.reports.read` |
 | GET | `/api/platform/payments/summary` | platform | `platform.reports.read` |
 | GET | `/api/platform/hubs/:hubId/consolidated` | platform | `platform.reports.read` |
+| GET | `/api/platform/hubs/:hubId/overview` | platform | `platform.reports.read` |
 | GET | `/api/platform/plans` | platform | `platform.plans.read` |
 | GET | `/api/platform/plans/:id` | platform | `platform.plans.read` |
 | POST | `/api/platform/plans` | platform | `platform.plans.manage` |
@@ -1084,6 +1085,7 @@ Hub = grouping non-tenant di atas tenant (`hubId` di Tenant; null = standalone).
 - `GET /api/platform/shifts/summary?dateFrom=&dateTo=&hubId=&tenantId=` → per tenant + per outlet (jumlah shift, durasi, total)
 - `GET /api/platform/payments/summary?dateFrom=&dateTo=&hubId=&tenantId=` → total + breakdown metode pembayaran lintas-tenant
 - `GET /api/platform/hubs/:hubId/consolidated?dateFrom=&dateTo=` → **Hub Consolidated Report**: `{ hub, tenantCount, tenants[{ tenantId, tenantName, totals, outlets[{ outletId, outletName, shifts, payments }] }], totals }`
+- `GET /api/platform/hubs/:hubId/overview?dateFrom=&dateTo=` → **Hub Overview** (Hub V2 Fase 19): `{ hub, dateFrom, dateTo, generatedAt, counts{ tenants, outlets, activeOutlets, members }, operational{ staleHours, outletsWithOpenShift, outletsStale, outletsWithoutShift, outlets[{ outletId, outletName, tenantId, tenantName, isActive, openShifts, lastShiftAt, hasOpenShift, isStale, idleHours }] }, sales{ currency: 'IDR', total, transactions, byTenant[{ tenantId, tenantName, total, transactions }] }, subscription[{ tenantId, tenantName, planName, status, daysRemaining }] }`. Range default 30 hari terakhir (`dateFrom`/`dateTo` opsional). Sales memakai **satu** grouped agregasi `orders` (`paid`/`completed`, revenue `total + roundingAdjustment`) untuk seluruh tenant hub. `operational` **tidak** bergantung pada range: stale = tidak ada shift buka **dan** aktivitas terakhir lebih lama dari `staleHours` (24) atau belum pernah buka shift. Outlet **tanpa shift pun tetap muncul** (baris dibangun dari daftar outlet, lalu di-join aktivitas shift), termasuk row aktivitas untuk outlet yang sudah dihapus. `subscription` **mengomit** tenant tanpa langganan. `pendingInvitations` tidak ada di Fase 19 (Fase 20).
 
 Response shifts/payments summary menambahkan `tenantName` per tenant (dari `resolvePlatformScope.tenantNameById`).
 
@@ -1390,6 +1392,7 @@ id, tenantId, email, displayName, roleId, isActive, lastLoginAt, createdAt, upda
 | 108 | GET | `/api/platform/shifts/summary` | platform `platform.reports.read` |
 | 109 | GET | `/api/platform/payments/summary` | platform `platform.reports.read` |
 | 110 | GET | `/api/platform/hubs/:hubId/consolidated` | platform `platform.reports.read` |
+| 110a | GET | `/api/platform/hubs/:hubId/overview` | platform `platform.reports.read` (Hub V2 Fase 19) |
 | 111 | POST | `/api/hub-memberships` | ✓ `platform.hubs.manage` |
 | 112 | GET | `/api/hub-memberships/hub/:hubId` | ✓ `platform.hubs.manage` |
 | 113 | PUT | `/api/hub-memberships/:hubId/:userId` | ✓ `platform.hubs.manage` (ganti role) |

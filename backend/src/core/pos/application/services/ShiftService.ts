@@ -1,6 +1,13 @@
 import { NotFoundError, ValidationError } from '../../../../@shared/infrastructure/error/AppError';
 import { Shift, ICarriedOverBill, IPaymentBreakdownEntry } from '../../domain/Shift';
 
+interface OutletActivityRow {
+  tenantId: string;
+  outletId: string | null;
+  openShifts: number;
+  lastShiftAt: Date | null;
+}
+
 export class ShiftService {
   constructor(
     private readonly shiftRepository: any,
@@ -164,6 +171,29 @@ export class ShiftService {
       totalAmount: bills.reduce((sum, b) => sum + b.total, 0),
       bills,
       fromShift,
+    };
+  }
+
+  /**
+   * Hub V2 Fase 19 — shift activity per outlet for many tenants at once,
+   * independent of any date range (staleness is "now", not a report window).
+   *
+   * Only outlets that HAVE shift activity can appear here; deciding which
+   * outlets are stale needs the full outlet list, so that half of the rule
+   * lives with the caller that owns the list (one owner, not two).
+   */
+  async getPlatformOutletActivity(tenantIds: string[]) {
+    const activity = await this.shiftRepository.findOutletActivityByTenantIds(tenantIds);
+
+    return {
+      generatedAt: new Date().toISOString(),
+      outlets: activity.map((row: OutletActivityRow) => ({
+        tenantId: row.tenantId,
+        outletId: row.outletId,
+        openShifts: row.openShifts,
+        hasOpenShift: row.openShifts > 0,
+        lastShiftAt: row.lastShiftAt ?? null,
+      })),
     };
   }
 

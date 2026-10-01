@@ -12,6 +12,7 @@ import { UserService } from '../../../../identity/application/services/UserServi
 import { PlatformCleanupService } from '../../../application/services/PlatformCleanupService';
 import { ValidationError, NotFoundError } from '../../../../../@shared/infrastructure/error/AppError';
 import { resolvePlatformScope } from '../../../application/helpers/resolvePlatformScope';
+import { buildHubOverview } from '../../../application/read-models/HubOverviewReadModel';
 
 interface PlatformControllerDeps {
   hubService: HubService;
@@ -30,7 +31,23 @@ interface PlatformControllerDeps {
   warehouseRepository?: any;
   userService?: UserService;
   cleanupService?: PlatformCleanupService;
-  hubMembershipService?: { listMembers(hubId: string): Promise<any[]> };
+  hubMembershipService?: { listMembers(hubId: string): Promise<unknown[]> };
+  reportService?: {
+    getPlatformSalesByTenant(
+      tenantIds: string[],
+      options?: { dateFrom?: Date; dateTo?: Date },
+    ): Promise<{
+      totals: { totalOrders: number; totalRevenue: number };
+      byTenant: Array<{
+        tenantId: string;
+        totalOrders: number;
+        totalRevenue: number;
+        totalTax: number;
+        totalDiscount: number;
+        totalRounding: number;
+      }>;
+    }>;
+  };
 }
 
 export class PlatformController extends BaseController {
@@ -653,6 +670,36 @@ export class PlatformController extends BaseController {
       tenants: resultTenants,
       totals,
     });
+  }
+
+  /**
+   * Hub V2 Fase 19 — one read model for a hub: counts, operational status of
+   * every outlet, sales per tenant, and the subscription rollup.
+   *
+   * Built from already-tenant-scoped collections (`orders`, `shifts`, `outlets`,
+   * `subscriptions`) via `tenantId: { $in: [...] }`. The hub stores no business
+   * data of its own, and this endpoint adds no collection.
+   */
+  async overview(req: Request, res: Response): Promise<void> {
+    const { dateFrom, dateTo } = req.query;
+    const hub = await this.deps.hubService.getById(req.params.hubId);
+    const [from, to] = this.resolveDateRange(dateFrom as string | undefined, dateTo as string | undefined);
+    const scope = await resolvePlatformScope(this.deps.tenantRepository, { hubId: req.params.hubId });
+
+    const readModel = await buildHubOverview({
+      hubId: req.params.hubId,
+      tenantIds: scope.tenantIds,
+      tenantNameById: scope.tenantNameById,
+      membersSource: this.deps.hubMembershipService ?? null,
+      dateFrom: from,
+      dateTo: to,
+      outletsSource: this.deps.outletService,
+      activitySource: this.deps.shiftService,
+      salesSource: this.deps.reportService ?? null,
+      subscriptionSource: this.deps.subscriptionService ?? null,
+    });
+
+    this.ok(res, { hub: hub.serialize(), ...readModel });
   }
 
   async shiftsSummary(req: Request, res: Response): Promise<void> {

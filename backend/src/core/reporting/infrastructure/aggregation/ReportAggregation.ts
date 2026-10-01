@@ -6,6 +6,16 @@ export interface IPaymentBreakdownGroup {
   amount: number;
 }
 
+/** Group row of `getPlatformSalesByTenantAggregation` (one row per tenant). */
+export interface PlatformSalesByTenantRow {
+  _id: string;
+  totalOrders: number;
+  totalRevenue: number;
+  totalTax: number;
+  totalDiscount: number;
+  totalRounding: number;
+}
+
 export class ReportAggregation {
   constructor(
     private readonly orderModel: Model<any>,
@@ -1208,5 +1218,61 @@ export class ReportAggregation {
       totalCogs: Number(row.totalCogs ?? 0),
       totalUnits: Number(row.totalUnits ?? 0),
     };
+  }
+
+  /**
+   * Hub V2 Fase 19 — sales grouped by tenant across many tenants at once.
+   *
+   * Deliberately ONE grouped aggregation over `orders` instead of calling
+   * `getFinanceAggregation` per tenant: a hub with N tenants would otherwise
+   * issue 2N pipelines (totals + categories) just to draw one overview card.
+   * Revenue semantics mirror `getFinanceAggregation` — `roundingAdjustment` is
+   * added to `total`, discount takes the `$max` of the two duplicated fields —
+   * so a hub total and a per-tenant finance report never disagree.
+   *
+   * The window is taken as an already-expanded `{ from, to }` (the platform
+   * controller's `resolveDateRange` sets it to start/end of day), so this does
+   * not re-derive day bounds from a `YYYY-MM-DD` string like the tenant-scoped
+   * aggregations do.
+   */
+  async getPlatformSalesByTenantAggregation(
+    tenantIds: string[],
+    range: { from: Date; to: Date },
+  ) {
+    if (tenantIds.length === 0) return [];
+
+    const rows = await this.orderModel.aggregate([
+      {
+        $match: {
+          tenantId: { $in: tenantIds },
+          createdAt: { $gte: range.from, $lte: range.to },
+          status: { $in: ['paid', 'completed'] },
+        },
+      },
+      {
+        $group: {
+          _id: '$tenantId',
+          totalOrders: { $sum: 1 },
+          totalRevenue: {
+            $sum: { $add: [{ $ifNull: ['$roundingAdjustment', 0] }, '$total'] },
+          },
+          totalTax: { $sum: { $ifNull: ['$tax', 0] } },
+          totalDiscount: {
+            $sum: { $max: [{ $ifNull: ['$discount', 0] }, { $ifNull: ['$discountTotal', 0] }] },
+          },
+          totalRounding: { $sum: { $ifNull: ['$roundingAdjustment', 0] } },
+        },
+      },
+      { $sort: { totalRevenue: -1 } },
+    ]);
+
+    return rows.map((row: PlatformSalesByTenantRow) => ({
+      tenantId: String(row._id),
+      totalOrders: Number(row.totalOrders ?? 0),
+      totalRevenue: Math.round(Number(row.totalRevenue ?? 0)),
+      totalTax: Math.round(Number(row.totalTax ?? 0)),
+      totalDiscount: Math.round(Number(row.totalDiscount ?? 0)),
+      totalRounding: Math.round(Number(row.totalRounding ?? 0)),
+    }));
   }
 }

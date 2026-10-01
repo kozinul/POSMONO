@@ -59,6 +59,7 @@ export function registerPlatformWiring({ container, models, systemConnection }: 
           userService: container.resolve('userService'),
           cleanupService: container.resolve('platformCleanupService'),
           hubMembershipService: container.resolve('hubMembershipService'),
+          reportService: container.resolve('reportService'),
         },
       }),
     }),

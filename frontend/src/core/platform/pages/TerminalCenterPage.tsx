@@ -41,6 +41,7 @@ export default function TerminalCenterPage() {
 
   const activeTab = visibleTabs.some((t) => t.id === tab) ? tab : visibleTabs[0]?.id ?? 'tenants';
   const canManageHub = permissions.includes(PLATFORM_HUBS_PERMISSION);
+  const canViewReports = permissions.includes(PERMISSIONS.PLATFORM_REPORTS_READ);
 
   return (
     <div>
@@ -77,6 +78,7 @@ export default function TerminalCenterPage() {
           selectedHubId={selectedHubId}
           onSelectHub={setSelectedHubId}
           canManage={canManageHub}
+          canViewReports={canViewReports}
           onViewConsolidated={(hubId) => {
             setConsolidatedHubId(hubId);
             setTab('consolidated');
