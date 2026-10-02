@@ -88,6 +88,41 @@ const members = [
   { id: 'm1', hubId: 'hub-1', userId: 'u1', role: 'owner' as const, displayName: 'Budi', email: 'budi@kopi.id', userTenantId: 'tenant-1', userTenantName: 'Alpha Kopi', createdAt: '', updatedAt: '' },
 ];
 
+const invitations = [
+  {
+    id: 'i1',
+    hubId: 'hub-1',
+    email: 'budi@kopi.id',
+    role: 'manager' as const,
+    roleLabel: 'Manager',
+    status: 'pending' as const,
+    isExpired: false,
+    acceptedBy: null,
+    acceptedAt: null,
+    revokedAt: null,
+    expiresAt: '2099-01-01T00:00:00.000Z',
+    invitedBy: 'platform-admin',
+    createdAt: '',
+    updatedAt: '',
+  },
+  {
+    id: 'i2',
+    hubId: 'hub-1',
+    email: 'lama@kopi.id',
+    role: 'viewer' as const,
+    roleLabel: 'Viewer',
+    status: 'expired' as const,
+    isExpired: true,
+    acceptedBy: null,
+    acceptedAt: null,
+    revokedAt: null,
+    expiresAt: '2026-01-01T00:00:00.000Z',
+    invitedBy: 'platform-admin',
+    createdAt: '',
+    updatedAt: '',
+  },
+];
+
 const otherTenant = {
   id: 'tenant-2',
   name: 'Roti Manis',
@@ -157,7 +192,7 @@ function tenantPage(rows: unknown[]) {
   });
 }
 
-function mockApi(usersSummary?: unknown[], detail = hubDetail) {
+function mockApi(usersSummary?: unknown[], detail = hubDetail, memberRows = members) {
   const byId: Record<string, typeof hubDetail> = { 'hub-1': hubDetail, 'hub-3': archivedHubDetail };
   vi.mocked(api.get).mockImplementation((url: string) => {
     if (url === '/platform/hubs') return Promise.resolve({ data: { success: true, data: hubs } });
@@ -168,7 +203,10 @@ function mockApi(usersSummary?: unknown[], detail = hubDetail) {
       return Promise.resolve({ data: { success: true, data: usersSummary ? { ...row, usersSummary } : row } });
     }
     if (/^\/hub-memberships\/hub\/hub-\d+$/.test(url)) {
-      return Promise.resolve({ data: { success: true, data: members } });
+      return Promise.resolve({ data: { success: true, data: memberRows } });
+    }
+    if (/^\/hubs\/hub-\d+\/invitations$/.test(url)) {
+      return Promise.resolve({ data: { success: true, data: invitations } });
     }
     if (url.startsWith('/platform/users')) {
       return Promise.resolve({
@@ -219,6 +257,7 @@ function mockApi(usersSummary?: unknown[], detail = hubDetail) {
 function renderSection(
   overrides: Partial<React.ComponentProps<typeof HubsSection>> = {},
   detail = hubDetail,
+  memberRows = members,
 ) {
   const props: React.ComponentProps<typeof HubsSection> = {
     selectedHubId: 'hub-1',
@@ -229,7 +268,7 @@ function renderSection(
     onViewTenants: vi.fn(),
     ...overrides,
   };
-  mockApi(undefined, detail);
+  mockApi(undefined, detail, memberRows);
   return { props, ...render(<TestQueryProvider><HubsSection {...props} /></TestQueryProvider>) };
 }
 
@@ -439,6 +478,147 @@ describe('HubsSection', () => {
     await userEvent.click(await screen.findByText('Hapus'));
 
     await waitFor(() => expect(api.delete).toHaveBeenCalledWith('/hub-memberships/hub-1/u1'));
+  });
+
+  // ------------------------------------------------ Hub V2 Fase 20 — suspend
+
+  describe('suspensi anggota (Hub V2 Fase 20)', () => {
+    const suspendedMember = {
+      ...members[0],
+      id: 'm9',
+      userId: 'u9',
+      email: 'sari@kopi.id',
+      displayName: 'Sari',
+      status: 'suspended' as const,
+      suspendedAt: '2026-10-01T00:00:00.000Z',
+    };
+
+    it('sends an explicit status, and keeps suspend and reactivate distinct', async () => {
+      renderSection();
+
+      await userEvent.click(await screen.findByRole('button', { name: /Anggota/ }));
+      await userEvent.click(await screen.findByText('Tangguhkan'));
+      await waitFor(() =>
+        expect(api.put).toHaveBeenCalledWith('/hub-memberships/hub-1/u1/status', {
+          status: 'suspended',
+        }),
+      );
+
+      // Suspending is not "removing": no delete is issued behind the scenes.
+      expect(api.delete).not.toHaveBeenCalled();
+    });
+
+    it('shows a suspended member with its status and offers to restore it', async () => {
+      renderSection({}, hubDetail, [suspendedMember]);
+
+      await userEvent.click(await screen.findByRole('button', { name: /Anggota/ }));
+
+      // Scoped to the member table: the hub list itself has a "Ditangguhkan"
+      // badge for the suspended hub, which is a different fact entirely.
+      const memberTable = await screen.findByRole('table');
+      await waitFor(() => expect(within(memberTable).getByText('Ditangguhkan')).toBeInTheDocument());
+      expect(within(memberTable).getByRole('columnheader', { name: 'Status' })).toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole('button', { name: 'Aktifkan' }));
+      await waitFor(() =>
+        expect(api.put).toHaveBeenCalledWith('/hub-memberships/hub-1/u9/status', { status: 'active' }),
+      );
+    });
+
+    it('treats a member row without a status as active (pre-Fase-20 rows)', async () => {
+      renderSection();
+
+      await userEvent.click(await screen.findByRole('button', { name: /Anggota/ }));
+
+      // The fixture has no `status` field at all; the badge must not be blank.
+      const memberTable = await screen.findByRole('table');
+      await waitFor(() => expect(within(memberTable).getByText('Aktif')).toBeInTheDocument());
+    });
+
+    it('locks status changes on an archived hub', async () => {
+      renderSection({ selectedHubId: 'hub-3' }, archivedHubDetail, [suspendedMember]);
+
+      await userEvent.click(await screen.findByRole('button', { name: /Anggota/ }));
+      expect(await screen.findByRole('button', { name: 'Aktifkan' })).toBeDisabled();
+    });
+  });
+
+  // ------------------------------------------ Hub V2 Fase 20 — invitations
+
+  describe('Undangan sub-tab (Hub V2 Fase 20)', () => {
+    it('lists invitations with their status from the hub-scoped endpoint', async () => {
+      renderSection();
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Undangan' }));
+
+      expect(await screen.findByText('budi@kopi.id')).toBeInTheDocument();
+      expect(screen.getByText('lama@kopi.id')).toBeInTheDocument();
+      expect(screen.getByText('Menunggu')).toBeInTheDocument();
+      expect(screen.getByText('Kedaluwarsa')).toBeInTheDocument();
+      // Only a pending invitation can be revoked.
+      expect(screen.getAllByRole('button', { name: 'Cabut' })).toHaveLength(1);
+
+      expect(vi.mocked(api.get).mock.calls.some((c) => String(c[0]) === '/hubs/hub-1/invitations')).toBe(true);
+    });
+
+    it('creates an invitation and shows the raw link exactly once', async () => {
+      vi.mocked(api.post).mockResolvedValueOnce({
+        data: {
+          success: true,
+          data: {
+            invitation: { ...invitations[0], email: 'baru@kopi.id' },
+            token: 'rahasia-token-123',
+          },
+        },
+      } as never);
+      renderSection();
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Undangan' }));
+      await userEvent.type(await screen.findByLabelText('Email tujuan'), 'baru@kopi.id');
+      await userEvent.click(screen.getByRole('button', { name: 'Buat Undangan' }));
+
+      await waitFor(() =>
+        expect(api.post).toHaveBeenCalledWith('/hubs/hub-1/invitations', {
+          email: 'baru@kopi.id',
+          role: 'viewer',
+          expiresInHours: 24 * 7,
+        }),
+      );
+
+      // The one thing the admin cannot get back: the link is shown once, with an
+      // explicit warning that it will not be retrievable.
+      expect(await screen.findByText(/hanya ditampilkan sekali/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Salin Tautan' })).toBeInTheDocument();
+    });
+
+    it('revokes a pending invitation', async () => {
+      renderSection();
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Undangan' }));
+      await userEvent.click(await screen.findByText('Cabut'));
+
+      await waitFor(() => expect(api.delete).toHaveBeenCalledWith('/hubs/hub-1/invitations/i1'));
+    });
+
+    it('hides the form and the actions without platform.hubs.manage', async () => {
+      renderSection({ canManage: false });
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Undangan' }));
+
+      // Read-only: the list is still useful, but nothing may be issued or revoked.
+      expect(await screen.findByText('budi@kopi.id')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Email tujuan')).not.toBeInTheDocument();
+      expect(screen.queryByText('Cabut')).not.toBeInTheDocument();
+    });
+
+    it('freezes invitations on an archived hub', async () => {
+      renderSection({ selectedHubId: 'hub-3' }, archivedHubDetail);
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Undangan' }));
+
+      expect(await screen.findByText(/Hub diarsipkan/)).toBeInTheDocument();
+      expect(screen.queryByLabelText('Email tujuan')).not.toBeInTheDocument();
+    });
   });
 
   describe('Overview sub-tab (Hub V2 Fase 19)', () => {

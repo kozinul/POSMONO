@@ -4,10 +4,13 @@ import HubMemberAccessModal, { type AccessTenantOption } from './HubMemberAccess
 import {
   HUB_MEMBER_ROLES,
   HUB_MEMBER_ROLE_LABELS,
+  HUB_MEMBERSHIP_STATUS_LABELS,
   useHubMembers,
   useRemoveHubMembership,
+  useSetHubMembershipStatus,
   useUpdateHubMembership,
   type HubMemberRole,
+  type HubMembershipStatus,
 } from '../../../@shared/hooks/useHubMemberships';
 import { toast } from '../../../@shared/hooks/useToast';
 import { ArchivedNotice } from './platformUi';
@@ -52,12 +55,13 @@ export default function HubMemberPanel({
   const { data: members = [], isLoading } = useHubMembers(hubId);
   const updateMember = useUpdateHubMembership();
   const removeMember = useRemoveHubMembership();
+  const setMemberStatus = useSetHubMembershipStatus();
   const [error, setError] = useState('');
   const [accessUserId, setAccessUserId] = useState<string | null>(null);
   // An archived hub freezes its membership on the server too; disabling here
   // avoids offering buttons whose only possible answer is a 400.
   const locked = hubStatus === 'archived';
-  const isBusy = updateMember.isPending || removeMember.isPending;
+  const isBusy = updateMember.isPending || removeMember.isPending || setMemberStatus.isPending;
 
   const handleRoleChange = async (userId: string, currentRole: HubMemberRole, nextRole: HubMemberRole) => {
     if (nextRole === currentRole) return;
@@ -82,11 +86,51 @@ export default function HubMemberPanel({
     }
   };
 
+  /**
+   * Fase 20 — pause instead of remove.
+   *
+   * The wording is deliberate: "ditangguhkan" keeps the record and the grants, so
+   * unsuspending brings back exactly the previous reach. A member who thinks
+   * they were removed and who later finds their access restored would have no
+   * way to explain the gap.
+   */
+  const handleStatusChange = async (userId: string, nextStatus: HubMembershipStatus) => {
+    const suspending = nextStatus === 'suspended';
+    setError('');
+    const { isConfirmed } = await Swal.fire({
+      title: suspending ? 'Tangguhkan anggota?' : 'Aktifkan kembali anggota?',
+      html: suspending
+        ? `<p style="color:#1f2937;margin:0 0 8px"><b>${memberName(userId)}</b> langsung kehilangan akses lintas-tenant di hub <b>${hubName}</b>.</p><p style="color:#6b7280;font-size:13px;text-align:left">Record keanggotaan dan aturan akses per-tenantnya disimpan, jadi mengaktifkan kembali mengembalikan akses persis seperti sebelumnya.</p>`
+        : `<p style="color:#1f2937;margin:0">Akses <b>${memberName(userId)}</b> di hub <b>${hubName}</b> dipulihkan sesuai aturan akses yang tersimpan.</p>`,
+      icon: suspending ? 'warning' : 'question',
+      showCancelButton: true,
+      confirmButtonText: suspending ? 'Ya, Tangguhkan' : 'Ya, Aktifkan',
+      cancelButtonText: 'Batal',
+      confirmButtonColor: suspending ? '#dc2626' : '#2176D2',
+      cancelButtonColor: '#6b7280',
+      showLoaderOnConfirm: true,
+      preConfirm: async () => {
+        try {
+          await setMemberStatus.mutateAsync({ hubId, userId, status: nextStatus });
+          return true;
+        } catch (e) {
+          Swal.showValidationMessage(apiErrorMessage(e, 'Gagal mengubah status anggota'));
+          return false;
+        }
+      },
+    });
+    if (!isConfirmed) return;
+    toast({
+      title: suspending ? 'Anggota ditangguhkan' : 'Anggota diaktifkan kembali',
+      icon: suspending ? 'warning' : 'success',
+    });
+  };
+
   const handleRemove = async (userId: string) => {
     setError('');
     const { isConfirmed } = await Swal.fire({
       title: 'Hapus anggota dari hub?',
-      html: `<p style="color:#991b1b;margin:0 0 8px"><b>${memberName(userId)}</b> akan kehilangan akses lintas-tenant di hub <b>${hubName}</b>.</p><p style="color:#6b7280;font-size:13px;text-align:left">Role user di tenant asalnya tidak berubah.</p>`,
+      html: `<p style="color:#991b1b;margin:0 0 8px"><b>${memberName(userId)}</b> akan kehilangan akses lintas-tenant di hub <b>${hubName}</b>.</p><p style="color:#6b7280;font-size:13px;text-align:left">Role user di tenant asalnya tidak berubah. Kalau hanya ingin menahan akses sementara, pakai <b>Tangguhkan</b> — itu bisa dibalik.</p>`,
       icon: 'warning',
       showCancelButton: true,
       confirmButtonText: 'Ya, Hapus',
@@ -166,6 +210,7 @@ export default function HubMemberPanel({
                 <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Anggota</th>
                 <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Tenant Asal</th>
                 <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                 {canManage && (
                   <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Aksi</th>
                 )}
@@ -174,8 +219,13 @@ export default function HubMemberPanel({
             <tbody className="bg-white divide-y divide-gray-100">
               {members.map((m) => {
                 const missingUser = !m.displayName && !m.email;
+                // Absent on rows written before Fase 20; those were all active.
+                const memberStatus: HubMembershipStatus = m.status ?? 'active';
                 return (
-                  <tr key={m.id} className="hover:bg-gray-50">
+                  <tr
+                    key={m.id}
+                    className={memberStatus === 'suspended' ? 'bg-amber-50/40' : 'hover:bg-gray-50'}
+                  >
                     <td className="px-3 py-2 text-sm">
                       <span className="font-medium text-gray-900">{m.displayName ?? m.userId}</span>
                       <span className="block text-xs text-gray-500">{m.email ?? m.userId}</span>
@@ -203,9 +253,31 @@ export default function HubMemberPanel({
                         <Badge tone={ROLE_TONE[m.role]}>{HUB_MEMBER_ROLE_LABELS[m.role]}</Badge>
                       )}
                     </td>
+                    <td className="px-3 py-2 text-sm">
+                      <Badge tone={memberStatus === 'suspended' ? 'amber' : 'green'}>
+                        {HUB_MEMBERSHIP_STATUS_LABELS[memberStatus]}
+                      </Badge>
+                    </td>
                     {canManage && (
                       <td className="px-3 py-2 text-right">
                         <div className="inline-flex items-center gap-2">
+                          <button
+                            onClick={() =>
+                              handleStatusChange(
+                                m.userId,
+                                memberStatus === 'suspended' ? 'active' : 'suspended',
+                              )
+                            }
+                            disabled={isBusy || locked}
+                            className={subtleBtnCls}
+                            title={
+                              memberStatus === 'suspended'
+                                ? 'Pulihkan akses lintas-tenant anggota ini'
+                                : 'Tahan akses lintas-tenant tanpa menghapus keanggotaannya'
+                            }
+                          >
+                            {memberStatus === 'suspended' ? 'Aktifkan' : 'Tangguhkan'}
+                          </button>
                           <button
                             onClick={() => setAccessUserId(m.userId)}
                             disabled={locked}

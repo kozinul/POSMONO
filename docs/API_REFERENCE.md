@@ -1030,6 +1030,9 @@ Hub = grouping non-tenant di atas tenant (`hubId` di Tenant; null = standalone).
 | POST | `/api/hubs/:hubId/tenants/:tenantId` | ✓ | `platform.hubs.manage` (assign) |
 | DELETE | `/api/hubs/:hubId/tenants/:tenantId` | ✓ | `platform.hubs.manage` (unassign) |
 | GET | `/api/hubs/:hubId/tenants` | ✓ | `platform.hubs.manage` |
+| GET | `/api/hubs/:hubId/invitations` | ✓ | `platform.hubs.manage` — **Fase 20** |
+| POST | `/api/hubs/:hubId/invitations` | ✓ | `platform.hubs.manage` — **Fase 20** (201) |
+| DELETE | `/api/hubs/:hubId/invitations/:invitationId` | ✓ | `platform.hubs.manage` — **Fase 20** (cabut) |
 
 **Body** POST/PUT: `{ name, description?, code?, status? }`. Assign tenant = set `tenant.hubId` (via `HubService.assignTenant`).
 
@@ -1187,6 +1190,7 @@ User lintas-tenant (Group Admin). Role: `owner` | `admin` | `manager` | `viewer`
 | GET | `/api/hub-memberships/hub/:hubId/:userId/access` | ✓ | `platform.hubs.manage` — **Fase 17** grant per tenant |
 | PUT | `/api/hub-memberships/hub/:hubId/:userId/access` | ✓ | `platform.hubs.manage` — upsert grant (`tenantId` wajib) |
 | DELETE | `/api/hub-memberships/hub/:hubId/:userId/access/:tenantId` | ✓ | `platform.hubs.manage` — **menangguhkan** (status `suspended`), bukan hapus |
+| PUT | `/api/hub-memberships/:hubId/:userId/status` | ✓ | `platform.hubs.manage` — **Fase 20** `{ status }` |
 
 **Body** POST: `{ hubId, userId, role }`; PUT: `{ role }`. Errors: 400 invalid role, 404 hub/user/membership tidak ada, 409 duplikat.
 
@@ -1205,9 +1209,62 @@ Response `GET /access`:
 { items[{ id, hubId, userId, tenantId, tenantRole, outletIds[], status, allOutlets, tenantRoleLabel, createdAt, updatedAt }] }
 ```
 
-**Kenapa `DELETE` → `suspended`, bukan hard delete:** kalau baris grant terakhir dihapus, user kembali ke **mode fallback** (semua tenant dalam hub dengan `HUB_MEMBER_ROLE_PERMS`). Di mode fallback anggota ber-role `owner` otomatis menjadi **Owner penuh di tiap tenant hub** — persislubang otorisasi yang fase ini tutup. Baris `suspended` adalah *tombstone* yang menjaga user tetap dalam mode grant dengan akses **nol**.
+**Kenapa `DELETE` → `suspended`, bukan hard delete:** kalau baris grant terakhir dihapus, user kembali ke **mode fallback** (semua tenant dalam hub dengan `HUB_MEMBER_ROLE_PERMS`). Di mode fallback anggota ber-role `owner` otomatis menjadi **Owner penuh di tiap tenant hub** — persis lubang otorisasi yang fase ini tutup. Baris `suspended` adalah *tombstone* yang menjaga user tetap dalam mode grant dengan akses **nol**.
 
 Catatan lain: menambah anggota baru langsung di-*seed* grant `viewer` ke semua tenant aktif hub; menghapus anggota me-*suspend* seluruh grant-nya; menambah ulang mengaktifkan kembali grant yang ada. Lihat `docs/HUB_ARCHITECTURE.md` § "Keputusan runtime Fase 17".
+
+### Status anggota — `PUT /:hubId/:userId/status` (Fase 20)
+
+**Body**: `{ "status": "active" | "suspended" }` — **wajib eksplisit**, tidak ada toggle. Mengirim status yang sudah aktif (menghapus yang aktif/suspended) → `400`.
+
+| Efek | Detail |
+| --- | --- |
+| `suspended` | `switch-tenant` **403**, tenant/hub hilang dari `/api/hub-context/me`, anggota **tetap tampil** di `GET /hub-memberships/hub/:hubId` dengan `status: 'suspended'` |
+| `active` | akses dipulihkan persis seperti sebelum ditangguhkan |
+
+**Kenapa bukan `DELETE`:** menghapus baris membership mengembalikan user ke fallback nol-grant (ADR D3) → akses `owner`-like di seluruh tenant hub. Suspend mempertahankan baris sebagai *tombstone* dan **grant dibiarkan aktif** dengan sengaja, sehingga reaktivasi memulihkan matriks yang sama tanpa jalur tulis kedua. Konsekuensinya, `POST /hub-memberships` untuk baris yang sedang `suspended` **mengaktifkan kembali** (role dari body), bukan `409` — jalur kembali yang wajar adalah "tambah orang ini".
+
+Audit: `MEMBER_SUSPENDED`, `MEMBER_REACTIVATED`.
+
+---
+
+## Undangan Hub (`/api/hub-invitations`) — Fase 20
+
+Setiap undangan punya router sendiri: administrasi di bawah `/api/hubs/:hubId/invitations` (`platform.hubs.manage`), penredepsi di sini (`authenticate` biasa — penerima undangan adalah user tenant, bukan admin platform). Keduanya sengaja tidak berbagi file route.
+
+**Router invitee**
+
+| Method | Path | Auth | Permission |
+|--------|------|------|------------|
+| GET | `/api/hub-invitations/:token` | ✓ | — (preview; email akun **harus** sama dengan email undangan) |
+| POST | `/api/hub-invitations/:token/accept` | ✓ | — |
+
+Router admin-nya sudah terdaftar di tabel [Hubs](#hubs-apihubs).
+
+**Body** create: `{ email, role, expiresInHours? }`. `expiresInHours` di-clamp ke **1 jam … 30 hari**, default 7 hari. `email` dinormalisasi (trim, `<>` dibuang, lowercase) sebelum pengecekan duplikat.
+
+Response create (**201**):
+```
+{ invitation: { id, hubId, email, role, roleLabel, status, isExpired, acceptedBy, acceptedAt, revokedAt, expiresAt, invitedBy, createdAt, updatedAt },
+  token: "<mentah, hanya dikembalikan SEKALI>" }
+```
+
+Response `GET /api/hub-invitations/:token`:
+```
+{ hubId, hubName, email, role, roleLabel, status, expiresAt, currentUserEmail, emailMatches, alreadyMember }
+```
+
+Response `POST …/accept`: `{ hubId, hubName, created, membership }` — `membership` = baris membership hasil (dari `addMembership`, atau baris yang sudah ada bila `created: false`).
+
+**Keamanan token**
+- Server menyimpan **SHA-256** token; token mentah tidak pernah disimpan dan **tidak bisa diambil ulang** — hanya ada di respons create.
+- `tokenHash` tidak pernah muncul di respons list/preview/accept, dan **tidak ikut ke audit log** (`after` disanitasi).
+- Body `accept` **diabaikan sepenuhnya**: `hubId`, `email`, dan `role` selalu berasal dari baris undangan.
+- Email akun yang masuk harus cocok dengan email undangan, kalau tidak **403**.
+
+**Status**: `pending` → `accepted` (saat diterima) · `expired` (lewat `expiresAt`, di-*stamp* saat dibaca) · `revoked` (dicabut admin). Hanya `pending` bisa dicabut, dan hanya satu undangan terbuka per `(hubId, email)` — ditegakkan index unik parsial di Mongo, bukan hanya pengecekan service.
+
+Errors: 400 (role tidak dikenal, undangan sudah `accepted`/`revoked`, kedaluwarsa, hub terarsip), 401 (tanpa login), 403 (email tidak cocok / RBAC), 404 (token atau undangan tidak ada, email tak valid), 409 (undangan terbuka sudah ada / sudah jadi anggota).
 
 ---
 

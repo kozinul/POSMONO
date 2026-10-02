@@ -5,6 +5,7 @@ import AssignTenantModal from './AssignTenantModal';
 import AddMemberModal from './AddMemberModal';
 import CreateHubModal from './CreateHubModal';
 import HubMemberPanel from './HubMemberPanel';
+import HubInvitationPanel from './HubInvitationPanel';
 import HubProfileCard from './HubProfileCard';
 import HubTenantPanel from './HubTenantPanel';
 import HubOverviewPanel from './HubOverviewPanel';
@@ -16,7 +17,7 @@ import {
   primaryBtnCls,
 } from './platformUi';
 
-type HubSubTab = 'profil' | 'tenant' | 'anggota' | 'overview';
+type HubSubTab = 'profil' | 'tenant' | 'anggota' | 'undangan' | 'overview';
 
 // `overview` is a read model of tenant data, so it needs its own permission;
 // without `platform.reports.read` the tab is hidden rather than shown empty.
@@ -24,6 +25,9 @@ const SUB_TABS: { id: HubSubTab; label: string; needsReports?: boolean }[] = [
   { id: 'profil', label: 'Profil' },
   { id: 'tenant', label: 'Tenant' },
   { id: 'anggota', label: 'Anggota' },
+  // Fase 20: reachable without `platform.reports.read` (unlike `overview`),
+  // because issuing and revoking is administration, not reporting.
+  { id: 'undangan', label: 'Undangan' },
   { id: 'overview', label: 'Overview', needsReports: true },
 ];
 
@@ -194,6 +198,16 @@ export default function HubsSection({
                 canManage={canManage}
                 onDeleted={() => onSelectHub(null)}
                 onViewConsolidated={onViewConsolidated}
+              />
+            )}
+
+            {subTab === 'undangan' && (
+              <HubInvitationPanel
+                hubId={hubDetail.id}
+                hubName={hubDetail.name}
+                hubStatus={hubDetail.status}
+                canManage={canManage}
+                onViewAudit={onViewAudit}
               />
             )}
 

@@ -25,6 +25,14 @@ export interface HubMember {
   hubId: string;
   userId: string;
   role: HubMemberRole;
+  /**
+   * Fase 20: a suspended member is still listed — the row is a tombstone that
+   * keeps a removed user out of the ADR D3 zero-grant fallback, and it is what
+   * makes reactivation possible. Optional because the backend only started
+   * sending it in Fase 20.
+   */
+  status?: HubMembershipStatus;
+  suspendedAt?: string | null;
   displayName: string | null;
   email: string | null;
   userTenantId: string | null;
@@ -32,6 +40,13 @@ export interface HubMember {
   createdAt: string;
   updatedAt: string;
 }
+
+export type HubMembershipStatus = 'active' | 'suspended';
+
+export const HUB_MEMBERSHIP_STATUS_LABELS: Record<HubMembershipStatus, string> = {
+  active: 'Aktif',
+  suspended: 'Ditangguhkan',
+};
 
 export interface AddHubMembershipInput {
   hubId: string;
@@ -192,6 +207,31 @@ export function useRemoveHubMembership() {
       api.delete(`/hub-memberships/${input.hubId}/${input.userId}`),
     onSuccess: (_data, variables) => {
       invalidateHubMembers(queryClient, variables.hubId);
+    },
+  });
+}
+
+/**
+ * Fase 20 — pause a member without deleting the record.
+ *
+ * Separate from `useRemoveHubMembership` on purpose: the two look like the same
+ * gesture in a table row, but only this one leaves the grants in place so
+ * unsuspending restores the exact previous reach. Removing is destructive and
+ * irreversible in a way that suspending is not.
+ *
+ * The status is always sent explicitly — the server has no partial "toggle"
+ * semantics, and guessing the next state from a possibly stale list is how a
+ * double-click turns an unsuspend into a suspend.
+ */
+export function useSetHubMembershipStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { hubId: string; userId: string; status: HubMembershipStatus }) =>
+      api.put(`/hub-memberships/${input.hubId}/${input.userId}/status`, { status: input.status }),
+    onSuccess: (_data, variables) => {
+      invalidateHubMembers(queryClient, variables.hubId);
+      queryClient.invalidateQueries({ queryKey: ['hub-context'] });
+      queryClient.invalidateQueries({ queryKey: ['accessible-tenants'] });
     },
   });
 }

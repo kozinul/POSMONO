@@ -33,6 +33,10 @@ const DatabasePage = lazy(() => import('../core/database/pages/DatabasePage'));
 const RefundPage = lazy(() => import('../core/refunds/pages/RefundPage'));
 const ModifierListPage = lazy(() => import('../core/modifiers/pages/ModifierListPage'));
 const TerminalCenterPage = lazy(() => import('../core/platform/pages/TerminalCenterPage'));
+// Hub V2 Fase 20 — an ordinary tenant user redeeming an invitation. Inside
+// ProtectedRoute (the server checks the signed-in address) but outside
+// DashboardLayout: a brand-new hub member has no menu entries worth showing.
+const HubInvitationPage = lazy(() => import('../core/hub/pages/HubInvitationPage'));
 const TenantDetailPage = lazy(() => import('../core/platform/pages/TenantDetailPage'));
 
 const Loading = () => (
@@ -77,6 +81,9 @@ export function AppRouter() {
               <Route path="/templates/:id/designer" element={<DesignerPage />} />
               <Route path="/database" element={<DatabasePage />} />
             </Route>
+            {/* Hub V2 Fase 20 — guarded like any tenant page, but without the
+                dashboard chrome: see the lazy import above. */}
+            <Route path="/hub-invitations/:token" element={<HubInvitationPage />} />
           </Route>
           <Route element={<PlatformRoute />}>
             <Route element={<TerminalLayout />}>

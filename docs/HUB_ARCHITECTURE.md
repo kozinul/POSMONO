@@ -289,7 +289,7 @@ Frontend Terminal Center sekarang punya tab **Hub & Anggota** yang utuh: buat/ed
 
 > Keputusan arsitektur yang mengunci fase-fase ini: **[`HUB_V2_DECISIONS.md`](HUB_V2_DECISIONS.md)** (D1–D4 + opsi yang ditolak).
 > Rencana frontend: **[`HUB_V2_FRONTEND_PLAN.md`](HUB_V2_FRONTEND_PLAN.md)**.
-> Status: **Fase 16 & 17 selesai 2026-09-29**; **Fase 18 selesai 2026-09-30**; **Fase 19 selesai 2026-10-01** (gate debt pass T0–T9 terpenuhi). Fase 20 masih rencana.
+> Status: **Fase 16 & 17 selesai 2026-09-29**; **Fase 18 selesai 2026-09-30**; **Fase 19 selesai 2026-10-01**; **Fase 20 selesai 2026-10-02** (gate debt pass T0–T9 terpenuhi). Fase 16–20 beres.
 > Fase 1–15 tetap utuh; Fase 16 tidak mengubah perilaku apa pun.
 
 ### Konteks (recon 2026-09-28)
@@ -407,12 +407,39 @@ subscription:[ { tenantId, tenantName, planName, status, daysRemaining } ]
 - `counts.members` masih lewat `hubMembershipService.listMembers()` (N+1 `findById` user per anggota). Batch `countByHub` dibutuhkan; endpoint ini sudah jadi tempatnya.
 - Overview read-only: tidak ada export/scheduled report (di luar scope, terkunci di `HUB_V2_DECISIONS.md`).
 
-### Fase 20 — Hub Invitation & suspend member
-- [ ] Domain `HubInvitation { id, hubId, email, role, tokenHash, expiresAt, invitedBy, status: pending|accepted|expired|revoked }` + repo/schema/service.
-- [ ] `HubMembership.status: 'active'|'suspended'` (suspend ≠ hapus; membership yang disuspend tidak muncul di `findAccessibleTenants`).
-- [ ] API platform: `POST/GET /api/hubs/:hubId/invitations`, `DELETE /api/hubs/:hubId/invitations/:id`; accept: `POST /api/hub-invitations/:token/accept` (`authenticate`).
-- [ ] Validasi: email format, duplikat `(hubId, email, pending)` ditolak, token di-hash (tidak disimpan plaintext), expiry dicek saat accept.
-- [ ] Frontend: `HubInvitationPanel` (daftar pending + kirim) di tab Anggota; halaman accept `/hub-invitations/accept` (layout minimal, **bukan** `TerminalLayout`/`PlatformRoute`).
+### Fase 20 — Hub Invitation & suspend member ✅ (2026-10-02)
+
+**Domain & persistence**
+- `HubInvitation { id, hubId, email, role, tokenHash, expiresAt, invitedBy, status: pending|accepted|expired|revoked, acceptedBy, acceptedAt, revokedAt }` (`core/hub/domain/`), `invitationToken.ts` (32 byte `base64url` + SHA-256), repo/schema/Mongo adapter, TTL default 7 hari (clamp 1 jam … 30 hari). Index unik parsial `{hubId, email}` untuk `status:'pending'` — inilah yang membuat "satu undangan terbuka per alamat" ditegakkan di database, bukan hanya di service.
+- `HubMembership.status: 'active'|'suspended'` + `suspendedAt`, `suspend()`, `reactivate()`, `isActive()` **absent-tolerant** (dokumen pre-Fase-20 tidak punya field ini dan semuanya aktif secara definisi).
+
+**API**
+| Endpoint | Guard | Guna |
+| --- | --- | --- |
+| `GET /api/hubs/:hubId/invitations` | `platform.hubs.manage` | daftar undangan + status efektif |
+| `POST /api/hubs/:hubId/invitations` | `platform.hubs.manage` | buat undangan, **201** + token mentah sekali |
+| `DELETE /api/hubs/:hubId/invitations/:invitationId` | `platform.hubs.manage` | cabut (hanya yang masih `pending`) |
+| `GET /api/hub-invitations/:token` | `authenticate` | preview untuk penerima |
+| `POST /api/hub-invitations/:token/accept` | `authenticate` | terima undangan |
+| `PUT /api/hub-memberships/:hubId/:userId/status` | `platform.hubs.manage` | `{ "status": "active" \| "suspended" }` |
+
+Audit: `INVITATION_SENT`, `INVITATION_REVOKED`, `INVITATION_ACCEPTED`, `MEMBER_SUSPENDED`, `MEMBER_REACTIVATED`.
+
+**Frontend**: sub-tab **Undangan** di Terminal Center (`HubInvitationPanel.tsx`), badge + tombol **Tangguhkan/Aktifkan** di `HubMemberPanel.tsx`, halaman terima `/hub-invitations/:token` (`core/hub/pages/HubInvitationPage.tsx`, layout minimal di luar `DashboardLayout`), hook `useHubInvitations.ts`, `useSetHubMembershipStatus()`.
+
+**Lima keputusan yang dibayar mahal di Fase 20**
+1. **Token mentah hanya sekali, dan tidak masuk audit.** Server menyimpan SHA-256; respons create mengembalikan `token` mentah, respons list/preview tidak pernah memuat `tokenHash` (hash di respons API satu langkah dari jadi kredensial), dan `PlatformAuditService` menerima `after` tanpa token — audit dibaca orang lebih banyak daripada penerima undangan.
+2. **Two audiences, two routers.** Administrasi (`platform.hubs.manage`) dan penredepsi (`authenticate` biasa) **tidak** berbagi file route: menggabungkannya membuat batas permission bergantung pada route mana yang cocok duluan. Rute admin juga tetap di router hub yang sudah dijaga.
+3. **Accept tidak pernah mempercayai body.** `hubId`, `email`, dan `role` semuanya berasal dari baris undangan; body hanya boleh kosong. Caller tidak bisa bergabung ke hub pilihan sendiri atau naik role di luar apa yang ditulis admin.
+4. **Email penerima harus sama dengan akun yang masuk** (403 + preview menjelaskan kedua alamat). Tautan yang bocor saja tidak cukup untuk ditebus; memindahkan grant ke akun lain butuh server yang sama.
+5. **Suspend = tombstone, dan grant sengaja tidak disentuh.** Menghapus baris membership akan mengembalikan user ke fallback ADR D3 (nol grant → akses `owner`-like di seluruh tenant hub), jadi suspend hanya memasang flag yang dibaca setiap jalur akses. Grant dibiarkan aktif agar `reactivate` memulihkan matriks persis seperti sebelumnya, tanpa jalur tulis kedua yang bisa melenceng. Konsekuensi yang harus diterima: **`addMembership` terhadap baris suspended = reaktivasi** (role dari pemanggil), bukan 409 — kalau tidak, satu-satunya jalan kembali adalah endpoint khusus.
+
+**Deviasi dari rencana**: halaman terima ada di `/hub-invitations/:token`, bukan `/hub-invitations/accept` — token adalah kredensialnya, jadi URL per undangan bisa dibagikan/dibookmark dan tidak ada token yang terselip ke POST body. `ProtectedRoute` mendapat pengecualian kasir untuk path ini (kasir sah jadi anggota `viewer` di hub).
+
+**Batas yang diketahui (sengaja ditunda)**
+- Tidak ada mailer: admin menyalin tautan dari panel (ada fallback select-manual bila clipboard ditolak browser).
+- Kolom anggota belum menampilkan ringkasan grant ("N dari M tenant") — endpoint bulk belum ada (sama seperti batas Fase 19).
+- `HubInvitation` tidak punya indeks kedaluwarsa: baris `pending` yang lewat tenggat hanya di-*stamp* `expired` saat dibaca (create/list/preview/accept), jadi satu filter TTL opsional bisa ditambahkan tanpa perubahan kontrak.
 
 ### Di luar scope (terkunci di `HUB_V2_DECISIONS.md`)
 `HubTenantMembership` (multi-hub) · wallet/`WalletLedger`/`HubWallet` · `HubInvoice`/prepaid credit
