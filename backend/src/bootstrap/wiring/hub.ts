@@ -10,6 +10,7 @@ import { HubMembershipController } from '../../core/hub/interfaces/http/controll
 import { MongoHubInvitationRepository } from '../../core/hub/infrastructure/persistence/MongoHubInvitationRepository';
 import { HubInvitationService } from '../../core/hub/application/services/HubInvitationService';
 import { HubInvitationController } from '../../core/hub/interfaces/http/controllers/HubInvitationController';
+import { MyHubController } from '../../core/hub/interfaces/http/controllers/MyHubController';
 import type { WiringContext } from './types';
 
 /**
@@ -114,6 +115,24 @@ export function registerHubWiring({ container, models }: WiringContext): void {
       injector: () => ({
         hubInvitationService: container.resolve('hubInvitationService'),
         auditService: container.resolve('platformAuditService'),
+      }),
+    }),
+    // Hub V2 Fase 21 — member-facing reads. Cross-domain sources are resolved
+    // lazily here (not at registration time) so the hub context stays loadable on
+    // its own; the read model declares only the methods it calls, so passing the
+    // real services satisfies it without a new port interface.
+    myHubController: asClass(MyHubController, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        deps: {
+          accessService: container.resolve('hubMemberAccessService'),
+          hubService: container.resolve('hubService'),
+          membersSource: container.resolve('hubMembershipService'),
+          outletsSource: container.resolve('outletService'),
+          activitySource: container.resolve('shiftService'),
+          salesSource: container.resolve('reportService'),
+          subscriptionSource: container.resolve('subscriptionService'),
+        },
       }),
     }),
   });

@@ -11,8 +11,9 @@ import { SubscriptionService } from '../../../../billing/application/services/Su
 import { UserService } from '../../../../identity/application/services/UserService';
 import { PlatformCleanupService } from '../../../application/services/PlatformCleanupService';
 import { ValidationError, NotFoundError } from '../../../../../@shared/infrastructure/error/AppError';
+import { resolveDateRange } from '../../../../../@shared/interfaces/queryDateRange';
 import { resolvePlatformScope } from '../../../application/helpers/resolvePlatformScope';
-import { buildHubOverview } from '../../../application/read-models/HubOverviewReadModel';
+import { buildHubOverview } from '../../../../hub/application/read-models/HubOverviewReadModel';
 
 interface PlatformControllerDeps {
   hubService: HubService;
@@ -542,7 +543,7 @@ export class PlatformController extends BaseController {
     const { dateFrom, dateTo } = req.query;
     const hub = await this.deps.hubService.getById(req.params.hubId);
 
-    const [from, to] = this.resolveDateRange(dateFrom as string | undefined, dateTo as string | undefined);
+    const [from, to] = resolveDateRange(dateFrom as string | undefined, dateTo as string | undefined);
 
     const scope = await resolvePlatformScope(this.deps.tenantRepository, { hubId: req.params.hubId });
 
@@ -683,7 +684,7 @@ export class PlatformController extends BaseController {
   async overview(req: Request, res: Response): Promise<void> {
     const { dateFrom, dateTo } = req.query;
     const hub = await this.deps.hubService.getById(req.params.hubId);
-    const [from, to] = this.resolveDateRange(dateFrom as string | undefined, dateTo as string | undefined);
+    const [from, to] = resolveDateRange(dateFrom as string | undefined, dateTo as string | undefined);
     const scope = await resolvePlatformScope(this.deps.tenantRepository, { hubId: req.params.hubId });
 
     const readModel = await buildHubOverview({
@@ -709,7 +710,7 @@ export class PlatformController extends BaseController {
       tenantId: tenantId as string | undefined,
     });
 
-    const [from, to] = this.resolveDateRange(dateFrom as string | undefined, dateTo as string | undefined);
+    const [from, to] = resolveDateRange(dateFrom as string | undefined, dateTo as string | undefined);
 
     const summary = await this.deps.shiftService.getPlatformShiftsSummary(scope.tenantIds, {
       dateFrom: from,
@@ -732,7 +733,7 @@ export class PlatformController extends BaseController {
       tenantId: tenantId as string | undefined,
     });
 
-    const [from, to] = this.resolveDateRange(dateFrom as string | undefined, dateTo as string | undefined);
+    const [from, to] = resolveDateRange(dateFrom as string | undefined, dateTo as string | undefined);
 
     const summary = await this.deps.paymentService.getPlatformPaymentsSummary(scope.tenantIds, {
       dateFrom: from,
@@ -923,18 +924,5 @@ export class PlatformController extends BaseController {
     } catch {
       // Audit recording must never break the primary operation.
     }
-  }
-
-  private resolveDateRange(dateFrom?: string, dateTo?: string): [Date, Date] {
-    const from = dateFrom ? new Date(dateFrom) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const to = dateTo ? new Date(dateTo) : new Date();
-
-    if (isNaN(from.getTime()) || isNaN(to.getTime())) {
-      throw new ValidationError('Invalid dateFrom/dateTo — expected YYYY-MM-DD');
-    }
-
-    from.setHours(0, 0, 0, 0);
-    to.setHours(23, 59, 59, 999);
-    return [from, to];
   }
 }

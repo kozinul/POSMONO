@@ -1268,12 +1268,52 @@ Errors: 400 (role tidak dikenal, undangan sudah `accepted`/`revoked`, kedaluwars
 
 ---
 
+## Permukaan Anggota Hub (`/api/hub`) — Fase 21
+
+Read-only. Guard = `authenticate` + `requireHubPermission` (membership dibaca per request), **bukan** `authorize()`: permission `hub.*` sengaja tidak ada di JWT karena token membawa permission **tenant**. Administrasi hub tetap di `/api/hubs` & `/api/hub-memberships` (`platform.hubs.manage`).
+
+| Method | Path | Permission | Guna |
+|--------|------|------------|------|
+| GET | `/api/hub/me/hubs` | — (self-scoped) | hub **operasional** yang dianggotai + role + permission role itu |
+| GET | `/api/hub/:hubId` | `hub.read` | profil hub + `role`/`roleLabel`/`permissions` pemanggil |
+| GET | `/api/hub/:hubId/tenants` | `hub.tenants.read` | tenant dalam hub |
+| GET | `/api/hub/:hubId/members` | `hub.members.read` | anggota hub + status (`active`/`suspended`) |
+| GET | `/api/hub/:hubId/overview` | `hub.reports.read` | read model Fase 19 (query: `dateFrom`, `dateTo`) |
+
+**Matriks role hub** (`HUB_ROLE_PERMISSION_MATRIX`) — `viewer` dipersempit di Fase 21:
+
+| Role | `hub.*` |
+|------|---------|
+| owner | read, members read/manage, tenants read/manage, reports read/export |
+| admin | read, members read/manage, tenants read, reports read/export |
+| manager | read, members read, tenants read, reports read |
+| viewer | read |
+
+**Response shapes**
+```
+GET /api/hub/me/hubs          → { data: [{ id, code, name, description, status, role, roleLabel, permissions[] }] }
+GET /api/hub/:hubId           → { data: { id, code, name, description, status, ownerUserId, isActive, createdAt, updatedAt,
+                                       role, roleLabel, permissions[] } }
+GET /api/hub/:hubId/tenants   → { data: [{ id, name, status, businessType, businessCategory, address, phone, subscriptionExpiresAt }] }
+GET /api/hub/:hubId/members   → { data: [{ id, hubId, userId, role, status, suspendedAt, createdAt, updatedAt,
+                                             displayName, email, userTenantId, userTenantName }] }
+GET /api/hub/:hubId/overview  → { data: { hub, dateFrom, dateTo, generatedAt, counts, operational, sales, subscription } }
+```
+
+**Cakupan ≠ grant**: `/api/hub/*` mencakup **seluruh tenant dalam hub**, bukan hanya tenant hasil grant Fase 17. Grant governs "tenant mana yang boleh saya buka" (`switch-tenant`); ini governs "kelompok bisnis ini bagaimana".
+
+**`config` tidak pernah keluar**: baris tenant diproyeksi field per field — `Tenant.serialize()` memuat `config`, dan `config` memuat kredensial QRIS gateway tenant (`qrisGatewayApiKey`, `qrisGatewayBaseUrl`, `qrisGatewayMerchantId`).
+
+Errors: 400 (`dateFrom`/`dateTo` bukan `YYYY-MM-DD`), 401 (tanpa login), **403** (bukan anggota aktif · membership `suspended` · hub `suspended`/`archived` · role kurang permission · **admin platform tanpa membership — tidak ada bypass**), 404 (hub tidak ada).
+
+---
+
 ## Auth — Session Lintas-Tenant (`/api/auth`)
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | GET | `/api/auth/accessible-tenants` | ✓ | Tenant yang bisa diakses user, sudah ter-**intersect dengan grant Fase 17** `{ tenantId, tenantName, hubId, hubName, role, accessSource, tenantRole, outletIds }` |
-| GET | `/api/hub-context/me` | ✓ | Konteks keanggotaan hub user yang login: `{ hubs[], grants[], tenants[], effectivePermissions[] }` (Fase 17) |
+| GET | `/api/hub-context/me` | ✓ | Konteks keanggotaan hub user yang login: `{ hubs[], grants[], tenants[], effectivePermissions[] }` (Fase 17). `hubs[]` sejak **Fase 21** berasal dari satu pemilik yang sama dengan `GET /api/hub/me/hubs`, jadi kedua endpoint tidak bisa berbeda jawaban |
 | POST | `/api/auth/switch-tenant` | ✓ | `{ tenantId }` → token access+refresh baru scope target; **grant per tenant dibaca lebih dulu**; 403 bila tidak tercakup |
 
 **Resolusi akses lintas-tenant (Fase 17)** — urutan di `AuthService.switchTenant`:

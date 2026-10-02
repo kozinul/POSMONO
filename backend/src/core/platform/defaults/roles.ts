@@ -166,10 +166,19 @@ export const HUB_MEMBER_ROLE_LABELS: Record<string, string> = {
 /**
  * Hub V2 Fase 16 — role matrix for the reserved `hub.*` namespace (ADR D1 tahap 2).
  *
- * Exported so the matrix is data, not a hardcoded chain of ternaries in the
- * service layer, and so it can be seeded once hub-side admin exists. No route
- * enforces these permissions yet: hub administration is still done from the
- * Terminal Center under `platform.hubs.manage`.
+ * Exported so the matrix is data, not a hardcoded chain of ternaries in the service layer. Fase 21
+ * is the first consumer: `GET /api/hub/*` (the member-facing read API) resolves the caller's hub
+ * membership and maps it through this matrix, so **this table is now the authority** for what a
+ * hub role may do. Platform administration is separate and still lives in the Terminal Center
+ * under `platform.hubs.manage`.
+ *
+ * These permissions are absent from every JWT on purpose. A token carries the caller's **tenant**
+ * permissions, so `authorize(HUB_READ)` would deny every member; the member-facing guard reads the
+ * membership row instead (see `HubMemberAccessService.assertHubPermission`).
+ *
+ * Fase 21 narrowed `viewer`: it lost `hub.reports.read`. As a member of a group admin tool, a
+ * viewer used to be able to read every tenant's revenue while being denied even the tenant *list* —
+ * numbers with no names attached. Viewer now sees the hub profile and nothing else.
  */
 export const HUB_ROLE_PERMISSION_MATRIX: Record<string, string[]> = {
   owner: [
@@ -195,10 +204,7 @@ export const HUB_ROLE_PERMISSION_MATRIX: Record<string, string[]> = {
     HUB_TENANTS_READ,
     HUB_REPORTS_READ,
   ],
-  viewer: [
-    HUB_READ,
-    HUB_REPORTS_READ,
-  ],
+  viewer: [HUB_READ],
 };
 
 export const DEFAULT_ROLES: DefaultRoleDef[] = [

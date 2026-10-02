@@ -216,6 +216,16 @@ export class HubMembershipService {
     }));
   }
 
+  /**
+ * Fase 21 — head count without hydrating members.
+ *
+ * `listMembers` resolves one user per row, so a read surface that only needs
+ * "how many members" (the hub overview) would pay that N+1 for a number.
+ */
+async countMembers(hubId: string): Promise<number> {
+  return this.deps.hubMembershipRepository.countByHub(hubId);
+  }
+
   async listByUser(userId: string): Promise<any[]> {
     const memberships = await this.deps.hubMembershipRepository.findByUser(userId);
     return Promise.all(

@@ -290,6 +290,8 @@ Frontend Terminal Center sekarang punya tab **Hub & Anggota** yang utuh: buat/ed
 > Keputusan arsitektur yang mengunci fase-fase ini: **[`HUB_V2_DECISIONS.md`](HUB_V2_DECISIONS.md)** (D1–D4 + opsi yang ditolak).
 > Rencana frontend: **[`HUB_V2_FRONTEND_PLAN.md`](HUB_V2_FRONTEND_PLAN.md)**.
 > Status: **Fase 16 & 17 selesai 2026-09-29**; **Fase 18 selesai 2026-09-30**; **Fase 19 selesai 2026-10-01**; **Fase 20 selesai 2026-10-02** (gate debt pass T0–T9 terpenuhi). Fase 16–20 beres.
+>
+> **Fase 21 (backend, selesai 2026-10-02) + Fase 22 (frontend)** adalah lanjutan D1 tahap 2: permukaan baca milik anggota hub. Rencana UI-nya ada di `HUB_V2_FRONTEND_PLAN.md` (dibekukan); lihat §Fase 21 di bawah.
 > Fase 1–15 tetap utuh; Fase 16 tidak mengubah perilaku apa pun.
 
 ### Konteks (recon 2026-09-28)
@@ -441,10 +443,40 @@ Audit: `INVITATION_SENT`, `INVITATION_REVOKED`, `INVITATION_ACCEPTED`, `MEMBER_S
 - Kolom anggota belum menampilkan ringkasan grant ("N dari M tenant") — endpoint bulk belum ada (sama seperti batas Fase 19).
 - `HubInvitation` tidak punya indeks kedaluwarsa: baris `pending` yang lewat tenggat hanya di-*stamp* `expired` saat dibaca (create/list/preview/accept), jadi satu filter TTL opsional bisa ditambahkan tanpa perubahan kontrak.
 
+### Fase 21 — Member-facing hub API (tahap 2 D1, read-only) ✅ (2026-10-02)
+
+Sebelum fase ini, "being in a hub" hanya berarti **bisa pindah tenant**: satu baris `HubMembership` + grant Fase 17, lalu `/api/hub-context/me`. Tidak ada hub yang bisa dibaca oleh anggotanya sendiri, dan permission `hub.*` (Fase 16) belum ditegakkan. Fase 21 menutup itu dengan permukaan baca yang **read-only** — administrasi hub tetap milik platform/Terminal Center (D1 tahap 1).
+
+**API** (`authenticate` + `requireHubPermission`, bukan `platformAuthenticate`/`authorize`)
+| Endpoint | Permission | Guna |
+| --- | --- | --- |
+| `GET /api/hub/me/hubs` | — (self-scoped) | hub aktif yang dianggotai + role + permission role itu |
+| `GET /api/hub/:hubId` | `hub.read` | profil hub (+ role pemanggil) |
+| `GET /api/hub/:hubId/tenants` | `hub.tenants.read` | tenant dalam hub, **tanpa `config`** |
+| `GET /api/hub/:hubId/members` | `hub.members.read` | anggota + status |
+| `GET /api/hub/:hubId/overview` | `hub.reports.read` | read model Fase 19 yang sama |
+
+**Kenapa guard baru (`requireHubPermission`), bukan `authorize()`**: permission `hub.*` sengaja tidak ada di JWT — token membawa permission **tenant**. Kalau `authorize(HUB_READ)` dipakai, setiap anggota mendapat 403 apa pun role-nya; kalau `hub.*` ditambahkan ke token, lapisan hub ikut menumpang di session tenant._Otoritasnya membership, dibaca per request dari baris membership.
+
+**Lima keputusan yang dibayar mahal di Fase 21**
+1. **Matriks `viewer` dipersempit.** `viewer` memegang `hub.reports.read` sejak Fase 16 — artinya anggota yang ditolak bahkan untuk melihat *daftar* tenant bisa membaca pendapatan semua tenant yang angkanya tidak bernama. Sekarang `viewer: [HUB_READ]` saja, dan tes `HubPermissionNamespace.test.ts` mengunci subset-ness antar role (`viewer ⊆ manager ⊆ admin ⊆ owner`) supaya matriks tidak bisa lagi tidak monoton.
+2. **Tidak ada bypass untuk platform admin.** `platform.hubs.manage` menjalankan hub dari Terminal Center; `/api/hub/*` adalah permukaan anggota. Admin platform tanpa membership mendapat **403**, bukan melihat segalanya — dibuktikan tes (token platform non-member 403, platform yang *juga* anggota 200).
+3. **404 sebelum 403.** `assertHubPermission` memeriksa keberadaan hub dulu, baru keanggotaan, baru permission, sehingga "hub tidak ada" tidak berubah jadi "kamu tidak berhak" yang menyesatkan.
+4. **Baca hub ≠ grant tenant.** `/api/hub/*` mencakup **seluruh tenant dalam hub**, bukan hanya tenant hasil grant Fase 17. Itu dua pertanyaan berbeda: "tenant mana yang boleh saya buka" (grant, ditegakkan di `switch-tenant`) versus "kelompok bisnis ini bagaimana" (API ini, ditegakkan `hub.tenants.read`). Irisannya akan mengembalikan Fase 17 sebagai bug: anggota tak bisa menyebut nama tenant yang muncul di baris pendapatan hubnya.
+5. **Proyeksi tenant eksplisit, bukan `serialize()`.** `Tenant.serialize()` membawa `config`, dan `config` memuat `qrisGatewayApiKey`/`qrisGatewayBaseUrl`/`qrisGatewayMerchantId` milik tenant lain. `MyHubController.tenantRows` memetakan field per field; tes asserting `rahasia-tenant-alpha` tidak muncul di respons. (Platform `/tenants` masih mengembalikan `serialize()` penuh — itu permukaan platform dan belum disentuh.)
+
+**Utang yang dibayar sambil jalan**: batas Fase 19 "`counts.members` masih N+1" ditutup — `HubMembershipRepository.countByHub()` + `HubMembershipService.countMembers()` + `MemberSource.countMembers?` opsional pada read model (tetap jalan kalau sumber hanya bisa `listMembers`).
+
+**Pemindahan file**: `HubOverviewReadModel.ts` pindah `core/platform/application/read-models/` → `core/hub/application/read-models/` — sejak Fase 21 read model itu punya **dua** pemanggil (Terminal Center dan anggota hub), dan tempat alamatnya adalah domain hub, bukan platform.
+
+**Batas yang diketahui (sengaja ditunda)**
+- Belum ada mutasi dari sisi anggota (ubah role, suspend anggota, grant per tenant, undangan) — semuanya masih `platform.hubs.manage`.
+- Belum ada `switch-hub`: memilih hub terjadi lewat halaman `/hub` (Fase 22), bukan lewat pergantian session.
+- Ringkasan grant per anggota ("N dari M tenant") masih butuh endpoint bulk (sama seperti batas Fase 19/Fase 20).
 ### Di luar scope (terkunci di `HUB_V2_DECISIONS.md`)
 `HubTenantMembership` (multi-hub) · wallet/`WalletLedger`/`HubWallet` · `HubInvoice`/prepaid credit
-(ditunda) · `Hub.settings`/logo/contact · UI admin sisi customer (D1 tahap 2) · scheduled reports &
-export overview.
+(ditunda) · `Hub.settings`/logo/contact · mutasi sisi anggota (Fase 21 sengaja read-only; lihat §Fase 21) · scheduled
+reports & export overview.
 
 ### Urutan & release
 ```

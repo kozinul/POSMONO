@@ -81,7 +81,25 @@ describe('Hub V2 Fase 16 — permission namespace', () => {
     expect(matrix.admin).not.toContain(PERMISSIONS.HUB_TENANTS_MANAGE);
     expect(matrix.manager).not.toContain(PERMISSIONS.HUB_MEMBERS_MANAGE);
     expect(matrix.manager).not.toContain(PERMISSIONS.HUB_REPORTS_EXPORT);
-    expect(matrix.viewer).toEqual([PERMISSIONS.HUB_READ, PERMISSIONS.HUB_REPORTS_READ]);
+    expect(matrix.manager).toContain(PERMISSIONS.HUB_REPORTS_READ);
+  });
+
+  // Fase 21 — viewer was narrowed. It used to hold `hub.reports.read`, which
+  // meant a viewer could read every tenant's revenue while being denied even the
+  // tenant *list* the numbers belonged to. Frozen here so it cannot drift back.
+  it('narrows viewer to the hub profile only (Fase 21)', () => {
+    expect(HUB_ROLE_PERMISSION_MATRIX.viewer).toEqual([PERMISSIONS.HUB_READ]);
+    expect(HUB_ROLE_PERMISSION_MATRIX.viewer).not.toContain(PERMISSIONS.HUB_REPORTS_READ);
+  });
+
+  // Monotonic *within* the levels that share a job: every role must be a subset
+  // of the one above it, or a manager could end up holding something an admin
+  // lacks.
+  it('keeps each hub role a subset of the role above it (Fase 21)', () => {
+    const matrix = HUB_ROLE_PERMISSION_MATRIX;
+    for (const permission of matrix.viewer) expect(matrix.manager).toContain(permission);
+    for (const permission of matrix.manager) expect(matrix.admin).toContain(permission);
+    for (const permission of matrix.admin) expect(matrix.owner).toContain(permission);
   });
 
   it('gives hub manager tenant operations but not user management', () => {

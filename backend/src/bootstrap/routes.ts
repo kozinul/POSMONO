@@ -32,6 +32,7 @@ import { createHubRoutes } from '../core/hub/interfaces/http/routes/hub.routes';
 import { createHubMembershipRoutes } from '../core/hub/interfaces/http/routes/hubmembership.routes';
 import { createHubContextRoutes } from '../core/hub/interfaces/http/routes/hubcontext.routes';
 import { createHubInvitationRoutes } from '../core/hub/interfaces/http/routes/hubinvitation.routes';
+import { createMyHubRoutes } from '../core/hub/interfaces/http/routes/myhub.routes';
 import { createOutletRoutes } from '../core/outlet/interfaces/http/routes/outlet.routes';
 import { createPlatformRoutes } from '../core/platform/interfaces/http/routes/platform.routes';
 import { createPlanRoutes } from '../core/billing/interfaces/http/routes/plan.routes';
@@ -137,6 +138,12 @@ export function registerRoutes(app: Express, container: DIContainer): void {
   app.use('/api/hub-context', createHubContextRoutes(hubMembershipController));
   // Hub V2 Fase 20 — the invitee's own invitation (authenticate, not platform).
   app.use('/api/hub-invitations', createHubInvitationRoutes(hubInvitationController));
+
+  // Hub V2 Fase 21 — the member's own hub surface. `hubMemberAccessService` is
+  // resolved here (not inside the router) so the guard is a real dependency
+  // rather than a container lookup buried in middleware.
+  const myHubController = container.resolve('myHubController');
+  app.use('/api/hub', createMyHubRoutes(myHubController, container.resolve('hubMemberAccessService')));
 
   const outletController = container.resolve('outletController');
   app.use('/api/outlets', createOutletRoutes(outletController));

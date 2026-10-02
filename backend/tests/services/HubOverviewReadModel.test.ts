@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { buildHubOverview, OVERVIEW_STALE_HOURS } from '../../src/core/platform/application/read-models/HubOverviewReadModel';
+import { buildHubOverview, OVERVIEW_STALE_HOURS } from '../../src/core/hub/application/read-models/HubOverviewReadModel';
 
 const hoursAgo = (hours: number) => new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
 
@@ -165,6 +165,29 @@ describe('buildHubOverview (Hub V2 Fase 19)', () => {
     const model = await buildHubOverview({ ...baseInput, membersSource: null });
 
     expect(model.counts.members).toBe(0);
+  });
+
+  // Fase 21 — the N+1 Fase 19 left open. `listMembers` hydrates one user per row,
+  // so a surface that only needs a head count must not call it.
+  it('prefers countMembers over listMembers when the source can count', async () => {
+    const listMembers = vi.fn(async () => [{ id: 'u-1' }, { id: 'u-2' }]);
+    const countMembers = vi.fn(async () => 7);
+    const model = await buildHubOverview({
+      ...baseInput,
+      membersSource: { listMembers, countMembers },
+    });
+
+    expect(model.counts.members).toBe(7);
+    expect(countMembers).toHaveBeenCalledWith(baseInput.hubId);
+    expect(listMembers).not.toHaveBeenCalled();
+  });
+
+  it('falls back to counting the decorated list when countMembers is absent', async () => {
+    const listMembers = vi.fn(async () => [{ id: 'u-1' }]);
+    const model = await buildHubOverview({ ...baseInput, membersSource: { listMembers } });
+
+    expect(model.counts.members).toBe(1);
+    expect(listMembers).toHaveBeenCalledWith(baseInput.hubId);
   });
 
   it('passes the requested range and tenant list to every source', async () => {

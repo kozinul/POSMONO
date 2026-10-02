@@ -685,6 +685,14 @@ describe('HubMemberAccessService', () => {
       mocks.accessRepository.findByUser.mockResolvedValue([grant]);
       mocks.hubRepository.findById.mockResolvedValue(createHub(HUB_ID));
       mocks.tenantRepository.findById.mockResolvedValue(createTenant(TENANT_A, 'Alpha Kopi', HUB_ID));
+      // Fase 21 — `hubs` now comes from `listMyHubs`, which reads the member's own
+      // rows (`findByUser`) instead of inferring hubs from reachable
+      // tenants/grants. The per-hub lookup stays mocked because tenant
+      // resolution (`grantedTenants`) still asks "is this an active member?"
+      // individually.
+      mocks.hubMembershipRepository.findByUser.mockResolvedValue([
+        createMembership(HUB_ID, USER, 'owner'),
+      ]);
       mocks.hubMembershipRepository.findByHubAndUser.mockResolvedValue(
         createMembership(HUB_ID, USER, 'owner'),
       );
@@ -699,6 +707,152 @@ describe('HubMemberAccessService', () => {
       expect(context.tenants).toHaveLength(1);
       // reported sorted + de-duplicated, so a UI diff never flips on order
       expect(context.effectivePermissions).toEqual([...TENANT_ACCESS_ROLE_PERMS.manager].sort());
+    });
+
+    // The pre-Fase 21 implementation derived the hub list from reachable tenants
+    // and grants, so a member of a hub they could not switch into saw no hub at
+    // all — `/hub-context/me` and the hub switcher silently disagreed.
+    it('lists a hub the member belongs to even when no grant or tenant is reachable', async () => {
+      mocks.hubMembershipRepository.findByUser.mockResolvedValue([
+        createMembership(HUB_ID, USER, 'viewer'),
+      ]);
+      mocks.hubRepository.findById.mockResolvedValue(createHub(HUB_ID));
+
+      const context = await service.getContext(USER);
+      expect(context.hubs).toEqual([
+        { id: HUB_ID, code: 'HUB-1', name: 'Hub hub-1', status: 'active', isActive: true },
+      ]);
+      expect(context.tenants).toEqual([]);
+    });
+  });
+
+  describe('listMyHubs (Fase 21)', () => {
+    it('reports role, label and the hub.* namespace of the role', async () => {
+      mocks.hubMembershipRepository.findByUser.mockResolvedValue([
+        createMembership(HUB_ID, USER, 'manager'),
+      ]);
+      mocks.hubRepository.findById.mockResolvedValue(createHub(HUB_ID));
+
+      const rows = await service.listMyHubs(USER);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ id: HUB_ID, code: 'HUB-1', status: 'active', role: 'manager' });
+      expect(rows[0].roleLabel).toBe('Hub Manager');
+      expect(rows[0].permissions).toContain('hub.reports.read');
+      expect(rows[0].permissions).not.toContain('hub.members.manage');
+    });
+
+    it('omits suspended memberships and non-operational hubs', async () => {
+      const suspended = createMembership(HUB_ID, USER, 'owner');
+      suspended.suspend();
+      mocks.hubMembershipRepository.findByUser.mockResolvedValue([
+        suspended,
+        createMembership(OTHER_HUB, USER, 'owner'),
+      ]);
+      mocks.hubRepository.findById.mockImplementation(async (id: string) =>
+        id === HUB_ID ? createHub(HUB_ID) : createHub(OTHER_HUB, 'suspended'),
+      );
+
+      const rows = await service.listMyHubs(USER);
+      expect(rows).toEqual([]);
+    });
+
+    it('skips a hub that was deleted under a live membership', async () => {
+      mocks.hubMembershipRepository.findByUser.mockResolvedValue([
+        createMembership(HUB_ID, USER, 'owner'),
+      ]);
+      mocks.hubRepository.findById.mockImplementation(async () => {
+        throw new Error('hub gone');
+      });
+
+      await expect(service.listMyHubs(USER)).resolves.toEqual([]);
+    });
+
+    it('sorts by name so a multi-hub member sees a stable order', async () => {
+      mocks.hubMembershipRepository.findByUser.mockResolvedValue([
+        createMembership(HUB_ID, USER, 'owner'),
+        createMembership(OTHER_HUB, USER, 'viewer'),
+      ]);
+      mocks.hubRepository.findById.mockImplementation(async (id: string) =>
+        id === HUB_ID
+          ? makeHub({ id, name: 'Zulu Group', code: 'ZULU' })
+          : makeHub({ id, name: 'Alfa Group', code: 'ALFA' }),
+      );
+
+      const rows = await service.listMyHubs(USER);
+      expect(rows.map((r) => r.name)).toEqual(['Alfa Group', 'Zulu Group']);
+    });
+  });
+
+  describe('assertHubPermission (Fase 21)', () => {
+    it('returns the role and permissions of an active member', async () => {
+      mocks.hubRepository.findById.mockResolvedValue(createHub(HUB_ID));
+      mocks.hubMembershipRepository.findByHubAndUser.mockResolvedValue(
+        createMembership(HUB_ID, USER, 'manager'),
+      );
+
+      const access = await service.assertHubPermission(HUB_ID, USER, 'hub.reports.read');
+      expect(access.role).toBe('manager');
+      expect(access.hub.serialize().id).toBe(HUB_ID);
+    });
+
+    it('404s on an unknown hub before asking about membership', async () => {
+      mocks.hubRepository.findById.mockResolvedValue(null);
+      await expect(service.assertHubPermission(HUB_ID, USER, 'hub.read')).rejects.toThrow(NotFoundError);
+      expect(mocks.hubMembershipRepository.findByHubAndUser).not.toHaveBeenCalled();
+    });
+
+    it('403s a non-member', async () => {
+      mocks.hubRepository.findById.mockResolvedValue(createHub(HUB_ID));
+      mocks.hubMembershipRepository.findByHubAndUser.mockResolvedValue(null);
+      await expect(service.assertHubPermission(HUB_ID, USER, 'hub.read')).rejects.toThrow(ForbiddenError);
+    });
+
+    it('403s a suspended member', async () => {
+      mocks.hubRepository.findById.mockResolvedValue(createHub(HUB_ID));
+      const suspended = createMembership(HUB_ID, USER, 'owner');
+      suspended.suspend();
+      mocks.hubMembershipRepository.findByHubAndUser.mockResolvedValue(suspended);
+      await expect(service.assertHubPermission(HUB_ID, USER, 'hub.read')).rejects.toThrow(ForbiddenError);
+    });
+
+    it('403s a member of a suspended or archived hub', async () => {
+      for (const status of ['suspended', 'archived'] as HubStatus[]) {
+        mocks.hubRepository.findById.mockResolvedValue(createHub(HUB_ID, status));
+        mocks.hubMembershipRepository.findByHubAndUser.mockResolvedValue(
+          createMembership(HUB_ID, USER, 'owner'),
+        );
+        await expect(service.assertHubPermission(HUB_ID, USER, 'hub.read')).rejects.toThrow(ForbiddenError);
+      }
+    });
+
+    it('403s and names the missing permission', async () => {
+      mocks.hubRepository.findById.mockResolvedValue(createHub(HUB_ID));
+      mocks.hubMembershipRepository.findByHubAndUser.mockResolvedValue(
+        createMembership(HUB_ID, USER, 'viewer'),
+      );
+      await expect(service.assertHubPermission(HUB_ID, USER, 'hub.reports.read')).rejects.toThrow(
+        /hub\.reports\.read/,
+      );
+    });
+
+    it('requires every listed permission, not just one of them', async () => {
+      mocks.hubRepository.findById.mockResolvedValue(createHub(HUB_ID));
+      mocks.hubMembershipRepository.findByHubAndUser.mockResolvedValue(
+        createMembership(HUB_ID, USER, 'manager'),
+      );
+      // manager reads reports but does not manage members.
+      await expect(
+        service.assertHubPermission(HUB_ID, USER, 'hub.reports.read', 'hub.members.manage'),
+      ).rejects.toThrow(ForbiddenError);
+    });
+
+    it('lets an active member through with no permission required', async () => {
+      mocks.hubRepository.findById.mockResolvedValue(createHub(HUB_ID));
+      mocks.hubMembershipRepository.findByHubAndUser.mockResolvedValue(
+        createMembership(HUB_ID, USER, 'viewer'),
+      );
+      const access = await service.assertHubPermission(HUB_ID, USER);
+      expect(access.permissions).toEqual(['hub.read']);
     });
   });
 });

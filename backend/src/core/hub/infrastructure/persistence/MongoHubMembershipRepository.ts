@@ -81,6 +81,10 @@ export class MongoHubMembershipRepository {
     return docs.map((doc: HubMembershipDoc) => this.toDomain(doc));
   }
 
+  async countByHub(hubId: string): Promise<number> {
+    return this.model.countDocuments({ hubId }).exec();
+  }
+
   async deleteByHubAndUser(hubId: string, userId: string): Promise<boolean> {
     const result = await this.model.deleteOne({ hubId, userId }).exec();
     return result.deletedCount > 0;

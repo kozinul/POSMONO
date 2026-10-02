@@ -78,6 +78,20 @@ customer group owner bisa mengelola hub-nya sendiri.
 - Tahap kedua butuh keputusan UX terpisah: customer hub admin login lewat mana, dan apakah memakai
   tenant switcher atau hub switcher.
 
+**Rekaman tahap 2 (Fase 21, 2026-10-02)** — D1 tidak berubah: **tidak ada mutasi** dari sisi
+anggota. Yang tiba adalah permukaan baca (`GET /api/hub/*`), dan tiga hal yang harus tercatat
+supaya tahap berikutnya tidak mengulang perdebatan yang sama:
+- **Permission `hub.*` ditagih dari membership, bukan dari JWT.** Token membawa permission
+  *tenant*; kalau `hub.*` ikut masuk token, lapisan hub akan menumpang di session tenant. Guard
+  `requireHubPermission` membaca baris membership per request, jadi suspend member berlaku
+  seketika di API — sama seperti di tenant switcher.
+- **Tidak ada bypass platform.** Admin platform tetap mengelola hub dari Terminal Center; di
+  `/api/hub/*` dia adalah anggota biasa, dan tanpa membership mendapat 403. Kalau nanti terminal
+  butuh melihat hub milik klien, jalurnya endpoint platform, bukan membuka bypass di sini.
+- **`viewer` dipersempit.** Fase 16 memberi `viewer` akses `hub.reports.read` — angka pendapatan
+  semua tenant, sementara ia ditolak untuk melihat daftar tenant-nya. Sekarang `viewer` hanya
+  `hub.read`. Matriks harus tetap monoton per level dan diuji begitu.
+
 ## D2 — Satu tenant = satu hub
 
 **Keputusan:** `Tenant.hubId` (nullable) tetap **satu-satunya sumber kebenaran** relasi Hub↔Tenant.
@@ -149,6 +163,7 @@ kalau ada kebutuhan komersial nyata.
 | **18** | Hub identity | `code` unique + `status` enum + `ownerUserId` | — |
 | **19** | Hub Overview (read model) | Sales dari orders per tenant (bukan shift) + kartu ringkas | D4 (tidak ada angka "saldo", hanya subscription rollup) |
 | **20** | Hub Invitation & suspend member | `HubInvitation` + `HubMembership.status` | D1 (undangan dipakai platform dulu) |
+| **21** | Permukaan baca anggota hub (D1 tahap 2, **read-only**) | `GET /api/hub/*` + `requireHubPermission` | D1 (tahap 2 dimulai dari **baca**, bukan tulis) · D2 (satu tenant = satu hub, jadi daftar tenant hub lengkap) |
 
 Front-end plan: [`HUB_V2_FRONTEND_PLAN.md`](HUB_V2_FRONTEND_PLAN.md).
 
@@ -178,6 +193,9 @@ Front-end plan: [`HUB_V2_FRONTEND_PLAN.md`](HUB_V2_FRONTEND_PLAN.md).
 direservasi untuk D1 tahap 2, matriks role hub 4. Catatan & release note di
 [`HUB_ARCHITECTURE.md`](HUB_ARCHITECTURE.md) § Fase 16.
 
-**Fase berikutnya: Fase 17** — `HubMemberTenantAccess` + `switch-tenant` membaca grant, yang
-menutup temuan otorisasi di §"Temuan kritis". WAJIB menyertakan test **DENY**, dan tetap punya
-fallback ke perilaku lama supaya nol anggota existing kehilangan akses (D3).
+**Fase 16–20 selesai** (lihat phase ledger di atas dan §Fase 16–21 `HUB_ARCHITECTURE.md`).
+
+**Fase 21 selesai 2026-10-02** (backend) — D1 tahap 2 dimulai dari **baca**: `GET /api/hub/*`
+read-only, dijaga membership, dengan `viewer` dipersempit ke `hub.read` saja dan `config` tenant
+(proyeksi QRIS) tidak pernah keluar. Fase 22 (frontend) menyusul; mutasi sisi anggota tetap
+menunggu keputusan terpisah.

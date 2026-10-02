@@ -6,11 +6,13 @@ import {
 } from '../../../../@shared/infrastructure/error/AppError';
 import { HubMemberTenantAccess, type HubAccessStatus } from '../../domain/HubMemberTenantAccess';
 import type { HubMemberTenantAccessRepository } from '../../domain/HubMemberTenantAccessRepository';
+import type { Hub, HubStatus } from '../../domain/Hub';
 import { HUB_MEMBER_ROLES, type HubMemberRole } from '../../domain/HubMembership';
 import type { HubMembershipRepository } from '../../domain/HubMembershipRepository';
 import {
   HUB_MEMBER_ROLE_LABELS,
   HUB_MEMBER_ROLE_PERMS,
+  HUB_ROLE_PERMISSION_MATRIX,
   TENANT_ACCESS_ROLES,
   TENANT_ACCESS_ROLE_LABELS,
   TENANT_ACCESS_ROLE_PERMS,
@@ -46,6 +48,26 @@ export interface AccessibleTenantRow {
 }
 
 export type AccessSource = 'grant' | 'fallback';
+
+/** Fase 21 — a hub the signed-in person is an active member of. */
+export interface MyHubRow {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  status: HubStatus;
+  role: HubMemberRole;
+  roleLabel: string;
+  /** The `hub.*` namespace this role may use — enough for the UI to hide a tab. */
+  permissions: string[];
+}
+
+export interface HubAuthorization {
+  /** Resolved once so a guarded handler does not re-read the hub. */
+  hub: Hub;
+  role: HubMemberRole;
+  permissions: string[];
+}
 
 export interface ResolvedTenantSession {
   tenantId: string;
@@ -471,8 +493,12 @@ export class HubMemberAccessService {
    *
    * One lookup, not two: the switcher builds a row per grant and the hub context
    * one per hub, so an extra query here is an N+1 on an already-batched read.
+   *
+   * Public since Fase 21: the member-facing hub API answers "may this person
+   * read this hub?" from the same definition the session switcher uses, so a
+   * suspended member cannot reach the API while still appearing in the switcher.
    */
-  private async activeMembershipRole(hubId: string, userId: string): Promise<HubMemberRole | null> {
+  async activeMembershipRole(hubId: string, userId: string): Promise<HubMemberRole | null> {
     try {
       const membership = await this.deps.hubMembershipRepository.findByHubAndUser(hubId, userId);
       if (!membership || !membership.isActive()) return null;
@@ -496,37 +522,17 @@ export class HubMemberAccessService {
     const grants = await this.deps.accessRepository.findByUser(userId);
     const tenants = await this.findAccessibleTenants(userId);
 
-    const hubIds = Array.from(
-      new Set([
-        ...tenants.map((t) => t.hubId),
-        ...grants.map((g) => g.serialize().hubId),
-      ]),
-    );
-
-    const hubs: any[] = [];
-    for (const hubId of hubIds) {
-      try {
-        const hub = await this.deps.hubRepository.findById(hubId);
-        if (!hub) continue;
-        // Grants survive a suspension (that is how reactivation restores access),
-        // but a hub you cannot enter must not be offered as context — it would
-        // show in the switcher while granting nothing. `grants` still lists them.
-        if (!hub.isOperational()) continue;
-        // Same for a suspended membership (Fase 20): a tombstoned member is not
-        // in the hub, so the hub is not their context.
-        if (!(await this.activeMembershipRole(hubId, userId))) continue;
-        const data = hub.serialize();
-        hubs.push({
-          id: hubId,
-          code: data.code,
-          name: data.name,
-          status: data.status,
-          isActive: true,
-        });
-      } catch {
-        // hub deleted — skip
-      }
-    }
+    // One owner for "which hubs is this person in". Deriving the hub list from
+    // reachable tenants/grants (the pre-Fase 21 shape) hid a hub the member
+    // belongs to but cannot switch into — and made `/hub-context/me` disagree
+    // with `/api/hub/me/hubs`.
+    const hubs = (await this.listMyHubs(userId)).map((hub) => ({
+      id: hub.id,
+      code: hub.code,
+      name: hub.name,
+      status: hub.status,
+      isActive: true,
+    }));
 
     const sessions = await Promise.all(
       tenants.map((t) => this.resolveSessionFor(userId, t.tenantId).catch(() => null)),
@@ -542,6 +548,90 @@ export class HubMemberAccessService {
       tenants,
       effectivePermissions,
     };
+  }
+
+  // ------------------------------------------------- hub-side authorization
+
+  /**
+   * Fase 21 — the hubs the signed-in person is an active member of, with the
+   * `hub.*` permissions their role carries.
+   *
+   * Self-scoped: a userId alone, no hub in the path, so it cannot be steered at
+   * another hub. Suspended members and non-operational hubs are omitted rather
+   * than returned as dead entries (Fase 18/20: a tombstone is not a surface).
+   */
+  async listMyHubs(userId: string): Promise<MyHubRow[]> {
+    const memberships = await this.deps.hubMembershipRepository.findByUser(userId);
+    const rows: MyHubRow[] = [];
+
+    for (const membership of memberships) {
+      if (!membership.isActive()) continue;
+      const { hubId, role } = membership.serialize();
+
+      let hub: Hub | null = null;
+      try {
+        hub = await this.deps.hubRepository.findById(hubId);
+      } catch {
+        // hub deleted — skip
+      }
+      if (!hub || !hub.isOperational()) continue;
+
+      const data = hub.serialize();
+      rows.push({
+        id: hubId,
+        code: data.code,
+        name: data.name,
+        description: data.description ?? null,
+        status: data.status,
+        role,
+        roleLabel: HUB_MEMBER_ROLE_LABELS[role],
+        permissions: this.hubPermissionsForRole(role),
+      });
+    }
+
+    rows.sort((a, b) => a.name.localeCompare(b.name));
+    return rows;
+  }
+
+  /** The `hub.*` namespace granted to a hub role; empty for anything unknown. */
+  hubPermissionsForRole(role: HubMemberRole): string[] {
+    return [...(HUB_ROLE_PERMISSION_MATRIX[role] ?? [])];
+  }
+
+  /**
+   * The gate behind `requireHubPermission`. Throws rather than returning a
+   * boolean so the HTTP layer cannot accidentally treat "denied" as "no rows".
+   *
+   * Order is deliberate and observable to the caller: an unknown hub is 404, a
+   * hub you may not enter is 403, and so is a role that lacks the permission.
+   * Notably **not** bypassed for platform admins — `platform.hubs.manage` runs
+   * the hub from the Terminal Center, and `/api/hub/*` is the member surface, so
+   * a platform admin without a membership gets 403 instead of quietly seeing
+   * everything.
+   */
+  async assertHubPermission(
+    hubId: string,
+    userId: string,
+    ...required: string[]
+  ): Promise<HubAuthorization> {
+    const hub = await this.deps.hubRepository.findById(hubId);
+    if (!hub) throw new NotFoundError('Hub', hubId);
+    if (!hub.isOperational()) {
+      throw new ForbiddenError('Hub sedang ditangguhkan atau diarsipkan — akses anggota dinonaktifkan');
+    }
+
+    const role = await this.activeMembershipRole(hubId, userId);
+    if (!role) {
+      throw new ForbiddenError('Anda bukan anggota aktif hub ini');
+    }
+
+    const permissions = this.hubPermissionsForRole(role);
+    const missing = required.filter((permission) => !permissions.includes(permission));
+    if (missing.length > 0) {
+      throw new ForbiddenError(`Peran hub Anda tidak memiliki izin: ${missing.join(', ')}`);
+    }
+
+    return { hub, role, permissions };
   }
 
   // ----------------------------------------------------------------- guards

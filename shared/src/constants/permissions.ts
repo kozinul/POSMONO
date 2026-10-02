@@ -90,13 +90,16 @@ export const PERMISSIONS = {
   PLATFORM_HUBS_MANAGE: 'platform.hubs.manage',
 
   /**
-   * Hub namespace — **RESERVED** (Hub V2 Fase 16).
+   * Hub namespace (Hub V2 Fase 16, enforced Fase 21).
    *
-   * These permissions are *defined now, enforced later* (ADR D1 tahap 2:
-   * hub-side admin). They are not yet granted to anyone and no route checks
-   * them, so they must not be treated as dead constants: the role matrix that
-   * consumes them lives in `backend/src/core/platform/defaults/roles.ts`
-   * (`HUB_ROLE_PERMISSION_MATRIX`) and they are wired when hub-side admin ships.
+   * Enforced by the member-facing hub API (`GET /api/hub/*`) since Fase 21 —
+   * `requireHubPermission` resolves the caller's membership for that hub and maps
+   * the role through `HUB_ROLE_PERMISSION_MATRIX`. Platform administration of hubs
+   * stays under `platform.hubs.manage` in the Terminal Center.
+   *
+   * Note they are absent from every JWT on purpose: a token carries the caller's
+   * **tenant** permissions, so the hub guard reads the membership row rather than
+   * `req.userPermissions`.
    *
    * Note the namespace is intentionally NOT `hub:manage`: that string used to
    * be the *platform* permission and was renamed to `platform.hubs.manage` in

@@ -1,10 +1,14 @@
 /**
- * Hub V2 Fase 19 — the hub overview read model.
+ * The hub overview read model (Hub V2 Fase 19; reused by Fase 21).
  *
- * Kept out of `PlatformController` on purpose: this is a composition rule
- * (which outlets appear, when an outlet counts as stale, how zero-sales tenants
- * are presented), not HTTP plumbing, and it needs to be readable — and
- * testable — without an Express request.
+ * Kept out of any controller on purpose: this is a composition rule (which
+ * outlets appear, when an outlet counts as stale, how zero-sales tenants are
+ * presented), not HTTP plumbing, and it needs to be readable — and testable —
+ * without an Express request.
+ *
+ * Lives under the hub context, not the platform one, because Fase 21 serves the
+ * same projection to hub members through `/api/hub/:hubId/overview`; the Terminal
+ * Center just became its second caller.
  *
  * The hub owns no business data. Everything here is a projection over
  * `orders` / `shifts` / `outlets` / `subscriptions` already scoped to the hub's
@@ -59,46 +63,53 @@ export interface HubOverviewReadModel {
  * caller can pass the real services, a wiring-time subset, or a test double
  * without the module importing four concrete classes.
  */
-interface OutletSource {
+export interface OutletSource {
   listAllForPlatform(tenantIds: string[], activeOnly?: boolean): Promise<Array<{ serialize(): OutletDocument }>>;
 }
-interface OutletDocument {
+export interface OutletDocument {
   id: string;
   name: string;
   tenantId: string;
   isActive: boolean;
 }
-interface OutletActivityRow {
+export interface OutletActivityRow {
   tenantId: string;
   outletId: string | null;
   openShifts: number;
   hasOpenShift: boolean;
   lastShiftAt: string | null;
 }
-interface ActivitySource {
+export interface ActivitySource {
   getPlatformOutletActivity(tenantIds: string[]): Promise<{ generatedAt: string; outlets: OutletActivityRow[] }>;
 }
-interface SalesTotals {
+export interface SalesTotals {
   totalOrders: number;
   totalRevenue: number;
 }
-interface SalesSource {
+export interface SalesSource {
   getPlatformSalesByTenant(
     tenantIds: string[],
     options?: { dateFrom?: Date; dateTo?: Date },
   ): Promise<{ totals: SalesTotals; byTenant: Array<{ tenantId: string; totalOrders: number; totalRevenue: number }> }>;
 }
-interface SubscriptionRow {
+export interface SubscriptionRow {
   tenantId: string;
   planName: string | null;
   status: string;
   daysRemaining: number;
 }
-interface SubscriptionSource {
+export interface SubscriptionSource {
   getTenantSubscriptions(tenantIds: string[]): Promise<SubscriptionRow[]>;
 }
-interface MemberSource {
+export interface MemberSource {
   listMembers(hubId: string): Promise<unknown[]>;
+  /**
+   * Fase 21 — bulk head count. Optional so the read model still accepts a
+   * caller that only decorates members (the platform wiring used to pass exactly
+   * that); when present it replaces `listMembers`, which is one `findById` per
+   * member and the N+1 Fase 19 left open.
+   */
+  countMembers?(hubId: string): Promise<number>;
 }
 
 export interface BuildHubOverviewInput {
@@ -122,12 +133,16 @@ function outletKey(tenantId: string, outletId: string | null): string {
 export async function buildHubOverview(input: BuildHubOverviewInput): Promise<HubOverviewReadModel> {
   const { tenantIds, tenantNameById } = input;
 
-  const [outlets, activity, sales, subscriptions, members] = await Promise.all([
+  const [outlets, activity, sales, subscriptions, memberCount] = await Promise.all([
     input.outletsSource.listAllForPlatform(tenantIds),
     input.activitySource.getPlatformOutletActivity(tenantIds),
     input.salesSource ? input.salesSource.getPlatformSalesByTenant(tenantIds, { dateFrom: input.dateFrom, dateTo: input.dateTo }) : Promise.resolve(null),
     input.subscriptionSource ? input.subscriptionSource.getTenantSubscriptions(tenantIds) : Promise.resolve([]),
-    input.membersSource ? input.membersSource.listMembers(input.hubId) : Promise.resolve([]),
+    input.membersSource
+      ? input.membersSource.countMembers
+        ? input.membersSource.countMembers(input.hubId)
+        : input.membersSource.listMembers(input.hubId).then((rows) => rows.length)
+      : Promise.resolve(0),
   ]);
 
   const outletDocuments = outlets.map((o) => o.serialize());
@@ -218,7 +233,7 @@ export async function buildHubOverview(input: BuildHubOverviewInput): Promise<Hu
       tenants: tenantIds.length,
       outlets: outletDocuments.length,
       activeOutlets: activeOutletCount,
-      members: members.length,
+      members: memberCount,
     },
     operational: {
       staleHours: OVERVIEW_STALE_HOURS,
