@@ -37,6 +37,7 @@ const TerminalCenterPage = lazy(() => import('../core/platform/pages/TerminalCen
 // ProtectedRoute (the server checks the signed-in address) but outside
 // DashboardLayout: a brand-new hub member has no menu entries worth showing.
 const HubInvitationPage = lazy(() => import('../core/hub/pages/HubInvitationPage'));
+const HubPage = lazy(() => import('../core/hub/pages/HubPage'));
 const TenantDetailPage = lazy(() => import('../core/platform/pages/TenantDetailPage'));
 
 const Loading = () => (
@@ -80,6 +81,7 @@ export function AppRouter() {
               <Route path="/templates" element={<TemplateListPage />} />
               <Route path="/templates/:id/designer" element={<DesignerPage />} />
               <Route path="/database" element={<DatabasePage />} />
+              <Route path="/hub" element={<HubPage />} />
             </Route>
             {/* Hub V2 Fase 20 — guarded like any tenant page, but without the
                 dashboard chrome: see the lazy import above. */}

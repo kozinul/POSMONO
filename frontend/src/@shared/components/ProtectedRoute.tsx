@@ -9,7 +9,7 @@ const CASHIER_ONLY_PATHS = ['/pos'];
  * a perfectly valid `viewer` in a hub, so bouncing them to /pos here would make
  * their invitation unredeemable.
  */
-const CASHIER_ALLOWED_PREFIXES = ['/hub-invitations'];
+const CASHIER_ALLOWED_PREFIXES = ['/hub-invitations', '/hub'];
 
 export function ProtectedRoute() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
