@@ -4,7 +4,7 @@ import { ValidationError } from '../../../../../@shared/infrastructure/error/App
 import { PlatformAuditService } from '../../../../../core/platform/audit/application/services/PlatformAuditService';
 import { HubMembershipService } from '../../../application/services/HubMembershipService';
 import { HubMemberAccessService } from '../../../application/services/HubMemberAccessService';
-import { HUB_MEMBER_ROLES, HubMemberRole } from '../../../domain/HubMembership';
+import { HUB_MEMBERSHIP_STATUSES, HUB_MEMBER_ROLES, HubMemberRole } from '../../../domain/HubMembership';
 import { HUB_ACCESS_STATUSES, type HubAccessStatus } from '../../../domain/HubMemberTenantAccess';
 import { TENANT_ACCESS_ROLES, type TenantAccessRole } from '../../../../platform/defaults/roles';
 
@@ -65,6 +65,48 @@ export class HubMembershipController extends BaseController {
       after: { hubId: req.params.hubId, userId: req.params.userId },
     });
     this.noContent(res);
+  }
+
+  /**
+   * Hub V2 Fase 20 — pause or restore a member.
+   *
+   * One endpoint for both states (like the access grant's `status` field) so the
+   * "suspend" and "unsuspend" affordances cannot drift apart. `status` is
+   * **required**: defaulting it would make a malformed body silently suspend or
+   * revive somebody.
+   */
+  async setStatus(req: Request, res: Response): Promise<void> {
+    const { hubId, userId } = req.params;
+    const { status } = req.body ?? {};
+    if (!HUB_MEMBERSHIP_STATUSES.includes(status)) {
+      throw new ValidationError(
+        `status is required. Expected one of ${HUB_MEMBERSHIP_STATUSES.join(', ')}`,
+      );
+    }
+
+    const isSuspend = status === 'suspended';
+    const changed = isSuspend
+      ? await this.hubMembershipService.suspendMembership(hubId, userId)
+      : await this.hubMembershipService.reactivateMembership(hubId, userId);
+
+    if (!changed) {
+      throw new ValidationError(
+        isSuspend
+          ? 'Anggota tidak ditemukan atau sudah ditangguhkan'
+          : 'Anggota tidak ditemukan atau sudah aktif',
+      );
+    }
+
+    await this.audit(req, {
+      action: isSuspend ? 'MEMBER_SUSPENDED' : 'MEMBER_REACTIVATED',
+      description: isSuspend
+        ? 'Anggota ditangguhkan (akses dicabut tanpa menghapus keanggotaan)'
+        : 'Anggota diaktifkan kembali',
+      after: { hubId, userId, status },
+    });
+
+    const membership = await this.hubMembershipService.findMembership(hubId, userId);
+    this.ok(res, membership?.serialize() ?? { hubId, userId, status });
   }
 
   async listMembers(req: Request, res: Response): Promise<void> {

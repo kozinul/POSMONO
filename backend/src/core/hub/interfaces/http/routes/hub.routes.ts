@@ -3,10 +3,15 @@ import { PERMISSIONS } from '@posmono/shared';
 import { asyncHandler } from '../../../../../@shared/interfaces/middleware/asyncHandler';
 import { platformAuthenticate, platformAuthorize } from '../../../../../core/platform/interfaces/http/middleware/platformAuth';
 import { HubController } from '../controllers/HubController';
+import { HubInvitationController } from '../controllers/HubInvitationController';
 
 const { PLATFORM_HUBS_MANAGE } = PERMISSIONS;
 
-export function createHubRoutes(hubController: HubController): Router {
+export function createHubRoutes(
+  hubController: HubController,
+  /** Fase 20 — optional so a partially deployed instance keeps serving hubs. */
+  hubInvitationController?: HubInvitationController,
+): Router {
   const router = Router();
 
   router.get('/', platformAuthenticate, platformAuthorize(PLATFORM_HUBS_MANAGE), asyncHandler(hubController.list.bind(hubController)));
@@ -17,6 +22,15 @@ export function createHubRoutes(hubController: HubController): Router {
   router.post('/:hubId/tenants/:tenantId', platformAuthenticate, platformAuthorize(PLATFORM_HUBS_MANAGE), asyncHandler(hubController.assignTenant.bind(hubController)));
   router.delete('/:hubId/tenants/:tenantId', platformAuthenticate, platformAuthorize(PLATFORM_HUBS_MANAGE), asyncHandler(hubController.unassignTenant.bind(hubController)));
   router.get('/:hubId/tenants', platformAuthenticate, platformAuthorize(PLATFORM_HUBS_MANAGE), asyncHandler(hubController.listTenants.bind(hubController)));
+
+  // Fase 20 — invitations. The invitee's side lives in its own router
+  // (`/api/hub-invitations/:token`) because that one is `authenticate`-only.
+  if (hubInvitationController) {
+    const guard = [platformAuthenticate, platformAuthorize(PLATFORM_HUBS_MANAGE)] as const;
+    router.get('/:hubId/invitations', ...guard, asyncHandler(hubInvitationController.list.bind(hubInvitationController)));
+    router.post('/:hubId/invitations', ...guard, asyncHandler(hubInvitationController.create.bind(hubInvitationController)));
+    router.delete('/:hubId/invitations/:invitationId', ...guard, asyncHandler(hubInvitationController.revoke.bind(hubInvitationController)));
+  }
 
   return router;
 }

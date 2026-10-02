@@ -7,6 +7,9 @@ import { HubMembershipService } from '../../core/hub/application/services/HubMem
 import { MongoHubMemberTenantAccessRepository } from '../../core/hub/infrastructure/persistence/MongoHubMemberTenantAccessRepository';
 import { HubMemberAccessService } from '../../core/hub/application/services/HubMemberAccessService';
 import { HubMembershipController } from '../../core/hub/interfaces/http/controllers/HubMembershipController';
+import { MongoHubInvitationRepository } from '../../core/hub/infrastructure/persistence/MongoHubInvitationRepository';
+import { HubInvitationService } from '../../core/hub/application/services/HubInvitationService';
+import { HubInvitationController } from '../../core/hub/interfaces/http/controllers/HubInvitationController';
 import type { WiringContext } from './types';
 
 /**
@@ -84,6 +87,33 @@ export function registerHubWiring({ container, models }: WiringContext): void {
         hubMembershipService: container.resolve('hubMembershipService'),
         auditService: container.resolve('platformAuditService'),
         hubMemberAccessService: container.resolve('hubMemberAccessService'),
+      }),
+    }),
+    hubInvitationRepository: asClass(MongoHubInvitationRepository, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        model: models.HubInvitationModel,
+      }),
+    }),
+    // Accepting an invitation reuses `hubMembershipService.addMembership` so the
+    // membership it creates goes through the same validation, archived-hub guard
+    // and ADR D3 grant baseline as one added by hand.
+    hubInvitationService: asClass(HubInvitationService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        deps: {
+          invitationRepository: container.resolve('hubInvitationRepository'),
+          hubRepository: container.resolve('hubRepository'),
+          membershipService: container.resolve('hubMembershipService'),
+          userRepository: container.resolve('userRepository'),
+        },
+      }),
+    }),
+    hubInvitationController: asClass(HubInvitationController, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        hubInvitationService: container.resolve('hubInvitationService'),
+        auditService: container.resolve('platformAuditService'),
       }),
     }),
   });

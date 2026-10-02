@@ -31,6 +31,7 @@ import { createPrinterRoutes, createPrintRoutes } from '../core/printing/interfa
 import { createHubRoutes } from '../core/hub/interfaces/http/routes/hub.routes';
 import { createHubMembershipRoutes } from '../core/hub/interfaces/http/routes/hubmembership.routes';
 import { createHubContextRoutes } from '../core/hub/interfaces/http/routes/hubcontext.routes';
+import { createHubInvitationRoutes } from '../core/hub/interfaces/http/routes/hubinvitation.routes';
 import { createOutletRoutes } from '../core/outlet/interfaces/http/routes/outlet.routes';
 import { createPlatformRoutes } from '../core/platform/interfaces/http/routes/platform.routes';
 import { createPlanRoutes } from '../core/billing/interfaces/http/routes/plan.routes';
@@ -128,11 +129,14 @@ export function registerRoutes(app: Express, container: DIContainer): void {
   app.use('/api/print', createPrintRoutes(printerController));
 
   const hubController = container.resolve('hubController');
-  app.use('/api/hubs', createHubRoutes(hubController));
+  const hubInvitationController = container.resolve('hubInvitationController');
+  app.use('/api/hubs', createHubRoutes(hubController, hubInvitationController));
 
   const hubMembershipController = container.resolve('hubMembershipController');
   app.use('/api/hub-memberships', createHubMembershipRoutes(hubMembershipController));
   app.use('/api/hub-context', createHubContextRoutes(hubMembershipController));
+  // Hub V2 Fase 20 — the invitee's own invitation (authenticate, not platform).
+  app.use('/api/hub-invitations', createHubInvitationRoutes(hubInvitationController));
 
   const outletController = container.resolve('outletController');
   app.use('/api/outlets', createOutletRoutes(outletController));

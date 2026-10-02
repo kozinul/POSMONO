@@ -9,6 +9,7 @@ import { DiscountConfigurationSchema } from '../../core/discount/infrastructure/
 import { FamilySchema } from '../../core/catalog/infrastructure/persistence/schemas/FamilySchema';
 import { HubMemberTenantAccessSchema } from '../../core/hub/infrastructure/persistence/schemas/HubMemberTenantAccessSchema';
 import { HubMembershipSchema } from '../../core/hub/infrastructure/persistence/schemas/HubMembershipSchema';
+import { HubInvitationSchema } from '../../core/hub/infrastructure/persistence/schemas/HubInvitationSchema';
 import { HubSchema } from '../../core/hub/infrastructure/persistence/schemas/HubSchema';
 import { MenuTypeSchema } from '../../core/catalog/infrastructure/persistence/schemas/MenuTypeSchema';
 import { ModifierSchema } from '../../core/catalog/infrastructure/persistence/schemas/ModifierSchema';
@@ -102,6 +103,10 @@ export function buildModels(connection: Connection) {
     HubMemberTenantAccessSchema,
   );
   HubMemberTenantAccessModel.syncIndexes().catch(() => {});
+  // Fase 20: the partial unique index on (hubId, email, pending) only enforces
+  // "one open invitation per address per hub" once Mongo has actually built it.
+  const HubInvitationModel = connection.model('HubInvitation', HubInvitationSchema);
+  HubInvitationModel.syncIndexes().catch(() => {});
   const OutletModel = connection.model('Outlet', OutletSchema);
   OutletModel.syncIndexes().catch(() => {});
   const PlanModel = connection.model('Plan', PlanSchema);
@@ -145,6 +150,7 @@ export function buildModels(connection: Connection) {
     HubModel,
     HubMembershipModel,
     HubMemberTenantAccessModel,
+    HubInvitationModel,
     OutletModel,
     PlanModel,
     SubscriptionModel,
@@ -191,6 +197,7 @@ export function registerModels(container: AwilixContainer, models: Models): void
     hubModel: asValue(models.HubModel),
     hubMembershipModel: asValue(models.HubMembershipModel),
     hubMemberTenantAccessModel: asValue(models.HubMemberTenantAccessModel),
+    hubInvitationModel: asValue(models.HubInvitationModel),
     outletModel: asValue(models.OutletModel),
     planModel: asValue(models.PlanModel),
     subscriptionModel: asValue(models.SubscriptionModel),

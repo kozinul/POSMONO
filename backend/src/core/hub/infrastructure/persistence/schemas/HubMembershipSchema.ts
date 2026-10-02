@@ -1,5 +1,5 @@
 import { Schema } from 'mongoose';
-import { HUB_MEMBER_ROLES } from '../../../domain/HubMembership';
+import { HUB_MEMBER_ROLES, HUB_MEMBERSHIP_STATUSES } from '../../../domain/HubMembership';
 
 export const HubMembershipSchema = new Schema(
   {
@@ -10,6 +10,11 @@ export const HubMembershipSchema = new Schema(
     // enum here would silently drift (Mongoose does not run validators on
     // findOneAndUpdate, so a stale enum fails at read time, not write time).
     role: { type: String, enum: [...HUB_MEMBER_ROLES], required: true },
+    // No `default` on purpose. A `default: 'active'` would resurrect legacy
+    // documents that were meant to be left untouched on every save, and this
+    // field only earns a value when a suspension is actually recorded.
+    status: { type: String, enum: [...HUB_MEMBERSHIP_STATUSES] },
+    suspendedAt: { type: Date, default: null },
   },
   {
     timestamps: true,

@@ -295,4 +295,126 @@ describe('HubMembershipService', () => {
       expect(await service.resolveRoleForTenant(USER_A, 'tenant-other')).toBeNull();
     });
   });
+  // Hub V2 Fase 20 — suspension is a tombstone, not a deletion. Each case below
+  // exists because the "obvious" cheaper implementation would reopen the
+  // ADR D3 zero-grant fallback and hand the member hub-wide owner authority.
+
+  describe('suspendMembership', () => {
+    it('marks the membership suspended, keeping role and row', async () => {
+      const membership = createMembership(HUB_ID, USER_A, 'manager');
+      repos.hubMembershipRepository.findByHubAndUser.mockResolvedValue(membership);
+
+      expect(await service.suspendMembership(HUB_ID, USER_A)).toBe(true);
+      expect(membership.serialize().status).toBe('suspended');
+      expect(membership.serialize().suspendedAt).toBeInstanceOf(Date);
+      // The role survives, so unsuspending restores the previous authority.
+      expect(membership.serialize().role).toBe('manager');
+      expect(repos.hubMembershipRepository.save).toHaveBeenCalledWith(membership);
+      expect(repos.hubMembershipRepository.deleteByHubAndUser).not.toHaveBeenCalled();
+    });
+
+    it('returns false for an unknown member and an already suspended one', async () => {
+      repos.hubMembershipRepository.findByHubAndUser.mockResolvedValue(null);
+      expect(await service.suspendMembership(HUB_ID, USER_A)).toBe(false);
+
+      const suspended = createMembership(HUB_ID, USER_A, 'manager');
+      suspended.suspend();
+      repos.hubMembershipRepository.findByHubAndUser.mockResolvedValue(suspended);
+      expect(await service.suspendMembership(HUB_ID, USER_A)).toBe(false);
+      expect(repos.hubMembershipRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('refuses to suspend inside an archived hub', async () => {
+      repos.hubMembershipRepository.findByHubAndUser.mockResolvedValue(createMembership(HUB_ID, USER_A, 'viewer'));
+      repos.hubRepository.findById.mockResolvedValue(createHub(HUB_ID, 'Group', 'archived'));
+
+      await expect(service.suspendMembership(HUB_ID, USER_A)).rejects.toThrow(ValidationError);
+    });
+  });
+
+  describe('reactivateMembership', () => {
+    it('clears the suspension and keeps the stored role', async () => {
+      const membership = createMembership(HUB_ID, USER_A, 'admin');
+      membership.suspend();
+      repos.hubMembershipRepository.findByHubAndUser.mockResolvedValue(membership);
+
+      expect(await service.reactivateMembership(HUB_ID, USER_A)).toBe(true);
+      expect(membership.serialize().status).toBe('active');
+      expect(membership.serialize().suspendedAt).toBeNull();
+      expect(membership.serialize().role).toBe('admin');
+    });
+
+    it('returns false for an unknown member and an already active one', async () => {
+      repos.hubMembershipRepository.findByHubAndUser.mockResolvedValue(null);
+      expect(await service.reactivateMembership(HUB_ID, USER_A)).toBe(false);
+
+      repos.hubMembershipRepository.findByHubAndUser.mockResolvedValue(createMembership(HUB_ID, USER_A, 'viewer'));
+      expect(await service.reactivateMembership(HUB_ID, USER_A)).toBe(false);
+      expect(repos.hubMembershipRepository.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('addMembership over a suspended row', () => {
+    it('reactivates and applies the requested role instead of reporting a duplicate', async () => {
+      service = new HubMembershipService({ ...repos, accessService } as any);
+      repos.hubRepository.findById.mockResolvedValue(createHub(HUB_ID));
+      repos.userRepository.findByIdRaw.mockResolvedValue({ id: USER_A });
+      const suspended = createMembership(HUB_ID, USER_A, 'viewer');
+      suspended.suspend();
+      repos.hubMembershipRepository.findByHubAndUser.mockResolvedValue(suspended);
+
+      await service.addMembership(HUB_ID, USER_A, 'manager');
+
+      expect(suspended.serialize().status).toBe('active');
+      expect(suspended.serialize().role).toBe('manager');
+      // Grants that were suspended on removal are revived with their stored role
+      // and outlet scope, so the D3 baseline stays consistent with the membership.
+      expect(accessService.syncDefaultGrantsForMember).toHaveBeenCalledWith(HUB_ID, USER_A);
+    });
+
+    it('never suspends grants as a side effect of a suspension', async () => {
+      service = new HubMembershipService({ ...repos, accessService } as any);
+      repos.hubMembershipRepository.findByHubAndUser.mockResolvedValue(createMembership(HUB_ID, USER_A, 'viewer'));
+
+      await service.suspendMembership(HUB_ID, USER_A);
+
+      // Suspending the membership is enough on its own: the access paths gate on
+      // the membership, so touching the grants here would only add a second
+      // source of truth that could drift on reactivation.
+      expect(accessService.suspendAllGrantsForMember).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findMembership / listMembers', () => {
+    it('exposes the status so callers can tell a pause from a removal', async () => {
+      const active = createMembership(HUB_ID, USER_A, 'viewer');
+      const paused = createMembership(HUB_ID, USER_B, 'manager', 'm-b');
+      paused.suspend();
+
+      repos.hubMembershipRepository.findByHubAndUser.mockResolvedValue(paused);
+      expect((await service.findMembership(HUB_ID, USER_B))!.serialize().status).toBe('suspended');
+
+      repos.hubRepository.findById.mockResolvedValue(createHub(HUB_ID));
+      repos.hubMembershipRepository.findByHub.mockResolvedValue([active, paused]);
+      repos.userRepository.findByIdRaw.mockResolvedValue(null);
+
+      const rows = await service.listMembers(HUB_ID);
+      expect(rows.map((r: any) => r.status)).toEqual(['active', 'suspended']);
+      // A suspended member is still listed: the point is to make them
+      // reactivatable, not invisible.
+      expect(rows.map((r: any) => r.userId)).toEqual([USER_A, USER_B]);
+    });
+
+    it('skips suspended memberships when resolving accessible tenants', async () => {
+      const paused = createMembership(HUB_ID, USER_A, 'viewer');
+      paused.suspend();
+      repos.hubMembershipRepository.findByUser.mockResolvedValue([paused]);
+      repos.hubRepository.findById.mockResolvedValue(createHub(HUB_ID));
+      repos.tenantRepository.findByHubId.mockResolvedValue([createTenant('tenant-a', 'Alpha', HUB_ID)]);
+
+      expect(await service.findAccessibleTenants(USER_A)).toEqual([]);
+      expect(await service.resolveRoleForTenant(USER_A, 'tenant-a')).toBeNull();
+    });
+  });
+
 });

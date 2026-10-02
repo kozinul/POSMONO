@@ -301,7 +301,7 @@ export class HubMemberAccessService {
     return this.resolveFallback(userId, tenantId);
   }
 
-  /** hub still active + user still a member + tenant still owned by that hub. */
+  /** hub still active + user still an *active* member + tenant still owned by that hub. */
   private async isGrantStillLinked(
     hubId: string,
     userId: string,
@@ -310,8 +310,7 @@ export class HubMemberAccessService {
     const hub = await this.deps.hubRepository.findById(hubId);
     if (!hub || !hub.isOperational()) return false;
 
-    const membership = await this.deps.hubMembershipRepository.findByHubAndUser(hubId, userId);
-    if (!membership) return false;
+    if (!(await this.activeMembershipRole(hubId, userId))) return false;
 
     const tenant = await this.deps.tenantRepository.findById(tenantId);
     if (!tenant) return false;
@@ -319,6 +318,19 @@ export class HubMemberAccessService {
     return tenant.serialize().hubId === hubId;
   }
 
+  /**
+   * The single place that answers "may this user act as a member of this hub?".
+   *
+   * Fase 20 added a suspended state to the membership, and four different query
+   * paths need the answer (grant resolution, grant listing, fallback resolution,
+   * fallback listing, plus the hub context). Expressing it once keeps a future
+   * change to the rule from having to be replicated five times — the Fase 19
+   * lesson about a rule with two owners.
+   *
+   * Grants are intentionally *not* suspended alongside the membership: they
+   * describe the shape of the access, the membership decides whether it applies.
+   * Reactivating the member then restores exactly the previous matrix.
+   */
   /** ADR D3 — pre-Fase 17 behaviour: hub role decides, every outlet allowed. */
   private async resolveFallback(userId: string, tenantId: string): Promise<ResolvedTenantSession | null> {
     const memberships = await this.deps.hubMembershipRepository.findByUser(userId);
@@ -326,6 +338,7 @@ export class HubMemberAccessService {
     for (const membership of memberships) {
       const membershipData = membership.serialize();
       if (!HUB_MEMBER_ROLES.includes(membershipData.role)) continue;
+      if (!membership.isActive()) continue;
 
       const hub = await this.deps.hubRepository.findById(membershipData.hubId);
       if (!hub || !hub.isOperational()) continue;
@@ -396,12 +409,18 @@ export class HubMemberAccessService {
       }
       if (!tenantName || !ownsTenant) continue;
 
+      // An active membership is what makes a grant usable (Fase 20). A suspended
+      // member must disappear from the switcher rather than appear and 403 on
+      // click — the lookup below already happened for the role it displays.
+      const hubRole = await this.activeMembershipRole(data.hubId, userId);
+      if (!hubRole) continue;
+
       out.push({
         tenantId: data.tenantId,
         tenantName,
         hubId: data.hubId,
         hubName: hub.serialize().name,
-        role: (await this.hubRoleFor(data.hubId, userId)) ?? 'viewer',
+        role: hubRole,
         tenantRole: data.tenantRole,
         outletIds: [...data.outletIds],
         accessSource: 'grant',
@@ -417,6 +436,7 @@ export class HubMemberAccessService {
 
     for (const membership of memberships) {
       const data = membership.serialize();
+      if (!membership.isActive()) continue;
       const hub = await this.deps.hubRepository.findById(data.hubId);
       if (!hub || !hub.isOperational()) continue;
 
@@ -445,10 +465,18 @@ export class HubMemberAccessService {
     return rows;
   }
 
-  private async hubRoleFor(hubId: string, userId: string): Promise<HubMemberRole | null> {
+  /**
+   * The hub role of an **active** member, or null. Null covers both "no
+   * membership" and "membership suspended" — for reach they are the same thing.
+   *
+   * One lookup, not two: the switcher builds a row per grant and the hub context
+   * one per hub, so an extra query here is an N+1 on an already-batched read.
+   */
+  private async activeMembershipRole(hubId: string, userId: string): Promise<HubMemberRole | null> {
     try {
       const membership = await this.deps.hubMembershipRepository.findByHubAndUser(hubId, userId);
-      return membership?.serialize().role ?? null;
+      if (!membership || !membership.isActive()) return null;
+      return membership.serialize().role;
     } catch {
       return null;
     }
@@ -484,6 +512,9 @@ export class HubMemberAccessService {
         // but a hub you cannot enter must not be offered as context — it would
         // show in the switcher while granting nothing. `grants` still lists them.
         if (!hub.isOperational()) continue;
+        // Same for a suspended membership (Fase 20): a tombstoned member is not
+        // in the hub, so the hub is not their context.
+        if (!(await this.activeMembershipRole(hubId, userId))) continue;
         const data = hub.serialize();
         hubs.push({
           id: hubId,

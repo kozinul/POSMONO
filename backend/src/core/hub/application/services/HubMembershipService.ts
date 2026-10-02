@@ -51,16 +51,31 @@ export class HubMembershipService {
     }
 
     const existing = await this.deps.hubMembershipRepository.findByHubAndUser(hubId, userId);
-    if (existing) {
-      throw new ConflictError('User is already a member of this hub');
-    }
+    const membership = existing ?? HubMembership.create({ hubId, userId, role });
 
-    const membership = HubMembership.create({ hubId, userId, role });
-    await this.deps.hubMembershipRepository.save(membership);
+    if (existing) {
+      // Fase 20: a suspension is a tombstone, not a removal, so re-adding a
+      // suspended member **reactivates** it instead of failing as a duplicate.
+      // Refusing would leave no way back from a suspension other than a dedicated
+      // reactivation call, and "add this person" is what an admin actually clicks.
+      if (existing.isActive()) {
+        throw new ConflictError('User is already a member of this hub');
+      }
+      existing.reactivate();
+      // The role comes from the caller's form: for an invitation accept it is the
+      // role the invitation was issued with, and a stale `viewer` from before the
+      // suspension would silently not be what was invited.
+      existing.updateRole(role);
+      await this.deps.hubMembershipRepository.save(existing);
+    } else {
+      await this.deps.hubMembershipRepository.save(membership);
+    }
 
     // ADR D3: a new member's baseline is "reach every tenant of the hub as
     // viewer". Seeding it here is what stops a member with hub role `owner` from
     // inheriting the permissive fallback and becoming Owner in every tenant.
+    // It also revives grants that were suspended when the member left, keeping
+    // their stored role and outlet scope (Fase 17 decision).
     // Best-effort: a failure must not undo the membership the admin just created.
     if (this.deps.accessService?.syncDefaultGrantsForMember) {
       try {
@@ -71,6 +86,49 @@ export class HubMembershipService {
     }
 
     return membership;
+  }
+
+  async findMembership(hubId: string, userId: string): Promise<HubMembership | null> {
+    return this.deps.hubMembershipRepository.findByHubAndUser(hubId, userId);
+  }
+
+  /**
+   * Hub V2 Fase 20 — pause a member without losing the record of them.
+   *
+   * Removing the row is not an acceptable substitute: it drops the user back into
+   * the ADR D3 zero-grant fallback, which restores hub-wide `owner`-like access
+   * instead of cutting it. A suspension keeps the row and simply fails the
+   * "active membership" gate every access path checks.
+   *
+   * The grants are deliberately left alone. They describe the *shape* of the
+   * access; the membership decides whether any of it applies. That way
+   * `reactivate` restores exactly the matrix that was in force before, with no
+   * second write path that could drift.
+   *
+   * Returns false when there was nothing to suspend (unknown or already
+   * suspended) so the controller can answer 400 instead of pretending.
+   */
+  async suspendMembership(hubId: string, userId: string): Promise<boolean> {
+    const membership = await this.deps.hubMembershipRepository.findByHubAndUser(hubId, userId);
+    if (!membership) return false;
+    await this.assertHubNotArchived(hubId);
+    if (!membership.isActive()) return false;
+
+    membership.suspend();
+    await this.deps.hubMembershipRepository.save(membership);
+    return true;
+  }
+
+  /** Undo a suspension. The stored role and grants are kept, so access returns as it was. */
+  async reactivateMembership(hubId: string, userId: string): Promise<boolean> {
+    const membership = await this.deps.hubMembershipRepository.findByHubAndUser(hubId, userId);
+    if (!membership) return false;
+    await this.assertHubNotArchived(hubId);
+    if (membership.isActive()) return false;
+
+    membership.reactivate();
+    await this.deps.hubMembershipRepository.save(membership);
+    return true;
   }
 
   async updateMembershipRole(hubId: string, userId: string, role: HubMemberRole): Promise<HubMembership> {
@@ -184,6 +242,9 @@ export class HubMembershipService {
     const out: AccessibleTenant[] = [];
     for (const membership of memberships) {
       const data = membership.serialize();
+      // Fase 20: a suspended member reaches nothing. The grant path enforces
+      // this in `HubMemberAccessService`; this is the pre-Fase-17 fallback.
+      if (!membership.isActive()) continue;
       const hub = await this.deps.hubRepository.findById(data.hubId);
       if (!hub || !hub.isOperational()) continue;
       const hubName = hub.serialize().name;

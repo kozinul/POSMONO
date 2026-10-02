@@ -13,6 +13,10 @@ export function createHubMembershipRoutes(hubMembershipController: HubMembership
   router.post('/', platformAuthenticate, platformAuthorize(PLATFORM_HUBS_MANAGE), asyncHandler(hubMembershipController.add.bind(hubMembershipController)));
   router.get('/hub/:hubId', platformAuthenticate, platformAuthorize(PLATFORM_HUBS_MANAGE), asyncHandler(hubMembershipController.listMembers.bind(hubMembershipController)));
   router.put('/:hubId/:userId', platformAuthenticate, platformAuthorize(PLATFORM_HUBS_MANAGE), asyncHandler(hubMembershipController.updateRole.bind(hubMembershipController)));
+  // Fase 20 — suspend / reactivate. Declared before the `/:hubId/:userId` GET-less
+  // routes it would otherwise shadow is not a concern (method differs), but it is
+  // kept next to updateRole because it is the same admin surface.
+  router.put('/:hubId/:userId/status', platformAuthenticate, platformAuthorize(PLATFORM_HUBS_MANAGE), asyncHandler(hubMembershipController.setStatus.bind(hubMembershipController)));
   router.delete('/:hubId/:userId', platformAuthenticate, platformAuthorize(PLATFORM_HUBS_MANAGE), asyncHandler(hubMembershipController.remove.bind(hubMembershipController)));
 
   router.get('/me', authenticate, asyncHandler(hubMembershipController.myMemberships.bind(hubMembershipController)));
