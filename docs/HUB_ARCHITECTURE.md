@@ -406,7 +406,7 @@ subscription:[ { tenantId, tenantName, planName, status, daysRemaining } ]
 3. **Read model dipisah dari controller** (`core/platform/application/read-models/HubOverviewReadModel.ts`). `PlatformController` sempat melewati batas 1.000 baris & Budget kompleksitas merah; komposisi ini aturan bisnis (outlet mana yang muncul, kapan dianggap stale, tenant nol penjualan ditampilkan sebagai apa) dan harus bisa diuji tanpa Express. Modul ini mendeklarasikan kebutuhannya secara struktural (`OutletSource`, `ActivitySource`, …), bukan mengimpor 4 kelas konkret.
 
 **Batas yang diketahui (sengaja ditunda)**
-- `counts.members` masih lewat `hubMembershipService.listMembers()` (N+1 `findById` user per anggota). Batch `countByHub` dibutuhkan; endpoint ini sudah jadi tempatnya.
+- ~~`counts.members` masih lewat `hubMembershipService.listMembers()` (N+1 `findById` user per anggota).~~ **Ditutup Fase 21** — `HubMembershipRepository.countByHub()` + `countMembers()` dipakai lewat `HubOverviewPrimitives.countHubMembers`. Lihat § Fase 21.
 - Overview read-only: tidak ada export/scheduled report (di luar scope, terkunci di `HUB_V2_DECISIONS.md`).
 
 ### Fase 20 — Hub Invitation & suspend member ✅ (2026-10-02)

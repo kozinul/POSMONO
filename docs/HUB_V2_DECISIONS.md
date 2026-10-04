@@ -197,5 +197,13 @@ direservasi untuk D1 tahap 2, matriks role hub 4. Catatan & release note di
 
 **Fase 21 selesai 2026-10-02** (backend) — D1 tahap 2 dimulai dari **baca**: `GET /api/hub/*`
 read-only, dijaga membership, dengan `viewer` dipersempit ke `hub.read` saja dan `config` tenant
-(proyeksi QRIS) tidak pernah keluar. Fase 22 (frontend) menyusul; mutasi sisi anggota tetap
-menunggu keputusan terpisah.
+(proyeksi QRIS) tidak pernah keluar.
+
+**Fase 22–23 selesai 2026-10-03/04** (frontend) — halaman anggota `/hub` (tab permission-gated,
+overview diekstrak supaya sama dengan Terminal Center), lalu `/hub/outlet`: dashboard **per outlet**
+dengan `GET /api/hub/outlet/overview` yang diturunkan dari `X-Outlet-Id` (tanpa `:hubId` maupun
+`:outletId` di path). Lihat § Fase 22 & § Fase 23 di `HUB_ARCHITECTURE.md`.
+
+**Yang masih terbuka di D1 tahap 2**: mutasi sisi anggota (ubah role, suspend, grant per tenant,
+undangan) tetap `platform.hubs.manage`; belum ada `switch-hub`; belum ada ringkasan grant per
+anggota ("N dari M tenant", butuh endpoint bulk); belum ada export/scheduled report.
