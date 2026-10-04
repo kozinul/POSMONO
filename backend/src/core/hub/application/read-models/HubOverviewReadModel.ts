@@ -16,20 +16,21 @@
  */
 
 /** Outlets with no open shift and no activity within `staleHours` need a look. */
-export const OVERVIEW_STALE_HOURS = 24;
+export { OVERVIEW_STALE_HOURS, buildOutletRows, countHubMembers } from './HubOverviewPrimitives';
+export type {
+  HubOverviewOutletRow,
+  HubOverviewActivityRow,
+  HubMemberCountSource,
+} from './HubOverviewPrimitives';
 
-export interface HubOverviewOutletRow {
-  outletId: string | null;
-  outletName: string | null;
-  tenantId: string;
-  tenantName: string | null;
-  isActive: boolean;
-  openShifts: number;
-  lastShiftAt: string | null;
-  hasOpenShift: boolean;
-  isStale: boolean;
-  idleHours: number | null;
-}
+import {
+  OVERVIEW_STALE_HOURS,
+  buildOutletRows,
+  countHubMembers,
+  type HubOverviewActivityRow,
+  type HubOverviewOutletDocument,
+  type HubOverviewOutletRow,
+} from './HubOverviewPrimitives';
 
 export interface HubOverviewReadModel {
   dateFrom: string;
@@ -72,13 +73,7 @@ export interface OutletDocument {
   tenantId: string;
   isActive: boolean;
 }
-export interface OutletActivityRow {
-  tenantId: string;
-  outletId: string | null;
-  openShifts: number;
-  hasOpenShift: boolean;
-  lastShiftAt: string | null;
-}
+export interface OutletActivityRow extends HubOverviewActivityRow {}
 export interface ActivitySource {
   getPlatformOutletActivity(tenantIds: string[]): Promise<{ generatedAt: string; outlets: OutletActivityRow[] }>;
 }
@@ -125,11 +120,6 @@ export interface BuildHubOverviewInput {
   subscriptionSource: SubscriptionSource | null;
 }
 
-/** Key that joins shift activity to an outlet; `null` outlet = the tenant default outlet. */
-function outletKey(tenantId: string, outletId: string | null): string {
-  return `${tenantId}:${outletId ?? 'default'}`;
-}
-
 export async function buildHubOverview(input: BuildHubOverviewInput): Promise<HubOverviewReadModel> {
   const { tenantIds, tenantNameById } = input;
 
@@ -138,78 +128,17 @@ export async function buildHubOverview(input: BuildHubOverviewInput): Promise<Hu
     input.activitySource.getPlatformOutletActivity(tenantIds),
     input.salesSource ? input.salesSource.getPlatformSalesByTenant(tenantIds, { dateFrom: input.dateFrom, dateTo: input.dateTo }) : Promise.resolve(null),
     input.subscriptionSource ? input.subscriptionSource.getTenantSubscriptions(tenantIds) : Promise.resolve([]),
-    input.membersSource
-      ? input.membersSource.countMembers
-        ? input.membersSource.countMembers(input.hubId)
-        : input.membersSource.listMembers(input.hubId).then((rows) => rows.length)
-      : Promise.resolve(0),
+    countHubMembers(input.membersSource, input.hubId),
   ]);
 
-  const outletDocuments = outlets.map((o) => o.serialize());
+  const outletDocuments: HubOverviewOutletDocument[] = outlets.map((o) => o.serialize());
   const activeOutletCount = outletDocuments.filter((o) => o.isActive).length;
 
-  const activityByKey: Record<string, OutletActivityRow> = {};
-  for (const row of activity.outlets) {
-    activityByKey[outletKey(row.tenantId, row.outletId)] = row;
-  }
-
-  const now = Date.now();
-  const staleMs = OVERVIEW_STALE_HOURS * 60 * 60 * 1000;
-
-  const rows: HubOverviewOutletRow[] = [];
-  const pushRow = (base: {
-    outletId: string | null;
-    outletName: string | null;
-    tenantId: string;
-    isActive: boolean;
-  }): void => {
-    const activityRow = activityByKey[outletKey(base.tenantId, base.outletId)];
-    const hasOpenShift = activityRow?.hasOpenShift ?? false;
-    const lastShiftAt = activityRow?.lastShiftAt ?? null;
-    const idleMs = lastShiftAt ? now - new Date(lastShiftAt).getTime() : null;
-    rows.push({
-      ...base,
-      tenantName: tenantNameById[base.tenantId] ?? null,
-      openShifts: activityRow?.openShifts ?? 0,
-      lastShiftAt,
-      hasOpenShift,
-      // An outlet that never opened a shift is stale too: that is exactly the
-      // case an operator needs to see, and it produces no shift row at all.
-      isStale: !hasOpenShift && (idleMs === null || idleMs > staleMs),
-      idleHours: idleMs === null ? null : Math.floor(idleMs / (60 * 60 * 1000)),
-    });
-  };
-
-  // Rows are driven by the outlet list, not by shift activity, so a never-used
-  // outlet is visible instead of silently absent.
-  for (const outlet of outletDocuments) {
-    pushRow({
-      outletId: outlet.id,
-      outletName: outlet.name,
-      tenantId: outlet.tenantId,
-      isActive: outlet.isActive,
-    });
-  }
-
-  // Activity for an outlet with no document (deleted outlet, or a legacy
-  // outletId-less shift) still has to appear, otherwise a live cashier silently
-  // disappears from the overview.
-  const knownOutletIds = new Set(outletDocuments.map((o) => o.id));
-  for (const activityRow of activity.outlets) {
-    if (activityRow.outletId && knownOutletIds.has(activityRow.outletId)) continue;
-    pushRow({
-      outletId: activityRow.outletId,
-      outletName: null,
-      tenantId: activityRow.tenantId,
-      isActive: activityRow.outletId === null,
-    });
-  }
-
-  rows.sort(
-    (a, b) =>
-      Number(b.hasOpenShift) - Number(a.hasOpenShift) ||
-      (a.outletName ?? '').localeCompare(b.outletName ?? ''),
-  );
+  const rows: HubOverviewOutletRow[] = buildOutletRows({
+    outletDocuments,
+    activityRows: activity.outlets,
+    tenantNameById,
+  });
 
   // Sales rows only exist for tenants that sold something; the overview lists
   // every tenant of the hub so "no sales" reads as Rp 0 instead of vanishing.

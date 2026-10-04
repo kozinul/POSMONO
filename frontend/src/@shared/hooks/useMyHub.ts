@@ -84,6 +84,47 @@ export interface MyHubMember {
 /** Same read model as the Terminal Center, reached through the member guard. */
 export type MyHubOverview = Omit<HubOverview, 'hub'> & { hub: MyHubProfile };
 
+/**
+ * Hub V2 Fase 23 — the **outlet** view, `GET /hub/outlet/overview`.
+ *
+ * A different shape from `MyHubOverview` on purpose: this screen answers "how is
+ * *this one outlet* doing", so it carries a single outlet, single-outlet sales and
+ * single-outlet shift status. There is no `counts` block and no outlet list here —
+ * a list on this screen would be a different question.
+ */
+export interface MyHubOutletOverview {
+  /** The hub the server derived from the outlet — the client never picks it. */
+  hub: MyHubProfile;
+  dateFrom: string;
+  dateTo: string;
+  generatedAt: string;
+  outlet: {
+    id: string;
+    name: string;
+    tenantId: string;
+    tenantName: string | null;
+    isActive: boolean;
+  };
+  sales: {
+    currency: string;
+    total: number;
+    transactions: number;
+    tax: number;
+    discount: number;
+    rounding: number;
+  };
+  operational: {
+    staleHours: number;
+    hasOpenShift: boolean;
+    openShifts: number;
+    lastShiftAt: string | null;
+    isStale: boolean;
+    idleHours: number | null;
+  };
+  /** Hub members, not outlet members — membership is a hub-level fact. */
+  members: { total: number };
+}
+
 interface MyHubQueryOptions {
   /** Tab-level gating: a viewer never fires the members request just to get a 403. */
   enabled?: boolean;
@@ -166,5 +207,41 @@ export function useMyHubOverview(
     },
     enabled: enabledFor(hubId, options),
     staleTime: 60_000,
+  });
+}
+
+/**
+ * Fase 23 — the outlet view of the caller's **active outlet**.
+ *
+ * `outletId` is not a path parameter and must not become one: the endpoint has no
+ * `hubId` either, because the server resolves `X-Outlet-Id` → outlet → tenant →
+ * `tenant.hubId` → membership. A client that could name the hub would get
+ * whichever hub it guessed.
+ *
+ * `retry: false` — a 403 here is a role decision (`viewer` has no
+ * `hub.reports.read`), not a flaky network, and retrying it would just delay the
+ * explanation the user needs to read.
+ */
+export function useMyHubOutletOverview(
+  outletId: string | null,
+  dateFrom: string,
+  dateTo: string,
+  options?: MyHubQueryOptions,
+) {
+  return useQuery({
+    queryKey: ['my-hub-outlet-overview', outletId, dateFrom, dateTo],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (dateFrom) params.set('dateFrom', dateFrom);
+      if (dateTo) params.set('dateTo', dateTo);
+      const query = params.toString();
+      const res = await api.get<{ success: boolean; data: MyHubOutletOverview }>(
+        `/hub/outlet/overview${query ? `?${query}` : ''}`,
+      );
+      return res.data.data;
+    },
+    enabled: !!outletId && options?.enabled !== false,
+    staleTime: 60_000,
+    retry: false,
   });
 }

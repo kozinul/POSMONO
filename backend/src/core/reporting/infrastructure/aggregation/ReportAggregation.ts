@@ -1,4 +1,5 @@
 import { Model } from 'mongoose';
+import { PlatformSalesAggregation } from './PlatformSalesAggregation';
 
 export interface IPaymentBreakdownGroup {
   method: string;
@@ -6,17 +7,17 @@ export interface IPaymentBreakdownGroup {
   amount: number;
 }
 
-/** Group row of `getPlatformSalesByTenantAggregation` (one row per tenant). */
-export interface PlatformSalesByTenantRow {
-  _id: string;
-  totalOrders: number;
-  totalRevenue: number;
-  totalTax: number;
-  totalDiscount: number;
-  totalRounding: number;
-}
+// Re-exported so the existing import sites keep resolving these row shapes.
+export type {
+  PlatformSalesByTenantRow,
+  PlatformSalesByOutletRow,
+  PlatformSalesRange,
+} from './PlatformSalesAggregation';
 
 export class ReportAggregation {
+  /** Multi-tenant sales reads live here; this class stays the facade over both. */
+  private readonly platformSales: PlatformSalesAggregation;
+
   constructor(
     private readonly orderModel: Model<any>,
     private readonly shiftModel: Model<any>,
@@ -25,7 +26,9 @@ export class ReportAggregation {
     private readonly refundModel?: Model<any>,
     private readonly stockModel?: Model<any>,
     private readonly stockMovementModel?: Model<any>,
-  ) {}
+  ) {
+    this.platformSales = new PlatformSalesAggregation(orderModel);
+  }
 
   async getDailySalesAggregation(tenantId: string, date: string, outletId?: string | null) {
     const startOfDay = new Date(date);
@@ -1223,56 +1226,20 @@ export class ReportAggregation {
   /**
    * Hub V2 Fase 19 — sales grouped by tenant across many tenants at once.
    *
-   * Deliberately ONE grouped aggregation over `orders` instead of calling
-   * `getFinanceAggregation` per tenant: a hub with N tenants would otherwise
-   * issue 2N pipelines (totals + categories) just to draw one overview card.
-   * Revenue semantics mirror `getFinanceAggregation` — `roundingAdjustment` is
-   * added to `total`, discount takes the `$max` of the two duplicated fields —
-   * so a hub total and a per-tenant finance report never disagree.
-   *
-   * The window is taken as an already-expanded `{ from, to }` (the platform
-   * controller's `resolveDateRange` sets it to start/end of day), so this does
-   * not re-derive day bounds from a `YYYY-MM-DD` string like the tenant-scoped
-   * aggregations do.
+   * Delegates to `PlatformSalesAggregation`: the multi-tenant sales reads are a
+   * different question from the tenant-scoped aggregations above, and keeping
+   * them in one place stopped this file from growing past its budget line.
    */
-  async getPlatformSalesByTenantAggregation(
-    tenantIds: string[],
-    range: { from: Date; to: Date },
-  ) {
-    if (tenantIds.length === 0) return [];
+  async getPlatformSalesByTenantAggregation(tenantIds: string[], range: { from: Date; to: Date }) {
+    return this.platformSales.getSalesByTenant(tenantIds, range);
+  }
 
-    const rows = await this.orderModel.aggregate([
-      {
-        $match: {
-          tenantId: { $in: tenantIds },
-          createdAt: { $gte: range.from, $lte: range.to },
-          status: { $in: ['paid', 'completed'] },
-        },
-      },
-      {
-        $group: {
-          _id: '$tenantId',
-          totalOrders: { $sum: 1 },
-          totalRevenue: {
-            $sum: { $add: [{ $ifNull: ['$roundingAdjustment', 0] }, '$total'] },
-          },
-          totalTax: { $sum: { $ifNull: ['$tax', 0] } },
-          totalDiscount: {
-            $sum: { $max: [{ $ifNull: ['$discount', 0] }, { $ifNull: ['$discountTotal', 0] }] },
-          },
-          totalRounding: { $sum: { $ifNull: ['$roundingAdjustment', 0] } },
-        },
-      },
-      { $sort: { totalRevenue: -1 } },
-    ]);
-
-    return rows.map((row: PlatformSalesByTenantRow) => ({
-      tenantId: String(row._id),
-      totalOrders: Number(row.totalOrders ?? 0),
-      totalRevenue: Math.round(Number(row.totalRevenue ?? 0)),
-      totalTax: Math.round(Number(row.totalTax ?? 0)),
-      totalDiscount: Math.round(Number(row.totalDiscount ?? 0)),
-      totalRounding: Math.round(Number(row.totalRounding ?? 0)),
-    }));
+  /**
+   * Hub V2 Fase 23 — sales per **outlet**, in one pass.
+   *
+   * Separate from the tenant grouping on purpose; see `PlatformSalesAggregation`.
+   */
+  async getPlatformSalesByOutletAggregation(tenantIds: string[], range: { from: Date; to: Date }) {
+    return this.platformSales.getSalesByOutlet(tenantIds, range);
   }
 }

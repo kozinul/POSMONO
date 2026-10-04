@@ -1279,6 +1279,9 @@ Read-only. Guard = `authenticate` + `requireHubPermission` (membership dibaca pe
 | GET | `/api/hub/:hubId/tenants` | `hub.tenants.read` | tenant dalam hub |
 | GET | `/api/hub/:hubId/members` | `hub.members.read` | anggota hub + status (`active`/`suspended`) |
 | GET | `/api/hub/:hubId/overview` | `hub.reports.read` | read model Fase 19 (query: `dateFrom`, `dateTo`) |
+| GET | `/api/hub/outlet/overview` | `hub.reports.read` | **Fase 23** — read model **outlet aktif**; butuh header `X-Outlet-Id` (query: `dateFrom`, `dateTo`) |
+
+> ⚠️ `/outlet/overview` **tidak** punya `:hubId` di path, dan `:outletId` juga tidak — keduanya diturunkan server dari `X-Outlet-Id` → outlet → tenant → `tenant.hubId` → membership. Route didaftarkan **sebelum** `/:hubId/overview` agar parameter tidak menelan path. Alasannya bukan sekadar切身: kalau klien boleh menyebut hub-nya sendiri, anggota beberapa hub bisa menampilkan dashboard hub yang tidak memiliki outlet tersebut.
 
 **Matriks role hub** (`HUB_ROLE_PERMISSION_MATRIX`) — `viewer` dipersempit di Fase 21:
 
@@ -1298,13 +1301,20 @@ GET /api/hub/:hubId/tenants   → { data: [{ id, name, status, businessType, bus
 GET /api/hub/:hubId/members   → { data: [{ id, hubId, userId, role, status, suspendedAt, createdAt, updatedAt,
                                              displayName, email, userTenantId, userTenantName }] }
 GET /api/hub/:hubId/overview  → { data: { hub, dateFrom, dateTo, generatedAt, counts, operational, sales, subscription } }
+GET /api/hub/outlet/overview   → { data: { hub, dateFrom, dateTo, generatedAt,
+                                   outlet{ id, name, tenantId, tenantName, isActive },
+                                   sales{ currency, total, transactions, tax, discount, rounding },
+                                   operational{ staleHours, hasOpenShift, openShifts, lastShiftAt, isStale, idleHours },
+                                   members{ total } } }
 ```
+
+**Outlet overview (Fase 23)** dijawab sebagai **satu outlet**, bukan agregat grup: tanpa `counts`, tanpa `byTenant`, tanpa daftar outlet. Penjualan dihitung **per outlet** — satu grouped agregasi `orders` (`paid`/`completed`, revenue `total + roundingAdjustment`, `createdAt` dalam range) yang **`$match` `$or: [{ outletId }, { outletId: { $exists: false } }]`**. Order `outletId: null` ikut dihitung **hanya** bila tenant punya tepat satu outlet (backfill boot), jadi layar ini tidak nol diam-diam untuk order lama. Tenant lain tidak pernah bocor: agregasi selalu `tenantId` + `outletId` ter-filter. `members.total` = anggota **hub** (keanggotaan itu fakta level hub), `operational` mengikuti aturan stale 24 jam yang sama dengan overview grup, dan **`operational` tidak bergantung pada range**.
 
 **Cakupan ≠ grant**: `/api/hub/*` mencakup **seluruh tenant dalam hub**, bukan hanya tenant hasil grant Fase 17. Grant governs "tenant mana yang boleh saya buka" (`switch-tenant`); ini governs "kelompok bisnis ini bagaimana".
 
 **`config` tidak pernah keluar**: baris tenant diproyeksi field per field — `Tenant.serialize()` memuat `config`, dan `config` memuat kredensial QRIS gateway tenant (`qrisGatewayApiKey`, `qrisGatewayBaseUrl`, `qrisGatewayMerchantId`).
 
-Errors: 400 (`dateFrom`/`dateTo` bukan `YYYY-MM-DD`), 401 (tanpa login), **403** (bukan anggota aktif · membership `suspended` · hub `suspended`/`archived` · role kurang permission · **admin platform tanpa membership — tidak ada bypass**), 404 (hub tidak ada).
+Errors: 400 (`dateFrom`/`dateTo` bukan `YYYY-MM-DD`, atau **tanpa header `X-Outlet-Id`** pada `/outlet/overview` — endpoint ini tidak pernah jatuh ke outlet default), 401 (tanpa login), **403** (bukan anggota aktif · membership `suspended` · hub `suspended`/`archived` · role kurang permission · **admin platform tanpa membership — tidak ada bypass**), 404 (hub tidak ada · outlet tidak ada · **tenant outlet tidak punya `hubId`**, jadi layar `/hub/outlet` jadi empty state "pilih outlet di switcher", bukan 403).
 
 ---
 

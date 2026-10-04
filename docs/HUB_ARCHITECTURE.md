@@ -473,15 +473,43 @@ Sebelum fase ini, "being in a hub" hanya berarti **bisa pindah tenant**: satu ba
 - Belum ada mutasi dari sisi anggota (ubah role, suspend anggota, grant per tenant, undangan) — semuanya masih `platform.hubs.manage`.
 - Belum ada `switch-hub`: memilih hub terjadi lewat halaman `/hub` (Fase 22), bukan lewat pergantian session.
 - Ringkasan grant per anggota ("N dari M tenant") masih butuh endpoint bulk (sama seperti batas Fase 19/Fase 20).
+### Fase 22 — Halaman anggota `/hub` ✅ (2026-10-03)
+
+Fase 21 memberi permukaannya; fase ini membuatnya bisa dipakai orang. `/hub` di dashboard, **tab permission-gated** (`hub.read` untuk profil, `hub.tenants.read`, `hub.members.read`, `hub.reports.read` untuk overview) — tab yang tak terlihat tidak pernah menembak endpoint-nya, jadi user tanpa izin bukan sekadar melihat tab kosong.
+
+**Ekstraksi yang menjaga dua tampilan tetap sama**: `HubOverviewBody`, `useHubOverviewRange`, `HubOverviewRangeBar` berasal dari `HubOverviewPanel` (Terminal Center). Tampilan grup perlu `hubName` yang bentuknya berbeda di dua pemanggil, jadi `HubOverviewSections = Omit<HubOverview, 'hub'>` — header-nya disediakan oleh halaman. Preset periode + tampilan tanggal sudah dimiliki bersama, jadi dua layar tidak lagi punya dua definisi "7 hari".
+
+Batas yang diketahui: hook-nya masih di `core/platform/components`, jadi `core/hub` mengimpor dari `core/platform` — tidak ideal, tetapi tidak menyakitkan selama platform dan hub memang satu feature area.
+
+### Fase 23 — Dashboard hub per outlet (`/hub/outlet`) ✅ (2026-10-04)
+
+`/hub` menjawab "bagaimana **kelompok bisnis ini**", terjumlah di seluruh tenant + outlet. Untuk kasir/owner yang bekerja di **satu outlet**, itu pertanyaan yang salah: angkanya tercampur PCL di kasir lain, dan harus menggali tabel penjualan per tenant untuk menemukan angkanya sendiri. Fase 23 menambah layar kedua yang menjawab "bagaimana **outlet yang sedang saya pakai**", di `/hub/outlet`.
+
+**Kontrak yang tidak bisa ditawar: outlet dari header, bukan dari path**
+```
+GET /api/hub/outlet/overview            ← tanpa :hubId
+X-Outlet-Id: out-a
+  → outlet → tenant → tenant.hubId → membership → hub.reports.read
+```
+Tidak ada `:hubId` **dan** tidak ada `:outletId`. Outlet adalah sumber konteks; hub turun darinya. Kalau klien boleh menyebut hub-nya sendiri, anggota beberapa hub akan melihat dashboard hub yang tidak memiliki outlet di depan mereka — jadi guard `requireHubPermissionForOutlet` sengaja dibaca per-request, bukan lewat `authorize()` (sama seperti Fase 21: permission `hub.*` tidak ada di JWT). Route wajib terdaftar **sebelum** `/:hubId/overview`, kalau tidak `outlet` tertangkap sebagai `hubId`.
+
+**Tanpa header = 400, bukan outlet default.** Halaman ini menolak menebak outlet mana yang "sedang aktif": kalau switcher ada, tebakan tersebut benar setengah waktu dan menghasilkan layar yang terlihat otoriter untuk angka yang salah.
+
+**Pembacaan per outlet, bukan total tenant.** `getPlatformSalesByOutlet` me-`$match` `$or: [{ outletId }, { outletId: { $exists: false } }]` lalu `$group` per `tenantId + outletId`. Match kedua itu bukan kelonggaran: order lama tidak punya `outletId`, dan lotengnya nol untuk data yang sebenarnya milik outlet itu — jadi nilainya ikut, **hanya** bila tenant punya satu outlet (backfill boot). Order `outletId: null` pada tenant multi-outlet tetap dikeluarkan. `sales` tidak mengembalikan `totals` karena di layar ini hanya ada satu baris; `byTenant` dihapus karena itu bukan lagi pilihannya.
+
+**Dua read model, bukan satu dengan parameter.** `HubOverviewReadModel` (grup) dan `HubOutletOverviewReadModel` (outlet) menjawab dua pertanyaan berbeda, dan Fase 19 sudah menunjukkan lesson-nya: memberi satu builder dua bentuk menghasilkan parameter yang hanya satu caller yang pakai. Yang benar-benar dibagi bukan bentuk datanya melainkan **aturan**nya — `HubOverviewPrimitives` memegang `OVERVIEW_STALE_HOURS`, `buildOutletRows`, dan `countHubMembers`, jadi aturan stale 24 jam tetap punya satu pemilik walaupun ada dua read model.
+
+**Frontend**: `useMyHubOutletOverview` memakai `useAuthStore().activeOutletId` sebagai sumber outlet (persis seperti `/pos`), dan `activeOutletId` ada di query key — berganti outlet = refetch, tanpa `OUTLET_SCOPE_KEYS`. `HubOutletOverviewBody` sengaja **bukan** `HubOverviewBody`: yang ini tidak punya daftar outlet, dan `counts`/tabel per tenant tidak punya arti di layar ini. Baris outlet di tabel satu-baris juga dihapus karena judul halaman sudah menyebut outlet itu. 403 (role tanpa `hub.reports.read`) tampil sebagai "Anda tidak punya izin", bukan kode status mentah — `retry: false` di hook, karena 403 adalah keputusan role, bukan jaringan yang sesaat.
+
 ### Di luar scope (terkunci di `HUB_V2_DECISIONS.md`)
 `HubTenantMembership` (multi-hub) · wallet/`WalletLedger`/`HubWallet` · `HubInvoice`/prepaid credit
 (ditunda) · `Hub.settings`/logo/contact · mutasi sisi anggota (Fase 21 sengaja read-only; lihat §Fase 21) · scheduled
-reports & export overview.
+reports & export overview · **export** outlet overview (Fase 23 read-only, belum ada tombol unduh).
 
 ### Urutan & release
 ```
 1. Commit dokumen: HUB_V2_DECISIONS.md + HUB_V2_FRONTEND_PLAN.md + fase ini   (docs only)
 2. Fase 16 (commit sendiri — ada migrasi Role & wajib re-login)
 3. Fase 17 (commit sendiri — mengubah cara token lintas-tenant diterbitkan)
-4. Fase 18 → 19 → 20 (satu commit per fase)
+4. Fase 18 → 19 → 20 → 21 → 22 → 23 (satu commit per fase)
 ```

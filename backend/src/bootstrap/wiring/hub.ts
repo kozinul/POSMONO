@@ -132,6 +132,7 @@ export function registerHubWiring({ container, models }: WiringContext): void {
           activitySource: container.resolve('shiftService'),
           salesSource: container.resolve('reportService'),
           subscriptionSource: container.resolve('subscriptionService'),
+          outletSalesSource: container.resolve('reportService'),
         },
       }),
     }),
