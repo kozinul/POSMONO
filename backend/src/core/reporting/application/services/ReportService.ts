@@ -279,34 +279,6 @@ export class ReportService {
     };
   }
 
-  /**
-   * Hub V2 Fase 23 — sales per outlet for every tenant of a hub.
-   *
-   * No totals: an outlet view reads exactly one row, and returning a hub-wide
-   * total next to it invites someone to render "total" on an outlet screen — the
-   * very mix-up this endpoint exists to prevent.
-   */
-  async getPlatformSalesByOutlet(
-    tenantIds: string[],
-    options?: { dateFrom?: Date; dateTo?: Date },
-  ) {
-    const dateFrom = options?.dateFrom ?? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const dateTo = options?.dateTo ?? new Date();
-
-    const byOutlet = await this.reportAggregation.getPlatformSalesByOutletAggregation(tenantIds, {
-      from: dateFrom,
-      to: dateTo,
-    });
-
-    return {
-      dateFrom: dateFrom.toISOString(),
-      dateTo: dateTo.toISOString(),
-      generatedAt: new Date().toISOString(),
-      currency: 'IDR' as const,
-      byOutlet,
-    };
-  }
-
   async getProfitLoss(tenantId: string, dateFrom: string, dateTo: string) {
     const [finance, cogs] = await Promise.all([
       this.reportAggregation.getFinanceAggregation(tenantId, dateFrom, dateTo),

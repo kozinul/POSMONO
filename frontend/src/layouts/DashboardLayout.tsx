@@ -22,7 +22,6 @@ const navigation: NavItem[] = [
   { name: 'Families', href: '/families' },
   { name: 'Categories', href: '/categories' },
   { name: 'Modifiers', href: '/modifiers', permission: 'products:write' },
-  { name: 'Hub Outlet', href: '/hub/outlet' },
   { name: 'Hub', href: '/hub' },
   { name: 'Members', href: '/members' },
   { name: 'Promotions', href: '/promotions' },

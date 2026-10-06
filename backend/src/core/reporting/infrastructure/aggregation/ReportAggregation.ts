@@ -8,11 +8,7 @@ export interface IPaymentBreakdownGroup {
 }
 
 // Re-exported so the existing import sites keep resolving these row shapes.
-export type {
-  PlatformSalesByTenantRow,
-  PlatformSalesByOutletRow,
-  PlatformSalesRange,
-} from './PlatformSalesAggregation';
+export type { PlatformSalesByTenantRow, PlatformSalesRange } from './PlatformSalesAggregation';
 
 export class ReportAggregation {
   /** Multi-tenant sales reads live here; this class stays the facade over both. */
@@ -1232,14 +1228,5 @@ export class ReportAggregation {
    */
   async getPlatformSalesByTenantAggregation(tenantIds: string[], range: { from: Date; to: Date }) {
     return this.platformSales.getSalesByTenant(tenantIds, range);
-  }
-
-  /**
-   * Hub V2 Fase 23 — sales per **outlet**, in one pass.
-   *
-   * Separate from the tenant grouping on purpose; see `PlatformSalesAggregation`.
-   */
-  async getPlatformSalesByOutletAggregation(tenantIds: string[], range: { from: Date; to: Date }) {
-    return this.platformSales.getSalesByOutlet(tenantIds, range);
   }
 }

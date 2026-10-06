@@ -261,7 +261,7 @@ beforeAll(async () => {
   app.use(express.json());
   // The real route factory, so `authenticate` + `requireHubPermission` are
   // exercised in the same order production mounts them.
-  app.use('/api/hub', createMyHubRoutes(controller, accessService, { outlets: outletRepo, tenants: tenantRepo }));
+  app.use('/api/hub', createMyHubRoutes(controller, accessService));
   app.use('/api/hub-context', createHubContextRoutes(membershipController));
   app.use(errorHandler);
 

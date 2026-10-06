@@ -11,15 +11,10 @@ import {
   type SalesSource,
   type SubscriptionSource,
 } from '../../../application/read-models/HubOverviewReadModel';
-import {
-  buildHubOutletOverview,
-  type OutletSalesSource,
-} from '../../../application/read-models/HubOutletOverviewReadModel';
 import type {
   HubAuthorization,
   HubMemberAccessService,
 } from '../../../application/services/HubMemberAccessService';
-import type { ResolvedHubOutlet } from '../middleware/requireHubPermissionForOutlet';
 
 /**
  * Hub V2 Fase 21 — the member-facing hub read API (`/api/hub`).
@@ -79,8 +74,6 @@ export interface MyHubControllerDeps {
   activitySource: ActivitySource;
   salesSource?: SalesSource | null;
   subscriptionSource?: SubscriptionSource | null;
-  /** Fase 23 — outlet-level sales. Kept apart from `salesSource` on purpose. */
-  outletSalesSource?: OutletSalesSource | null;
 }
 
 export class MyHubController extends BaseController {
@@ -140,46 +133,6 @@ export class MyHubController extends BaseController {
     this.ok(res, { hub: access.hub.serialize(), ...readModel });
   }
 
-  /**
-   * Fase 23 — the outlet view, for the caller's active outlet.
-   *
-   * Different read model from `overview` on purpose: sales are counted per outlet
-   * here, because a tenant total on an outlet screen looks right while being
-   * wrong about money. The hub in the response is the one `requireHubPermissionForOutlet`
-   * derived from the outlet, so the client can gate its tabs on the permissions
-   * the server actually applied rather than on a hub it guessed.
-   */
-  async outletOverview(req: Request, res: Response): Promise<void> {
-    const access = this.requireHubAccess(req);
-    const outlet = this.requireHubOutlet(req);
-    const { dateFrom, dateTo } = req.query;
-    const [from, to] = resolveDateRange(dateFrom as string | undefined, dateTo as string | undefined);
-
-    const readModel = await buildHubOutletOverview({
-      hubId: access.hub.id.toString(),
-      outletId: outlet.id,
-      outletName: outlet.name,
-      outletTenantId: outlet.tenantId,
-      outletIsActive: outlet.isActive,
-      tenantName: outlet.tenantName,
-      membersSource: this.deps.membersSource,
-      dateFrom: from,
-      dateTo: to,
-      activitySource: this.deps.activitySource,
-      salesSource: this.deps.outletSalesSource ?? null,
-    });
-
-    this.ok(res, {
-      hub: {
-        ...access.hub.serialize(),
-        role: access.role,
-        roleLabel: HUB_MEMBER_ROLE_LABELS[access.role],
-        permissions: access.permissions,
-      },
-      ...readModel,
-    });
-  }
-
   private async tenantRows(hubId: string): Promise<HubTenantRow[]> {
     const tenants = await this.deps.hubService.listTenants(hubId);
     return tenants.map((tenant) => {
@@ -207,13 +160,5 @@ export class MyHubController extends BaseController {
       throw new ForbiddenError('Akses hub belum diverifikasi');
     }
     return req.hubAccess;
-  }
-
-  /** Same contract as `requireHubAccess`, for the outlet view's guard. */
-  private requireHubOutlet(req: Request): ResolvedHubOutlet {
-    if (!req.hubOutlet) {
-      throw new ForbiddenError('Outlet belum diverifikasi');
-    }
-    return req.hubOutlet;
   }
 }

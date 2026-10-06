@@ -34,7 +34,6 @@ function createMockAggregation() {
     getStockMovementTotalsAggregation: vi.fn(),
     getCogsAggregation: vi.fn(),
     getPlatformSalesByTenantAggregation: vi.fn(),
-    getPlatformSalesByOutletAggregation: vi.fn(),
   };
 }
 
@@ -237,59 +236,6 @@ describe('ReportService', () => {
       await service.getPlatformSalesByTenant(['t-a']);
 
       const [, window] = aggregation.getPlatformSalesByTenantAggregation.mock.calls[0];
-      const spanDays = (window.to.getTime() - window.from.getTime()) / (24 * 60 * 60 * 1000);
-      expect(spanDays).toBe(30);
-    });
-  });
-
-  describe('getPlatformSalesByOutlet (Hub V2 Fase 23)', () => {
-    const range = { dateFrom: new Date('2026-08-01'), dateTo: new Date('2026-08-31') };
-
-    it('returns rows per outlet and deliberately no totals', async () => {
-      aggregation.getPlatformSalesByOutletAggregation.mockResolvedValue([
-        { tenantId: 't-a', outletId: 'out-1', totalOrders: 7, totalRevenue: 700_000, totalTax: 70_000, totalDiscount: 0, totalRounding: 500 },
-        { tenantId: 't-a', outletId: null, totalOrders: 2, totalRevenue: 200_000, totalTax: 20_000, totalDiscount: 0, totalRounding: 0 },
-      ]);
-
-      const result = await service.getPlatformSalesByOutlet(['t-a'], range);
-
-      expect(aggregation.getPlatformSalesByOutletAggregation).toHaveBeenCalledTimes(1);
-      expect(aggregation.getPlatformSalesByOutletAggregation).toHaveBeenCalledWith(['t-a'], {
-        from: range.dateFrom,
-        to: range.dateTo,
-      });
-      expect(result.currency).toBe('IDR');
-      expect(result.byOutlet).toHaveLength(2);
-      // No totals on purpose: a hub-wide total sitting next to an outlet's own
-      // row is exactly the number someone renders as "total" on an outlet screen.
-      expect((result as Record<string, unknown>).totals).toBeUndefined();
-    });
-
-    it('keeps the outletId of a row, including the null one for pre-outlet orders', async () => {
-      aggregation.getPlatformSalesByOutletAggregation.mockResolvedValue([
-        { tenantId: 't-a', outletId: 'out-1', totalOrders: 1, totalRevenue: 10_000, totalTax: 0, totalDiscount: 0, totalRounding: 0 },
-        { tenantId: 't-a', outletId: null, totalOrders: 3, totalRevenue: 30_000, totalTax: 0, totalDiscount: 0, totalRounding: 0 },
-      ]);
-
-      const result = await service.getPlatformSalesByOutlet(['t-a'], range);
-
-      expect(result.byOutlet.map((r) => r.outletId)).toEqual(['out-1', null]);
-    });
-
-    it('returns an empty list when nothing sold', async () => {
-      aggregation.getPlatformSalesByOutletAggregation.mockResolvedValue([]);
-
-      const result = await service.getPlatformSalesByOutlet(['t-a'], range);
-
-      expect(result.byOutlet).toEqual([]);
-    });
-
-    it('defaults to the last 30 days when no range is given', async () => {
-      aggregation.getPlatformSalesByOutletAggregation.mockResolvedValue([]);
-
-      await service.getPlatformSalesByOutlet(['t-a']);
-
-      const [, window] = aggregation.getPlatformSalesByOutletAggregation.mock.calls[0];
       const spanDays = (window.to.getTime() - window.from.getTime()) / (24 * 60 * 60 * 1000);
       expect(spanDays).toBe(30);
     });

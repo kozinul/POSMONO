@@ -2,15 +2,9 @@ import { Router } from 'express';
 import { PERMISSIONS } from '@posmono/shared';
 import { asyncHandler } from '../../../../../@shared/interfaces/middleware/asyncHandler';
 import { authenticate } from '../../../../../@shared/interfaces/middleware/authenticate';
-import { resolveOutlet } from '../../../../../@shared/interfaces/middleware/resolveOutlet';
 import type { HubMemberAccessService } from '../../../application/services/HubMemberAccessService';
 import type { MyHubController } from '../controllers/MyHubController';
 import { requireHubPermission } from '../middleware/requireHubPermission';
-import {
-  requireHubPermissionForOutlet,
-  type HubOutletLookup,
-  type HubOutletTenantLookup,
-} from '../middleware/requireHubPermissionForOutlet';
 
 /**
  * Hub V2 Fase 21 — `/api/hub`, the hub member's own surface.
@@ -25,15 +19,9 @@ import {
  * and folding the member reads into either file would make the boundary depend on
  * which route matched first — exactly the trap Fase 20 documented for invitations.
  */
-export interface MyHubOutletScope {
-  outlets: HubOutletLookup;
-  tenants: HubOutletTenantLookup;
-}
-
 export function createMyHubRoutes(
   controller: MyHubController,
   accessService: HubMemberAccessService,
-  outletScope: MyHubOutletScope,
 ): Router {
   const router = Router();
 
@@ -41,23 +29,6 @@ export function createMyHubRoutes(
   // path and no permission — otherwise a member with no hub role could not even
   // discover that they have none.
   router.get('/me/hubs', authenticate, asyncHandler(controller.myHubs.bind(controller)));
-
-  // **Before** the `/:hubId/...` routes below, deliberately. Express matches in
-  // registration order, and `/:hubId/overview` would happily swallow
-  // `/outlet/overview` as `hubId = 'outlet'` — answering with "Hub with id outlet
-  // not found" instead of the outlet view.
-  router.get(
-    '/outlet/overview',
-    authenticate,
-    resolveOutlet,
-    requireHubPermissionForOutlet(
-      accessService,
-      outletScope.outlets,
-      outletScope.tenants,
-      PERMISSIONS.HUB_REPORTS_READ,
-    ),
-    asyncHandler(controller.outletOverview.bind(controller)),
-  );
 
   router.get(
     '/:hubId',

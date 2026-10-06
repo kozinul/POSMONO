@@ -38,9 +38,6 @@ const TerminalCenterPage = lazy(() => import('../core/platform/pages/TerminalCen
 // DashboardLayout: a brand-new hub member has no menu entries worth showing.
 const HubInvitationPage = lazy(() => import('../core/hub/pages/HubInvitationPage'));
 const HubPage = lazy(() => import('../core/hub/pages/HubPage'));
-// Hub V2 Fase 23 — the per-outlet hub dashboard. Kept apart from `/hub`,
-// which is the group-level view.
-const HubOutletPage = lazy(() => import('../core/hub/pages/HubOutletPage'));
 const TenantDetailPage = lazy(() => import('../core/platform/pages/TenantDetailPage'));
 
 const Loading = () => (
@@ -85,7 +82,6 @@ export function AppRouter() {
               <Route path="/templates/:id/designer" element={<DesignerPage />} />
               <Route path="/database" element={<DatabasePage />} />
               <Route path="/hub" element={<HubPage />} />
-              <Route path="/hub/outlet" element={<HubOutletPage />} />
             </Route>
             {/* Hub V2 Fase 20 — guarded like any tenant page, but without the
                 dashboard chrome: see the lazy import above. */}

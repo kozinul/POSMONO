@@ -143,13 +143,7 @@ export function registerRoutes(app: Express, container: DIContainer): void {
   // resolved here (not inside the router) so the guard is a real dependency
   // rather than a container lookup buried in middleware.
   const myHubController = container.resolve('myHubController');
-  app.use(
-    '/api/hub',
-    createMyHubRoutes(myHubController, container.resolve('hubMemberAccessService'), {
-      outlets: container.resolve('outletRepository'),
-      tenants: container.resolve('tenantRepository'),
-    }),
-  );
+  app.use('/api/hub', createMyHubRoutes(myHubController, container.resolve('hubMemberAccessService')));
 
   const outletController = container.resolve('outletController');
   app.use('/api/outlets', createOutletRoutes(outletController));

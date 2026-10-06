@@ -19,16 +19,6 @@ const tenantRow = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const outletRow = (overrides: Record<string, unknown> = {}) => ({
-  _id: { tenantId: 't-a', outletId: 'out-1' },
-  totalOrders: 3,
-  totalRevenue: 300_000,
-  totalTax: 30_000,
-  totalDiscount: 0,
-  totalRounding: 0,
-  ...overrides,
-});
-
 describe('PlatformSalesAggregation', () => {
   describe('getSalesByTenant', () => {
     it('groups by tenant and normalises every figure to a number', async () => {
@@ -86,54 +76,6 @@ describe('PlatformSalesAggregation', () => {
 
       const group = aggregate.mock.calls[0][0][1].$group;
       expect(group._id).toBe('$tenantId');
-    });
-  });
-
-  describe('getSalesByOutlet', () => {
-    it('groups by tenant AND outlet', async () => {
-      const { aggregate, model } = modelReturning([]);
-
-      await new PlatformSalesAggregation(model).getSalesByOutlet(['t-a'], range);
-
-      const group = aggregate.mock.calls[0][0][1].$group;
-      // The grouping key is the whole point: a tenant total shown on an outlet
-      // screen looks right and is wrong about money.
-      expect(group._id).toEqual({ tenantId: '$tenantId', outletId: '$outletId' });
-    });
-
-    it('shares the settled-order match and totals with the tenant grouping', async () => {
-      const byTenant = modelReturning([]);
-      const byOutlet = modelReturning([]);
-
-      await new PlatformSalesAggregation(byTenant.model).getSalesByTenant(['t-a'], range);
-      await new PlatformSalesAggregation(byOutlet.model).getSalesByOutlet(['t-a'], range);
-
-      const [matchA, groupStageA] = byTenant.aggregate.mock.calls[0][0];
-      const [matchB, groupStageB] = byOutlet.aggregate.mock.calls[0][0];
-      const groupA = groupStageA.$group;
-      const groupB = groupStageB.$group;
-      // Otherwise a hub outlet total and a hub tenant total could drift apart.
-      expect(matchB).toEqual(matchA);
-      expect(groupB.totalRevenue).toEqual(groupA.totalRevenue);
-      expect(groupB.totalDiscount).toEqual(groupA.totalDiscount);
-    });
-
-    it('keeps an outletId and reports a null outletId as null, not the string "null"', async () => {
-      const { model } = modelReturning([
-        outletRow(),
-        outletRow({ _id: { tenantId: 't-a', outletId: null } }),
-      ]);
-
-      const result = await new PlatformSalesAggregation(model).getSalesByOutlet(['t-a'], range);
-
-      expect(result.map((r) => r.outletId)).toEqual(['out-1', null]);
-    });
-
-    it('short-circuits an empty tenant list without touching Mongo', async () => {
-      const { aggregate, model } = modelReturning([]);
-
-      await expect(new PlatformSalesAggregation(model).getSalesByOutlet([], range)).resolves.toEqual([]);
-      expect(aggregate).not.toHaveBeenCalled();
     });
   });
 });

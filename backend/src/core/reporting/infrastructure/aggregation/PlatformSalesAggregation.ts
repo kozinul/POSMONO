@@ -2,7 +2,7 @@ import { Model } from 'mongoose';
 
 /**
  * Sales aggregations that span **many tenants at once** — the hub-level reads
- * (`/api/platform/hubs/:id/overview`, `/api/hub/outlet/overview`).
+ * (`/api/platform/hubs/:id/overview`, `/api/hub/:hubId/overview`).
  *
  * These live apart from `ReportAggregation` for one reason: they do not answer
  * "how did this tenant do", they answer "how did these tenants do together",
@@ -25,31 +25,8 @@ export interface PlatformSalesByTenantRow {
   totalRounding: number;
 }
 
-/**
- * Group row of `getSalesByOutlet` (one row per outlet).
- * `outletId: null` collects pre-outlet orders, which no outlet view reads.
- */
-export interface PlatformSalesByOutletRow {
-  _id: { tenantId: string; outletId: string | null };
-  totalOrders: number;
-  totalRevenue: number;
-  totalTax: number;
-  totalDiscount: number;
-  totalRounding: number;
-}
-
 export interface PlatformSalesByTenant {
   tenantId: string;
-  totalOrders: number;
-  totalRevenue: number;
-  totalTax: number;
-  totalDiscount: number;
-  totalRounding: number;
-}
-
-export interface PlatformSalesByOutlet {
-  tenantId: string;
-  outletId: string | null;
   totalOrders: number;
   totalRevenue: number;
   totalTax: number;
@@ -111,49 +88,6 @@ export class PlatformSalesAggregation {
 
     return rows.map((row: PlatformSalesByTenantRow) => ({
       tenantId: String(row._id),
-      totalOrders: Number(row.totalOrders ?? 0),
-      totalRevenue: Math.round(Number(row.totalRevenue ?? 0)),
-      totalTax: Math.round(Number(row.totalTax ?? 0)),
-      totalDiscount: Math.round(Number(row.totalDiscount ?? 0)),
-      totalRounding: Math.round(Number(row.totalRounding ?? 0)),
-    }));
-  }
-
-  /**
-   * Hub V2 Fase 23 — sales per **outlet**, in one pass.
-   *
-   * Kept separate from `getSalesByTenant` on purpose. An outlet view that reused
-   * the tenant aggregation and filtered its rows would show the *tenant's* whole
-   * revenue on an outlet screen: it looks right, and it is wrong about money.
-   * Grouping by `outletId` is what makes the number mean the outlet it is shown
-   * under.
-   *
-   * Orders from before outlets existed carry `outletId: null` and group under
-   * `null`. They are deliberately invisible to any outlet view — that matches the
-   * strict-equality `outletId` filter every other outlet-scoped report already
-   * applies (`MongoOrderRepository.getDailySales`, `findByTenant`), so an outlet
-   * view and that tenant's outlet-filtered report never disagree.
-   */
-  async getSalesByOutlet(
-    tenantIds: string[],
-    range: PlatformSalesRange,
-  ): Promise<PlatformSalesByOutlet[]> {
-    if (tenantIds.length === 0) return [];
-
-    const rows = await this.orderModel.aggregate([
-      { $match: PlatformSalesAggregation.settledMatch(tenantIds, range) },
-      {
-        $group: {
-          _id: { tenantId: '$tenantId', outletId: '$outletId' },
-          ...PlatformSalesAggregation.totals(),
-        },
-      },
-      { $sort: { totalRevenue: -1 } },
-    ]);
-
-    return rows.map((row: PlatformSalesByOutletRow) => ({
-      tenantId: String(row._id?.tenantId),
-      outletId: row._id?.outletId == null ? null : String(row._id.outletId),
       totalOrders: Number(row.totalOrders ?? 0),
       totalRevenue: Math.round(Number(row.totalRevenue ?? 0)),
       totalTax: Math.round(Number(row.totalTax ?? 0)),

@@ -1,14 +1,6 @@
 /**
- * Shared primitives for the two hub overview read views.
- *
- * Fase 19 built one read model (`HubOverviewReadModel`) for the group view, and
- * Fase 23 added a second, narrower one (`HubOutletOverviewReadModel`) for a
- * single outlet. They are deliberately **two views, not one function with
- * filters**: a hub member asking "how is this group of businesses doing" and an
- * operator asking "how is this one outlet doing" are different questions, and a
- * `getOverview({ hubId?, outletId?, tenantId? })` signature would only hide that.
- *
- * What genuinely belongs to both lives here, so there is exactly one owner:
+ * The rules behind the hub overview, kept apart from the read model that applies
+ * them so each rule has exactly one owner and can be tested without MongoDB.
  *
  * - `buildOutletRows` — which outlets appear, and when one counts as stale. Fase
  *   19 already learned this the hard way: two implementations of the stale rule
@@ -16,8 +8,8 @@
  * - `countHubMembers` — the `countMembers` head count with the `listMembers`
  *   fallback, i.e. the rule that keeps the member card off the N+1 path.
  *
- * Neither view imports the other, and neither imports a concrete service: the
- * sources stay structural so a test can pass doubles without MongoDB.
+ * The sources stay structural rather than importing a concrete service, so a test
+ * can pass plain doubles.
  */
 
 /** Outlets with no open shift and no activity within `staleHours` need a look. */
@@ -66,8 +58,9 @@ export function outletKey(tenantId: string, outletId: string | null): string {
  * activity for an outlet with no document (deleted outlet, or a legacy
  * outletId-less shift) is added back, otherwise a live cashier disappears.
  *
- * `staleHours` is deliberately **not** a parameter: both views must agree on what
- * "stale" means, and a knob here would be one caller drifting away from the other.
+ * `staleHours` is deliberately **not** a parameter: "stale" has to mean one thing
+ * everywhere it is shown, and a knob here would be one caller drifting away from
+ * another.
  */
 export function buildOutletRows(input: {
   outletDocuments: HubOverviewOutletDocument[];
