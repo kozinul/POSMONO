@@ -11,6 +11,10 @@ uploads/
 .DS_Store
 .pnpm-store/
 .vscode/
+.cursor/
+.opencode/
+CLAUDE.md
+opencode.json
 home/
 *.tsbuildinfo
 session-*.md
