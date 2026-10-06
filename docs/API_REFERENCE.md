@@ -1268,9 +1268,11 @@ Errors: 400 (role tidak dikenal, undangan sudah `accepted`/`revoked`, kedaluwars
 
 ---
 
-## Permukaan Anggota Hub (`/api/hub`) — Fase 21
+## Permukaan Anggota Hub (`/api/hub`) — Fase 21 (baca) + Fase 24 (mutasi)
 
-Read-only. Guard = `authenticate` + `requireHubPermission` (membership dibaca per request), **bukan** `authorize()`: permission `hub.*` sengaja tidak ada di JWT karena token membawa permission **tenant**. Administrasi hub tetap di `/api/hubs` & `/api/hub-memberships` (`platform.hubs.manage`).
+Guard = `authenticate` + `requireHubPermission` (membership dibaca per request), **bukan** `authorize()`: permission `hub.*` sengaja tidak ada di JWT karena token membawa permission **tenant**. Fase 21 membuka **baca**; Fase 24 menambah **tulis** pada path yang sama. Router baca (`myhub.routes.ts`) dan tulis (`myhubadmin.routes.ts`) sengaja berbeda file — dua audiens, dua sumber permission, supaya batasnya bukan detail urutan kecocokan route. Platform tetap punya permukaan admin sendiri di `/api/hubs` & `/api/hub-memberships` (`platform.hubs.manage`).
+
+### Baca (Fase 21)
 
 | Method | Path | Permission | Guna |
 |--------|------|------------|------|
@@ -1279,9 +1281,6 @@ Read-only. Guard = `authenticate` + `requireHubPermission` (membership dibaca pe
 | GET | `/api/hub/:hubId/tenants` | `hub.tenants.read` | tenant dalam hub |
 | GET | `/api/hub/:hubId/members` | `hub.members.read` | anggota hub + status (`active`/`suspended`) |
 | GET | `/api/hub/:hubId/overview` | `hub.reports.read` | read model Fase 19 (query: `dateFrom`, `dateTo`) |
-| GET | `/api/hub/outlet/overview` | `hub.reports.read` | **Fase 23** — read model **outlet aktif**; butuh header `X-Outlet-Id` (query: `dateFrom`, `dateTo`) |
-
-> ⚠️ `/outlet/overview` **tidak** punya `:hubId` di path, dan `:outletId` juga tidak — keduanya diturunkan server dari `X-Outlet-Id` → outlet → tenant → `tenant.hubId` → membership. Route didaftarkan **sebelum** `/:hubId/overview` agar parameter tidak menelan path. Alasannya bukan sekadar切身: kalau klien boleh menyebut hub-nya sendiri, anggota beberapa hub bisa menampilkan dashboard hub yang tidak memiliki outlet tersebut.
 
 **Matriks role hub** (`HUB_ROLE_PERMISSION_MATRIX`) — `viewer` dipersempit di Fase 21:
 
@@ -1301,20 +1300,42 @@ GET /api/hub/:hubId/tenants   → { data: [{ id, name, status, businessType, bus
 GET /api/hub/:hubId/members   → { data: [{ id, hubId, userId, role, status, suspendedAt, createdAt, updatedAt,
                                              displayName, email, userTenantId, userTenantName }] }
 GET /api/hub/:hubId/overview  → { data: { hub, dateFrom, dateTo, generatedAt, counts, operational, sales, subscription } }
-GET /api/hub/outlet/overview   → { data: { hub, dateFrom, dateTo, generatedAt,
-                                   outlet{ id, name, tenantId, tenantName, isActive },
-                                   sales{ currency, total, transactions, tax, discount, rounding },
-                                   operational{ staleHours, hasOpenShift, openShifts, lastShiftAt, isStale, idleHours },
-                                   members{ total } } }
 ```
-
-**Outlet overview (Fase 23)** dijawab sebagai **satu outlet**, bukan agregat grup: tanpa `counts`, tanpa `byTenant`, tanpa daftar outlet. Penjualan dihitung **per outlet** — satu grouped agregasi `orders` (`paid`/`completed`, revenue `total + roundingAdjustment`, `createdAt` dalam range) yang **`$match` `$or: [{ outletId }, { outletId: { $exists: false } }]`**. Order `outletId: null` ikut dihitung **hanya** bila tenant punya tepat satu outlet (backfill boot), jadi layar ini tidak nol diam-diam untuk order lama. Tenant lain tidak pernah bocor: agregasi selalu `tenantId` + `outletId` ter-filter. `members.total` = anggota **hub** (keanggotaan itu fakta level hub), `operational` mengikuti aturan stale 24 jam yang sama dengan overview grup, dan **`operational` tidak bergantung pada range**.
 
 **Cakupan ≠ grant**: `/api/hub/*` mencakup **seluruh tenant dalam hub**, bukan hanya tenant hasil grant Fase 17. Grant governs "tenant mana yang boleh saya buka" (`switch-tenant`); ini governs "kelompok bisnis ini bagaimana".
 
 **`config` tidak pernah keluar**: baris tenant diproyeksi field per field — `Tenant.serialize()` memuat `config`, dan `config` memuat kredensial QRIS gateway tenant (`qrisGatewayApiKey`, `qrisGatewayBaseUrl`, `qrisGatewayMerchantId`).
 
-Errors: 400 (`dateFrom`/`dateTo` bukan `YYYY-MM-DD`, atau **tanpa header `X-Outlet-Id`** pada `/outlet/overview` — endpoint ini tidak pernah jatuh ke outlet default), 401 (tanpa login), **403** (bukan anggota aktif · membership `suspended` · hub `suspended`/`archived` · role kurang permission · **admin platform tanpa membership — tidak ada bypass**), 404 (hub tidak ada · outlet tidak ada · **tenant outlet tidak punya `hubId`**, jadi layar `/hub/outlet` jadi empty state "pilih outlet di switcher", bukan 403).
+Errors: 400 (`dateFrom`/`dateTo` bukan `YYYY-MM-DD`), 401 (tanpa login), **403** (bukan anggota aktif · membership `suspended` · hub `suspended`/`archived` · role kurang permission · **admin platform tanpa membership — tidak ada bypass**), 404 (hub tidak ada).
+
+### Mutasi sisi anggota (Fase 24)
+
+Endpoint yang sama dipakai Terminal Center, tapi digerakkan oleh anggota hub sendiri lewat console `/hub`. Guard tetap `authenticate` + `requireHubPermission`; tambahan **aturan plafon** (`backend/src/core/hub/domain/hubRoleRules.ts`, 16 unit test) yang tidak bisa diekspresikan oleh route guard — `hub.members.manage` hanya bilang "boleh mengelola", bukan "boleh mengelola siapa pun":
+
+| Method | Path | Permission | Guna |
+|--------|------|------------|------|
+| GET | `/api/hub/:hubId/members/candidates` | `hub.members.read` | kandidat user aktif **hanya dari tenant dalam hub ini** (limit 20; `?search=`) |
+| POST | `/api/hub/:hubId/members` | `hub.members.manage` | tambah anggota `{ userId, role }` — user wajib milik tenant hub ini (201) |
+| PUT | `/api/hub/:hubId/members/:userId` | `hub.members.manage` | ganti role `{ role }` |
+| PUT | `/api/hub/:hubId/members/:userId/status` | `hub.members.manage` | `{ status: 'active' \| 'suspended' }` — **wajib eksplisit**, tanpa default |
+| DELETE | `/api/hub/:hubId/members/:userId` | `hub.members.manage` | hapus anggota (204) |
+| GET | `/api/hub/:hubId/members/:userId/access` | `hub.members.read` | daftar grant Fase 17 milik anggota |
+| PUT | `/api/hub/:hubId/members/:userId/access` | `hub.members.manage` | upsert grant `{ tenantId, tenantRole, outletIds?, status? }` |
+| DELETE | `/api/hub/:hubId/members/:userId/access/:tenantId` | `hub.members.manage` | cabut grant (menangguhkan, Fase 17 — 204) |
+| GET | `/api/hub/:hubId/invitations` | `hub.members.read` | daftar undangan |
+| POST | `/api/hub/:hubId/invitations` | `hub.members.manage` | buat undangan `{ email, role, expiresInHours? }` (201, token mentah sekali pakai) |
+| DELETE | `/api/hub/:hubId/invitations/:invitationId` | `hub.members.manage` | cabut undangan |
+
+**Plafon `hubRoleRules`** (murni, tanpa repo — diuji unit tanpa HTTP):
+- **`assertMayManageMember` — rank ketat (`>`)**: hanya role di bawah diri yang boleh dikelola (`admin` tidak bisa menyentuh `admin` lain; `owner` tidak menyentuh siapa pun termasuk owner lain) → **baris `owner` immutable dari layar ini**, yang menjaga hub selalu punya pengelola. Tidak ada guard "owner terakhir" terpisah — guard itu tidak terjangkau selama aturannya strict-rank.
+- **`assertNotSelf`**: tidak ada yang mengelola barisnya sendiri lewat permukaan ini (demote/suspend diri sendiri tidak bisa dibatalkan dari arah yang sama).
+- **`assertMayAssignHubRole` — rank `≤`**: role yang diberikan tidak boleh melebihi rank actor (owner boleh memberi owner; admin tidak boleh memberi owner).
+- **`assertTenantRoleWithinActor` — cap table, bukan perbandingan dua tangga**: `owner→owner`, `admin→admin`, `manager→manager`, `viewer→tidak boleh grant`. Cap table karena dua set tidak sejajar (role hub berhenti di `viewer`, role tenant punya `cashier` di tengah) — perbandingan numerik akan membuat hub `viewer` bisa mencetak tenant `cashier`. `TENANT_ACCESS_ROLES` terurut widest-first, jadi index **lebih kecil** = lebih berwenang.
+- Kandidat/penambahan anggota dibatasi tenant hub ini — admin hub tidak bisa mengenumerasi staf bisnis lain.
+
+**Audit**: memakai actor nyata (`PlatformAuditService.recordFromRequest` + `AuditActor` opsional), bukan `req.platformUser*` yang hanya diisi `platformAuthenticate`. Aksi: `MEMBER_ADDED` / `MEMBER_ROLE_CHANGED` / `MEMBER_SUSPENDED` / `MEMBER_REACTIVATED` / `MEMBER_REMOVED` / `MEMBER_ACCESS_GRANTED` / `MEMBER_ACCESS_UPDATED` / `MEMBER_ACCESS_REVOKED` / `INVITATION_SENT` / `INVITATION_REVOKED`. **Token undangan mentah tidak pernah masuk audit.** Rekam audit gagal tidak pernah menggagalkan operasi utama.
+
+Errors: 400 (role/status tidak dikenal, self-manage, rank melebihi actor, user bukan milik tenant hub, grant sudah dicabut), 401 (tanpa login), 403 (permission kurang / bukan anggota), 404 (hub/anggota tidak ada).
 
 ---
 

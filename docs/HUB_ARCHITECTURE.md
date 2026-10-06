@@ -473,43 +473,50 @@ Sebelum fase ini, "being in a hub" hanya berarti **bisa pindah tenant**: satu ba
 - Belum ada mutasi dari sisi anggota (ubah role, suspend anggota, grant per tenant, undangan) — semuanya masih `platform.hubs.manage`.
 - Belum ada `switch-hub`: memilih hub terjadi lewat halaman `/hub` (Fase 22), bukan lewat pergantian session.
 - Ringkasan grant per anggota ("N dari M tenant") masih butuh endpoint bulk (sama seperti batas Fase 19/Fase 20).
-### Fase 22 — Halaman anggota `/hub` ✅ (2026-10-03)
+### Fase 22 — Halaman anggota `/hub` ✅ (2026-10-03, dib superseded oleh Fase 24)
 
-Fase 21 memberi permukaannya; fase ini membuatnya bisa dipakai orang. `/hub` di dashboard, **tab permission-gated** (`hub.read` untuk profil, `hub.tenants.read`, `hub.members.read`, `hub.reports.read` untuk overview) — tab yang tak terlihat tidak pernah menembak endpoint-nya, jadi user tanpa izin bukan sekadar melihat tab kosong.
+Fase 21 memberi permukaannya; fase ini membuatnya bisa dipakai orang. Awalnya `/hub` hidup **di dalam dashboard** dengan tab permission-gated (`hub.read` profil, `hub.tenants.read`, `hub.members.read`, `hub.reports.read` overview) — tab yang tak terlihat tidak pernah menembak endpoint-nya.
 
-**Ekstraksi yang menjaga dua tampilan tetap sama**: `HubOverviewBody`, `useHubOverviewRange`, `HubOverviewRangeBar` berasal dari `HubOverviewPanel` (Terminal Center). Tampilan grup perlu `hubName` yang bentuknya berbeda di dua pemanggil, jadi `HubOverviewSections = Omit<HubOverview, 'hub'>` — header-nya disediakan oleh halaman. Preset periode + tampilan tanggal sudah dimiliki bersama, jadi dua layar tidak lagi punya dua definisi "7 hari".
+> **Fase 24 membongkar premis "di dalam dashboard".** Lihat §Fase 24: `/hub` kini console sendiri (`/hub/login` + `HubLayout`), bukan lagi halaman dashboard.
+
+**Ekstraksi yang menjaga dua tampilan tetap sama** (masih berlaku di Fase 24): `HubOverviewBody`, `useHubOverviewRange`, `HubOverviewRangeBar` berasal dari `HubOverviewPanel` (Terminal Center). Tampilan grup perlu `hubName` yang bentuknya berbeda di dua pemanggil, jadi `HubOverviewSections = Omit<HubOverview, 'hub'>` — header-nya disediakan oleh halaman.
 
 Batas yang diketahui: hook-nya masih di `core/platform/components`, jadi `core/hub` mengimpor dari `core/platform` — tidak ideal, tetapi tidak menyakitkan selama platform dan hub memang satu feature area.
 
-### Fase 23 — Dashboard hub per outlet (`/hub/outlet`) ✅ (2026-10-04)
+### Fase 23 — Dashboard hub per outlet (`/hub/outlet`) ❌ **DIREVERT 2026-10-04**
 
-`/hub` menjawab "bagaimana **kelompok bisnis ini**", terjumlah di seluruh tenant + outlet. Untuk kasir/owner yang bekerja di **satu outlet**, itu pertanyaan yang salah: angkanya tercampur PCL di kasir lain, dan harus menggali tabel penjualan per tenant untuk menemukan angkanya sendiri. Fase 23 menambah layar kedua yang menjawab "bagaimana **outlet yang sedang saya pakai**", di `/hub/outlet`.
+Dihapus seluruhnya (backend + frontend + test + docs) pada 2026-10-04. Alasan produk: **hub hanya dipakai client yang punya banyak tenant**, jadi layar per outlet tidak punya pemanggil. Angka per outlet tidak benar-benar hilang — `ReportController` sudah meneruskan `?outletId=` ke daily/sales/finance/shift report; yang belum ada hanya **filter outlet di UI `/reports`**.
 
-**Kontrak yang tidak bisa ditawar: outlet dari header, bukan dari path**
-```
-GET /api/hub/outlet/overview            ← tanpa :hubId
-X-Outlet-Id: out-a
-  → outlet → tenant → tenant.hubId → membership → hub.reports.read
-```
-Tidak ada `:hubId` **dan** tidak ada `:outletId`. Outlet adalah sumber konteks; hub turun darinya. Kalau klien boleh menyebut hub-nya sendiri, anggota beberapa hub akan melihat dashboard hub yang tidak memiliki outlet di depan mereka — jadi guard `requireHubPermissionForOutlet` sengaja dibaca per-request, bukan lewat `authorize()` (sama seperti Fase 21: permission `hub.*` tidak ada di JWT). Route wajib terdaftar **sebelum** `/:hubId/overview`, kalau tidak `outlet` tertangkap sebagai `hubId`.
+Yang tetap dipertahankan karena dipakai jalur grup: `HubOverviewPrimitives` (`OVERVIEW_STALE_HOURS`, `buildOutletRows`, `countHubMembers`) dan `PlatformSalesAggregation` (`getSalesByTenant` dari Fase 19). Yang hilang bersama fase ini: `GET /api/hub/outlet/overview`, guard `requireHubPermissionForOutlet`, `HubOutletOverviewReadModel`, `ReportService.getPlatformSalesByOutlet`, `PlatformSalesAggregation.getSalesByOutlet`, hook `useMyHubOutletOverview`, halaman `/hub/outlet` + nav `Hub Outlet`.
 
-**Tanpa header = 400, bukan outlet default.** Halaman ini menolak menebak outlet mana yang "sedang aktif": kalau switcher ada, tebakan tersebut benar setengah waktu dan menghasilkan layar yang terlihat otoriter untuk angka yang salah.
+Keputusan yang hilang bersama kodenya, tapi belum kontroversial — simpan kalau fiturnya dihidupkan lagi: outlet adalah sumber konteks (header `X-Outlet-Id` → outlet → tenant → `tenant.hubId` → membership), bukan parameter path; tanpa header = **400**, bukan fallback outlet default; dan penjualan harus dihitung per outlet (`$group` per `tenantId + outletId`), bukan total tenant yang difilter di tampilan.
 
-**Pembacaan per outlet, bukan total tenant.** `getPlatformSalesByOutlet` me-`$match` `$or: [{ outletId }, { outletId: { $exists: false } }]` lalu `$group` per `tenantId + outletId`. Match kedua itu bukan kelonggaran: order lama tidak punya `outletId`, dan lotengnya nol untuk data yang sebenarnya milik outlet itu — jadi nilainya ikut, **hanya** bila tenant punya satu outlet (backfill boot). Order `outletId: null` pada tenant multi-outlet tetap dikeluarkan. `sales` tidak mengembalikan `totals` karena di layar ini hanya ada satu baris; `byTenant` dihapus karena itu bukan lagi pilihannya.
+### Fase 24 — Hub Center console + mutasi sisi anggota ✅ (2026-10-04)
 
-**Dua read model, bukan satu dengan parameter.** `HubOverviewReadModel` (grup) dan `HubOutletOverviewReadModel` (outlet) menjawab dua pertanyaan berbeda, dan Fase 19 sudah menunjukkan lesson-nya: memberi satu builder dua bentuk menghasilkan parameter yang hanya satu caller yang pakai. Yang benar-benar dibagi bukan bentuk datanya melainkan **aturan**nya — `HubOverviewPrimitives` memegang `OVERVIEW_STALE_HOURS`, `buildOutletRows`, dan `countHubMembers`, jadi aturan stale 24 jam tetap punya satu pemilik walaupun ada dua read model.
+Fase 21/22 memberi **baca**; fase ini menutup dua lubang produk sekaligus: (1) `/hub` tidak bisa menjadi halaman dashboard — anggota hub bisa jadi orang yang tidak punya posisi tenant sama sekali, dan menu POS tidak punya apa pun untuk ditampilkan; (2) satu-satunya cara mengelola anggota adalah Terminal Center, padahal target penggunanya justru **klien dengan banyak tenant**, yang tidak punya waktu masuk ke console platform.
 
-**Frontend**: `useMyHubOutletOverview` memakai `useAuthStore().activeOutletId` sebagai sumber outlet (persis seperti `/pos`), dan `activeOutletId` ada di query key — berganti outlet = refetch, tanpa `OUTLET_SCOPE_KEYS`. `HubOutletOverviewBody` sengaja **bukan** `HubOverviewBody`: yang ini tidak punya daftar outlet, dan `counts`/tabel per tenant tidak punya arti di layar ini. Baris outlet di tabel satu-baris juga dihapus karena judul halaman sudah menyebut outlet itu. 403 (role tanpa `hub.reports.read`) tampil sebagai "Anda tidak punya izin", bukan kode status mentah — `retry: false` di hook, karena 403 adalah keputusan role, bukan jaringan yang sesaat.
+**Pemisahan console, bukan sekadar halaman baru.** `/hub/login` punya form sendiri dan `HubLayout`-nya sendiri, sibling dari `TerminalLayout`. Alasannya konsekuensi, bukan selera: `ProtectedRoute` melempar `Cashier` ke `/pos`, dan kasir adalah anggota `viewer` yang sah — jadi rute `/hub` **harus** di luar `ProtectedRoute` **dan** di luar `DashboardLayout`. Login memakai `/auth/login` tanpa `X-Tenant-Id`, persis fallback global-email yang dipakai login tenant hasil provisioning; header `platform` milik `TerminalLoginPage` justru akan membuat anggota hub mustahil masuk.
+
+**Aturan role satu pemilik, ditulis sekali** (`hubRoleRules.ts`, 16 unit test):
+- Yang boleh dikelola **hanya** role di bawah diri secara ketat (`admin` tidak bisa menyentuh `admin` lain, `owner` tidak menyentuh siapa pun termasuk owner lain) → **baris owner immutable dari layar anggota**, dan itu yang menjaga hub selalu punya pengelola. Takeaway: jangan "perbaiki" ini dengan guard owner-terakhir; guard itu tidak terjangkau selama aturannya strict-rank, jadi menambahkannya hanya mengarang input yang tidak bisa terjadi.
+- Role yang boleh diberikan tidak melebihi rank actor (owner boleh memberi owner; admin tidak boleh memberi owner).
+- Cap grant tenant: `owner→owner`, `admin→admin`, `manager→manager`, `viewer→tidak boleh grant`; revoke tetap `suspended`, bukan delete (Fase 17).
+
+**Yang FE terima dari server, bukan hasil tebakan sendiri**: UI tidak membaca role-rank; ia menerima `permissions[]` dari `/hub/me/hubs` lalu memakainya untuk memblok tab dan meng-`enable` query. Jebakan yang sudah satu kali terjadi: `HUB_MEMBER_ROLES` terurut widest-first, jadi `indexOf` memberi `owner` angka **terkecil** — membandingkan dengan `>` lalu membalik aturan secara senyap (owner tak bisa mengelola viewer). `core/hub/utils/roles.ts` sekarang punya `STRENGTH` eksplisit + 11 test.
+
+**Audit**: mutasi anggota memakai actor nyata, bukan baris kosong di `platform_audit` — `PlatformAuditService.recordFromRequest` menerima `AuditActor` opsional yang mengalahi field platform. Raw token undangan tidak pernah masuk audit.
+
+Batas yang diketahui: lifecycle tenant (pause/resume/subscription/destructive) **tetap platform-only**; `switch-hub` masih ganti halaman, bukan ganti session; ringkasan grant per anggota ("N dari M tenant") masih butuh endpoint bulk; satu-satunya jalan keluar dari role owner adalah meminta admin platform.
 
 ### Di luar scope (terkunci di `HUB_V2_DECISIONS.md`)
 `HubTenantMembership` (multi-hub) · wallet/`WalletLedger`/`HubWallet` · `HubInvoice`/prepaid credit
-(ditunda) · `Hub.settings`/logo/contact · mutasi sisi anggota (Fase 21 sengaja read-only; lihat §Fase 21) · scheduled
-reports & export overview · **export** outlet overview (Fase 23 read-only, belum ada tombol unduh).
+(ditunda) · `Hub.settings`/logo/contact · **lifecycle tenant & operasi destruktif dari sisi anggota** (tetap
+Terminal Center) · scheduled reports & export overview.
 
 ### Urutan & release
 ```
 1. Commit dokumen: HUB_V2_DECISIONS.md + HUB_V2_FRONTEND_PLAN.md + fase ini   (docs only)
 2. Fase 16 (commit sendiri — ada migrasi Role & wajib re-login)
 3. Fase 17 (commit sendiri — mengubah cara token lintas-tenant diterbitkan)
-4. Fase 18 → 19 → 20 → 21 → 22 → 23 (satu commit per fase)
+4. Fase 18 → 19 → 20 → 21 → 22 (satu commit per fase)
 ```

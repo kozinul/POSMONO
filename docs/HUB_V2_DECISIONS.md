@@ -92,6 +92,26 @@ supaya tahap berikutnya tidak mengulang perdebatan yang sama:
   semua tenant, sementara ia ditolak untuk melihat daftar tenant-nya. Sekarang `viewer` hanya
   `hub.read`. Matriks harus tetap monoton per level dan diuji begitu.
 
+**Rekaman tahap 2 lanjutan (Fase 24, 2026-10-04)** — D1 tetap, tapi tahap 2 kini punya
+**mutasi sisi anggota**: `POST/PUT/DELETE /api/hub/:hubId/members*` + grant + undangan
+(`hub.members.manage`), gerakkan dari console `/hub` sendiri (`/hub/login` + `HubLayout`,
+di luar `ProtectedRoute`/`DashboardLayout` — kasir adalah anggota `viewer` yang sah dan
+`ProtectedRoute` melemparnya ke `/pos`). Tiga hal yang harus tercatat:
+- **Permission saja tidak cukup; ada plafon.** `hub.members.manage` bilang "boleh mengelola",
+  bukan "boleh mengelola siapa pun". `hubRoleRules.ts` menambah rank-ketat (`>`): yang boleh
+  dikelola hanya role di bawah diri → baris `owner` immutable, tanpa guard "owner terakhir"
+  terpisah (guard itu tidak terjangkau selama aturannya strict-rank). Cap grant tenant memakai
+  cap table (`owner→owner`, …, `viewer→null`), bukan perbandingan dua tangga — dua set tidak
+  sejajar (role tenant punya `cashier` di tengah), jadi perbandingan numerik akan membuat
+  hub `viewer` bisa mencetak tenant `cashier`.
+- **`hub.*` tetap tidak masuk JWT.** Mutasi membaca membership per request seperti baca;
+  suspend member berlaku seketika. Membungkus `authorize()` di sini akan membalik keputusan
+  Fase 16.
+- **Yang TIDAK berpindah ke tahap 2**: lifecycle tenant (pause/resume/subscription/destructive)
+  tetap platform-only; `switch-hub` masih ganti halaman bukan ganti session; kelola/arsip
+  hub tetap Terminal Center. Jarak ini yang membedakan "mengelola orang dalam hub" (boleh)
+  dengan "mengelola entitas bisnis lintas-tenant" (belum).
+
 ## D2 — Satu tenant = satu hub
 
 **Keputusan:** `Tenant.hubId` (nullable) tetap **satu-satunya sumber kebenaran** relasi Hub↔Tenant.
@@ -148,7 +168,7 @@ kalau ada kebutuhan komersial nyata.
 | Wallet / top-up saldo di Kuire | Stored funds + KYC/escrow/rekonsiliasi (D4) |
 | `Hub.settings` sebagai config-bag | Jebakan yang sama seperti `TenantConfig` (QRIS); cukup `code`/`status` dulu |
 | `Hub.logo` / `contact` | Estetis; tidak ada kebutuhan produk yang terverifikasi |
-| Langsung buat UI hub-side admin | Memakai D1: permission namespace belum ada, permukaan auth belum di-hardening |
+| Langsung buat UI hub-side admin | Memakai D1: permission namespace belum ada, permukaan auth belum di-hardening — **selesai di Fase 24, berurutan sesuai D1** (namespace Fase 16 → baca Fase 21 → tulis Fase 24) |
 | Mapping `hub.owner` → `OWNER_PERMS` (status quo) | Security hole: memberi Owner penuh di semua tenant (lihat Temuan Kritis) |
 | Permission `hub:*` langsung dipakai bareng `hub:manage` (platform) | Tabrakan makna: `hub:manage` = permission platform. Namespace platform → `platform.hubs.manage` (Fase 16) |
 
@@ -164,6 +184,9 @@ kalau ada kebutuhan komersial nyata.
 | **19** | Hub Overview (read model) | Sales dari orders per tenant (bukan shift) + kartu ringkas | D4 (tidak ada angka "saldo", hanya subscription rollup) |
 | **20** | Hub Invitation & suspend member | `HubInvitation` + `HubMembership.status` | D1 (undangan dipakai platform dulu) |
 | **21** | Permukaan baca anggota hub (D1 tahap 2, **read-only**) | `GET /api/hub/*` + `requireHubPermission` | D1 (tahap 2 dimulai dari **baca**, bukan tulis) · D2 (satu tenant = satu hub, jadi daftar tenant hub lengkap) |
+| **22** | Halaman anggota `/hub` | Tab permission-gated + overview diekstrak bersama Terminal Center | D1 (baca dulu) |
+| **23** | Dashboard per outlet `/hub/outlet` | **DIREVERT** 2026-10-04 — hub dipakai client multi-tenant, per-outlet ada di `/reports` | — |
+| **24** | Hub Center console + mutasi sisi anggota ★ | `/hub/login` + `HubLayout` (di luar dashboard) + `POST/PUT/DELETE /api/hub/:hubId/members*` + grant + undangan, plafon `hubRoleRules` | D1 (tahap 2 **tulis**: kelola orang dalam hub pindah ke anggota; kelola entitas tetap platform) · D3 (cap grant per tenant role) |
 
 Front-end plan: [`HUB_V2_FRONTEND_PLAN.md`](HUB_V2_FRONTEND_PLAN.md).
 
@@ -173,7 +196,7 @@ Front-end plan: [`HUB_V2_FRONTEND_PLAN.md`](HUB_V2_FRONTEND_PLAN.md).
 
 | Keputusan lama (`HUB_ARCHITECTURE.md` §4) | Dampak |
 |---|---|
-| #5 — Otoritas kelola Hub = platform saja | **Dipertahankan** (D1 tahap 1); tahap 2 butuh ADR baru |
+| #5 — Otoritas kelola Hub = platform saja | **Disebagian dicabut di Fase 24** (D1 tahap 2): kelola anggota/grant/undangan jadi milik anggota hub; kelola & lifecycle entitas hub tetap platform |
 | #9 — `Hub.tenantId` dihapus, relasi via `Tenant.hubId` | **Dipertahankan & ditegaskan** (D2) |
 | #6 — `hub:manage` | Dipertahankan sebagai permission platform, tapi **di-rename** `platform.hubs.manage` (Fase 16) |
 
@@ -199,11 +222,19 @@ direservasi untuk D1 tahap 2, matriks role hub 4. Catatan & release note di
 read-only, dijaga membership, dengan `viewer` dipersempit ke `hub.read` saja dan `config` tenant
 (proyeksi QRIS) tidak pernah keluar.
 
-**Fase 22–23 selesai 2026-10-03/04** (frontend) — halaman anggota `/hub` (tab permission-gated,
-overview diekstrak supaya sama dengan Terminal Center), lalu `/hub/outlet`: dashboard **per outlet**
-dengan `GET /api/hub/outlet/overview` yang diturunkan dari `X-Outlet-Id` (tanpa `:hubId` maupun
-`:outletId` di path). Lihat § Fase 22 & § Fase 23 di `HUB_ARCHITECTURE.md`.
+**Fase 22 selesai 2026-10-03** (frontend) — halaman anggota `/hub` (tab permission-gated, overview
+diekstrak supaya sama dengan Terminal Center). Lihat § Fase 22 di `HUB_ARCHITECTURE.md`.
 
-**Yang masih terbuka di D1 tahap 2**: mutasi sisi anggota (ubah role, suspend, grant per tenant,
-undangan) tetap `platform.hubs.manage`; belum ada `switch-hub`; belum ada ringkasan grant per
-anggota ("N dari M tenant", butuh endpoint bulk); belum ada export/scheduled report.
+**Fase 23 (dashboard per outlet `/hub/outlet`) DIREVERT 2026-10-04** — alasannya produk, bukan teknis:
+hub hanya dipakai client yang **punya banyak tenant**, jadi pertanyaan "bagaimana outlet saya" sudah
+jawabannya di outlet/client itu sendiri, bukan di layar hub. Angka per outlet tidak ikut hilang:
+`/reports` sudah meneruskan `?outletId=` (yang belum ada hanya filter outlet di UI).
+
+**Fase 24 selesai 2026-10-04** — mutasi sisi anggota (tambah/ubah role/suspend/hapus anggota,
+grant per tenant, undangan) + console `/hub` sendiri di luar dashboard, dijaga plafon
+`hubRoleRules` (rank-ketat + cap table). Lihat § Fase 24 di `HUB_ARCHITECTURE.md`.
+
+**Yang masih terbuka di D1 tahap 2**: kelola/arsip/`status` hub tetap platform-only; lifecycle
+tenant (pause/resume/subscription/destructive) tetap platform-only; belum ada `switch-hub`
+(ganti halaman, bukan ganti session); belum ada ringkasan grant per anggota ("N dari M tenant",
+butuh endpoint bulk); belum ada export/scheduled report.
