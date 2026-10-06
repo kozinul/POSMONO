@@ -11,6 +11,7 @@ import { MongoHubInvitationRepository } from '../../core/hub/infrastructure/pers
 import { HubInvitationService } from '../../core/hub/application/services/HubInvitationService';
 import { HubInvitationController } from '../../core/hub/interfaces/http/controllers/HubInvitationController';
 import { MyHubController } from '../../core/hub/interfaces/http/controllers/MyHubController';
+import { MyHubAdminController } from '../../core/hub/interfaces/http/controllers/MyHubAdminController';
 import type { WiringContext } from './types';
 
 /**
@@ -132,6 +133,23 @@ export function registerHubWiring({ container, models }: WiringContext): void {
           activitySource: container.resolve('shiftService'),
           salesSource: container.resolve('reportService'),
           subscriptionSource: container.resolve('subscriptionService'),
+        },
+      }),
+    }),
+    // Hub V2 Fase 24 — hub-member-driven mutations. Same services as the
+    // platform surface on purpose (one membership lifecycle, one invitation
+    // service, one grant service); the difference is *who calls them* and the
+    // ceiling `MyHubAdminController` applies to the caller.
+    myHubAdminController: asClass(MyHubAdminController, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        deps: {
+          membershipService: container.resolve('hubMembershipService'),
+          invitationService: container.resolve('hubInvitationService'),
+          accessService: container.resolve('hubMemberAccessService'),
+          userRepository: container.resolve('userRepository'),
+          tenantRepository: container.resolve('tenantRepository'),
+          auditService: container.resolve('platformAuditService'),
         },
       }),
     }),

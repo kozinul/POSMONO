@@ -97,17 +97,28 @@ export interface ResolvedTenantSession {
  * switch that lets an admin narrow access without first having to write the
  * permissive baseline.
  */
+/**
+ * A grant row as the services hand it out: the persisted fields plus the two
+ * derived values (`tenantRoleLabel`, `allOutlets`) callers would otherwise have
+ * to recompute. Typed so consumers stop seeing `any`.
+ */
+export interface HubGrantView
+  extends ReturnType<HubMemberTenantAccess['serialize']> {
+  tenantRoleLabel?: string;
+  allOutlets: boolean;
+}
+
 export class HubMemberAccessService {
   constructor(private readonly deps: HubMemberAccessServiceDeps) {}
 
   // ---------------------------------------------------------------- grants
 
-  async listGrantsForMember(hubId: string, userId: string): Promise<any[]> {
+  async listGrantsForMember(hubId: string, userId: string): Promise<HubGrantView[]> {
     const grants = await this.deps.accessRepository.findByHubAndUser(hubId, userId);
     return grants.map((grant) => this.decorate(grant.serialize()));
   }
 
-  async listGrantsForUser(userId: string): Promise<any[]> {
+  async listGrantsForUser(userId: string): Promise<HubGrantView[]> {
     const grants = await this.deps.accessRepository.findByUser(userId);
     return grants.map((grant) => this.decorate(grant.serialize()));
   }
@@ -706,7 +717,7 @@ export class HubMemberAccessService {
     }
   }
 
-  private decorate(data: ReturnType<HubMemberTenantAccess['serialize']>) {
+  private decorate(data: ReturnType<HubMemberTenantAccess['serialize']>): HubGrantView {
     return {
       ...data,
       tenantRoleLabel: TENANT_ACCESS_ROLE_LABELS[data.tenantRole],

@@ -7,6 +7,12 @@ import {
 } from '../../domain/PlatformAuditLog';
 import { MongoPlatformAuditLogRepository, PlatformAuditLogFilter } from '../../infrastructure/persistence/MongoPlatformAuditLogRepository';
 
+export interface AuditActor {
+  id: string;
+  email: string;
+  roleName: string;
+}
+
 export interface AuditRecordPayload {
   action: PlatformAuditAction;
   tenantId?: string | null;
@@ -14,6 +20,15 @@ export interface AuditRecordPayload {
   before?: Record<string, unknown> | null;
   after?: Record<string, unknown> | null;
   reason?: string | null;
+  /**
+   * Hub V2 Fase 24 — for mutations issued from a surface that is not platform
+   * administered. `recordFromRequest` reads `req.platformUser*`, which only
+   * `platformAuthenticate` fills, so a hub member acting through `/api/hub/*`
+   * would otherwise be logged as `system`. The caller passes its own identity
+   * explicitly; without it the platform fields stay authoritative, so the
+   * Terminal Center trail is unchanged.
+   */
+  actor?: AuditActor | null;
 }
 
 export class PlatformAuditService {
@@ -35,9 +50,9 @@ export class PlatformAuditService {
   async recordFromRequest(req: Request, payload: AuditRecordPayload): Promise<PlatformAuditLog> {
     const log = PlatformAuditLog.create({
       action: payload.action,
-      actorId: (req as any).platformUserId ?? 'system',
-      actorEmail: (req as any).platformUserEmail ?? 'system',
-      actorRole: (req as any).platformUserRoleName ?? '',
+      actorId: payload.actor?.id ?? (req as any).platformUserId ?? 'system',
+      actorEmail: payload.actor?.email ?? (req as any).platformUserEmail ?? 'system',
+      actorRole: payload.actor?.roleName ?? (req as any).platformUserRoleName ?? '',
       tenantId: payload.tenantId ?? null,
       description: payload.description,
       before: payload.before ?? null,

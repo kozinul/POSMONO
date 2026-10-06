@@ -2,14 +2,20 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { DashboardLayout } from '../layouts/DashboardLayout';
 import { TerminalLayout } from '../layouts/TerminalLayout';
+import { HubLayout } from '../layouts/HubLayout';
 import { AuthLayout } from '../layouts/AuthLayout';
 import { ProtectedRoute } from '../@shared/components/ProtectedRoute';
 import { PlatformRoute } from '../@shared/components/PlatformRoute';
+import { HubRoute } from '../@shared/components/HubRoute';
 import NotFoundPage from '../@shared/pages/NotFoundPage';
 
 // Lazy-loaded pages
 const LoginPage = lazy(() => import('../core/auth/pages/LoginPage'));
 const TerminalLoginPage = lazy(() => import('../core/platform/pages/TerminalLoginPage'));
+// Hub V2 Fase 24 — the hub console's own entrance, for hub members rather than
+// platform operators or tenant staff.
+const HubLoginPage = lazy(() => import('../core/hub/pages/HubLoginPage'));
+const HubCenterPage = lazy(() => import('../core/hub/pages/HubCenterPage'));
 const DashboardPage = lazy(() => import('../core/dashboard/pages/DashboardPage'));
 const PosPage = lazy(() => import('../core/pos/pages/PosPage'));
 const OrderListPage = lazy(() => import('../core/orders/pages/OrderListPage'));
@@ -37,7 +43,6 @@ const TerminalCenterPage = lazy(() => import('../core/platform/pages/TerminalCen
 // ProtectedRoute (the server checks the signed-in address) but outside
 // DashboardLayout: a brand-new hub member has no menu entries worth showing.
 const HubInvitationPage = lazy(() => import('../core/hub/pages/HubInvitationPage'));
-const HubPage = lazy(() => import('../core/hub/pages/HubPage'));
 const TenantDetailPage = lazy(() => import('../core/platform/pages/TenantDetailPage'));
 
 const Loading = () => (
@@ -54,6 +59,7 @@ export function AppRouter() {
           <Route element={<AuthLayout />}>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/terminal/login" element={<TerminalLoginPage />} />
+            <Route path="/hub/login" element={<HubLoginPage />} />
           </Route>
           <Route element={<ProtectedRoute />}>
             <Route element={<DashboardLayout />}>
@@ -81,7 +87,6 @@ export function AppRouter() {
               <Route path="/templates" element={<TemplateListPage />} />
               <Route path="/templates/:id/designer" element={<DesignerPage />} />
               <Route path="/database" element={<DatabasePage />} />
-              <Route path="/hub" element={<HubPage />} />
             </Route>
             {/* Hub V2 Fase 20 — guarded like any tenant page, but without the
                 dashboard chrome: see the lazy import above. */}
@@ -91,6 +96,14 @@ export function AppRouter() {
             <Route element={<TerminalLayout />}>
               <Route path="/terminal-center" element={<TerminalCenterPage />} />
               <Route path="/terminal-center/tenants/:tenantId" element={<TenantDetailPage />} />
+            </Route>
+          </Route>
+          {/* Hub V2 Fase 24 — a member of any hub role, including `viewer` and
+              cashier, so this must sit outside ProtectedRoute (which bounces
+              Cashier to /pos) and outside DashboardLayout (tenant chrome). */}
+          <Route element={<HubRoute />}>
+            <Route element={<HubLayout />}>
+              <Route path="/hub" element={<HubCenterPage />} />
             </Route>
           </Route>
           <Route path="/terminal" element={<Navigate to="/terminal-center" replace />} />

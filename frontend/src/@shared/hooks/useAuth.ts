@@ -24,6 +24,9 @@ interface AuthState {
   logout: () => void;
 }
 
+/** Shared with `HubCenterPage`; kept here so logout can clear it. */
+export const ACTIVE_HUB_KEY = 'posmono.activeHubId';
+
 function defaultActiveOutletId(): string | null {
   try {
     const persisted = localStorage.getItem('activeOutletId');
@@ -85,6 +88,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       localStorage.removeItem('authUser');
       localStorage.removeItem('activeOutletId');
       localStorage.removeItem('authUser');
+      localStorage.removeItem(ACTIVE_HUB_KEY);
     }
     set({ user, isAuthenticated: !!user, activeOutletId: nextActiveOutletId, activeTenantId: nextActiveTenantId });
   },
@@ -115,6 +119,8 @@ export const useAuthStore = create<AuthState>((set) => ({
     localStorage.removeItem('tenantId');
     localStorage.removeItem('authUser');
     localStorage.removeItem('activeOutletId');
+    // Hub console selection: never let it survive into the next account.
+    localStorage.removeItem(ACTIVE_HUB_KEY);
     set({ user: null, isAuthenticated: false, activeOutletId: null, activeTenantId: null });
     window.location.href = '/login';
   },
