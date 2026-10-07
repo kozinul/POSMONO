@@ -8,7 +8,7 @@
 
 **Auth:** All endpoints except `/health`, `/api/auth/login`, `/api/auth/register`, `/api/auth/refresh`, `/api/auth/logout`, `GET /api/tenants/slug/:slug`, and **WebSocket (Socket.io)** connections require a JWT in the `Authorization: Bearer <token>` header.
 
-**Outlet header (multi-outlet):** Endpoint transaksi POS (payment, order mutations, shift mutations) juga divalidasi terhadap `X-Outlet-Id` header oleh middleware `resolveOutlet`. Header diisi dari `activeOutletId` di frontend; bila user punya `outletIds = []` (semua outlet) header bebas/opsional, selain itu harus ∈ `outletIds` user (403 bila tidak). Nilai header **menjadi sumber `outletId` service** (dibaca `req.outletId` → di-forward ke service); bila header tidak ada, service fallback ke outlet shift terbuka (`assertOpenShift`/`CreateOrderService` mencari shift per outlet bila `outletId` diberikan, tanpa filter bila null — backward-compatible). Body `outletId` TIDAK lagi diterima di `POST /shifts/open` (sumber resmi = header `X-Outlet-Id`).
+**Outlet header (multi-outlet):** Endpoint transaksi POS (payment, order mutations, shift mutations) juga divalidasi terhadap `X-Outlet-Id` header oleh middleware `resolveOutlet`. Header diisi dari `activeOutletId` di frontend; bila user punya `outletIds = []` (semua outlet) header bebas/opsional, selain itu harus ∈ `outletIds` user (403 bila tidak). Nilai header **menjadi sumber `outletId` service** (dibaca `req.outletId` → di-forward ke service); bila header tidak ada, service fallback ke outlet shift terbuka (`assertOpenShift`/`CreateOrderService` mencari shift per outlet bila `outletId` diberikan, tanpa filter bila null — backward-compatible). Body `outletId` TIDAK lagi diterima di `POST /shifts/open` (sumber resmi = header `X-Outlet-Id`). Sejak **2026-10-06** middleware `createResolveOutlet` (route transaksi order/payment/shift) juga menolak outlet **nonaktif** dengan **403** `Outlet "<nama>" sedang nonaktif — pilih outlet lain.`; pengecekan scope tetap lebih dulu (header di luar `outletIds` tidak memicu lookup DB), dan dokumen outlet yang **tidak ditemukan** sengaja **tidak** memblokir — semantik hapus tetap di handler downstream.
 
 **Platform session (Terminal Center):** Semua endpoint `/api/platform` memakai JWT terpisah dengan klaim `tenant: 'platform'` (dari session Platform Super Admin). Token tenant biasa → **401**. Cukup via `POST /api/auth/login` dengan header `X-Tenant-Id: platform`.
 
@@ -82,6 +82,8 @@ Login with email + password.
 }
 ```
 
+**Tenant nonaktif (2026-10-06):** bila password benar tetapi tenant berstatus non-aktif (`suspended` → "ditangguhkan", `frozen` → "dibekukan", `cancelled` → "dibatalkan", `deactivated` → "dinonaktifkan"), login mengembalikan **403** `Tenant Anda berstatus <label> — akses dinonaktifkan. Hubungi pengelola.` Gate berjalan **setelah** verifikasi password (tidak menjadi oracle enumerasi), dan tenant yang dokumennya **tidak ada** (mis. super admin `platform`) **tidak** diblokir agar data glitch tidak mengunci semua orang.
+
 ### `POST /api/auth/register`
 
 Register a new user under current tenant. Requires auth.
@@ -153,7 +155,23 @@ Create a new tenant.
 
 Get current tenant based on JWT tenantId.
 
-**Response 200:** Full tenant object (name, slug, status, plan, config, modules, etc.).
+**Response 200:** Full tenant object: `name, slug, businessType, businessCategory, address, phone, status, plan, hubId, hubName, config, modules, subscriptionExpiresAt, daysRemaining`.
+
+Catatan masa aktif: respon memuat `subscriptionExpiresAt` (tanggal kedaluwarsa masa aktif, `null` bila tidak ada batas) dan `daysRemaining` (dibulatkan ke atas, di-clamp ≥ 0). Endpoint ini **menjalankan lazy enforcement** — tenant berstatus `active`/`trial` yang periode aktifnya sudah lewat langsung di-set `suspended` (alasan `Masa aktif berakhir — auto-suspend`) sebelum respon dibangun, sehingga banner dan respon tidak pernah bertentangan.
+
+### `GET /api/tenants/current/subscription`
+
+Get subscription info for the current tenant. Sama seperti di atas, `getCurrent` menjalankan lazy enforcement **sebelum** menghitung `daysRemaining`.
+
+**Response 200:** `{ "plan", "status", "subscriptionExpiresAt", "daysRemaining" }`
+
+### `POST /api/tenants/current/subscription/renew`
+
+`authenticate` saja (merchant scope). Body: `{ "days": 30 }` (default 30 bila kosong).
+
+Perpanjangan kini didelegasikan ke jalur billing (`SubscriptionService.extendSubscription`) sehingga **dua jam dinding disinkronkan**: `Tenant.subscriptionExpiresAt` DAN dokumen `Subscription.currentPeriodEnd` (sebelumnya hanya tenant yang bergerak → drift). Status `suspended` ikut di-reaktivasi (perilaku `extendSubscription` sudah berlaku). Ledger `extended` ditulis.
+
+**Response 200:** `{ "success": true, "data": { "message": "Subscription successfully renewed", "subscription": { ... } } }`
 
 ### `PATCH /api/tenants/current/settings`
 
@@ -1344,7 +1362,7 @@ Errors: 400 (role/status tidak dikenal, self-manage, rank melebihi actor, user b
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | GET | `/api/auth/accessible-tenants` | ✓ | Tenant yang bisa diakses user, sudah ter-**intersect dengan grant Fase 17** `{ tenantId, tenantName, hubId, hubName, role, accessSource, tenantRole, outletIds }` |
-| GET | `/api/hub-context/me` | ✓ | Konteks keanggotaan hub user yang login: `{ hubs[], grants[], tenants[], effectivePermissions[] }` (Fase 17). `hubs[]` sejak **Fase 21** berasal dari satu pemilik yang sama dengan `GET /api/hub/me/hubs`, jadi kedua endpoint tidak bisa berbeda jawaban |
+| GET | `/api/hub-context/me` | ✓ | Konteks keanggotaan hub user yang login: `{ hubs[], grants[], tenants[], effectivePermissions[], blocked }` (Fase 17). `hubs[]` sejak **Fase 21** berasal dari satu pemilik yang sama dengan `GET /api/hub/me/hubs`, jadi kedua endpoint tidak bisa berbeda jawaban. Sejak **2026-10-06** `blocked` menjelaskan `hubs[]` yang kosong **karena** sesuatu ditangguhkan: `{ kind: 'membership_suspended' \| 'hub_suspended' \| 'hub_archived', hubId, hubName }`, atau `null` bila user memang tidak tergabung di hub mana pun (redirect biasa). Hub yang **dihapus** di-skip (`null`) — bukan status yang bisa ditindaklanjuti anggota |
 | POST | `/api/auth/switch-tenant` | ✓ | `{ tenantId }` → token access+refresh baru scope target; **grant per tenant dibaca lebih dulu**; 403 bila tidak tercakup |
 
 **Resolusi akses lintas-tenant (Fase 17)** — urutan di `AuthService.switchTenant`:

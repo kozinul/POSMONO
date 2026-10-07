@@ -84,7 +84,7 @@ export class Tenant extends AggregateRoot<TenantId> {
     this.plan = props.plan;
     this.planId = props.planId ?? null;
     this.status = props.status;
-    this.subscriptionExpiresAt = props.subscriptionExpiresAt ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    this.subscriptionExpiresAt = props.subscriptionExpiresAt ?? null;
     this.businessType = props.businessType;
     this.businessCategory = props.businessCategory || '';
     this.address = props.address || '';
@@ -180,6 +180,13 @@ export class Tenant extends AggregateRoot<TenantId> {
 
   isActive(): boolean {
     return this.status === 'active' || this.status === 'trial';
+  }
+
+  /** Active period ran out. Decoupled from `isActive()` so status-based gates can
+   *  stay explicit about *why* a tenant is being refused (admin choice vs the
+   *  clock). `null` means "no expiry set" and never expires. */
+  isExpired(now: Date = new Date()): boolean {
+    return this.subscriptionExpiresAt != null && this.subscriptionExpiresAt < now;
   }
 
   freeze(): void {

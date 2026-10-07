@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { BaseController } from '../../../../../@shared/interfaces/BaseController';
 import { TenantService } from '../../../application/services/TenantService';
+import { SubscriptionService } from '../../../../billing/application/services/SubscriptionService';
 import { createTenantSchema, updateTenantConfigSchema } from '@posmono/shared';
 import { ValidationError } from '../../../../../@shared/infrastructure/error/AppError';
 import { HubRepository } from '../../../../../core/hub/domain/HubRepository';
@@ -9,6 +10,7 @@ export class TenantController extends BaseController {
   constructor(
     private readonly tenantService: TenantService,
     private readonly hubRepository?: HubRepository,
+    private readonly subscriptionService?: SubscriptionService,
   ) {
     super();
   }
@@ -39,6 +41,10 @@ export class TenantController extends BaseController {
 
   async getCurrent(req: Request, res: Response): Promise<void> {
     const tenant = await this.tenantService.getById(req.tenantId);
+    // Lazy enforcement: an expired-but-usable tenant becomes `suspended` here
+    // instead of waiting for the next sweep, so the banner and the response
+    // never disagree about the deadline.
+    await this.tenantService.markSuspendedIfExpired(tenant);
     const data = tenant.serialize();
 
     let hubName: string | null = null;
@@ -46,6 +52,9 @@ export class TenantController extends BaseController {
       const hub = await this.hubRepository.findById(data.hubId);
       hubName = hub?.serialize().name ?? null;
     }
+
+    const expiresAt = data.subscriptionExpiresAt ? new Date(data.subscriptionExpiresAt) : null;
+    const daysRemaining = expiresAt ? Math.ceil((expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : 0;
 
     this.ok(res, {
       id: data.id,
@@ -61,6 +70,8 @@ export class TenantController extends BaseController {
       hubName,
       config: tenant.configValue,
       modules: data.modules,
+      subscriptionExpiresAt: data.subscriptionExpiresAt,
+      daysRemaining: Math.max(daysRemaining, 0),
     });
   }
 
@@ -93,6 +104,8 @@ export class TenantController extends BaseController {
   }
 
   async getSubscription(req: Request, res: Response): Promise<void> {
+    const tenant = await this.tenantService.getById(req.tenantId);
+    await this.tenantService.markSuspendedIfExpired(tenant);
     const sub = await this.tenantService.getSubscription(req.tenantId);
     this.ok(res, sub);
   }
@@ -100,7 +113,16 @@ export class TenantController extends BaseController {
   async renewSubscription(req: Request, res: Response): Promise<void> {
     const { days } = req.body;
     const numDays = parseInt(days, 10) || 30;
-    const tenant = await this.tenantService.extendSubscription(req.tenantId, numDays);
+    if (this.subscriptionService) {
+      // The billing path extends BOTH the tenant and the subscription document
+      // (and writes the ledger). TenantService.extendSubscription alone would
+      // only move `Tenant.subscriptionExpiresAt` and let the two clocks drift.
+      await this.subscriptionService.extendSubscription(req.tenantId, numDays, {
+        reason: 'Perpanjangan mandiri (merchant)',
+      });
+    } else {
+      await this.tenantService.extendSubscription(req.tenantId, numDays);
+    }
     const sub = await this.tenantService.getSubscription(req.tenantId);
     this.ok(res, { message: 'Subscription successfully renewed', subscription: sub });
   }

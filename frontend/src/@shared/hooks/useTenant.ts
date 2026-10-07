@@ -35,9 +35,12 @@ export interface Tenant {
   businessCategory: string;
   address: string;
   phone: string;
+  status: string;
   plan: string;
   hubId: string | null;
   hubName?: string | null;
+  subscriptionExpiresAt: string | null;
+  daysRemaining: number;
   config: TenantConfig;
 }
 

@@ -47,6 +47,9 @@ export function registerTenantWiring({ container, models }: WiringContext): void
       injector: () => ({
         tenantService: container.resolve('tenantService'),
         hubRepository: container.resolve('hubRepository'),
+        // Cross-domain dependency resolved lazily: renaming the wiring order
+        // must not be load-bearing (see `container.ts` contract notes).
+        subscriptionService: container.resolve('subscriptionService'),
       }),
     }),
   });

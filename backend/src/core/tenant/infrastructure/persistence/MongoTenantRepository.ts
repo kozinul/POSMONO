@@ -120,6 +120,19 @@ export class MongoTenantRepository {
     return docs.map((doc: TenantDoc) => this.toDomain(doc));
   }
 
+  /** Tenants whose active period has run out but are still usable: the sweep
+   *  (`SubscriptionSweepService`) and the lazy gates only ever touch these —
+   *  an admin-chosen `suspended/frozen/cancelled/deactivated` is never undone. */
+  async findActiveExpired(before: Date): Promise<Tenant[]> {
+    const docs = await this.model
+      .find({
+        status: { $in: ['active', 'trial'] },
+        subscriptionExpiresAt: { $lt: before },
+      })
+      .exec();
+    return docs.map((doc: TenantDoc) => this.toDomain(doc));
+  }
+
   async list(options: {
     hubId?: string | null;
     search?: string;

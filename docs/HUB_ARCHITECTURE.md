@@ -508,6 +508,20 @@ Fase 21/22 memberi **baca**; fase ini menutup dua lubang produk sekaligus: (1) `
 
 Batas yang diketahui: lifecycle tenant (pause/resume/subscription/destructive) **tetap platform-only**; `switch-hub` masih ganti halaman, bukan ganti session; ringkasan grant per anggota ("N dari M tenant") masih butuh endpoint bulk; satu-satunya jalan keluar dari role owner adalah meminta admin platform.
 
+### Fase 25 — Gerbang Status Nonaktif (Tenant · Outlet · Hub) ✅ (2026-10-06)
+
+Tiga status "nonaktif" sebelumnya hanya tampil di layar admin, tidak menutup pintunya. Fase ini menyamakan semantiknya: **status nonaktif = akses ditolak dengan alasan**, bukan diam-diam berhasil atau gagal generik.
+
+- **Tenant** — `AuthService.execute` membaca `tenantRepository.findById(tenantId)` **setelah password terbukti** dan menolak `!tenant.isActive()` dengan **403** berlabel Indonesia (`suspended`→"ditangguhkan", `frozen`→"dibekukan", `cancelled`→"dibatalkan", `deactivated`→"dinonaktifkan"). Dua jebakan yang dijaga: (1) gate **tidak** boleh sebelum verifikasi password (jadi oracle enumerasi — tes mengunci `findById` tak dipanggil pada password salah); (2) dokumen tenant **tidak ada** tidak memblokir, karena super admin `platform` tidak punya baris di `tenants`.
+- **Outlet** — middleware baru `createResolveOutlet(outletRepository)` di `resolveOutlet.ts` = `resolveOutlet` + gate `isActive`. Dipasang di route transaksi POS (order/payment/shift) via `bootstrap/routes.ts`; urutan dijaga: cek scope (murah, sinkron) lebih dulu sehingga header di luar `outletIds` tidak memicu lookup DB, lalu lookup, lalu 403 `Outlet "<nama>" sedang nonaktif — pilih outlet lain.` Dokumen outlet **tidak ditemukan tidak** memblokir (semantik hapus tetap di handler downstream). Route factory order/payment/shift kini menerima `outletMw` (default `resolveOutlet`) agar bisa diuji dengan stub. `DashboardLayout` berhenti menawarkan outlet nonaktif, **tetapi** outlet yang sedang aktif tetap ditampilkan walau kemudian dinonaktifkan — dropdown tidak boleh kosong, backend yang menolak dengan pesan.
+- **Hub** — `HubMemberAccessService.getContext` mengisi `blocked` saat `hubs[]` kosong **karena** penangguhan: `membership_suspended` / `hub_suspended` / `hub_archived` + `hubName`; `null` bila user memang bukan anggota hub. Hub yang **dihapus** di-skip (bukan status yang bisa ditindaklanjuti). `HubRoute` merender layar "Akses Hub Ditolak" berisi alasan alih-alih bounce senyap ke form login — perubahan status tidak lagi terlihat seperti login gagal.
+
+**Tests**: `resolveOutlet.middleware.test.ts` (7, DENY/ALLOW + urutan scope-sebelum-lookup + propagasi error + "outlet hilang tidak memblokir"), `HubMemberAccessService.test.ts` +6 (`blocked` per jenis + null), `AuthService.test.ts` +5 (DENY per status, ALLOW active/trial, dokumen hilang, tanpa oracle), `HubRoute.test.tsx` (5), `DashboardLayout.test.tsx` (3). **Berdampingan dengan `HUB_V2_DECISIONS.md`**: tanpa ADR baru; ini pengetatan kontrak yang sudah ada, bukan keputusan produk baru.
+
+### Lampiran 2026-10-07 — Masa Aktif Efektif (banner sisi anggota)
+
+Hub `TenantsSection` (`core/hub/sections/`) kini menampilkan banner ringkasan "**N tenant dalam hub berada di ambang masa aktif berakhir atau berstatus nonaktif**" — tenant dihitung bila (a) `status` bukan `active`/`trial` (tanpa harus punya expiry), atau (b) `subscriptionExpiresAt` ≤ 7 hari. Read-only: keputusan perpanjangan/suspend tetap di Terminal Center. Detail implementasi penuh (sweep, lazy gate, drift fix) ada di `AGENTS.md` § Masa Aktif Efektif.
+
 ### Di luar scope (terkunci di `HUB_V2_DECISIONS.md`)
 `HubTenantMembership` (multi-hub) · wallet/`WalletLedger`/`HubWallet` · `HubInvoice`/prepaid credit
 (ditunda) · `Hub.settings`/logo/contact · **lifecycle tenant & operasi destruktif dari sisi anggota** (tetap

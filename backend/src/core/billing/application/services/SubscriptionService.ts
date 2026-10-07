@@ -1,5 +1,5 @@
 import { Subscription } from '../../domain/Subscription';
-import { SubscriptionHistory } from '../../domain/SubscriptionHistory';
+import { SubscriptionHistory, SubscriptionHistoryAction } from '../../domain/SubscriptionHistory';
 import { MongoSubscriptionRepository } from '../../infrastructure/persistence/MongoSubscriptionRepository';
 import { MongoSubscriptionHistoryRepository } from '../../infrastructure/persistence/MongoSubscriptionHistoryRepository';
 import { MongoPlanRepository } from '../../infrastructure/persistence/MongoPlanRepository';
@@ -221,8 +221,52 @@ export class SubscriptionService {
     return entries.map((e) => e.serialize());
   }
 
+  /**
+   * Auto-suspend — the only subscription mutation driven by the clock. Tenants
+   * whose active period ran out but are still usable (`active`/`trial`) are
+   * moved to `suspended`, the subscription document is expired (when present)
+   * and an `expired` ledger row is written. Admin-chosen statuses
+   * (`suspended/frozen/cancelled/deactivated`) are never overwritten.
+   *
+   * Ran at boot and on an interval (see `bootstrap/jobs/subscriptionSweep`).
+   * The login and `getCurrent` gates also mark lazily, so the UI never shows a
+   * stale "active" between the deadline and the next sweep.
+   */
+  async sweepExpired(now: Date = new Date()): Promise<{ total: number; suspended: number }> {
+    const tenants = await this.tenantRepository.findActiveExpired(now);
+    for (const tenant of tenants) {
+      const before = tenant.serialize();
+      tenant.suspend('Masa aktif berakhir — auto-suspend');
+      await this.tenantRepository.save(tenant);
+
+      const sub = await this.subscriptionRepository.findByTenantId(before.id);
+      if (sub) {
+        const subBefore = sub.serialize();
+        sub.expire();
+        await this.subscriptionRepository.save(sub);
+        await this.recordHistory('expired', before.id, sub, {
+          statusBefore: subBefore.status,
+          statusAfter: sub.serialize().status,
+          periodStartBefore: subBefore.currentPeriodStart,
+          periodEndBefore: subBefore.currentPeriodEnd,
+          periodStartAfter: sub.serialize().currentPeriodStart,
+          periodEndAfter: sub.serialize().currentPeriodEnd,
+          context: { reason: 'Masa aktif berakhir — auto-suspend' },
+        });
+      } else {
+        await this.recordHistory('expired', before.id, null, {
+          planAfter: before.planId ?? before.plan,
+          periodStartBefore: before.subscriptionExpiresAt,
+          periodEndBefore: before.subscriptionExpiresAt,
+          context: { reason: 'Masa aktif berakhir — auto-suspend' },
+        });
+      }
+    }
+    return { total: tenants.length, suspended: tenants.length };
+  }
+
   private async recordHistory(
-    action: 'assigned' | 'changed' | 'extended' | 'cancelled',
+    action: SubscriptionHistoryAction,
     tenantId: string,
     sub: Subscription | null,
     fields: {

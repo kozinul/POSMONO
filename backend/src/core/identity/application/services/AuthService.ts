@@ -40,11 +40,14 @@ const TENANT_STATUS_LABELS: Record<string, string> = {
 /** Structural view of the tenant document the login gate needs. */
 interface TenantStatusRecord {
   isActive(): boolean;
+  isExpired?(): boolean;
+  suspend?(reason: string): void;
   serialize(): { status?: string | null };
 }
 
 interface TenantStatusSource {
   findById(id: string): Promise<TenantStatusRecord | null>;
+  save?(tenant: TenantStatusRecord): Promise<void>;
 }
 
 export class AuthService implements UseCase<LoginInput, LoginOutput> {
@@ -113,6 +116,22 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
         const label = TENANT_STATUS_LABELS[status] ?? 'nonaktif';
         throw new ForbiddenError(
           `Tenant Anda berstatus ${label} — akses dinonaktifkan. Hubungi pengelola.`,
+        );
+      }
+      // Active period ran out: same lazy rule as `TenantService.markSuspendedIfExpired`,
+      // applied here so a login right after the deadline is refused with the right
+      // reason instead of one sweep-tick late. Save is best-effort.
+      if (tenant && typeof tenant.isExpired === 'function' && tenant.isExpired()) {
+        if (typeof tenant.suspend === 'function' && typeof this.tenantRepository.save === 'function') {
+          try {
+            tenant.suspend('Masa aktif berakhir — auto-suspend');
+            await this.tenantRepository.save(tenant);
+          } catch {
+            // treated as missing — the refusal below is what matters
+          }
+        }
+        throw new ForbiddenError(
+          'Masa aktif tenant Anda telah berakhir — hubungi pengelola untuk memperpanjang.',
         );
       }
     }

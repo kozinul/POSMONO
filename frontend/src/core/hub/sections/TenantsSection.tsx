@@ -34,8 +34,27 @@ export default function TenantsSection({
     );
   }
 
+  const GRACE_D_MS = 7 * 24 * 60 * 60 * 1000;
+  const expiring = tenants.filter((t) => {
+    // Non-active status counts on its own, even without an expiry to read.
+    if (t.status !== 'active' && t.status !== 'trial') return true;
+    if (!t.subscriptionExpiresAt) return false;
+    const left = new Date(t.subscriptionExpiresAt).getTime() - Date.now();
+    return left <= GRACE_D_MS;
+  });
+
   return (
-    <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+    <div className="space-y-3">
+      {expiring.length > 0 && (
+        <div
+          role="alert"
+          className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900"
+        >
+          {expiring.length} tenant dalam hub berada di ambang masa aktif berakhir atau berstatus
+          nonaktif — tinjau di Terminal Center.
+        </div>
+      )}
+      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
       <table className="min-w-full text-sm">
         <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
           <tr>
@@ -74,6 +93,7 @@ export default function TenantsSection({
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

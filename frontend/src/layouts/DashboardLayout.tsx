@@ -5,6 +5,7 @@ import { useAccessibleTenants } from '../@shared/hooks/useHubMemberships';
 import { useOutlets } from '../@shared/hooks/useOutlets';
 import { useRealtimeSync } from '../@shared/hooks/useRealtimeSync';
 import { ErrorBoundary } from '../@shared/components/ErrorBoundary';
+import { SubscriptionBanner } from '../@shared/components/SubscriptionBanner';
 import clsx from 'clsx';
 
 interface NavItem {
@@ -161,6 +162,8 @@ export function DashboardLayout() {
           </button>
         </div>
       </header>
+
+      <SubscriptionBanner />
 
       <div className="flex flex-1 min-h-0 bg-gray-50">
         {!isPOSPage && (

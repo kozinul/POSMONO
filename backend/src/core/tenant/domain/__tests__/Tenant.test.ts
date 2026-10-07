@@ -52,6 +52,33 @@ describe('Tenant', () => {
     });
   });
 
+  describe('isExpired', () => {
+    it('is true when subscriptionExpiresAt is before now', () => {
+      const tenant = Tenant.create({
+        ...validTenantInput,
+        subscriptionExpiresAt: new Date('2026-10-01T00:00:00.000Z'),
+      });
+      expect(tenant.isExpired(new Date('2026-10-02T00:00:00.000Z'))).toBe(true);
+    });
+
+    it('is false when subscriptionExpiresAt is still in the future', () => {
+      const tenant = Tenant.create({
+        ...validTenantInput,
+        subscriptionExpiresAt: new Date('2026-11-01T00:00:00.000Z'),
+      });
+      expect(tenant.isExpired(new Date('2026-10-02T00:00:00.000Z'))).toBe(false);
+    });
+
+    it('is false when no expiry is set (null never expires)', () => {
+      // `create` always backfills an expiry; hydrate is what can see a stored null.
+      const tenant = Tenant.hydrate({
+        ...Tenant.create(validTenantInput).serialize(),
+        subscriptionExpiresAt: null,
+      });
+      expect(tenant.isExpired(new Date('2026-10-02T00:00:00.000Z'))).toBe(false);
+    });
+  });
+
   describe('suspend', () => {
     it('sets status to suspended', () => {
       const tenant = Tenant.create(validTenantInput);

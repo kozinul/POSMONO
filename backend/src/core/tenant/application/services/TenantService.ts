@@ -169,4 +169,17 @@ export class TenantService {
       daysRemaining: Math.max(daysRemaining, 0),
     };
   }
+
+  /**
+   * Lazy enforcement of the active period. Callers that already hold the tenant
+   * (merchant-facing reads) use this instead of duplicating the rule, so the UI
+   * never shows a stale "active" between the deadline and the next sweep. Only
+   * `active`/`trial` are touched; returns true when the status changed.
+   */
+  async markSuspendedIfExpired(tenant: Tenant): Promise<boolean> {
+    if (!tenant.isExpired()) return false;
+    tenant.suspend('Masa aktif berakhir — auto-suspend');
+    await this.tenantRepository.save(tenant);
+    return true;
+  }
 }

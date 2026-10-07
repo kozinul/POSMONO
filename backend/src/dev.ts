@@ -294,6 +294,9 @@ async function main() {
   const { provisionDefaults } = await import('./bootstrap/provisioning');
   await provisionDefaults(container);
 
+  const { startSubscriptionSweep } = await import('./bootstrap/jobs/subscriptionSweep');
+  const stopSubscriptionSweep = startSubscriptionSweep(container);
+
   const app = createServer(container);
   const httpServer = http.createServer(app);
 
@@ -315,11 +318,13 @@ async function main() {
   if (mongod) {
     process.on('SIGINT', async () => {
       logger.info('Shutting down...');
+      stopSubscriptionSweep();
       await mongod.stop();
       process.exit(0);
     });
     process.on('SIGTERM', async () => {
       logger.info('Shutting down...');
+      stopSubscriptionSweep();
       await mongod.stop();
       process.exit(0);
     });

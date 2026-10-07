@@ -517,6 +517,45 @@ describe('AuthService', () => {
       expect(tenantRepo.findById).not.toHaveBeenCalled();
     });
 
+    it('DENY: expired-but-usable tenant is refused with the clock reason and lazily suspended', async () => {
+      primeValidCredentials();
+      const save = vi.fn().mockResolvedValue(undefined);
+      (tenantRepo as any).save = save;
+      let status = 'active';
+      const suspend = vi.fn((_reason: string) => {
+        status = 'suspended';
+      });
+      tenantRepo.findById.mockResolvedValue({
+        isActive: () => status === 'active' || status === 'trial',
+        isExpired: () => true,
+        suspend,
+        serialize: () => ({ status }),
+      });
 
+      const err = await gatedService()
+        .execute({ email: 'user@test.com', password: 'pw', tenantId: TENANT_ID })
+        .catch((e: Error) => e);
+
+      expect(err).toBeInstanceOf(ForbiddenError);
+      expect((err as Error).message).toContain('Masa aktif tenant Anda telah berakhir');
+      expect(suspend).toHaveBeenCalledWith('Masa aktif berakhir — auto-suspend');
+      expect(save).toHaveBeenCalledOnce();
+      expect(tokenService.generateToken).not.toHaveBeenCalled();
+      expect(sessionService.create).not.toHaveBeenCalled();
+    });
+
+    it('ALLOW: an active tenant whose clock has not run out still gets tokens', async () => {
+      primeValidCredentials();
+      tenantRepo.findById.mockResolvedValue({ ...fakeTenant('active'), isExpired: () => false });
+
+      const result = await gatedService().execute({
+        email: 'user@test.com',
+        password: 'pw',
+        tenantId: TENANT_ID,
+      });
+
+      expect(result.accessToken).toBe('access-token-123');
+      expect(sessionService.create).toHaveBeenCalledOnce();
+    });
   });
 });

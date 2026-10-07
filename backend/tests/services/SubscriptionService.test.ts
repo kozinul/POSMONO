@@ -223,3 +223,110 @@ describe('SubscriptionService.getTenantSubscriptions (Hub V2 Fase 19)', () => {
     expect(subRepo.findByTenantIds).not.toHaveBeenCalled();
   });
 });
+
+describe('SubscriptionService.sweepExpired (masa aktif)', () => {
+  const NOW = new Date('2026-10-02T00:00:00.000Z');
+
+  function makeSweepRepos(store: Map<string, any>, subStore: Map<string, any>) {
+    const tenantRepo = {
+      findActiveExpired: vi.fn(async (before: Date) =>
+        [...store.values()]
+          .filter(
+            (d) =>
+              (d.status === 'active' || d.status === 'trial') &&
+              d.subscriptionExpiresAt &&
+              new Date(d.subscriptionExpiresAt) < before,
+          )
+          .map((d) => ({
+            serialize: () => d,
+            suspend: vi.fn((reason: string) => {
+              d.status = 'suspended';
+              d.suspendedReason = reason;
+            }),
+          })),
+      ),
+      save: vi.fn(async (t: any) => {
+        store.set(t.serialize().id, t.serialize());
+      }),
+    };
+    const subRepo = {
+      findByTenantId: vi.fn(async (tenantId: string) => {
+        const data = subStore.get(tenantId);
+        return data ? Subscription.hydrate({ ...data }) : null;
+      }),
+      save: vi.fn(async (sub: Subscription) => {
+        subStore.set(sub.serialize().tenantId, sub.serialize());
+      }),
+    };
+    const historyRepo = makeHistoryRepo();
+    return {
+      tenantRepo,
+      subRepo,
+      historyRepo,
+      service: new SubscriptionService(subRepo as any, makePlanRepo() as any, tenantRepo as any, historyRepo),
+    };
+  }
+
+  const tenantRow = (partial: Record<string, unknown> = {}) => ({
+    id: 't1',
+    name: 'Kopi Bali',
+    planId: 'trial',
+    planName: 'Trial',
+    status: 'active',
+    subscriptionExpiresAt: new Date('2026-10-01T00:00:00.000Z'),
+    config: { timezone: 'Asia/Jakarta' },
+    modules: [],
+    ...partial,
+  });
+
+  it('suspends an active tenant past the deadline, expires its subscription and writes an expired ledger row', async () => {
+    const store = new Map([['t1', tenantRow()]]);
+    const subStore = new Map([['t1', makeBaseSub({ currentPeriodEnd: new Date('2026-10-01T00:00:00.000Z') })]]);
+    const { service, historyRepo } = makeSweepRepos(store, subStore);
+
+    const result = await service.sweepExpired(NOW);
+
+    expect(result).toEqual({ total: 1, suspended: 1 });
+    expect(store.get('t1').status).toBe('suspended');
+    expect(store.get('t1').suspendedReason).toContain('Masa aktif');
+    expect(subStore.get('t1').status).toBe('expired');
+    const saved = historyRepo.save.mock.calls[0][0].serialize();
+    expect(saved.action).toBe('expired');
+    expect(saved.statusBefore).toBe('active');
+    expect(saved.statusAfter).toBe('expired');
+    expect(saved.reason).toContain('Masa aktif');
+  });
+
+  it('suspends a trial tenant without a subscription document and still writes the ledger', async () => {
+    const store = new Map([['t1', tenantRow({ status: 'trial', planId: null, planName: null })]]);
+    const { service, historyRepo } = makeSweepRepos(store, new Map());
+
+    const result = await service.sweepExpired(NOW);
+
+    expect(result.suspended).toBe(1);
+    expect(store.get('t1').status).toBe('suspended');
+    const saved = historyRepo.save.mock.calls[0][0].serialize();
+    expect(saved.action).toBe('expired');
+    expect(saved.planName).toBeNull();
+  });
+
+  it('never overwrites an admin-chosen status (e.g. already suspended)', async () => {
+    const store = new Map([['t1', tenantRow({ status: 'suspended' })]]);
+    const { service, historyRepo } = makeSweepRepos(store, new Map());
+
+    const result = await service.sweepExpired(NOW);
+
+    expect(result.suspended).toBe(0);
+    expect(store.get('t1').status).toBe('suspended');
+    expect(historyRepo.save).not.toHaveBeenCalled();
+  });
+
+  it('passes the cutoff time through to the repository lookup', async () => {
+    const store = new Map([['t1', tenantRow()]]);
+    const { service, tenantRepo } = makeSweepRepos(store, new Map());
+
+    await service.sweepExpired(NOW);
+
+    expect(tenantRepo.findActiveExpired).toHaveBeenCalledWith(NOW);
+  });
+});

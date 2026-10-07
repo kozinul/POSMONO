@@ -146,4 +146,27 @@ describe('MongoTenantRepository', () => {
       expect(second.total).toBe(3);
     });
   });
+
+  describe('findActiveExpired', () => {
+    const past = new Date('2026-10-01T00:00:00.000Z');
+    const cutoff = new Date('2026-10-02T00:00:00.000Z');
+
+    it('returns only usable tenants whose expiry is before the cutoff', async () => {
+      await repo.save(createTenant({ slug: 'expired-active', subscriptionExpiresAt: past, status: 'active' }));
+      await repo.save(createTenant({ slug: 'expired-trial', subscriptionExpiresAt: past, status: 'trial' }));
+      await repo.save(createTenant({ slug: 'future', subscriptionExpiresAt: new Date('2026-12-01T00:00:00.000Z'), status: 'active' }));
+      await repo.save(createTenant({ slug: 'admin-suspended', subscriptionExpiresAt: past, status: 'suspended' }));
+      await repo.save(createTenant({ slug: 'no-expiry', subscriptionExpiresAt: null as any, status: 'active' }));
+
+      const rows = await repo.findActiveExpired(cutoff);
+
+      expect(rows.map((t) => t.serialize().slug).sort()).toEqual(['expired-active', 'expired-trial']);
+    });
+
+    it('returns an empty list when nothing has expired', async () => {
+      await repo.save(createTenant({ slug: 'future', subscriptionExpiresAt: new Date('2026-12-01T00:00:00.000Z'), status: 'active' }));
+
+      expect(await repo.findActiveExpired(cutoff)).toEqual([]);
+    });
+  });
 });

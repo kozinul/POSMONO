@@ -3,7 +3,7 @@ import { Identifier } from '../../../@shared/domain/Identifier';
 
 class SubscriptionHistoryId extends Identifier {}
 
-export type SubscriptionHistoryAction = 'assigned' | 'changed' | 'extended' | 'cancelled';
+export type SubscriptionHistoryAction = 'assigned' | 'changed' | 'extended' | 'cancelled' | 'expired';
 
 export interface ISubscriptionHistory {
   id: string;
