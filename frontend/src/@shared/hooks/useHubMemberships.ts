@@ -160,6 +160,12 @@ export interface HubContext {
   grants: HubMemberAccessGrant[];
   tenants: AccessibleTenant[];
   effectivePermissions: string[];
+  /**
+   * Why `hubs[]` is empty — only set when at least one membership exists but
+   * none is usable (suspended member / suspended-archived hub). `null` or
+   * absent means "belongs to no hub", which is a redirect, not a message.
+   */
+  blocked?: { kind: 'membership_suspended' | 'hub_suspended' | 'hub_archived'; hubId: string; hubName: string | null } | null;
 }
 
 function invalidateHubMembers(queryClient: ReturnType<typeof useQueryClient>, hubId: string) {

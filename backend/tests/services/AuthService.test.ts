@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AuthService } from '../../src/core/identity/application/services/AuthService';
 import { User } from '../../src/core/identity/domain/User';
 import { PasswordService } from '../../src/core/identity/domain/services/PasswordService';
-import { UnauthorizedError, ValidationError } from '../../src/@shared/infrastructure/error/AppError';
+import { UnauthorizedError, ValidationError, ForbiddenError } from '../../src/@shared/infrastructure/error/AppError';
 
 const TENANT_ID = 'tenant-test-1';
 
@@ -408,5 +408,115 @@ describe('AuthService', () => {
 
       expect(await service.getCurrentUser('user-1', 'tenant-unknown')).toBeNull();
     });
+  });
+  // ------------------------------------------------ tenant status gate (2026-10-06)
+
+  describe('tenant status gate', () => {
+    const tenantRepo = { findById: vi.fn() };
+
+    function fakeTenant(status: string) {
+      return {
+        isActive: () => status === 'active' || status === 'trial',
+        serialize: () => ({ status }),
+      };
+    }
+
+    function gatedService() {
+      // Positional construction follows this file's convention; the gate is
+      // the 8th (last) optional slot.
+      return new AuthService(
+        userRepo,
+        tokenService,
+        passwordService,
+        sessionService,
+        undefined,
+        undefined,
+        undefined,
+        tenantRepo,
+      );
+    }
+
+    function primeValidCredentials() {
+      userRepo.findByEmail.mockResolvedValue(createUser());
+      passwordService.compare.mockResolvedValue(true);
+    }
+
+    beforeEach(() => {
+      tenantRepo.findById.mockReset();
+    });
+
+    it('DENY: blocked tenant yields an Indonesian reason and no token/session', async () => {
+      primeValidCredentials();
+      tenantRepo.findById.mockResolvedValue(fakeTenant('suspended'));
+
+      const err = await gatedService()
+        .execute({ email: 'user@test.com', password: 'pw', tenantId: TENANT_ID })
+        .catch((e: Error) => e);
+
+      expect(err).toBeInstanceOf(ForbiddenError);
+      expect((err as Error).message).toBe(
+        'Tenant Anda berstatus ditangguhkan — akses dinonaktifkan. Hubungi pengelola.',
+      );
+      expect(tokenService.generateToken).not.toHaveBeenCalled();
+      expect(sessionService.create).not.toHaveBeenCalled();
+      expect(userRepo.save).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['frozen', 'dibekukan'],
+      ['cancelled', 'dibatalkan'],
+      ['deactivated', 'dinonaktifkan'],
+    ])('DENY: %s tenant explains itself as "%s"', async (status, label) => {
+      primeValidCredentials();
+      tenantRepo.findById.mockResolvedValue(fakeTenant(status));
+
+      const err = await gatedService()
+        .execute({ email: 'user@test.com', password: 'pw', tenantId: TENANT_ID })
+        .catch((e: Error) => e);
+
+      expect(err).toBeInstanceOf(ForbiddenError);
+      expect((err as Error).message).toContain(label);
+    });
+
+    it.each(['active', 'trial'])('ALLOW: %s tenant still gets tokens', async (status) => {
+      primeValidCredentials();
+      tenantRepo.findById.mockResolvedValue(fakeTenant(status));
+
+      const result = await gatedService().execute({
+        email: 'user@test.com',
+        password: 'pw',
+        tenantId: TENANT_ID,
+      });
+
+      expect(result.accessToken).toBe('access-token-123');
+      expect(sessionService.create).toHaveBeenCalledOnce();
+    });
+
+    it('ALLOW: a missing tenant document does not block (platform admin has no row)', async () => {
+      primeValidCredentials();
+      tenantRepo.findById.mockResolvedValue(null);
+
+      const result = await gatedService().execute({
+        email: 'user@test.com',
+        password: 'pw',
+        tenantId: TENANT_ID,
+      });
+
+      expect(result.accessToken).toBe('access-token-123');
+    });
+
+    it('does not reveal tenant state to a wrong-password attempt', async () => {
+      userRepo.findByEmail.mockResolvedValue(createUser());
+      passwordService.compare.mockResolvedValue(false);
+      tenantRepo.findById.mockResolvedValue(fakeTenant('suspended'));
+
+      await expect(
+        gatedService().execute({ email: 'user@test.com', password: 'wrong', tenantId: TENANT_ID }),
+      ).rejects.toThrow(UnauthorizedError);
+      // The gate sits after password verification — no lookup, no oracle.
+      expect(tenantRepo.findById).not.toHaveBeenCalled();
+    });
+
+
   });
 });

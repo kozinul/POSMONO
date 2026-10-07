@@ -24,6 +24,29 @@ interface LoginOutput {
   refreshToken: string;
 }
 
+/**
+ * Indonesian labels for the login gate. `active`/`trial` never reach this map
+ * (`Tenant.isActive()` lets them through), so anything else is a blocking
+ * status and must produce a human-readable reason instead of a generic
+ * "gagal login".
+ */
+const TENANT_STATUS_LABELS: Record<string, string> = {
+  suspended: 'ditangguhkan',
+  frozen: 'dibekukan',
+  cancelled: 'dibatalkan',
+  deactivated: 'dinonaktifkan',
+};
+
+/** Structural view of the tenant document the login gate needs. */
+interface TenantStatusRecord {
+  isActive(): boolean;
+  serialize(): { status?: string | null };
+}
+
+interface TenantStatusSource {
+  findById(id: string): Promise<TenantStatusRecord | null>;
+}
+
 export class AuthService implements UseCase<LoginInput, LoginOutput> {
   constructor(
     private readonly userRepository: any,
@@ -38,6 +61,14 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
      * existing members keep working during a rolling deploy.
      */
     private readonly hubMemberAccessService?: any,
+    /**
+     * Login gate for non-active tenants (suspended/frozen/…). Optional so
+     * existing positional constructions keep working; when present, a valid
+     * password on a blocked tenant must yield a specific Indonesian reason,
+     * not a token — checked *after* password verification so account state is
+     * never revealed to a wrong-password attempt.
+     */
+    private readonly tenantRepository?: TenantStatusSource,
   ) {}
 
   async execute(input: LoginInput): Promise<LoginOutput> {
@@ -63,6 +94,27 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
 
     if (!user.isActiveUser()) {
       throw new UnauthorizedError('User account is inactive');
+    }
+
+    // Gate after the password is proven: revealing tenant state to a
+    // wrong-password attempt would be an account-enumeration oracle. A missing
+    // tenant document is deliberately NOT blocking — the platform super admin
+    // (tenantId 'platform') has no row in `tenants`, and a data glitch must not
+    // lock everyone out.
+    if (this.tenantRepository) {
+      let tenant: TenantStatusRecord | null = null;
+      try {
+        tenant = await this.tenantRepository.findById(tenantId);
+      } catch {
+        // treated as missing — see above
+      }
+      if (tenant && typeof tenant.isActive === 'function' && !tenant.isActive()) {
+        const status = String(tenant.serialize?.()?.status ?? '');
+        const label = TENANT_STATUS_LABELS[status] ?? 'nonaktif';
+        throw new ForbiddenError(
+          `Tenant Anda berstatus ${label} — akses dinonaktifkan. Hubungi pengelola.`,
+        );
+      }
     }
 
     user.recordLogin();

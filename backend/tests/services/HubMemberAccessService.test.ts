@@ -726,6 +726,77 @@ describe('HubMemberAccessService', () => {
     });
   });
 
+  // ------------------------------------------------- blocked reason (2026-10-06)
+  // "No hubs" is ambiguous: the console redirects when you belong to none, but
+  // must *explain* when something was suspended. `blocked` is the difference.
+  describe('getContext blocked reason', () => {
+    it('explains a suspended membership and names the hub', async () => {
+      const suspended = createMembership(HUB_ID, USER, 'owner');
+      suspended.suspend();
+      mocks.hubMembershipRepository.findByUser.mockResolvedValue([suspended]);
+      mocks.hubRepository.findById.mockResolvedValue(createHub(HUB_ID));
+
+      const context = await service.getContext(USER);
+      expect(context.hubs).toEqual([]);
+      expect(context.blocked).toEqual({
+        kind: 'membership_suspended',
+        hubId: HUB_ID,
+        hubName: 'Hub hub-1',
+      });
+    });
+
+    it('explains a suspended hub', async () => {
+      mocks.hubMembershipRepository.findByUser.mockResolvedValue([
+        createMembership(HUB_ID, USER, 'owner'),
+      ]);
+      mocks.hubRepository.findById.mockResolvedValue(createHub(HUB_ID, 'suspended'));
+
+      const context = await service.getContext(USER);
+      expect(context.hubs).toEqual([]);
+      expect(context.blocked).toEqual({ kind: 'hub_suspended', hubId: HUB_ID, hubName: 'Hub hub-1' });
+    });
+
+    it('distinguishes an archived hub from a suspended one', async () => {
+      mocks.hubMembershipRepository.findByUser.mockResolvedValue([
+        createMembership(HUB_ID, USER, 'owner'),
+      ]);
+      mocks.hubRepository.findById.mockResolvedValue(createHub(HUB_ID, 'archived'));
+
+      const context = await service.getContext(USER);
+      expect(context.blocked).toEqual({ kind: 'hub_archived', hubId: HUB_ID, hubName: 'Hub hub-1' });
+    });
+
+    it('leaves blocked null when the member belongs to no hub at all', async () => {
+      mocks.hubMembershipRepository.findByUser.mockResolvedValue([]);
+
+      const context = await service.getContext(USER);
+      expect(context.hubs).toEqual([]);
+      expect(context.blocked).toBeNull();
+    });
+
+    it('skips a deleted hub — "hub gone" is not an actionable status', async () => {
+      mocks.hubMembershipRepository.findByUser.mockResolvedValue([
+        createMembership(HUB_ID, USER, 'owner'),
+      ]);
+      mocks.hubRepository.findById.mockResolvedValue(null);
+
+      const context = await service.getContext(USER);
+      expect(context.hubs).toEqual([]);
+      expect(context.blocked).toBeNull();
+    });
+
+    it('never sets blocked while a usable hub remains', async () => {
+      mocks.hubMembershipRepository.findByUser.mockResolvedValue([
+        createMembership(HUB_ID, USER, 'owner'),
+      ]);
+      mocks.hubRepository.findById.mockResolvedValue(createHub(HUB_ID));
+
+      const context = await service.getContext(USER);
+      expect(context.hubs).toHaveLength(1);
+      expect(context.blocked).toBeNull();
+    });
+  });
+
   describe('listMyHubs (Fase 21)', () => {
     it('reports role, label and the hub.* namespace of the role', async () => {
       mocks.hubMembershipRepository.findByUser.mockResolvedValue([

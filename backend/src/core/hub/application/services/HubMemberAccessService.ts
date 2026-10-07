@@ -62,6 +62,19 @@ export interface MyHubRow {
   permissions: string[];
 }
 
+/**
+ * Why `/api/hub-context/me` returned an empty `hubs[]` — the difference between
+ * "you are not a member of any hub" (redirect to login is fine) and "you *are*
+ * a member, but something is suspended" (the console must say so instead of
+ * bouncing silently). Only present when at least one membership exists but none
+ * is usable; `null` otherwise.
+ */
+export interface HubBlockedReason {
+  kind: 'membership_suspended' | 'hub_suspended' | 'hub_archived';
+  hubId: string;
+  hubName: string | null;
+}
+
 export interface HubAuthorization {
   /** Resolved once so a guarded handler does not re-read the hub. */
   hub: Hub;
@@ -529,6 +542,7 @@ export class HubMemberAccessService {
     grants: any[];
     tenants: AccessibleTenantRow[];
     effectivePermissions: string[];
+    blocked: HubBlockedReason | null;
   }> {
     const grants = await this.deps.accessRepository.findByUser(userId);
     const tenants = await this.findAccessibleTenants(userId);
@@ -558,7 +572,47 @@ export class HubMemberAccessService {
       grants: grants.map((g) => this.decorate(g.serialize())),
       tenants,
       effectivePermissions,
+      blocked: hubs.length === 0 ? await this.resolveBlockedReason(userId) : null,
     };
+  }
+
+  /**
+   * The explanation for an empty hub list, or `null` when "empty" just means
+   * the person belongs to no hub (the caller can redirect to a normal login
+   * then). Scans the raw memberships rather than asking `listMyHubs`, which
+   * intentionally drops every unusable row — the omission *is* the signal here.
+   * The first unsatisfiable membership wins; a deleted hub is skipped, since
+   * "hub gone" is not a status a member can act on.
+   */
+  private async resolveBlockedReason(userId: string): Promise<HubBlockedReason | null> {
+    const memberships = await this.deps.hubMembershipRepository.findByUser(userId);
+
+    for (const membership of memberships) {
+      const { hubId } = membership.serialize();
+
+      let hub: Hub | null = null;
+      try {
+        hub = await this.deps.hubRepository.findById(hubId);
+      } catch {
+        // hub deleted — not a reportable status, keep scanning
+      }
+
+      if (!membership.isActive()) {
+        return { kind: 'membership_suspended', hubId, hubName: hub?.serialize().name ?? null };
+      }
+      if (!hub) continue;
+
+      const data = hub.serialize();
+      if (!hub.isOperational()) {
+        return {
+          kind: data.status === 'archived' ? 'hub_archived' : 'hub_suspended',
+          hubId,
+          hubName: data.name,
+        };
+      }
+    }
+
+    return null;
   }
 
   // ------------------------------------------------- hub-side authorization

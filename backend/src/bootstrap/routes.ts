@@ -1,5 +1,6 @@
 import { Express } from 'express';
 import type { DIContainer } from './container';
+import { createResolveOutlet } from '../@shared/interfaces/middleware/resolveOutlet';
 import { createAuthRoutes } from '../core/identity/interfaces/http/routes/auth.routes';
 import { createTenantRoutes } from '../core/tenant/interfaces/http/routes/tenant.routes';
 import { createProductRoutes } from '../core/catalog/interfaces/http/routes/product.routes';
@@ -78,13 +79,14 @@ export function registerRoutes(app: Express, container: DIContainer): void {
   app.use('/api/permissions', createPermissionRoutes(permissionController));
 
   const orderController = container.resolve('orderController');
-  app.use('/api/orders', createOrderRoutes(orderController));
+  const outletMw = createResolveOutlet(container.resolve('outletRepository'));
+  app.use('/api/orders', createOrderRoutes(orderController, outletMw));
 
   const shiftController = container.resolve('shiftController');
-  app.use('/api/shifts', createShiftRoutes(shiftController));
+  app.use('/api/shifts', createShiftRoutes(shiftController, outletMw));
 
   const paymentController = container.resolve('paymentController');
-  app.use('/api/payments', createPaymentRoutes(paymentController));
+  app.use('/api/payments', createPaymentRoutes(paymentController, outletMw));
 
   const reportController = container.resolve('reportController');
   app.use('/api/reports', createReportRoutes(reportController));

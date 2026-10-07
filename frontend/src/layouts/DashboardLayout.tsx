@@ -74,10 +74,15 @@ export function DashboardLayout() {
       (user?.roleName === 'Cashier' ? item.href === '/pos' : !item.permission || hasPermission(user, item.permission)),
   );
 
-  const availableOutlets =
+  // Inactive outlets are not offered — picking one would only produce 403s on
+  // every POS mutation. The *currently active* outlet stays in the list even if
+  // it was deactivated meanwhile, so the select never renders blank; the
+  // backend guard (`resolveOutlet`) is what refuses it with a message.
+  const availableOutlets = (
     !!user && user.outletIds && user.outletIds.length > 0
       ? outlets.filter((o) => user.outletIds!.includes(o.id))
-      : outlets;
+      : outlets
+  ).filter((o) => o.isActive || o.id === activeOutletId);
   const showOutletSwitcher = availableOutlets.length > 1;
   const currentOutletName = availableOutlets.find((o) => o.id === activeOutletId)?.name ?? null;
 

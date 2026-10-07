@@ -74,6 +74,7 @@ export function registerIdentityWiring({ container, models }: WiringContext): vo
         roleRepository: container.resolve('roleRepository'),
         hubMembershipService: container.resolve('hubMembershipService'),
         hubMemberAccessService: container.resolve('hubMemberAccessService'),
+        tenantRepository: container.resolve('tenantRepository'),
       }),
     }),
     authController: asClass(AuthController, {
