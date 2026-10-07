@@ -8,6 +8,7 @@ import { PaymentService } from '../../../../payment/application/services/Payment
 import { ProvisionTenantService } from '../../../application/services/ProvisionTenantService';
 import { PlatformAuditService } from '../../../audit/application/services/PlatformAuditService';
 import { SubscriptionService } from '../../../../billing/application/services/SubscriptionService';
+import { SubscriptionBillingService } from '../../../../billing/application/services/SubscriptionBillingService';
 import { UserService } from '../../../../identity/application/services/UserService';
 import { PlatformCleanupService } from '../../../application/services/PlatformCleanupService';
 import { ValidationError, NotFoundError } from '../../../../../@shared/infrastructure/error/AppError';
@@ -26,6 +27,7 @@ interface PlatformControllerDeps {
   provisionTenantService?: ProvisionTenantService;
   auditService?: PlatformAuditService;
   subscriptionService?: SubscriptionService;
+  subscriptionBillingService?: SubscriptionBillingService;
   provisioningRunRepository?: any;
   userRepository?: any;
   roleRepository?: any;
@@ -807,6 +809,25 @@ export class PlatformController extends BaseController {
       },
       reason: req.body.reason,
     });
+
+    // Invoice issued AFTER the extension succeeded (best-effort, like the
+    // platform extend path in SubscriptionController).
+    const subProps = sub?.serialize();
+    if (subProps) {
+      await this.tryBilling(async () => {
+        await this.deps.subscriptionBillingService?.createInvoiceForExtend({
+          tenantId,
+          subscriptionId: subProps.id,
+          planId: subProps.planId,
+          referenceType: 'extended',
+          periodStart: new Date(subProps.currentPeriodEnd.getTime() - numDays * 86_400_000),
+          periodEnd: subProps.currentPeriodEnd,
+          days: numDays,
+          notes: req.body.reason ?? null,
+        });
+      });
+    }
+
     this.ok(res, tenant.serialize());
   }
 
@@ -923,6 +944,15 @@ export class PlatformController extends BaseController {
       });
     } catch {
       // Audit recording must never break the primary operation.
+    }
+  }
+
+  private async tryBilling(fn: () => Promise<unknown>): Promise<void> {
+    try {
+      await fn();
+    } catch {
+      // Invoice creation is best-effort (see MEMBER_AREA_PLAN.md): a failed
+      // invoice write must never break the subscription mutation.
     }
   }
 }

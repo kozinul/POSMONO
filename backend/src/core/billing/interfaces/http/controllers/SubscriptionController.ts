@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { BaseController } from '../../../../../@shared/interfaces/BaseController';
 import { SubscriptionService } from '../../../application/services/SubscriptionService';
+import { SubscriptionBillingService } from '../../../application/services/SubscriptionBillingService';
 import { EntitlementService } from '../../../application/services/EntitlementService';
 import { UnauthorizedError, ValidationError } from '../../../../../@shared/infrastructure/error/AppError';
 import { PlatformAuditService } from '../../../../../core/platform/audit/application/services/PlatformAuditService';
@@ -10,6 +11,7 @@ export class SubscriptionController extends BaseController {
     private readonly subscriptionService: SubscriptionService,
     private readonly entitlementService: EntitlementService,
     private readonly auditService?: PlatformAuditService,
+    private readonly billingService?: SubscriptionBillingService,
   ) {
     super();
   }
@@ -47,6 +49,21 @@ export class SubscriptionController extends BaseController {
       },
       reason,
     });
+
+    // Invoice issued AFTER the mutation succeeded — a failed invoice write must
+    // never roll back the plan assignment (best-effort, like the ledger).
+    const s = sub.serialize();
+    await this.tryBilling(async () => {
+      await this.billingService?.createInvoiceForPlan({
+        tenantId,
+        subscriptionId: s.id,
+        planId: s.planId,
+        referenceType: before ? 'plan_changed' : 'plan_assigned',
+        periodStart: s.currentPeriodStart,
+        periodEnd: s.currentPeriodEnd,
+      });
+    });
+
     this.ok(res, sub.serialize());
   }
 
@@ -84,6 +101,20 @@ export class SubscriptionController extends BaseController {
       actorEmail: (req as any).platformUserEmail || 'system',
       reason: req.body.reason,
     });
+    if (sub) {
+      const s = sub.serialize();
+      await this.tryBilling(async () => {
+        await this.billingService?.createInvoiceForExtend({
+          tenantId,
+          subscriptionId: s.id,
+          planId: s.planId,
+          referenceType: 'extended',
+          periodStart: new Date(s.currentPeriodEnd.getTime() - days * 86_400_000),
+          periodEnd: s.currentPeriodEnd,
+          days,
+        });
+      });
+    }
     this.ok(res, sub ? sub.serialize() : { subscription: null });
   }
 
@@ -115,6 +146,15 @@ export class SubscriptionController extends BaseController {
       return subscription;
     } catch {
       return null;
+    }
+  }
+
+  private async tryBilling(fn: () => Promise<unknown>): Promise<void> {
+    try {
+      await fn();
+    } catch {
+      // Invoice creation is best-effort (see MEMBER_AREA_PLAN.md): a failed
+      // invoice write must never break the subscription mutation.
     }
   }
 

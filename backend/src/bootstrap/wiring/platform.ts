@@ -52,6 +52,7 @@ export function registerPlatformWiring({ container, models, systemConnection }: 
           provisionTenantService: container.resolve('provisionTenantService'),
           auditService: container.resolve('platformAuditService'),
           subscriptionService: container.resolve('subscriptionService'),
+          subscriptionBillingService: container.resolve('subscriptionBillingService'),
           provisioningRunRepository: container.resolve('provisioningRunRepository'),
           userRepository: container.resolve('userRepository'),
           roleRepository: container.resolve('roleRepository'),

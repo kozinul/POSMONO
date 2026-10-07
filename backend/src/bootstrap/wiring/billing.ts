@@ -1,8 +1,11 @@
 import { asClass, Lifetime } from 'awilix';
 import { MongoPlanRepository } from '../../core/billing/infrastructure/persistence/MongoPlanRepository';
 import { MongoSubscriptionRepository } from '../../core/billing/infrastructure/persistence/MongoSubscriptionRepository';
+import { MongoSubscriptionInvoiceRepository } from '../../core/billing/infrastructure/persistence/MongoSubscriptionInvoiceRepository';
+import { MongoPaymentAttemptRepository } from '../../core/billing/infrastructure/persistence/MongoPaymentAttemptRepository';
 import { PlanService } from '../../core/billing/application/services/PlanService';
 import { SubscriptionService } from '../../core/billing/application/services/SubscriptionService';
+import { SubscriptionBillingService } from '../../core/billing/application/services/SubscriptionBillingService';
 import { MongoSubscriptionHistoryRepository } from '../../core/billing/infrastructure/persistence/MongoSubscriptionHistoryRepository';
 import { EntitlementService } from '../../core/billing/application/services/EntitlementService';
 import { PlanController } from '../../core/billing/interfaces/http/controllers/PlanController';
@@ -47,6 +50,28 @@ export function registerBillingWiring({ container, models }: WiringContext): voi
       lifetime: Lifetime.SINGLETON,
       injector: () => ({ model: models.SubscriptionHistoryModel }),
     }),
+    subscriptionInvoiceRepository: asClass(MongoSubscriptionInvoiceRepository, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({ model: models.SubscriptionInvoiceModel }),
+    }),
+    paymentAttemptRepository: asClass(MongoPaymentAttemptRepository, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({ model: models.PaymentAttemptModel }),
+    }),
+    // SubscriptionBillingService owns invoices + payment attempts; it depends
+    // on SubscriptionService (settle → extend) but SubscriptionService never
+    // depends back — invoice creation happens at the caller (controllers).
+    subscriptionBillingService: asClass(SubscriptionBillingService, {
+      lifetime: Lifetime.SINGLETON,
+      injector: () => ({
+        deps: {
+          invoiceRepository: container.resolve('subscriptionInvoiceRepository'),
+          paymentAttemptRepository: container.resolve('paymentAttemptRepository'),
+          planRepository: container.resolve('planRepository'),
+          subscriptionService: container.resolve('subscriptionService'),
+        },
+      }),
+    }),
     entitlementService: asClass(EntitlementService, {
       lifetime: Lifetime.SINGLETON,
       injector: () => ({
@@ -67,6 +92,7 @@ export function registerBillingWiring({ container, models }: WiringContext): voi
         subscriptionService: container.resolve('subscriptionService'),
         entitlementService: container.resolve('entitlementService'),
         auditService: container.resolve('platformAuditService'),
+        billingService: container.resolve('subscriptionBillingService'),
       }),
     }),
   });

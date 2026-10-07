@@ -55,6 +55,7 @@ masih dirujuk (mis. kontrak API QRIS). Yang benar-benar usang ada di `archive/`.
 | [`HUB_V2_DECISIONS.md`](HUB_V2_DECISIONS.md) | **ADR** — keputusan D1–D4 untuk pengembangan Hub berikutnya + opsi yang ditolak | 🟢 baru, aktif |
 | [`HUB_V2_FRONTEND_PLAN.md`](HUB_V2_FRONTEND_PLAN.md) | Fase 17–20 — bagian **frontend** (matriks akses, identity, overview, undangan) | 🟡 direncanakan |
 | [`QRIS_GATEWAY_PLAN.md`](QRIS_GATEWAY_PLAN.md) | Kontrak integrasi gateway QRIS (endpoint, polling, mapping invoice) | ✅ selesai, rujukan kontrak |
+| [`MEMBER_AREA_PLAN.md`](MEMBER_AREA_PLAN.md) | Member area langganan merchant: SubscriptionInvoice + PaymentAttempt (bukan 1:1), invoice-first renew, kontrak masa depan Wallet/VA/auto-renewal, RBAC `settings.billing.read` | 🟡 direncanakan |
 | [`TECH_DEBT_PLAN.md`](TECH_DEBT_PLAN.md) | **Rencana pengurangan kompleksitas**: pagar regresi (CI), composition root, file god, type safety, budget anti-regresi — skala prioritas P0–P3 | 🔴 **aktif, memblokir Fase 18** |
 
 ## 4. Kontrak & Operasional

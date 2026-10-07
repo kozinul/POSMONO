@@ -34,6 +34,8 @@ import { ShiftSchema } from '../../core/pos/infrastructure/persistence/schemas/S
 import { StockMovementSchema } from '../../core/inventory/infrastructure/persistence/schemas/StockMovementSchema';
 import { StockSchema } from '../../core/inventory/infrastructure/persistence/schemas/StockSchema';
 import { SubscriptionHistorySchema } from '../../core/billing/infrastructure/persistence/schemas/SubscriptionHistorySchema';
+import { SubscriptionInvoiceSchema } from '../../core/billing/infrastructure/persistence/schemas/SubscriptionInvoiceSchema';
+import { PaymentAttemptSchema } from '../../core/billing/infrastructure/persistence/schemas/PaymentAttemptSchema';
 import { SubscriptionSchema } from '../../core/billing/infrastructure/persistence/schemas/SubscriptionSchema';
 import { TaxConfigurationSchema } from '../../core/tax/infrastructure/persistence/schemas/TaxConfigurationSchema';
 import { TemplateSchema } from '../../core/template/infrastructure/persistence/schemas/TemplateSchema';
@@ -115,6 +117,10 @@ export function buildModels(connection: Connection) {
   const PlatformAuditLogModel = connection.model('PlatformAuditLog', PlatformAuditLogSchema);
   const ProvisioningRunModel = connection.model('ProvisioningRun', ProvisioningRunSchema);
   const SubscriptionHistoryModel = connection.model('SubscriptionHistory', SubscriptionHistorySchema);
+  const SubscriptionInvoiceModel = connection.model('SubscriptionInvoice', SubscriptionInvoiceSchema);
+  SubscriptionInvoiceModel.syncIndexes().catch(() => {});
+  const PaymentAttemptModel = connection.model('PaymentAttempt', PaymentAttemptSchema);
+  PaymentAttemptModel.syncIndexes().catch(() => {});
   SubscriptionModel.syncIndexes().catch(() => {});
 
   return {
@@ -157,6 +163,8 @@ export function buildModels(connection: Connection) {
     PlatformAuditLogModel,
     ProvisioningRunModel,
     SubscriptionHistoryModel,
+    SubscriptionInvoiceModel,
+    PaymentAttemptModel,
   };
 }
 
@@ -201,5 +209,7 @@ export function registerModels(container: AwilixContainer, models: Models): void
     outletModel: asValue(models.OutletModel),
     planModel: asValue(models.PlanModel),
     subscriptionModel: asValue(models.SubscriptionModel),
+    subscriptionInvoiceModel: asValue(models.SubscriptionInvoiceModel),
+    paymentAttemptModel: asValue(models.PaymentAttemptModel),
   });
 }
