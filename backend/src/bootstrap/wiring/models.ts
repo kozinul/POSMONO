@@ -1,6 +1,8 @@
 import { asValue, type AwilixContainer } from 'awilix';
 import type { Connection } from 'mongoose';
 import { migratePlatformHubPermissions } from '../../core/platform/infrastructure/persistence/migratePlatformHubPermissions';
+import { migrateTenantBillingRead } from '../../core/platform/infrastructure/persistence/migrateTenantBillingRead';
+import { migrateTenantBillingUpdate } from '../../core/platform/infrastructure/persistence/migrateTenantBillingUpdate';
 import { migrateHubIdentity } from '../../core/hub/infrastructure/persistence/migrateHubIdentity';
 import { CategorySchema } from '../../core/catalog/infrastructure/persistence/schemas/CategorySchema';
 import { CustomerSchema } from '../../core/customer/infrastructure/persistence/schemas/CustomerSchema';
@@ -61,6 +63,10 @@ export function buildModels(connection: Connection) {
   // Hub V2 Fase 16: `hub:manage` → `platform.hubs.manage` in stored roles, so a
   // deployed platform super-admin keeps hub access without a manual DB step.
   migratePlatformHubPermissions(RoleModel).catch(() => {});
+  // Member Area Langganan: ensure tenant Owner & Manager roles carry `settings.billing.read`.
+  migrateTenantBillingRead(RoleModel).catch(() => {});
+  // Owner-only: `settings.billing.update` guards the merchant self-pay endpoint.
+  migrateTenantBillingUpdate(RoleModel).catch(() => {});
   const SessionModel = connection.model('Session', SessionSchema);
   const TenantModel = connection.model('Tenant', TenantSchema);
   const ProductModel = connection.model('Product', ProductSchema);

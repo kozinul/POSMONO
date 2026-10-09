@@ -9,6 +9,7 @@ import type { HubMemberTenantAccessRepository } from '../../domain/HubMemberTena
 import type { Hub, HubStatus } from '../../domain/Hub';
 import { HUB_MEMBER_ROLES, type HubMemberRole } from '../../domain/HubMembership';
 import type { HubMembershipRepository } from '../../domain/HubMembershipRepository';
+import { tenantEntryDenial } from '../../../tenant/domain/tenantEntry';
 import {
   HUB_MEMBER_ROLE_LABELS,
   HUB_MEMBER_ROLE_PERMS,
@@ -442,9 +443,10 @@ export class HubMemberAccessService {
 
       let tenantName: string | null = null;
       let ownsTenant = false;
+      let tenantDoc: any = null;
       try {
-        const tenant = await this.deps.tenantRepository.findById(data.tenantId);
-        const tenantData = tenant?.serialize();
+        tenantDoc = await this.deps.tenantRepository.findById(data.tenantId);
+        const tenantData = tenantDoc?.serialize();
         tenantName = tenantData?.name ?? null;
         // A grant row must still point at a tenant of its own hub; if the tenant
         // was moved to another hub the row is stale and must not be offered.
@@ -460,6 +462,11 @@ export class HubMemberAccessService {
       // click — the lookup below already happened for the role it displays.
       const hubRole = await this.activeMembershipRole(data.hubId, userId);
       if (!hubRole) continue;
+
+      // Same rule as `switchTenant`'s status gate: a non-owner must not be
+      // offered a suspended/expired tenant the gate would refuse. Owner keeps
+      // the row — billing recovery happens from inside.
+      if (tenantEntryDenial(tenantDoc, data.tenantRole === 'owner')) continue;
 
       out.push({
         tenantId: data.tenantId,
@@ -488,6 +495,9 @@ export class HubMemberAccessService {
 
       const tenants = await this.deps.tenantRepository.findByHubId(data.hubId);
       for (const tenant of tenants) {
+        // Same status rule as `switchTenant` (see grantedTenants); in fallback
+        // mode the session's owner-ness comes from the hub role.
+        if (tenantEntryDenial(tenant, data.role === 'owner')) continue;
         const t = tenant.serialize();
         out.push({
           tenantId: t.id,

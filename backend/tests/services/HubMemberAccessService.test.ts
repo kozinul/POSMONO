@@ -28,8 +28,18 @@ function createMembership(hubId: string, userId: string, role: string) {
   } as any);
 }
 
-function createTenant(id: string, name: string, hubId: string) {
-  return { serialize: () => ({ id, name, hubId }) };
+function createTenant(
+  id: string,
+  name: string,
+  hubId: string,
+  overrides: { status?: string; expired?: boolean } = {},
+) {
+  const status = overrides.status ?? 'active';
+  return {
+    serialize: () => ({ id, name, hubId, status }),
+    isActive: () => status === 'active' || status === 'trial',
+    isExpired: () => overrides.expired === true,
+  };
 }
 
 function createOutlet(id: string, tenantId: string) {
@@ -669,6 +679,92 @@ describe('HubMemberAccessService', () => {
       const rows = await service.findAccessibleTenants(USER);
       expect(rows.map((r) => r.tenantId)).toEqual([TENANT_A, TENANT_B]);
       expect(rows[0].accessSource).toBe('fallback');
+    });
+
+    // ------------------------------------ tenant status rule (same as switch gate)
+
+    describe('tenant status rule', () => {
+      function grantWithRole(tenantRole: string) {
+        return [
+          HubMemberTenantAccess.create({
+            hubId: HUB_ID,
+            userId: USER,
+            tenantId: TENANT_A,
+            tenantRole: tenantRole as any,
+            outletIds: [],
+            status: 'active',
+          }),
+        ];
+      }
+
+      it('DENY: hides a suspended tenant from a non-owner grant', async () => {
+        mocks.accessRepository.findByUser.mockResolvedValue(grantWithRole('manager'));
+        mocks.hubRepository.findById.mockResolvedValue(createHub(HUB_ID));
+        mocks.tenantRepository.findById.mockResolvedValue(
+          createTenant(TENANT_A, 'Alpha Kopi', HUB_ID, { status: 'suspended' }),
+        );
+        mocks.hubMembershipRepository.findByHubAndUser.mockResolvedValue(
+          createMembership(HUB_ID, USER, 'admin'),
+        );
+
+        expect(await service.findAccessibleTenants(USER)).toEqual([]);
+      });
+
+      it('ALLOW: keeps a suspended tenant visible to the owner grant (billing recovery)', async () => {
+        mocks.accessRepository.findByUser.mockResolvedValue(grantWithRole('owner'));
+        mocks.hubRepository.findById.mockResolvedValue(createHub(HUB_ID));
+        mocks.tenantRepository.findById.mockResolvedValue(
+          createTenant(TENANT_A, 'Alpha Kopi', HUB_ID, { status: 'suspended' }),
+        );
+        mocks.hubMembershipRepository.findByHubAndUser.mockResolvedValue(
+          createMembership(HUB_ID, USER, 'owner'),
+        );
+
+        const rows = await service.findAccessibleTenants(USER);
+        expect(rows).toHaveLength(1);
+        expect(rows[0].tenantId).toBe(TENANT_A);
+      });
+
+      it('DENY: hides a frozen tenant even from an owner grant (status beats grace)', async () => {
+        mocks.accessRepository.findByUser.mockResolvedValue(grantWithRole('owner'));
+        mocks.hubRepository.findById.mockResolvedValue(createHub(HUB_ID));
+        mocks.tenantRepository.findById.mockResolvedValue(
+          createTenant(TENANT_A, 'Alpha Kopi', HUB_ID, { status: 'frozen' }),
+        );
+        mocks.hubMembershipRepository.findByHubAndUser.mockResolvedValue(
+          createMembership(HUB_ID, USER, 'owner'),
+        );
+
+        expect(await service.findAccessibleTenants(USER)).toEqual([]);
+      });
+
+      it('DENY: hides an expired tenant from a non-owner fallback row', async () => {
+        mocks.accessRepository.findByUser.mockResolvedValue([]);
+        mocks.hubMembershipRepository.findByUser.mockResolvedValue([
+          createMembership(HUB_ID, USER, 'admin'),
+        ]);
+        mocks.hubRepository.findById.mockResolvedValue(createHub(HUB_ID));
+        mocks.tenantRepository.findByHubId.mockResolvedValue([
+          createTenant(TENANT_A, 'Alpha Kopi', HUB_ID, { expired: true }),
+        ]);
+
+        expect(await service.findAccessibleTenants(USER)).toEqual([]);
+      });
+
+      it('ALLOW: keeps an expired tenant visible to a fallback owner (billing recovery)', async () => {
+        mocks.accessRepository.findByUser.mockResolvedValue([]);
+        mocks.hubMembershipRepository.findByUser.mockResolvedValue([
+          createMembership(HUB_ID, USER, 'owner'),
+        ]);
+        mocks.hubRepository.findById.mockResolvedValue(createHub(HUB_ID));
+        mocks.tenantRepository.findByHubId.mockResolvedValue([
+          createTenant(TENANT_A, 'Alpha Kopi', HUB_ID, { expired: true }),
+        ]);
+
+        const rows = await service.findAccessibleTenants(USER);
+        expect(rows).toHaveLength(1);
+        expect(rows[0].tenantId).toBe(TENANT_A);
+      });
     });
   });
 

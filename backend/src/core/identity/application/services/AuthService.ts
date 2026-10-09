@@ -2,6 +2,7 @@ import { UseCase } from '../../../../@shared/application/UseCase';
 import { User } from '../../domain/User';
 import { PasswordService } from '../../domain/services/PasswordService';
 import { UnauthorizedError, ValidationError, ForbiddenError } from '../../../../@shared/infrastructure/error/AppError';
+import { tenantEntryDenial, TENANT_STATUS_LABELS } from '../../../tenant/domain/tenantEntry';
 import { HUB_MEMBER_ROLE_PERMS, HUB_MEMBER_ROLE_LABELS } from '../../../platform/defaults/roles';
 
 interface LoginInput {
@@ -23,19 +24,6 @@ interface LoginOutput {
   accessToken: string;
   refreshToken: string;
 }
-
-/**
- * Indonesian labels for the login gate. `active`/`trial` never reach this map
- * (`Tenant.isActive()` lets them through), so anything else is a blocking
- * status and must produce a human-readable reason instead of a generic
- * "gagal login".
- */
-const TENANT_STATUS_LABELS: Record<string, string> = {
-  suspended: 'ditangguhkan',
-  frozen: 'dibekukan',
-  cancelled: 'dibatalkan',
-  deactivated: 'dinonaktifkan',
-};
 
 /** Structural view of the tenant document the login gate needs. */
 interface TenantStatusRecord {
@@ -99,55 +87,23 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
       throw new UnauthorizedError('User account is inactive');
     }
 
-    // Gate after the password is proven: revealing tenant state to a
-    // wrong-password attempt would be an account-enumeration oracle. A missing
-    // tenant document is deliberately NOT blocking — the platform super admin
-    // (tenantId 'platform') has no row in `tenants`, and a data glitch must not
-    // lock everyone out.
-    if (this.tenantRepository) {
-      let tenant: TenantStatusRecord | null = null;
-      try {
-        tenant = await this.tenantRepository.findById(tenantId);
-      } catch {
-        // treated as missing — see above
-      }
-      if (tenant && typeof tenant.isActive === 'function' && !tenant.isActive()) {
-        const status = String(tenant.serialize?.()?.status ?? '');
-        const label = TENANT_STATUS_LABELS[status] ?? 'nonaktif';
-        throw new ForbiddenError(
-          `Tenant Anda berstatus ${label} — akses dinonaktifkan. Hubungi pengelola.`,
-        );
-      }
-      // Active period ran out: same lazy rule as `TenantService.markSuspendedIfExpired`,
-      // applied here so a login right after the deadline is refused with the right
-      // reason instead of one sweep-tick late. Save is best-effort.
-      if (tenant && typeof tenant.isExpired === 'function' && tenant.isExpired()) {
-        if (typeof tenant.suspend === 'function' && typeof this.tenantRepository.save === 'function') {
-          try {
-            tenant.suspend('Masa aktif berakhir — auto-suspend');
-            await this.tenantRepository.save(tenant);
-          } catch {
-            // treated as missing — the refusal below is what matters
-          }
-        }
-        throw new ForbiddenError(
-          'Masa aktif tenant Anda telah berakhir — hubungi pengelola untuk memperpanjang.',
-        );
-      }
-    }
+    const role = await this.resolveRole(user.roleIdValue);
+    const roleName = role?.serialize().name?.toLowerCase() ?? '';
+    const isOwner = roleName === 'owner';
+
+    await this.assertTenantUsable(tenantId, isOwner);
 
     user.recordLogin();
     await this.userRepository.save(user);
 
-    const role = await this.resolveRole(user.roleIdValue);
-    const roleName = role?.serialize().name ?? null;
+    const actualRoleName = role?.serialize().name ?? null;
     const permissions = role?.serialize().permissions ?? [];
 
     const refreshToken = this.tokenService.generateRefreshToken({
       sub: user.id.toValue(),
       tenant: tenantId,
       role: user.roleIdValue,
-      roleName: roleName ?? undefined,
+      roleName: actualRoleName ?? undefined,
       permissions,
       outletIds: user.outletIdsValue,
       email: user.emailValue,
@@ -165,18 +121,71 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
       sub: user.id.toValue(),
       tenant: tenantId,
       role: user.roleIdValue,
-      roleName: roleName ?? undefined,
+      roleName: actualRoleName ?? undefined,
       permissions,
       outletIds: user.outletIdsValue,
       email: user.emailValue,
     });
 
-    return { user, roleName, permissions, outletIds: user.outletIdsValue, accessToken, refreshToken };
+    return { user, roleName: actualRoleName, permissions, outletIds: user.outletIdsValue, accessToken, refreshToken };
   }
 
   private async resolveRole(roleId: string) {
     if (!this.roleRepository) return null;
     return this.roleRepository.findById(roleId);
+  }
+
+  /**
+   * Shared status gate for entering a tenant (login AND cross-tenant switch).
+   * On login it runs *after* the password is proven: revealing tenant state to
+   * a wrong-password attempt would be an account-enumeration oracle. The entry
+   * rule itself lives in `tenantEntryDenial` — also used by the switcher, so
+   * the list never offers a tenant this gate would refuse.
+   */
+  private async assertTenantUsable(tenantId: string, isOwner: boolean): Promise<void> {
+    if (!this.tenantRepository) return;
+
+    let tenant: TenantStatusRecord | null = null;
+    try {
+      tenant = await this.tenantRepository.findById(tenantId);
+    } catch {
+      // treated as missing — see tenantEntryDenial
+    }
+
+    const denial = tenantEntryDenial(tenant, isOwner);
+    if (denial === 'suspended') {
+      throw new ForbiddenError(
+        'Masa aktif toko ditangguhkan. Silakan hubungi Owner toko untuk perpanjangan.',
+      );
+    }
+    if (denial === 'status') {
+      const status = String(tenant?.serialize?.()?.status ?? '');
+      const label = TENANT_STATUS_LABELS[status] ?? 'nonaktif';
+      throw new ForbiddenError(
+        `Tenant Anda berstatus ${label} — akses dinonaktifkan. Hubungi pengelola.`,
+      );
+    }
+
+    // Active period ran out: same lazy rule as `TenantService.markSuspendedIfExpired`,
+    // applied here so a login right after the deadline is refused with the right
+    // reason instead of one sweep-tick late. Save is best-effort. Runs only after
+    // the status denials above so a `frozen` tenant is never overwritten to
+    // `suspended` by `suspend()`.
+    if (tenant && typeof tenant.isExpired === 'function' && tenant.isExpired()) {
+      if (typeof tenant.suspend === 'function' && typeof this.tenantRepository.save === 'function') {
+        try {
+          tenant.suspend('Masa aktif berakhir — auto-suspend');
+          await this.tenantRepository.save(tenant);
+        } catch {
+          // treated as missing — the refusal (or grace) below is what matters
+        }
+      }
+    }
+    if (denial === 'expired') {
+      throw new ForbiddenError(
+        'Masa aktif tenant Anda telah berakhir — hubungi pengelola untuk memperpanjang.',
+      );
+    }
   }
 
   async refresh(token: string): Promise<{ accessToken: string; refreshToken: string }> {
@@ -310,6 +319,13 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
     if (!session) {
       throw new ForbiddenError('No hub access grants entry to this tenant');
     }
+
+    // Same status rule as login: a hub grant does NOT bypass the tenant-status
+    // gate — otherwise a suspended/expired tenant would be fully reachable via
+    // switch-tenant while login refuses it. Owner may still enter (billing
+    // recovery); `tenantRole` covers grant sessions, `hubRole` the legacy path.
+    const isOwner = session.tenantRole === 'owner' || session.hubRole === 'owner';
+    await this.assertTenantUsable(targetTenantId, isOwner);
 
     const user = await this.userRepository.findByIdRaw(userId);
     if (!user) {

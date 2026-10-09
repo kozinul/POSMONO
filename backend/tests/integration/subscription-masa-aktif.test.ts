@@ -9,7 +9,13 @@ import { createTenantRoutes } from '../../src/core/tenant/interfaces/http/routes
 import { MongoSubscriptionRepository } from '../../src/core/billing/infrastructure/persistence/MongoSubscriptionRepository';
 import { MongoPlanRepository } from '../../src/core/billing/infrastructure/persistence/MongoPlanRepository';
 import { MongoSubscriptionHistoryRepository } from '../../src/core/billing/infrastructure/persistence/MongoSubscriptionHistoryRepository';
+import { MongoSubscriptionInvoiceRepository } from '../../src/core/billing/infrastructure/persistence/MongoSubscriptionInvoiceRepository';
+import { MongoPaymentAttemptRepository } from '../../src/core/billing/infrastructure/persistence/MongoPaymentAttemptRepository';
 import { SubscriptionService } from '../../src/core/billing/application/services/SubscriptionService';
+import { SubscriptionBillingService } from '../../src/core/billing/application/services/SubscriptionBillingService';
+import { EntitlementService } from '../../src/core/billing/application/services/EntitlementService';
+import { SubscriptionController } from '../../src/core/billing/interfaces/http/controllers/SubscriptionController';
+import { createMerchantSubscriptionRoutes } from '../../src/core/billing/interfaces/http/routes/subscription.routes';
 import { Tenant } from '../../src/core/tenant/domain/Tenant';
 import { Subscription } from '../../src/core/billing/domain/Subscription';
 import { generateTestToken } from '../helpers/auth';
@@ -17,14 +23,19 @@ import { setupTestDb, teardownTestDb, clearCollections } from '../helpers/db';
 import { TenantSchema } from '../../src/core/tenant/infrastructure/persistence/schemas/TenantSchema';
 import { SubscriptionSchema } from '../../src/core/billing/infrastructure/persistence/schemas/SubscriptionSchema';
 import { SubscriptionHistorySchema } from '../../src/core/billing/infrastructure/persistence/schemas/SubscriptionHistorySchema';
+import { SubscriptionInvoiceSchema } from '../../src/core/billing/infrastructure/persistence/schemas/SubscriptionInvoiceSchema';
+import { PaymentAttemptSchema } from '../../src/core/billing/infrastructure/persistence/schemas/PaymentAttemptSchema';
 import { PlanSchema } from '../../src/core/billing/infrastructure/persistence/schemas/PlanSchema';
 
 let tenantModel: mongoose.Model<any>;
 let subModel: mongoose.Model<any>;
 let historyModel: mongoose.Model<any>;
+let invoiceModel: mongoose.Model<any>;
+let attemptModel: mongoose.Model<any>;
 let planModel: mongoose.Model<any>;
 let tenantRepository: MongoTenantRepository;
 let subscriptionRepository: MongoSubscriptionRepository;
+let billingService: SubscriptionBillingService;
 let app: express.Express;
 
 const TENANT_ID = 'tenant-masa-aktif-1';
@@ -74,23 +85,43 @@ beforeAll(async () => {
   tenantModel = mongoose.model('Tenant', TenantSchema);
   subModel = mongoose.model('Subscription', SubscriptionSchema);
   historyModel = mongoose.model('SubscriptionHistory', SubscriptionHistorySchema);
+  invoiceModel = mongoose.model('SubscriptionInvoice', SubscriptionInvoiceSchema);
+  attemptModel = mongoose.model('PaymentAttempt', PaymentAttemptSchema);
   planModel = mongoose.model('Plan', PlanSchema);
 
   tenantRepository = new MongoTenantRepository(tenantModel);
   subscriptionRepository = new MongoSubscriptionRepository(subModel);
   const planRepository = new MongoPlanRepository(planModel);
   const historyRepository = new MongoSubscriptionHistoryRepository(historyModel);
+  const invoiceRepository = new MongoSubscriptionInvoiceRepository(invoiceModel);
+  const attemptRepository = new MongoPaymentAttemptRepository(attemptModel);
+
   const subscriptionService = new SubscriptionService(
     subscriptionRepository,
     planRepository,
     tenantRepository,
     historyRepository,
   );
+  billingService = new SubscriptionBillingService({
+    invoiceRepository,
+    paymentAttemptRepository: attemptRepository,
+    planRepository,
+    subscriptionService,
+  });
+  const entitlementService = new EntitlementService(subscriptionRepository, planRepository);
   const tenantService = new TenantService(tenantRepository, { publish: vi.fn() } as any);
+
+  const subscriptionController = new SubscriptionController(
+    subscriptionService,
+    entitlementService,
+    undefined,
+    billingService,
+  );
 
   app = express();
   app.use(express.json());
   app.use('/api/tenants', createTenantRoutes(new TenantController(tenantService, undefined, subscriptionService)));
+  app.use('/api/tenants', createMerchantSubscriptionRoutes(subscriptionController));
 }, 60000);
 
 afterAll(async () => {
@@ -133,23 +164,50 @@ describe('masa aktif enforcement over HTTP', () => {
     expect(after.status).toBe(before.status);
   });
 
-  it('renew through the billing path syncs tenant and subscription clocks and reactivates', async () => {
+  it('renew through the billing path creates a pending invoice and settling it syncs tenant and subscription clocks and reactivates', async () => {
+    await planModel.create({
+      _id: 'plan-trial',
+      name: 'Trial Pro',
+      basePrice: 199000,
+      billingCycle: 'monthly',
+      modules: ['pos'],
+      limits: {},
+      addOns: [],
+      isDefault: false,
+      isPublic: true,
+      sortOrder: 1,
+    });
     await createTenantDoc({ status: 'suspended', subscriptionExpiresAt: new Date('2026-10-01T00:00:00.000Z') }).save();
     await createSubscriptionDoc().save();
 
     const res = await request(app)
       .post('/api/tenants/current/subscription/renew')
-      .set('Authorization', `Bearer ${generateTestToken({ tenant: TENANT_ID })}`)
+      .set('Authorization', `Bearer ${generateTestToken({ tenant: TENANT_ID, permissions: ['settings.billing.read'] })}`)
       .send({ days: 30 })
       .expect(200);
 
-    expect(res.body.data.message).toBe('Subscription successfully renewed');
-    expect(res.body.data.subscription.status).toBe('active');
+    expect(res.body.data.invoice.status).toBe('pending');
+    expect(res.body.data.invoice.referenceType).toBe('renewal');
+    expect(res.body.data.invoice.amount).toBe(199000);
+
+    // Before settlement, the tenant is still suspended (invoice-first)
+    const beforeSettlement = await tenantModel.findById(TENANT_ID).lean();
+    expect(beforeSettlement.status).toBe('suspended');
+
+    // Settle the invoice
+    await billingService.recordPaymentAttempt({
+      tenantId: TENANT_ID,
+      invoiceId: res.body.data.invoice.id,
+      amount: 199000,
+      method: 'manual',
+    });
 
     const storedTenant = await tenantModel.findById(TENANT_ID).lean();
     const storedSub = await subModel.findOne({ tenantId: TENANT_ID }).lean();
-    // Drift fix: both clocks move together (both fell back to "now" because
-    // the stored end was already in the past, so allow sub-ms rounding).
+    expect(storedTenant.status).toBe('active');
+    expect(storedSub.status).toBe('active');
+
+    // Drift fix: both clocks move together
     const tenantEnd = new Date(storedTenant.subscriptionExpiresAt).getTime();
     const subEnd = new Date(storedSub.currentPeriodEnd).getTime();
     expect(Math.abs(subEnd - tenantEnd)).toBeLessThan(1000);

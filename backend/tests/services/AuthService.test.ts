@@ -445,7 +445,7 @@ describe('AuthService', () => {
       tenantRepo.findById.mockReset();
     });
 
-    it('DENY: blocked tenant yields an Indonesian reason and no token/session', async () => {
+    it('DENY: suspended tenant for non-owner yields billing lockout message and no token/session', async () => {
       primeValidCredentials();
       tenantRepo.findById.mockResolvedValue(fakeTenant('suspended'));
 
@@ -455,11 +455,31 @@ describe('AuthService', () => {
 
       expect(err).toBeInstanceOf(ForbiddenError);
       expect((err as Error).message).toBe(
-        'Tenant Anda berstatus ditangguhkan — akses dinonaktifkan. Hubungi pengelola.',
+        'Masa aktif toko ditangguhkan. Silakan hubungi Owner toko untuk perpanjangan.',
       );
       expect(tokenService.generateToken).not.toHaveBeenCalled();
       expect(sessionService.create).not.toHaveBeenCalled();
       expect(userRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('ALLOW: suspended tenant permits owner login for billing recovery', async () => {
+      primeValidCredentials();
+      tenantRepo.findById.mockResolvedValue(fakeTenant('suspended'));
+      const roleRepo = { findById: vi.fn(async () => ({ serialize: () => ({ name: 'owner', permissions: [] }) })) };
+
+      const authService = new AuthService(
+        userRepo,
+        tokenService,
+        passwordService,
+        sessionService,
+        roleRepo,
+        undefined,
+        undefined,
+        tenantRepo,
+      );
+
+      const res = await authService.execute({ email: 'user@test.com', password: 'pw', tenantId: TENANT_ID });
+      expect(res.accessToken).toBe('access-token-123');
     });
 
     it.each([
@@ -556,6 +576,70 @@ describe('AuthService', () => {
 
       expect(result.accessToken).toBe('access-token-123');
       expect(sessionService.create).toHaveBeenCalledOnce();
+    });
+
+    // ------------------------------------------- switch-tenant gate (same rule)
+
+    describe('switch-tenant gate', () => {
+      function switchableService(membershipRole: string) {
+        const hubMembershipService = {
+          findAccessibleTenants: vi.fn(async () => [
+            { tenantId: 'tenant-beta', tenantName: 'Beta', hubId: 'hub-1', hubName: 'BCA', role: membershipRole },
+          ]),
+          resolveRoleForTenant: vi.fn(async () => membershipRole),
+        };
+        // Positional: slot 6 = hubMembershipService, slot 8 = tenantRepository.
+        return new AuthService(
+          userRepo,
+          tokenService,
+          passwordService,
+          sessionService,
+          undefined,
+          hubMembershipService,
+          undefined,
+          tenantRepo,
+        );
+      }
+
+      beforeEach(() => {
+        userRepo.findByIdRaw = vi.fn(async () => createUser());
+      });
+
+      it('DENY: suspended tenant refuses a non-owner switch with the billing message', async () => {
+        tenantRepo.findById.mockResolvedValue(fakeTenant('suspended'));
+
+        const err = await switchableService('admin')
+          .switchTenant('user-1', 'tenant-beta')
+          .catch((e: Error) => e);
+
+        expect(err).toBeInstanceOf(ForbiddenError);
+        expect((err as Error).message).toBe(
+          'Masa aktif toko ditangguhkan. Silakan hubungi Owner toko untuk perpanjangan.',
+        );
+        expect(tokenService.generateToken).not.toHaveBeenCalled();
+        expect(sessionService.create).not.toHaveBeenCalled();
+      });
+
+      it('ALLOW: suspended tenant permits an owner switch for billing recovery', async () => {
+        tenantRepo.findById.mockResolvedValue(fakeTenant('suspended'));
+
+        const result = await switchableService('owner').switchTenant('user-1', 'tenant-beta');
+
+        expect(result.accessToken).toBe('access-token-123');
+        expect(sessionService.create).toHaveBeenCalledOnce();
+      });
+
+      it('DENY: frozen tenant refuses an owner switch too (status denial beats grace)', async () => {
+        tenantRepo.findById.mockResolvedValue(fakeTenant('frozen'));
+
+        const err = await switchableService('owner')
+          .switchTenant('user-1', 'tenant-beta')
+          .catch((e: Error) => e);
+
+        expect(err).toBeInstanceOf(ForbiddenError);
+        expect((err as Error).message).toContain('dibekukan');
+        expect(tokenService.generateToken).not.toHaveBeenCalled();
+      });
     });
   });
 });

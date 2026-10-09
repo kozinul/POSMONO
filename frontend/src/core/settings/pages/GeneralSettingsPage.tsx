@@ -10,6 +10,7 @@ import RoundingSection from '../sections/RoundingSection';
 import QrisSection from '../sections/QrisSection';
 import ChargesSection from '../sections/ChargesSection';
 import ReceiptSection from '../sections/ReceiptSection';
+import BillingSection from '../sections/BillingSection';
 import SettingsTopBar from '../components/SettingsTopBar';
 import SettingsSidebar from '../components/SettingsSidebar';
 import { useSettingsDraft } from '../hooks/useSettingsDraft';
@@ -87,6 +88,8 @@ export default function GeneralSettingsPage() {
             )}
 
             {activeSection === 'receipt' && <ReceiptSection {...draft.receipt} />}
+
+            {activeSection === 'billing' && <BillingSection />}
           </div>
         </div>
       </div>

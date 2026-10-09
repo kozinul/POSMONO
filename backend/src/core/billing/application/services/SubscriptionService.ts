@@ -215,9 +215,9 @@ export class SubscriptionService {
     return null;
   }
 
-  async getTenantSubscriptionHistory(tenantId: string): Promise<any[]> {
+  async getTenantSubscriptionHistory(tenantId: string, limit: number = 100): Promise<any[]> {
     if (!this.historyRepository) return [];
-    const entries = await this.historyRepository.findByTenantId(tenantId, 100);
+    const entries = await this.historyRepository.findByTenantId(tenantId, limit);
     return entries.map((e) => e.serialize());
   }
 

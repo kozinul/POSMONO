@@ -120,7 +120,11 @@ export class SubscriptionController extends BaseController {
 
   async getSubscriptionHistory(req: Request, res: Response): Promise<void> {
     const tenantId = req.params.tenantId;
-    const history = await this.subscriptionService.getTenantSubscriptionHistory(tenantId);
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 100;
+    const history = await this.subscriptionService.getTenantSubscriptionHistory(
+      tenantId,
+      isNaN(limit) ? 100 : limit,
+    );
     this.ok(res, { items: history, total: history.length });
   }
 
@@ -130,7 +134,87 @@ export class SubscriptionController extends BaseController {
     this.ok(res, entitlement);
   }
 
-  // Merchant Portal endpoint
+  async listTenantInvoices(req: Request, res: Response): Promise<void> {
+    const tenantId = req.params.tenantId;
+    if (!this.billingService) {
+      this.ok(res, { items: [], totals: { outstanding: 0, paid: 0 } });
+      return;
+    }
+    const result = await this.billingService.listInvoices(tenantId);
+    this.ok(res, result);
+  }
+
+  async listTenantInvoicePayments(req: Request, res: Response): Promise<void> {
+    const { tenantId, invoiceId } = req.params;
+    if (!this.billingService) {
+      this.ok(res, { items: [] });
+      return;
+    }
+    const result = await this.billingService.listPaymentAttempts(tenantId, invoiceId);
+    this.ok(res, result);
+  }
+
+  async recordInvoicePayment(req: Request, res: Response): Promise<void> {
+    const { tenantId, invoiceId } = req.params;
+    const { amount, method, referenceNumber, notes } = req.body || {};
+    const numAmount = typeof amount === 'number' ? amount : parseFloat(amount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      throw new ValidationError('Nominal pembayaran valid harus disertakan.');
+    }
+    if (!method || typeof method !== 'string') {
+      throw new ValidationError('Metode pembayaran harus disertakan.');
+    }
+    if (!this.billingService) {
+      throw new ValidationError('Layanan billing tidak tersedia.');
+    }
+    const actorEmail = (req as any).platformUserEmail || 'system';
+    const result = await this.billingService.recordPaymentAttempt({
+      tenantId,
+      invoiceId,
+      amount: numAmount,
+      method,
+      referenceNumber,
+      notes,
+      actorEmail,
+    });
+    await this.audit(req, {
+      action: 'SUBSCRIPTION_INVOICE_PAID',
+      tenantId,
+      description: `Pembayaran invoice ${result.invoice.number} sebesar Rp ${numAmount.toLocaleString('id-ID')} dicatat`,
+      after: {
+        invoiceId,
+        invoiceNumber: result.invoice.number,
+        amount: numAmount,
+        method,
+        referenceNumber: referenceNumber ?? null,
+      },
+      reason: notes ?? null,
+    });
+    this.ok(res, result);
+  }
+
+  async cancelInvoice(req: Request, res: Response): Promise<void> {
+    const { tenantId, invoiceId } = req.params;
+    const reason = req.body?.reason ?? null;
+    if (!this.billingService) {
+      throw new ValidationError('Layanan billing tidak tersedia.');
+    }
+    const result = await this.billingService.cancelInvoice(tenantId, invoiceId, reason);
+    await this.audit(req, {
+      action: 'SUBSCRIPTION_INVOICE_CANCELLED',
+      tenantId,
+      description: `Invoice ${result.invoice.number} dibatalkan`,
+      after: {
+        invoiceId,
+        invoiceNumber: result.invoice.number,
+        status: result.invoice.status,
+      },
+      reason,
+    });
+    this.ok(res, result);
+  }
+
+  // Merchant Portal endpoints
   async getCurrentEntitlement(req: Request, res: Response): Promise<void> {
     const tenantId = req.tenantId;
     if (!tenantId) {
@@ -138,6 +222,118 @@ export class SubscriptionController extends BaseController {
     }
     const entitlement = await this.entitlementService.getTenantEntitlement(tenantId);
     this.ok(res, entitlement);
+  }
+
+  async getCurrentInvoices(req: Request, res: Response): Promise<void> {
+    const tenantId = req.tenantId;
+    if (!tenantId) {
+      throw new UnauthorizedError('Unauthorized');
+    }
+    if (!this.billingService) {
+      this.ok(res, { items: [], totals: { outstanding: 0, paid: 0 } });
+      return;
+    }
+    const result = await this.billingService.listInvoices(tenantId);
+    this.ok(res, result);
+  }
+
+  async getCurrentPayments(req: Request, res: Response): Promise<void> {
+    const tenantId = req.tenantId;
+    if (!tenantId) {
+      throw new UnauthorizedError('Unauthorized');
+    }
+    if (!this.billingService) {
+      this.ok(res, { items: [] });
+      return;
+    }
+    const { items } = await this.billingService.listPaymentAttempts(tenantId);
+    this.ok(res, { items: items.filter((a) => a.status === 'completed') });
+  }
+
+  async getCurrentHistory(req: Request, res: Response): Promise<void> {
+    const tenantId = req.tenantId;
+    if (!tenantId) {
+      throw new UnauthorizedError('Unauthorized');
+    }
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 100;
+    const history = await this.subscriptionService.getTenantSubscriptionHistory(
+      tenantId,
+      isNaN(limit) ? 100 : limit,
+    );
+    this.ok(res, { items: history, total: history.length });
+  }
+
+  async renewSubscription(req: Request, res: Response): Promise<void> {
+    const tenantId = req.tenantId;
+    if (!tenantId) {
+      throw new UnauthorizedError('Unauthorized');
+    }
+    const days = req.body?.days ? parseInt(req.body.days, 10) : 30;
+    const numDays = isNaN(days) || days <= 0 ? 30 : days;
+    if (!this.billingService) {
+      throw new ValidationError('Layanan billing tidak tersedia.');
+    }
+
+    const { subscription, plan } = await this.subscriptionService.getTenantSubscription(tenantId);
+    if (!subscription || !plan) {
+      throw new ValidationError('Tenant tidak memiliki langganan aktif untuk diperpanjang.');
+    }
+    if (plan.basePrice <= 0) {
+      throw new ValidationError('Plan gratis tidak memerlukan perpanjangan.');
+    }
+
+    const baseDate = subscription.currentPeriodEnd
+      ? new Date(subscription.currentPeriodEnd)
+      : new Date();
+    const periodStart = baseDate.getTime() > Date.now() ? baseDate : new Date();
+    const periodEnd = new Date(periodStart.getTime() + numDays * 86_400_000);
+
+    const invoice = await this.billingService.createInvoiceForExtend({
+      tenantId,
+      subscriptionId: subscription.id,
+      planId: subscription.planId,
+      referenceType: 'renewal',
+      periodStart,
+      periodEnd,
+      days: numDays,
+      notes: 'Perpanjangan mandiri (merchant)',
+    });
+
+    if (!invoice) {
+      throw new ValidationError('Gagal membuat invoice perpanjangan.');
+    }
+
+    this.ok(res, { invoice: invoice.serialize() });
+  }
+
+  async payCurrentInvoice(req: Request, res: Response): Promise<void> {
+    const tenantId = req.tenantId;
+    if (!tenantId) {
+      throw new UnauthorizedError('Unauthorized');
+    }
+    const { invoiceId } = req.params;
+    const { amount, method, referenceNumber, notes } = req.body || {};
+    const numAmount = typeof amount === 'number' ? amount : parseFloat(amount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      throw new ValidationError('Nominal pembayaran valid harus disertakan.');
+    }
+    if (!method || typeof method !== 'string') {
+      throw new ValidationError('Metode pembayaran harus disertakan.');
+    }
+    if (!this.billingService) {
+      throw new ValidationError('Layanan billing tidak tersedia.');
+    }
+    const actorEmail = (req as any).userEmail || (req as any).platformUserEmail || 'merchant';
+    const result = await this.billingService.recordPaymentAttempt({
+      tenantId,
+      invoiceId,
+      amount: numAmount,
+      method,
+      referenceNumber,
+      notes,
+      actorEmail,
+    });
+    this.ok(res, result);
   }
 
   private async safeGetSubscription(tenantId: string): Promise<any | null> {

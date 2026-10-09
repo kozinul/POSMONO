@@ -29,6 +29,9 @@ export const OWNER_PERMS = [
   'reports:read',
   'customers:read', 'customers:write',
   'settings:read', 'settings:write',
+  'settings.billing.read',
+  // Money path: recording an invoice payment stays owner-only (Manager keeps read).
+  'settings.billing.update',
   'shifts:read', 'shifts:write',
   'printers:read', 'printers:write',
 ];
@@ -42,6 +45,7 @@ export const MANAGER_PERMS = [
   'reports:read',
   'customers:read', 'customers:write',
   'settings:read',
+  'settings.billing.read',
   'shifts:read', 'shifts:write',
   'printers:read', 'printers:write',
 ];

@@ -102,4 +102,14 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
       </svg>
     ),
   },
+  {
+    id: 'billing',
+    label: 'Langganan & Tagihan',
+    keywords: 'tagihan langganan invoice billing plan pembayaran riwayat',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.75 0M2.25 12h19.5m-19.5-6.75a60.07 60.07 0 0115.75 0" />
+      </svg>
+    ),
+  },
 ];
