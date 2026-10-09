@@ -7,6 +7,7 @@ export function createAuthRoutes(authController: AuthController): Router {
   const router = Router();
 
   router.post('/login', asyncHandler(authController.login.bind(authController)));
+  router.post('/hub-login', asyncHandler(authController.hubLogin.bind(authController)));
   router.post('/register', authenticate, asyncHandler(authController.register.bind(authController)));
   router.post('/refresh', asyncHandler(authController.refresh.bind(authController)));
   router.post('/logout', asyncHandler(authController.logout.bind(authController)));

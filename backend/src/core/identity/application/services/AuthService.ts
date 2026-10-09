@@ -4,6 +4,7 @@ import { PasswordService } from '../../domain/services/PasswordService';
 import { UnauthorizedError, ValidationError, ForbiddenError } from '../../../../@shared/infrastructure/error/AppError';
 import { tenantEntryDenial, TENANT_STATUS_LABELS } from '../../../tenant/domain/tenantEntry';
 import { HUB_MEMBER_ROLE_PERMS, HUB_MEMBER_ROLE_LABELS } from '../../../platform/defaults/roles';
+import type { MyHubRow } from '../../../hub/application/services/HubMemberAccessService';
 
 interface LoginInput {
   email: string;
@@ -24,6 +25,28 @@ interface LoginOutput {
   accessToken: string;
   refreshToken: string;
 }
+
+interface HubLoginInput {
+  email: string;
+  password: string;
+  userAgent?: string;
+  ipAddress?: string;
+}
+
+interface HubLoginOutput {
+  user: User;
+  accessToken: string;
+  refreshToken: string;
+  hubs: MyHubRow[];
+}
+
+/**
+ * Sentinel tenant for a hub-console session (Fase 25). Mirrors the platform
+ * console's `tenant: 'platform'`: a reserved id that no real tenant can hold, so
+ * tenant-scoped queries answered with this token come back empty instead of
+ * leaking another tenant's data.
+ */
+export const HUB_SESSION_TENANT = 'hub';
 
 /** Structural view of the tenant document the login gate needs. */
 interface TenantStatusRecord {
@@ -186,6 +209,82 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
         'Masa aktif tenant Anda telah berakhir — hubungi pengelola untuk memperpanjang.',
       );
     }
+  }
+
+  /**
+   * Hub V2 Fase 25 — the hub console's own sign-in, a separate audience from the
+   * POS dashboard.
+   *
+   * `/api/hub/*` and `/hub-context/me` authorize from the membership row per
+   * request and never from the token's tenant, so this deliberately skips
+   * `assertTenantUsable`: a member whose *own* tenant is suspended must still be
+   * able to administer the hub. In exchange the token carries no tenant authority
+   * (`tenant:'hub'`, empty permissions/outlets) — tenant and POS routes are scoped
+   * to a real tenant id, so a hub session cannot reach them.
+   *
+   * Resolution is by globally-unique email, exactly like the provisioning fallback
+   * in `execute`; the home tenant is only used to find the user, never to decide
+   * access.
+   */
+  async hubLogin(input: HubLoginInput): Promise<HubLoginOutput> {
+    const user = this.userRepository.findByEmailGlobal
+      ? await this.userRepository.findByEmailGlobal(input.email)
+      : null;
+    if (!user) {
+      throw new UnauthorizedError('Invalid credentials');
+    }
+
+    const valid = await this.passwordService.compare(input.password, user.passwordHashValue);
+    if (!valid) {
+      throw new UnauthorizedError('Invalid credentials');
+    }
+
+    if (!user.isActiveUser()) {
+      throw new UnauthorizedError('User account is inactive');
+    }
+
+    if (!this.hubMemberAccessService?.listMyHubs) {
+      throw new ForbiddenError('Hub membership is not configured on this instance');
+    }
+
+    const userId = user.id.toValue();
+    const hubs = await this.hubMemberAccessService.listMyHubs(userId);
+    if (hubs.length === 0) {
+      throw new ForbiddenError('Akun ini bukan anggota hub mana pun yang aktif');
+    }
+
+    user.recordLogin();
+    await this.userRepository.save(user);
+
+    const refreshToken = this.tokenService.generateRefreshToken({
+      sub: userId,
+      tenant: HUB_SESSION_TENANT,
+      role: 'hub',
+      roleName: 'Hub Member',
+      permissions: [],
+      outletIds: [],
+      email: user.emailValue,
+    });
+
+    await this.sessionService.create({
+      userId,
+      tenantId: HUB_SESSION_TENANT,
+      refreshToken,
+      userAgent: input.userAgent || '',
+      ipAddress: input.ipAddress || '',
+    });
+
+    const accessToken = this.tokenService.generateToken({
+      sub: userId,
+      tenant: HUB_SESSION_TENANT,
+      role: 'hub',
+      roleName: 'Hub Member',
+      permissions: [],
+      outletIds: [],
+      email: user.emailValue,
+    });
+
+    return { user, accessToken, refreshToken, hubs };
   }
 
   async refresh(token: string): Promise<{ accessToken: string; refreshToken: string }> {

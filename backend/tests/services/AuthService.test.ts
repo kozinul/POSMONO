@@ -642,4 +642,105 @@ describe('AuthService', () => {
       });
     });
   });
+
+  // ------------------------------------------------ hub console login (2026-10-09, Fase 25)
+
+  describe('hubLogin', () => {
+    const accessService = { listMyHubs: vi.fn() };
+    const tenantRepo = { findById: vi.fn() };
+
+    function hubService(withAccess = true) {
+      // Positional: slot 7 = hubMemberAccessService, slot 8 = tenantRepository.
+      return new AuthService(
+        userRepo,
+        tokenService,
+        passwordService,
+        sessionService,
+        undefined,
+        undefined,
+        withAccess ? accessService : undefined,
+        tenantRepo,
+      );
+    }
+
+    beforeEach(() => {
+      (userRepo as any).findByEmailGlobal = vi.fn().mockResolvedValue(createUser());
+      passwordService.compare.mockResolvedValue(true);
+      accessService.listMyHubs.mockReset();
+      accessService.listMyHubs.mockResolvedValue([{ id: 'hub-1', role: 'viewer' }]);
+      tenantRepo.findById.mockReset();
+    });
+
+    it('ALLOW: issues a tenant-less hub session and records the login', async () => {
+      const result = await hubService().hubLogin({ email: 'user@test.com', password: 'pw' });
+
+      expect(result.accessToken).toBe('access-token-123');
+      expect(result.hubs).toHaveLength(1);
+      expect(sessionService.create).toHaveBeenCalledOnce();
+      expect(tokenService.generateToken).toHaveBeenCalledWith(
+        expect.objectContaining({ tenant: 'hub', permissions: [], outletIds: [] }),
+      );
+      expect(userRepo.save).toHaveBeenCalledOnce();
+    });
+
+    it('ALLOW: a suspended home tenant no longer blocks the hub console', async () => {
+      tenantRepo.findById.mockResolvedValue({
+        isActive: () => false,
+        serialize: () => ({ status: 'suspended' }),
+      });
+
+      const result = await hubService().hubLogin({ email: 'user@test.com', password: 'pw' });
+
+      expect(result.accessToken).toBe('access-token-123');
+      // The whole point: the tenant entry gate is not consulted at all.
+      expect(tenantRepo.findById).not.toHaveBeenCalled();
+    });
+
+    it('DENY: unknown email is rejected before comparing the password', async () => {
+      (userRepo as any).findByEmailGlobal.mockResolvedValue(null);
+
+      await expect(hubService().hubLogin({ email: 'nobody@test.com', password: 'pw' })).rejects.toThrow(
+        UnauthorizedError,
+      );
+      expect(passwordService.compare).not.toHaveBeenCalled();
+    });
+
+    it('DENY: wrong password never reaches the membership lookup', async () => {
+      passwordService.compare.mockResolvedValue(false);
+
+      await expect(hubService().hubLogin({ email: 'user@test.com', password: 'bad' })).rejects.toThrow(
+        UnauthorizedError,
+      );
+      expect(accessService.listMyHubs).not.toHaveBeenCalled();
+    });
+
+    it('DENY: inactive account is refused', async () => {
+      (userRepo as any).findByEmailGlobal.mockResolvedValue(createUser({ isActive: false }));
+
+      await expect(hubService().hubLogin({ email: 'user@test.com', password: 'pw' })).rejects.toThrow(
+        UnauthorizedError,
+      );
+      expect(accessService.listMyHubs).not.toHaveBeenCalled();
+    });
+
+    it('DENY: an account with no active hub membership gets no token', async () => {
+      accessService.listMyHubs.mockResolvedValue([]);
+
+      const err = await hubService()
+        .hubLogin({ email: 'user@test.com', password: 'pw' })
+        .catch((e: Error) => e);
+
+      expect(err).toBeInstanceOf(ForbiddenError);
+      expect((err as Error).message).toContain('bukan anggota hub');
+      expect(tokenService.generateToken).not.toHaveBeenCalled();
+      expect(sessionService.create).not.toHaveBeenCalled();
+    });
+
+    it('DENY: missing hub wiring refuses instead of downgrading to a tenant token', async () => {
+      await expect(hubService(false).hubLogin({ email: 'user@test.com', password: 'pw' })).rejects.toThrow(
+        ForbiddenError,
+      );
+      expect(tokenService.generateToken).not.toHaveBeenCalled();
+    });
+  });
 });

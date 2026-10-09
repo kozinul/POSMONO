@@ -47,6 +47,40 @@ export class AuthController extends BaseController {
     });
   }
 
+  /**
+   * Fase 25 — hub-console sign-in. No `X-Tenant-Id`: the member is resolved by
+   * global email, and the issued token carries no tenant authority (see
+   * `AuthService.hubLogin`).
+   */
+  async hubLogin(req: Request, res: Response): Promise<void> {
+    const parsed = loginSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new ValidationError('Invalid input');
+    }
+
+    const result = await this.authService.hubLogin({
+      email: parsed.data.email,
+      password: parsed.data.password,
+      userAgent: req.headers['user-agent'],
+      ipAddress: req.ip,
+    });
+
+    this.ok(res, {
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+      user: {
+        id: result.user.id.toValue(),
+        email: result.user.emailValue,
+        displayName: result.user.displayNameValue,
+        role: 'hub',
+        roleName: 'Hub Member',
+        permissions: [],
+        outletIds: [],
+      },
+      hubs: result.hubs,
+    });
+  }
+
   async refresh(req: Request, res: Response): Promise<void> {
     const { refreshToken } = req.body;
     if (!refreshToken) {

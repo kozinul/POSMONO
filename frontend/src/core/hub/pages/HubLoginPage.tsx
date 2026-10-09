@@ -7,10 +7,12 @@ import { ACTIVE_HUB_KEY, useAuthStore } from '../../../@shared/hooks/useAuth';
  * Hub V2 Fase 24 — the hub console's own sign-in.
  *
  * Deliberately **not** `/login`: that form resolves a tenant first, and a hub
- * member's own tenant is an accident of where they were hired. This one posts
- * the same credentials to `/auth/login` without an `X-Tenant-Id`, which is the
- * global-email fallback — an account is unique by email across provisioning, so
- * the server can find whoever they are and tell us which tenant issued the token.
+ * member's own tenant is an accident of where they were hired. This posts to
+ * `/auth/hub-login` without an `X-Tenant-Id`: the server resolves the account by
+ * globally-unique email and issues a **hub-only** token (`tenant:'hub'`, no tenant
+ * permissions). That is what lets a member whose own tenant is suspended still
+ * administer the hub — `/api/hub/*` authorizes from the membership row, not the
+ * token's tenant — while keeping the token useless on tenant/POS routes.
  *
  * The pre-login localStorage wipe mirrors `TerminalLoginPage`: both consoles
  * replace whichever session was active, and leaving a stale `accessToken` or
@@ -37,7 +39,7 @@ export default function HubLoginPage() {
     localStorage.removeItem(ACTIVE_HUB_KEY);
 
     try {
-      const { data } = await api.post('/auth/login', {
+      const { data } = await api.post('/auth/hub-login', {
         email: email.trim(),
         password,
       });
