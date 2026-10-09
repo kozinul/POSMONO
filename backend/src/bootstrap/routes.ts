@@ -1,6 +1,7 @@
 import { Express } from 'express';
 import type { DIContainer } from './container';
 import { createResolveOutlet } from '../@shared/interfaces/middleware/resolveOutlet';
+import { createTenantStatusGate } from '../core/tenant/interfaces/http/middleware/tenantTransactionGate';
 import { createAuthRoutes } from '../core/identity/interfaces/http/routes/auth.routes';
 import { createTenantRoutes } from '../core/tenant/interfaces/http/routes/tenant.routes';
 import { createProductRoutes } from '../core/catalog/interfaces/http/routes/product.routes';
@@ -38,7 +39,7 @@ import { createMyHubAdminRoutes } from '../core/hub/interfaces/http/routes/myhub
 import { createOutletRoutes } from '../core/outlet/interfaces/http/routes/outlet.routes';
 import { createPlatformRoutes } from '../core/platform/interfaces/http/routes/platform.routes';
 import { createPlanRoutes } from '../core/billing/interfaces/http/routes/plan.routes';
-import { createPlatformSubscriptionRoutes, createMerchantEntitlementRoutes } from '../core/billing/interfaces/http/routes/subscription.routes';
+import { createPlatformSubscriptionRoutes, createMerchantSubscriptionRoutes } from '../core/billing/interfaces/http/routes/subscription.routes';
 
 export function registerRoutes(app: Express, container: DIContainer): void {
   app.get('/health', (_req, res) => {
@@ -80,13 +81,19 @@ export function registerRoutes(app: Express, container: DIContainer): void {
 
   const orderController = container.resolve('orderController');
   const outletMw = createResolveOutlet(container.resolve('outletRepository'));
-  app.use('/api/orders', createOrderRoutes(orderController, outletMw));
+  const tenantRepository = container.resolve('tenantRepository');
+  // POS guards, order matters: the outlet scope check (cheap, sync) still
+  // answers before the tenant-status lookup, so a header outside the user's
+  // outlets never triggers a DB read. The status gate skips GETs, so reads
+  // (reports, the POS alert itself) stay open while mutations are refused.
+  const posGuards = [outletMw, createTenantStatusGate(tenantRepository)];
+  app.use('/api/orders', createOrderRoutes(orderController, posGuards));
 
   const shiftController = container.resolve('shiftController');
-  app.use('/api/shifts', createShiftRoutes(shiftController, outletMw));
+  app.use('/api/shifts', createShiftRoutes(shiftController, posGuards));
 
   const paymentController = container.resolve('paymentController');
-  app.use('/api/payments', createPaymentRoutes(paymentController, outletMw));
+  app.use('/api/payments', createPaymentRoutes(paymentController, posGuards));
 
   const reportController = container.resolve('reportController');
   app.use('/api/reports', createReportRoutes(reportController));
@@ -122,7 +129,6 @@ export function registerRoutes(app: Express, container: DIContainer): void {
   const templateController = container.resolve('templateController');
   app.use('/api/templates', createTemplateRoutes(templateController));
 
-  const tenantRepository = container.resolve('tenantRepository');
   app.use('/api/pricing', createPricingRouter(discountConfigRepo, taxConfigRepo, promoCodeRepo, tenantRepository));
 
   const databaseController = container.resolve('databaseController');
@@ -165,5 +171,5 @@ export function registerRoutes(app: Express, container: DIContainer): void {
 
   const subscriptionController = container.resolve('subscriptionController');
   app.use('/api/platform', createPlatformSubscriptionRoutes(subscriptionController));
-  app.use('/api/tenants', createMerchantEntitlementRoutes(subscriptionController));
+  app.use('/api/tenants', createMerchantSubscriptionRoutes(subscriptionController));
 }

@@ -5,7 +5,10 @@ import { authorize } from '../../../../../@shared/interfaces/middleware/authoriz
 import { resolveOutlet } from '../../../../../@shared/interfaces/middleware/resolveOutlet';
 import { PaymentController } from '../controllers/PaymentController';
 
-export function createPaymentRoutes(paymentController: PaymentController, outletMw: RequestHandler = resolveOutlet): Router {
+export function createPaymentRoutes(
+  paymentController: PaymentController,
+  outletMw: RequestHandler | RequestHandler[] = resolveOutlet,
+): Router {
   const router = Router();
 
   router.get('/', authenticate, asyncHandler(paymentController.list.bind(paymentController)));

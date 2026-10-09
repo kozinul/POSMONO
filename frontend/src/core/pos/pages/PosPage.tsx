@@ -22,6 +22,7 @@ import { useOpenShift } from '../../shifts/hooks/useShift';
 import { PosVoidModal } from '../components/PosVoidModal';
 import { PosActionPanel } from '../components/PosActionPanel';
 import { OpenShiftModal } from '../components/OpenShiftModal';
+import { TenantStatusGate } from '../components/TenantStatusGate';
 import { useAuthStore, hasPermission } from '../../../@shared/hooks/useAuth';
 import { useOutlets } from '../../../@shared/hooks/useOutlets';
 import { VOID_ORDER_PERMISSION } from '../../../@shared/utils/permissions';
@@ -293,6 +294,8 @@ export default function PosPage() {
 
   return (
     <div className="flex-1 min-h-0 w-full flex overflow-hidden">
+      {/* Above every POS layer: a refused tenant must not reach the cashier UI. */}
+      <TenantStatusGate />
       {shiftGateVisible && (
         <div className="fixed inset-0 z-[80] bg-black/60 flex items-center justify-center p-4">
           <OpenShiftModal

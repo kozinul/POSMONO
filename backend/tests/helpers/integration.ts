@@ -62,6 +62,8 @@ import { ShiftController } from '../../src/core/pos/interfaces/http/controllers/
 import { ProductController } from '../../src/core/catalog/interfaces/http/controllers/ProductController';
 import { InventoryController } from '../../src/core/inventory/interfaces/http/controllers/InventoryController';
 import { errorHandler } from '../../src/@shared/interfaces/middleware/errorHandler';
+import { resolveOutlet } from '../../src/@shared/interfaces/middleware/resolveOutlet';
+import { createTenantStatusGate } from '../../src/core/tenant/interfaces/http/middleware/tenantTransactionGate';
 import { generateTestToken } from './auth';
 
 export interface IntegrationTestContext {
@@ -100,6 +102,10 @@ export interface IntegrationTestContext {
 export interface IntegrationAppOptions {
   enforceShift?: boolean;
   permissions?: string[];
+  /** Wire the POS tenant-status gate into orders/shifts/payments (production
+   * wiring lives in `bootstrap/routes.ts`; opt-in so existing tests that never
+   * seed a tenants doc keep their exact behavior). */
+  statusGate?: boolean;
 }
 
 function buildTaxServiceMock(): { calculate: (input: any) => Promise<any> } {
@@ -239,9 +245,10 @@ export async function buildIntegrationApp(options: IntegrationAppOptions = {}): 
   const app = express();
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
-  app.use('/api/orders', createOrderRoutes(orderController));
-  app.use('/api/payments', createPaymentRoutes(paymentController));
-  app.use('/api/shifts', createShiftRoutes(shiftController));
+  const posGuards = options.statusGate ? [resolveOutlet, createTenantStatusGate(tenantRepo)] : undefined;
+  app.use('/api/orders', createOrderRoutes(orderController, posGuards));
+  app.use('/api/payments', createPaymentRoutes(paymentController, posGuards));
+  app.use('/api/shifts', createShiftRoutes(shiftController, posGuards));
   app.use('/api/products', createProductRoutes(productController));
   app.use('/api/inventory', createInventoryRoutes(inventoryController));
   app.use(errorHandler);

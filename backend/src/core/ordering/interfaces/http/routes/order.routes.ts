@@ -4,7 +4,10 @@ import { authenticate } from '../../../../../@shared/interfaces/middleware/authe
 import { resolveOutlet } from '../../../../../@shared/interfaces/middleware/resolveOutlet';
 import { OrderController } from '../controllers/OrderController';
 
-export function createOrderRoutes(orderController: OrderController, outletMw: RequestHandler = resolveOutlet): Router {
+export function createOrderRoutes(
+  orderController: OrderController,
+  outletMw: RequestHandler | RequestHandler[] = resolveOutlet,
+): Router {
   const router = Router();
 
   router.get('/', authenticate, asyncHandler(orderController.list.bind(orderController)));

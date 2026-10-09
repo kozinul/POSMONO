@@ -4,7 +4,10 @@ import { authenticate } from '../../../../../@shared/interfaces/middleware/authe
 import { resolveOutlet } from '../../../../../@shared/interfaces/middleware/resolveOutlet';
 import { ShiftController } from '../controllers/ShiftController';
 
-export function createShiftRoutes(shiftController: ShiftController, outletMw: RequestHandler = resolveOutlet): Router {
+export function createShiftRoutes(
+  shiftController: ShiftController,
+  outletMw: RequestHandler | RequestHandler[] = resolveOutlet,
+): Router {
   const router = Router();
 
   router.get('/', authenticate, asyncHandler(shiftController.list.bind(shiftController)));

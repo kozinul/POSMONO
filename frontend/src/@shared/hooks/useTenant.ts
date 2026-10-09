@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
 import { api } from '../services/api';
 
 export interface TenantConfig {
@@ -44,7 +44,7 @@ export interface Tenant {
   config: TenantConfig;
 }
 
-export function useTenant() {
+export function useTenant(options?: Pick<UseQueryOptions<Tenant>, 'refetchInterval'>) {
   return useQuery<Tenant>({
     queryKey: ['tenant'],
     queryFn: async () => {
@@ -52,6 +52,7 @@ export function useTenant() {
       return data.data;
     },
     staleTime: 5 * 60 * 1000,
+    refetchInterval: options?.refetchInterval,
   });
 }
 
