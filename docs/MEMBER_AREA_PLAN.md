@@ -12,8 +12,9 @@
 > **Sinkron implementasi (2026-10-09):**
 > - **Commit 1** (`8d263a46`, 2026-10-07) — shared types + domain (`SubscriptionInvoice`/`PaymentAttempt`) + repos + `SubscriptionBillingService` + wiring. Invoice dibuat **best-effort** pasca mutasi billing (gagal tulis invoice ≠ gagal operasi).
 > - **Commit 2+3** (`f9703a34`, 2026-10-09) — endpoint merchant (`GET current/subscription/{invoices,payments,history}`, `POST current/subscription/renew` **invoice-first**, `POST current/subscription/invoices/:id/pay`) + endpoint platform invoice (list/pay/cancel) + RBAC `settings.billing.read` (Owner & Manager) + `settings.billing.update` (**Owner saja**, untuk membayar) + migrasi boot idempotent `migrateTenantBillingRead`/`migrateTenantBillingUpdate`.
-> - **Perbedaan dari desain awal (keputusan saat implementasi):** UI member area = **section Settings** `BillingSection` ("Langganan & Tagihan", id `billing`) — **bukan** halaman `/langganan` (route/nav tidak dibuat). **Merchant self-pay ditambahkan** (tidak ada di desain awal) lewat endpoint pay yang sama, digerbangi `settings.billing.update` Owner-only; Manager hanya read-only. Tab **invoice di Terminal Center belum dibuat** (hanya endpoint platform-nya yang ada) — admin Kuire belum punya layar untuk mencatat/membatalkan pembayaran.
-> - **Verifikasi:** backend **1603/1603** (127 file) · frontend **227/227** (32 file) · `pnpm lint` bersih · `pnpm budget` hijau (`: any` 199/200).
+> - **Perbedaan dari desain awal (keputusan saat implementasi):** UI member area = **section Settings** `BillingSection` ("Langganan & Tagihan", id `billing`) — **bukan** halaman `/langganan` (route/nav tidak dibuat). **Merchant self-pay ditambahkan** (tidak ada di desain awal) lewat endpoint pay yang sama, digerbangi `settings.billing.update` Owner-only; Manager hanya read-only.
+> - **Commit 4** (2026-10-09) — **UI invoice Terminal Center** selesai: `TenantInvoicesSection.tsx` (hook `useSubscriptionInvoices.ts`) di tab **Plan & Langganan** `TenantDetailPage` — daftar tagihan + total outstanding/terbayar, aksi **Catat Pembayaran** (modal metode/ref/catatan; nominal dikunci = nilai invoice), **Batalkan** (Swal + alasan), dan modal riwayat upaya pembayaran per invoice. Endpoint platform yang sudah ada kini punya pemanggil.
+> - **Verifikasi:** backend **1603/1603** (127 file) · frontend **232/232** (33 file) · `pnpm lint` bersih · `pnpm budget` hijau (`: any` 199/200).
 
 Dokumen ini mengunci **keputusan produk + kontrak** untuk member area langganan sebelum kode
 ditulis. Urutan kerja mengikuti pola repo: **domain → permission → API → UI**, satu commit satu
@@ -382,9 +383,9 @@ RBAC:
 
 1. `[x]` **`8d263a46`** — `feat(billing): subscription invoice & payment attempt — dasar member area (invoice-first)` (shared types, domain, repos, `SubscriptionBillingService`).
 2. `[x]` **`f9703a34`** — `feat(billing): member area langganan — permission settings.billing.update + aturan entry satu pemilik` (endpoint merchant invoice-first + platform invoice + RBAC `settings.billing.read`/`.update`).
-3. `[~]` UI member area **selesai sebagai section Settings** (`BillingSection`), **bukan halaman `/langganan`**; tab invoice Terminal Center **belum dikerjakan** (lihat § Sinkron implementasi).
+3. `[x]` UI member area **selesai sebagai section Settings** (`BillingSection`), **bukan halaman `/langganan`**; tab invoice Terminal Center **selesai** sebagai `TenantInvoicesSection` di tab "Plan & Langganan" `TenantDetailPage` (lihat § Sinkron implementasi).
 
-> Catatan: `f9703a34` sekaligus memuat **gerbang status nonaktif (POS)** yang tidak dibahas dokumen ini — lihat entri `AGENTS.md` 2026-10-08 "Gerbang Blokir Transaksi Nonaktif (POS)".
+> Catatan: commit **`f419aa9e`** (bukan `f9703a34`) memuat **gerbang status nonaktif (POS)** yang tidak dibahas dokumen ini — lihat entri `AGENTS.md` 2026-10-08 "Gerbang Blokir Transaksi Nonaktif (POS)".
 
 ## Verifikasi
 
