@@ -22,6 +22,7 @@ import {
 import { formatCurrency } from '../../../@shared/utils/format';
 import TenantProfileForm from '../components/TenantProfileForm';
 import EditOutletModal from '../components/EditOutletModal';
+import TenantInvoicesSection from '../components/TenantInvoicesSection';
 
 const inputCls =
   'block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50';
@@ -735,6 +736,8 @@ export default function TenantDetailPage() {
               </div>
             )}
           </div>
+
+          <TenantInvoicesSection tenantId={tenant.id} />
         </div>
       )}
 
