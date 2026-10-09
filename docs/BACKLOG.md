@@ -83,8 +83,8 @@
 | `[x]` QRIS payment | 🟡 | Done (2026-08-23) — `QrisGatewayService` + PaymentModal QR flow |
 | `[ ]` GoPay / OVO integration | 🟡 | E-wallet integrations |
 | `[ ]` Bank transfer auto-confirmation | 🟡 | Webhook-based confirmation |
-| `[ ]` Invoice / billing portal | 🟡 | Customer-facing invoice portal |
-| `[ ]` Subscription billing | 🟡 | Recurring billing for SaaS itself |
+| `[x]` Invoice / billing portal | 🟡 | Done (2026-10-09) — invoice A4 per order + member area langganan (Settings → "Langganan & Tagihan": invoice, bayar, riwayat) |
+| `[~]` Subscription billing | 🟡 | Parsial (2026-10-09) — invoice + settle manual/self-pay (`SubscriptionInvoice`/`PaymentAttempt`); **belum** recurring/auto-renewal (wallet/VA/gateway — `docs/MEMBER_AREA_PLAN.md` § Non-goals) |
 
 ### 🟡 MEDIUM — Hardware Integration
 

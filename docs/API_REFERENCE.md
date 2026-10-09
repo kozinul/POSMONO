@@ -163,15 +163,45 @@ Catatan masa aktif: respon memuat `subscriptionExpiresAt` (tanggal kedaluwarsa m
 
 Get subscription info for the current tenant. Sama seperti di atas, `getCurrent` menjalankan lazy enforcement **sebelum** menghitung `daysRemaining`.
 
+Guard: `authenticate` + `authorize('settings.billing.read')` (Owner & Manager). Permission `settings.billing.update` (Owner **saja**) khusus endpoint bayar invoice.
+
 **Response 200:** `{ "plan", "status", "subscriptionExpiresAt", "daysRemaining" }`
+
+### `GET /api/tenants/current/subscription/invoices`
+
+Daftar tagihan langganan tenant pemanggil (member area). Guard `settings.billing.read`.
+
+**Response 200:** `{ "success": true, "data": { "items": [ { "id", "number", "planId", "amount", "currency": "IDR", "status": "pending|paid|overdue|cancelled", "referenceType": "plan_assigned|plan_changed|renewal|extended", "periodStart", "periodEnd", "dueDate", "paidAt", "createdAt" } ], "totals": { "outstanding", "paid" } } }`. `overdue` adalah **turunan** (`effectiveStatus`: invoice `pending` yang melewati `dueDate`) — bukan status tersimpan.
+
+### `GET /api/tenants/current/subscription/payments`
+
+Riwayat pembayaran langganan (hanya attempt berstatus `completed`). Guard `settings.billing.read`.
+
+**Response 200:** `{ "success": true, "data": { "items": [ { "id", "invoiceId", "amount", "method", "status", "referenceNumber", "createdAt", "actorEmail" } ] } }`
+
+### `GET /api/tenants/current/subscription/history`
+
+Proxy `SubscriptionService.getTenantSubscriptionHistory`. Guard `settings.billing.read`. Query opsional `?limit=` (default 100).
+
+**Response 200:** `{ "success": true, "data": { "items": [ { "action": "assigned|changed|extended|cancelled|expired", "planName", "actorEmail", "reason", "createdAt" } ], "total" } }`
 
 ### `POST /api/tenants/current/subscription/renew`
 
-`authenticate` saja (merchant scope). Body: `{ "days": 30 }` (default 30 bila kosong).
+`authenticate` + `authorize('settings.billing.read')` (merchant scope). Body: `{ "days": 30 }` (default 30 bila kosong).
 
-Perpanjangan kini didelegasikan ke jalur billing (`SubscriptionService.extendSubscription`) sehingga **dua jam dinding disinkronkan**: `Tenant.subscriptionExpiresAt` DAN dokumen `Subscription.currentPeriodEnd` (sebelumnya hanya tenant yang bergerak → drift). Status `suspended` ikut di-reaktivasi (perilaku `extendSubscription` sudah berlaku). Ledger `extended` ditulis.
+**Semantik invoice-first (K6):** membuat invoice `pending` `referenceType='renewal'` — langganan **belum** diperpanjang sampai invoice lunas (berbeda dari perilaku lama yang langsung `extendSubscription`). Tenant tanpa langganan/plan berbayar → `400` (`Plan gratis tidak memerlukan perpanjangan.`).
 
-**Response 200:** `{ "success": true, "data": { "message": "Subscription successfully renewed", "subscription": { ... } } }`
+**Response 200:** `{ "success": true, "data": { "invoice": { "id", "number", "amount", "status": "pending", "referenceType": "renewal", "periodStart", "periodEnd" } } }`
+
+### `POST /api/tenants/current/subscription/invoices/:invoiceId/pay`
+
+Merchant **self-pay** (Owner saja). Guard `authenticate` + `authorize('settings.billing.update')`.
+
+**Body:** `{ "amount": 199000, "method": "transfer", "referenceNumber": "TRF-...", "notes": "..." }` (`amount` > 0 dan `method` wajib; `referenceNumber`/`notes` opsional).
+
+`SubscriptionBillingService.recordPaymentAttempt` adalah **satu-satunya jalur settle**: invoice menjadi `paid` hanya via attempt `completed`; bila `referenceType='renewal'` langganan ikut diperpanjang (dua jam dinding `Tenant.subscriptionExpiresAt` & `Subscription.currentPeriodEnd` disinkronkan) + ledger `extended`. Attempt yang ditolak (amount tidak cocok / invoice sudah lunas / dibatalkan) tetap dicatat sebagai attempt `failed` (jejak), lalu `400`. Invoice tenant lain → `404`.
+
+**Response 200:** `{ "success": true, "data": { "invoice": { ... "status": "paid" }, "attempt": { "id", "status": "completed", ... } } }`
 
 ### `PATCH /api/tenants/current/settings`
 
@@ -1177,7 +1207,23 @@ Response shifts/payments summary menambahkan `tenantName` per tenant (dari `reso
 - `POST /api/platform/tenants/:tenantId/subscription` body `{ planId, billingCycle? }` → assign atau ganti plan (wajib `planId` eksplisit, **tidak ada fallback default**), return `200` (`this.ok`); tenant/plan tidak ditemukan → `404`.
 - `POST /api/platform/tenants/:tenantId/subscription/cancel` → `SubscriptionService.cancelSubscription` → **tenant di-deactivate** (`status='deactivated'`), `200`.
 - `GET /api/platform/tenants/:tenantId/entitlement` → entitlement per tenant (plan yang dipakai untuk menilai izin module/limit).
-- `GET /api/tenants/current/entitlement` (`authenticate` saja, merchant scope) → plan ter-resolve untuk tenant pemanggil: subscription → plan; tanpa subscription → fallback **entitlement Trial** hardcoded.
+- `GET /api/tenants/current/entitlement` (`authenticate` + `settings.billing.read`, merchant scope) → plan ter-resolve untuk tenant pemanggil: subscription → plan; tanpa subscription → fallback **entitlement Trial** hardcoded.
+
+**Invoice langganan (member area, 2026-10-07/09):**
+
+| Method | Path | Auth | Keterangan |
+|--------|------|------|------------|
+| GET | `/api/tenants/current/subscription/invoices` | `settings.billing.read` | `{ items, totals{ outstanding, paid } }` |
+| GET | `/api/tenants/current/subscription/payments` | `settings.billing.read` | attempt `completed` saja |
+| GET | `/api/tenants/current/subscription/history` | `settings.billing.read` | ledger riwayat (termasuk `expired`) |
+| POST | `/api/tenants/current/subscription/renew` | `settings.billing.read` | **invoice-first** — buat invoice `pending` (`renewal`) |
+| POST | `/api/tenants/current/subscription/invoices/:invoiceId/pay` | **`settings.billing.update`** (Owner) | self-pay; settle via `recordPaymentAttempt` |
+| GET | `/api/platform/tenants/:tenantId/subscription/invoices` | `platform.tenants.read` | daftar invoice platform |
+| GET | `/api/platform/tenants/:tenantId/subscription/invoices/:invoiceId/payments` | `platform.tenants.read` | attempt per invoice |
+| POST | `/api/platform/tenants/:tenantId/subscription/invoices/:invoiceId/pay` | `platform.tenants.manage` | catat pembayaran (audit `SUBSCRIPTION_INVOICE_PAID`) |
+| POST | `/api/platform/tenants/:tenantId/subscription/invoices/:invoiceId/cancel` | `platform.tenants.manage` | batalkan invoice (audit `SUBSCRIPTION_INVOICE_CANCELLED`) |
+
+> Aturan settle (satu pemilik): invoice → `paid` **hanya** lewat `SubscriptionBillingService.recordPaymentAttempt` (amount harus sama; satu attempt `completed` per invoice; attempt yang kalah race/ditolak disimpan `failed`). Invoice `referenceType='renewal'` memperpanjang langganan saat settle; `plan_assigned`/`plan_changed`/`extended` tidak (uang sudah diterima offline). Permission `settings.billing.update` Owner-only; migrasi boot idempotent `migrateTenantBillingRead`/`migrateTenantBillingUpdate` menambahkan permission ke role tenant existing. UI member area = section **Settings → "Langganan & Tagihan"** (`BillingSection`). Tab invoice di Terminal Center belum dibuat.
 
 **Entitlement shape:**
 
@@ -1555,5 +1601,13 @@ id, tenantId, email, displayName, roleId, isActive, lastLoginAt, createdAt, upda
 | 124 | POST | `/api/platform/tenants/:tenantId/subscription` | platform `platform.tenants.manage` |
 | 125 | POST | `/api/platform/tenants/:tenantId/subscription/cancel` | platform `platform.tenants.manage` |
 | 126 | GET | `/api/platform/tenants/:tenantId/entitlement` | platform `platform.tenants.read` |
+| 126a | GET | `/api/platform/tenants/:tenantId/subscription/invoices` | platform `platform.tenants.read` |
+| 126b | GET | `/api/platform/tenants/:tenantId/subscription/invoices/:invoiceId/payments` | platform `platform.tenants.read` |
+| 126c | POST | `/api/platform/tenants/:tenantId/subscription/invoices/:invoiceId/pay` | platform `platform.tenants.manage` |
+| 126d | POST | `/api/platform/tenants/:tenantId/subscription/invoices/:invoiceId/cancel` | platform `platform.tenants.manage` |
+| 126e | GET | `/api/tenants/current/subscription/invoices` | ✓ `settings.billing.read` |
+| 126f | GET | `/api/tenants/current/subscription/payments` | ✓ `settings.billing.read` |
+| 126g | GET | `/api/tenants/current/subscription/history` | ✓ `settings.billing.read` |
+| 126h | POST | `/api/tenants/current/subscription/invoices/:invoiceId/pay` | ✓ `settings.billing.update` |
 | 117 | GET | `/api/auth/accessible-tenants` | ✓ |
 | 118 | POST | `/api/auth/switch-tenant` | ✓ |
