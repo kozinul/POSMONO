@@ -1,5 +1,6 @@
 export const DEFAULT_PLANS = [
   {
+    _id: 'plan-trial',
     name: 'Trial',
     description: 'Free trial plan for evaluation',
     basePrice: 0,
@@ -21,6 +22,7 @@ export const DEFAULT_PLANS = [
     addOns: [],
   },
   {
+    _id: 'plan-starter',
     name: 'Starter',
     description: 'Perfect for small single-outlet retail & F&B',
     basePrice: 199000,
@@ -45,6 +47,7 @@ export const DEFAULT_PLANS = [
     ],
   },
   {
+    _id: 'plan-pro',
     name: 'Pro',
     description: 'Advanced features for growing businesses with multi-outlet',
     basePrice: 499000,
@@ -68,6 +71,7 @@ export const DEFAULT_PLANS = [
     ],
   },
   {
+    _id: 'plan-enterprise',
     name: 'Enterprise',
     description: 'Unlimited capacity and full feature suite for large chains',
     basePrice: 999000,

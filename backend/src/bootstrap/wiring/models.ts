@@ -4,6 +4,7 @@ import { migratePlatformHubPermissions } from '../../core/platform/infrastructur
 import { migrateTenantBillingRead } from '../../core/platform/infrastructure/persistence/migrateTenantBillingRead';
 import { migrateTenantBillingUpdate } from '../../core/platform/infrastructure/persistence/migrateTenantBillingUpdate';
 import { migrateHubIdentity } from '../../core/hub/infrastructure/persistence/migrateHubIdentity';
+import { migratePlanStringIds } from '../../core/billing/infrastructure/persistence/migratePlanStringIds';
 import { CategorySchema } from '../../core/catalog/infrastructure/persistence/schemas/CategorySchema';
 import { CustomerSchema } from '../../core/customer/infrastructure/persistence/schemas/CustomerSchema';
 import { DailyMetricSchema } from '../../core/reporting/infrastructure/persistence/schemas/DailyMetricSchema';
@@ -128,6 +129,16 @@ export function buildModels(connection: Connection) {
   const PaymentAttemptModel = connection.model('PaymentAttempt', PaymentAttemptSchema);
   PaymentAttemptModel.syncIndexes().catch(() => {});
   SubscriptionModel.syncIndexes().catch(() => {});
+  // Plans seeded before `DEFAULT_PLANS` carried explicit `_id`s are stored with
+  // a BSON ObjectId `_id` while the schema declares String — every string-id
+  // lookup (assign plan, subscription plan) missed them ("Plan tidak ditemukan.").
+  // Rewrite those ids to the stable string ids the seeder now uses and re-point
+  // references, before any billing code reads the collection.
+  migratePlanStringIds(PlanModel, {
+    subscriptionModel: SubscriptionModel,
+    tenantModel: TenantModel,
+    subscriptionHistoryModel: SubscriptionHistoryModel,
+  }).catch(() => {});
 
   return {
     UserModel,
