@@ -1,16 +1,19 @@
 import { useDailyReport } from '../../orders/hooks/useOrders';
 import ExportButtons from '../components/ExportButtons';
 import Spinner from '../components/Spinner';
+import OutletFilter from '../components/OutletFilter';
 import { formatCurrency } from '../../../@shared/utils/format';
 import { inputCls, labelCls } from '../components/reportUi';
 
 interface DailySectionProps {
   selectedDate: string;
   setSelectedDate: (value: string) => void;
+  outletId: string;
+  setOutletId: (value: string) => void;
 }
 
-export default function DailySection({ selectedDate, setSelectedDate }: DailySectionProps) {
-  const { data: daily, isLoading: dailyLoading } = useDailyReport(selectedDate);
+export default function DailySection({ selectedDate, setSelectedDate, outletId, setOutletId }: DailySectionProps) {
+  const { data: daily, isLoading: dailyLoading } = useDailyReport(selectedDate, outletId);
   return (
     <section className="bg-white rounded-2xl shadow-sm border border-gray-100">
       <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between gap-4">
@@ -18,17 +21,24 @@ export default function DailySection({ selectedDate, setSelectedDate }: DailySec
           <h2 className="text-lg font-bold text-gray-800">Laporan Harian</h2>
           <p className="text-sm text-gray-400 mt-0.5">Ringkasan transaksi per tanggal</p>
         </div>
-        <ExportButtons type="daily" params={{ date: selectedDate }} disabled={!daily} />
+        <ExportButtons
+          type="daily"
+          params={{ date: selectedDate, ...(outletId ? { outletId } : {}) }}
+          disabled={!daily}
+        />
       </div>
       <div className="px-6 py-5 space-y-5">
-        <div className="max-w-xs">
-          <label className={labelCls}>Tanggal</label>
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className={inputCls}
-          />
+        <div className="flex gap-4">
+          <div className="max-w-xs">
+            <label className={labelCls}>Tanggal</label>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className={inputCls}
+            />
+          </div>
+          <OutletFilter value={outletId} onChange={setOutletId} />
         </div>
         {dailyLoading ? (
           <Spinner />

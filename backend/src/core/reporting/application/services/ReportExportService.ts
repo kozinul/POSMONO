@@ -68,8 +68,13 @@ export class ReportExportService {
     private readonly categoryRepository: MongoCategoryRepository,
   ) {}
 
-  async exportDaily(tenantId: string, date: string, format: ReportExportFormat): Promise<ReportFile> {
-    const data = await this.reportService.getDailyReport(tenantId, date);
+  async exportDaily(
+    tenantId: string,
+    date: string,
+    format: ReportExportFormat,
+    outletId?: string | null,
+  ): Promise<ReportFile> {
+    const data = await this.reportService.getDailyReport(tenantId, date, outletId);
 
     const doc: ReportDoc = {
       title: 'Laporan Harian',
@@ -120,8 +125,9 @@ export class ReportExportService {
     dateFrom: string,
     dateTo: string,
     format: ReportExportFormat,
+    outletId?: string | null,
   ): Promise<ReportFile> {
-    const data = await this.reportService.getSalesReport(tenantId, dateFrom, dateTo);
+    const data = await this.reportService.getSalesReport(tenantId, dateFrom, dateTo, outletId);
 
     const doc: ReportDoc = {
       title: 'Laporan Penjualan',
@@ -184,8 +190,9 @@ export class ReportExportService {
     dateFrom: string,
     dateTo: string,
     format: ReportExportFormat,
+    outletId?: string | null,
   ): Promise<ReportFile> {
-    const data = await this.reportService.getFinanceReport(tenantId, dateFrom, dateTo);
+    const data = await this.reportService.getFinanceReport(tenantId, dateFrom, dateTo, outletId);
     const categories = await this.categoryRepository.findByTenant(tenantId);
     const nameMap = new Map(categories.map((c) => [c.serialize().id, c.serialize().name]));
 

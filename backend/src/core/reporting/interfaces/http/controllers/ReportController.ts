@@ -259,7 +259,12 @@ export class ReportController extends BaseController {
       res.status(400).json({ success: false, message: 'format must be pdf or xlsx' });
       return;
     }
-    const file = await this.reportExportService.exportDaily(req.tenantId, date as string, f);
+    const file = await this.reportExportService.exportDaily(
+      req.tenantId,
+      date as string,
+      f,
+      req.query.outletId as string | undefined,
+    );
     this.sendFile(res, file);
   }
 
@@ -279,6 +284,7 @@ export class ReportController extends BaseController {
       dateFrom as string,
       dateTo as string,
       f,
+      req.query.outletId as string | undefined,
     );
     this.sendFile(res, file);
   }
@@ -299,6 +305,7 @@ export class ReportController extends BaseController {
       dateFrom as string,
       dateTo as string,
       f,
+      req.query.outletId as string | undefined,
     );
     this.sendFile(res, file);
   }

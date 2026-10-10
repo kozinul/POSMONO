@@ -151,11 +151,14 @@ export function useDashboardSummary() {
   });
 }
 
-export function useDailyReport(date: string) {
+export function useDailyReport(date: string, outletId?: string | null) {
+  const outlet = outletId || '';
   return useQuery({
-    queryKey: ['daily-report', date],
+    queryKey: ['daily-report', date, outlet],
     queryFn: async () => {
-      const res = await api.get<{ success: boolean; data: DailyReport }>(`/reports/daily?date=${date}`);
+      const params = new URLSearchParams({ date });
+      if (outlet) params.set('outletId', outlet);
+      const res = await api.get<{ success: boolean; data: DailyReport }>(`/reports/daily?${params}`);
       return res.data.data;
     },
     enabled: !!date,
@@ -195,22 +198,28 @@ export function useShiftReport(shiftId: string | null | undefined) {
   });
 }
 
-export function useSalesReport(dateFrom: string, dateTo: string) {
+export function useSalesReport(dateFrom: string, dateTo: string, outletId?: string | null) {
+  const outlet = outletId || '';
   return useQuery({
-    queryKey: ['sales-report', dateFrom, dateTo],
+    queryKey: ['sales-report', dateFrom, dateTo, outlet],
     queryFn: async () => {
-      const res = await api.get<{ success: boolean; data: SalesReport }>(`/reports/sales?dateFrom=${dateFrom}&dateTo=${dateTo}`);
+      const params = new URLSearchParams({ dateFrom, dateTo });
+      if (outlet) params.set('outletId', outlet);
+      const res = await api.get<{ success: boolean; data: SalesReport }>(`/reports/sales?${params}`);
       return res.data.data;
     },
     enabled: !!dateFrom && !!dateTo,
   });
 }
 
-export function useFinanceReport(dateFrom: string, dateTo: string) {
+export function useFinanceReport(dateFrom: string, dateTo: string, outletId?: string | null) {
+  const outlet = outletId || '';
   return useQuery({
-    queryKey: ['finance-report', dateFrom, dateTo],
+    queryKey: ['finance-report', dateFrom, dateTo, outlet],
     queryFn: async () => {
-      const res = await api.get<{ success: boolean; data: FinanceReport }>(`/reports/finance?dateFrom=${dateFrom}&dateTo=${dateTo}`);
+      const params = new URLSearchParams({ dateFrom, dateTo });
+      if (outlet) params.set('outletId', outlet);
+      const res = await api.get<{ success: boolean; data: FinanceReport }>(`/reports/finance?${params}`);
       return res.data.data;
     },
     enabled: !!dateFrom && !!dateTo,

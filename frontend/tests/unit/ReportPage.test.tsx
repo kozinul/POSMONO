@@ -105,6 +105,11 @@ function mockApi() {
     if (u.startsWith('/reports/sales?')) return respond(u, salesReport);
     if (u.startsWith('/reports/dashboard')) return respond(u, {});
     if (u.startsWith('/categories')) return respond(u, [{ id: 'cat-1', name: 'Kopi' }]);
+    if (u.startsWith('/outlets'))
+      return respond(u, [
+        { id: 'outlet-1', name: 'Outlet Utama', isActive: true },
+        { id: 'outlet-2', name: 'Outlet Cabang', isActive: true },
+      ]);
     return respond(u, emptyReport());
   });
 }
@@ -196,6 +201,26 @@ describe('ReportPage', () => {
     await userEvent.click(screen.getByRole('button', { name: /Laporan Penjualan/ }));
     await screen.findByRole('heading', { name: 'Laporan Penjualan' });
     expect(firstDateInput()).toHaveValue('2026-01-05');
+  });
+
+  it('filter outlet: memilih outlet mengirim outletId dan kembali ke semua outlet tanpa param', async () => {
+    renderPage();
+    await screen.findByRole('heading', { name: 'Laporan Harian' });
+
+    const select = (await screen.findByLabelText('Filter Outlet')) as HTMLSelectElement;
+    expect(select).toHaveValue('');
+
+    await userEvent.selectOptions(select, 'outlet-2');
+    await waitFor(() => {
+      const last = vi.mocked(api.get).mock.calls.at(-1)?.[0] ?? '';
+      expect(String(last)).toContain('outletId=outlet-2');
+    });
+
+    await userEvent.selectOptions(select, '');
+    await waitFor(() => {
+      const last = vi.mocked(api.get).mock.calls.at(-1)?.[0] ?? '';
+      expect(String(last)).not.toContain('outletId=');
+    });
   });
 
   it('menampilkan empty state saat endpoint tidak mengembalikan data', async () => {

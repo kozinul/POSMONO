@@ -50,6 +50,50 @@ describe('ReportExportService', () => {
     expect(file.buffer.subarray(0, 4).toString()).toBe('%PDF');
   });
 
+  it('forwards outletId to the report service for daily/sales/finance exports', async () => {
+    vi.mocked(reportService.getDailyReport).mockResolvedValue({
+      date: '2026-08-06',
+      totalOrders: 5,
+      totalRevenue: 250_000,
+      totalItems: 9,
+      paymentBreakdown: {},
+      topProducts: [],
+      shifts: [],
+    });
+    vi.mocked(reportService.getSalesReport).mockResolvedValue({
+      dateFrom: '2026-08-01',
+      dateTo: '2026-08-06',
+      totalOrders: 5,
+      totalRevenue: 250_000,
+      totalItems: 9,
+      totalRounding: 0,
+      orders: [],
+      salesByCategory: [],
+      topProducts: [],
+    });
+    vi.mocked(reportService.getFinanceReport).mockResolvedValue({
+      dateFrom: '2026-08-01',
+      dateTo: '2026-08-06',
+      totalOrders: 5,
+      totalRevenue: 250_000,
+      netRevenue: 220_000,
+      totalTax: 30_000,
+      totalServiceCharge: 0,
+      totalDiscount: 0,
+      totalRounding: 0,
+      categories: [],
+    });
+    vi.mocked(categoryRepo.findByTenant).mockResolvedValue([]);
+
+    await service.exportDaily(TENANT_ID, '2026-08-06', 'pdf', 'outlet-1');
+    await service.exportSales(TENANT_ID, '2026-08-01', '2026-08-06', 'pdf', 'outlet-1');
+    await service.exportFinance(TENANT_ID, '2026-08-01', '2026-08-06', 'pdf', 'outlet-1');
+
+    expect(reportService.getDailyReport).toHaveBeenCalledWith(TENANT_ID, '2026-08-06', 'outlet-1');
+    expect(reportService.getSalesReport).toHaveBeenCalledWith(TENANT_ID, '2026-08-01', '2026-08-06', 'outlet-1');
+    expect(reportService.getFinanceReport).toHaveBeenCalledWith(TENANT_ID, '2026-08-01', '2026-08-06', 'outlet-1');
+  });
+
   it('generates a valid xlsx for daily report', async () => {
     vi.mocked(reportService.getDailyReport).mockResolvedValue({
       date: '2026-08-06',

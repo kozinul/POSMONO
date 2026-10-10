@@ -2,6 +2,7 @@ import { useSalesReport } from '../../orders/hooks/useOrders';
 import { useCategoryName } from '../hooks/useCategoryName';
 import ExportButtons from '../components/ExportButtons';
 import Spinner from '../components/Spinner';
+import OutletFilter from '../components/OutletFilter';
 import { formatCurrency } from '../../../@shared/utils/format';
 import { inputCls, labelCls } from '../components/reportUi';
 
@@ -11,12 +12,15 @@ interface SalesSectionProps {
   dateTo: string;
   setDateFrom: (value: string) => void;
   setDateTo: (value: string) => void;
+  outletId: string;
+  setOutletId: (value: string) => void;
 }
 
-export default function SalesSection({ today, dateFrom, dateTo, setDateFrom, setDateTo }: SalesSectionProps) {
+export default function SalesSection({ today, dateFrom, dateTo, setDateFrom, setDateTo, outletId, setOutletId }: SalesSectionProps) {
   const { data: sales, isLoading: salesLoading } = useSalesReport(
     dateFrom || today,
     dateTo || today,
+    outletId,
   );
   const getCategoryName = useCategoryName();
   return (
@@ -28,7 +32,7 @@ export default function SalesSection({ today, dateFrom, dateTo, setDateFrom, set
         </div>
         <ExportButtons
           type="sales"
-          params={{ dateFrom: dateFrom || today, dateTo: dateTo || today }}
+          params={{ dateFrom: dateFrom || today, dateTo: dateTo || today, ...(outletId ? { outletId } : {}) }}
           disabled={!sales}
         />
       </div>
@@ -42,6 +46,7 @@ export default function SalesSection({ today, dateFrom, dateTo, setDateFrom, set
             <label className={labelCls}>Sampai</label>
             <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className={inputCls} />
           </div>
+          <OutletFilter value={outletId} onChange={setOutletId} />
         </div>
         {salesLoading ? (
           <Spinner />

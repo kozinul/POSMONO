@@ -20,6 +20,7 @@ export default function ReportPage() {
   const [activeReport, setActiveReport] = useState('daily');
 
   const [selectedDate, setSelectedDate] = useState(today);
+  const [selectedOutletId, setSelectedOutletId] = useState('');
   const [dateFrom, setDateFrom] = useState(today);
   const [dateTo, setDateTo] = useState(today);
   const [financeFrom, setFinanceFrom] = useState(today);
@@ -76,6 +77,8 @@ export default function ReportPage() {
         <DailySection
           selectedDate={selectedDate}
           setSelectedDate={setSelectedDate}
+          outletId={selectedOutletId}
+          setOutletId={setSelectedOutletId}
         />
       )}
       {activeReport === 'sales' && (
@@ -85,6 +88,8 @@ export default function ReportPage() {
           dateTo={dateTo}
           setDateFrom={setDateFrom}
           setDateTo={setDateTo}
+          outletId={selectedOutletId}
+          setOutletId={setSelectedOutletId}
         />
       )}
       {activeReport === 'finance' && (
@@ -94,6 +99,8 @@ export default function ReportPage() {
           financeTo={financeTo}
           setFinanceFrom={setFinanceFrom}
           setFinanceTo={setFinanceTo}
+          outletId={selectedOutletId}
+          setOutletId={setSelectedOutletId}
         />
       )}
       {activeReport === 'profit-loss' && (

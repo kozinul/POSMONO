@@ -2,6 +2,7 @@ import { useFinanceReport } from '../../orders/hooks/useOrders';
 import { useCategoryName } from '../hooks/useCategoryName';
 import ExportButtons from '../components/ExportButtons';
 import Spinner from '../components/Spinner';
+import OutletFilter from '../components/OutletFilter';
 import { formatCurrency } from '../../../@shared/utils/format';
 import { inputCls, labelCls } from '../components/reportUi';
 
@@ -11,12 +12,15 @@ interface FinanceSectionProps {
   financeTo: string;
   setFinanceFrom: (value: string) => void;
   setFinanceTo: (value: string) => void;
+  outletId: string;
+  setOutletId: (value: string) => void;
 }
 
-export default function FinanceSection({ today, financeFrom, financeTo, setFinanceFrom, setFinanceTo }: FinanceSectionProps) {
+export default function FinanceSection({ today, financeFrom, financeTo, setFinanceFrom, setFinanceTo, outletId, setOutletId }: FinanceSectionProps) {
   const { data: finance, isLoading: financeLoading } = useFinanceReport(
     financeFrom || today,
     financeTo || today,
+    outletId,
   );
   const getCategoryName = useCategoryName();
   return (
@@ -28,7 +32,7 @@ export default function FinanceSection({ today, financeFrom, financeTo, setFinan
         </div>
         <ExportButtons
           type="finance"
-          params={{ dateFrom: financeFrom || today, dateTo: financeTo || today }}
+          params={{ dateFrom: financeFrom || today, dateTo: financeTo || today, ...(outletId ? { outletId } : {}) }}
           disabled={!finance}
         />
       </div>
@@ -42,6 +46,7 @@ export default function FinanceSection({ today, financeFrom, financeTo, setFinan
             <label className={labelCls}>Sampai</label>
             <input type="date" value={financeTo} onChange={(e) => setFinanceTo(e.target.value)} className={inputCls} />
           </div>
+          <OutletFilter value={outletId} onChange={setOutletId} />
         </div>
         {financeLoading ? (
           <Spinner />
