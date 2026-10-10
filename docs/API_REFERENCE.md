@@ -1064,6 +1064,28 @@ Catatan: ganti outlet membutuhkan re-login bila `outletIds` di JWT berubah; assi
 
 ---
 
+## Reports (`/api/reports`)
+
+Semua endpoint di bawah `authenticate`; mutasi/read-report lanjutan dibatasi `authorize('reports:read')` (Cashier 403 kecuali `/reports/shift` & `/reports/best-sellers`). Endpoint JSON + `/export?format=pdf|xlsx`.
+
+**Filter outlet (sejak 2026-10-10):** `GET /reports/daily`, `GET /reports/sales`, `GET /reports/finance` (dan export-nya) menerima `?outletId=` opsional. Tanpa `outletId` = konsolidasi **semua outlet**. `?outletId=` dibuat dari `GET /reports/daily?date=` / `GET /reports/sales?dateFrom=&dateTo=` / `GET /reports/finance?dateFrom=&dateTo=`.
+
+| Method | Path | Auth | Keterangan |
+|--------|------|------|------------|
+| GET | `/api/reports/dashboard?date=` | ✓ + `reports:read` | Dashboard summary |
+| GET | `/api/reports/daily?date=&outletId?=` | ✓ + `reports:read` | Laporan Harian; export `daily` |
+| GET | `/api/reports/sales?dateFrom=&dateTo=&outletId?=` | ✓ + `reports:read` | Laporan Penjualan; export `sales` |
+| GET | `/api/reports/finance?dateFrom=&dateTo=&outletId?=` | ✓ + `reports:read` | Laporan Keuangan; export `finance` |
+| GET | `/api/reports/shift?shiftId=` | ✓ (kasir) | Laporan per shift (POS) |
+| GET | `/api/reports/best-sellers?days=` | ✓ (kasir) | Top produk |
+| GET | `/api/reports/sales-per-cashier?dateFrom=&dateTo=` | ✓ + `reports:read` | Penjualan per kasir; export `sales-per-cashier` |
+| GET | `/api/reports/cashier-receipts?dateFrom=&dateTo=` | ✓ + `reports:read` | Penerimaan per kasir; export `cashier-receipts` |
+| GET | `/api/reports/sales-per-product?dateFrom=&dateTo=` | ✓ + `reports:read` | Penjualan per produk; export `sales-per-product` |
+| GET | `/api/reports/profit-loss?dateFrom=&dateTo=` | ✓ + `reports:read` | Laba Rugi; export `profit-loss` |
+| GET | `/api/reports/inventory-summary?dateFrom=&dateTo=` | ✓ + `reports:read` | Ringkasan stok; export `inventory-summary` |
+
+---
+
 ## Hubs (`/api/hubs`)
 
 Hub = grouping non-tenant di atas tenant (`hubId` di Tenant; null = standalone). CRUD & assign tenant goto Platform Super Admin (`platform.hubs.manage`). Hub **tidak menyentuh data bisnis** — murni grouping.
