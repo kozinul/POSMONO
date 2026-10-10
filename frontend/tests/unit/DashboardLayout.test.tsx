@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { DashboardLayout } from '../../src/layouts/DashboardLayout';
 import { useAuthStore } from '../../src/@shared/hooks/useAuth';
@@ -107,5 +107,34 @@ describe('DashboardLayout outlet switcher', () => {
 
     expect(await screen.findByText('Outlet A')).toBeInTheDocument();
     expect(screen.queryByLabelText('Pilih Outlet')).not.toBeInTheDocument();
+  });
+
+  it('sets the browser tab title to "POS - <tenant name>" once the name arrives', async () => {
+    mockApi([]);
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url === '/outlets') return Promise.resolve({ data: { success: true, data: [] } } as never);
+      if (url === '/auth/accessible-tenants')
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: [{ tenantId: 't1', tenantName: 'Toko Alpha', hubId: null, hubName: null, role: 'owner' }],
+          },
+        } as never);
+      return Promise.resolve({ data: { success: true, data: [] } } as never);
+    });
+    setUser([], null);
+
+    renderLayout();
+
+    await waitFor(() => expect(document.title).toBe('POS - Toko Alpha'));
+  });
+
+  it('falls back to POSMono while the tenant name is unknown', async () => {
+    mockApi([]); // accessible-tenants resolves to []
+    setUser([], null);
+
+    renderLayout();
+
+    await waitFor(() => expect(document.title).toBe('POSMono'));
   });
 });

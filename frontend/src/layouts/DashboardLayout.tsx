@@ -1,4 +1,5 @@
 import { Outlet, Link, useLocation, Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore, hasPermission } from '../@shared/hooks/useAuth';
 import { useAccessibleTenants } from '../@shared/hooks/useHubMemberships';
@@ -69,6 +70,12 @@ export function DashboardLayout() {
   const currentTenantId = user?.tenantId ?? '';
   const currentTenantName = accessibleTenants.find((t) => t.tenantId === currentTenantId)?.tenantName ?? null;
   const showTenantSwitcher = accessibleTenants.length > 0 && currentTenantId !== 'platform';
+
+  // Browser tab title follows the tenant ("POS - <nama toko>"); the name only
+  // arrives with the accessible-tenants query, so re-run when it does.
+  useEffect(() => {
+    document.title = currentTenantName ? `POS - ${currentTenantName}` : 'POSMono';
+  }, [currentTenantName]);
 
   const visibleNavigation = navigation.filter(
     (item) =>
