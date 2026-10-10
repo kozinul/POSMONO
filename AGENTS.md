@@ -639,6 +639,9 @@ Modular SaaS POS Platform (Node.js/Express + React/Tailwind). Multi-tenant, mult
 - **Contoh jebakan yang sama**: tipe `_id` schema (String vs ObjectId) harus konsisten antara seeder & repository — seed yang menulis `_id` lewat `$setOnInsert` tanpa id eksplisit menghasilkan ObjectId di koleksi ber-schema String dan seluruh lookup string jadi buntu.
 - **Tests**: `backend/tests/repositories/migratePlanStringIds.test.ts` (4: seed regression `findById` resolve, migration re-point 3 koleksi + no-op run kedua, skip plan string-id kustom, suffix collision `plan-trial` vs `plan-trial-2`). Backend **1622/1622 (129 files)**, frontend **233/233 (33 files)**, `pnpm lint` bersih, `pnpm budget` hijau (`: any` 199/200).
 
+### Tab Title "POS - {nama tenant}" — 2026-10-10
+- Title statis `POS - Cabang Kuta` di `index.html` diganti: `DashboardLayout` set `document.title = "POS - {tenantName}"` dari `/auth/accessible-tenants` (field `currentTenantName` yang sudah ada), fallback `'POSMono'` selama nama belum ter-load; `index.html` default `POSMono` untuk halaman login/loading. Berlaku semua halaman tenant (POS & dashboard); platform super admin tak terpengaruh (redirect ke Terminal Center sebelum effect). Tests: `DashboardLayout.test.tsx` +2. Frontend **235/235 (33 files)**, tsc + vite build OK.
+
 ## Key Patterns
 - `useQueryClient()` for cache invalidation after mutations
 - `useVoidOrder` for full order void; `useVoidItem` for per-item void
