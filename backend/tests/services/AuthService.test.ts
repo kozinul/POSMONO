@@ -231,6 +231,60 @@ describe('AuthService', () => {
         }),
       ).rejects.toThrow(ValidationError);
     });
+
+    it('DENY: rejects a role that belongs to another tenant', async () => {
+      userRepo.findByEmail.mockResolvedValue(null);
+      const roleRepository = {
+        findById: vi.fn().mockResolvedValue({ serialize: () => ({ tenantId: 'other-tenant', name: 'Owner' }) }),
+      };
+      const svc = new AuthService(userRepo, tokenService, passwordService, sessionService, roleRepository);
+
+      await expect(
+        svc.register({
+          tenantId: TENANT_ID,
+          email: 'escalate@test.com',
+          password: 'password123',
+          displayName: 'Escalator',
+          roleId: 'role-owner-other-tenant',
+        }),
+      ).rejects.toThrow(ValidationError);
+      expect(userRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('DENY: rejects an unknown role id', async () => {
+      userRepo.findByEmail.mockResolvedValue(null);
+      const roleRepository = { findById: vi.fn().mockResolvedValue(null) };
+      const svc = new AuthService(userRepo, tokenService, passwordService, sessionService, roleRepository);
+
+      await expect(
+        svc.register({
+          tenantId: TENANT_ID,
+          email: 'ghost-role@test.com',
+          password: 'password123',
+          displayName: 'Ghost',
+          roleId: 'role-does-not-exist',
+        }),
+      ).rejects.toThrow(ValidationError);
+    });
+
+    it('ALLOW: accepts a role from the same tenant', async () => {
+      userRepo.findByEmail.mockResolvedValue(null);
+      const roleRepository = {
+        findById: vi.fn().mockResolvedValue({ serialize: () => ({ tenantId: TENANT_ID, name: 'Cashier' }) }),
+      };
+      const svc = new AuthService(userRepo, tokenService, passwordService, sessionService, roleRepository);
+
+      const user = await svc.register({
+        tenantId: TENANT_ID,
+        email: 'ok@test.com',
+        password: 'password123',
+        displayName: 'Ok User',
+        roleId: 'role-cashier',
+      });
+
+      expect(user.serialize().roleId).toBe('role-cashier');
+      expect(userRepo.save).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('refresh', () => {

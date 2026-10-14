@@ -3,6 +3,7 @@ import request from 'supertest';
 import express from 'express';
 import { authenticate } from '../../src/@shared/interfaces/middleware/authenticate';
 import { errorHandler } from '../../src/@shared/interfaces/middleware/errorHandler';
+import { createAuthRoutes } from '../../src/core/identity/interfaces/http/routes/auth.routes';
 import { generateTestToken } from '../helpers/auth';
 
 function createTestApp() {
@@ -134,6 +135,45 @@ describe('Auth Routes', () => {
         .set('Authorization', 'Bearer invalid-token');
 
       expect(res.status).toBe(401);
+    });
+  });
+
+  describe('POST /api/auth/register RBAC (real auth.routes)', () => {
+    const noop = async (_req: any, res: any) => res.status(201).json({ success: true, data: {} });
+
+    const realApp = express();
+    realApp.use(express.json());
+    realApp.use('/api/auth', createAuthRoutes({
+      login: noop,
+      hubLogin: noop,
+      register: noop,
+      refresh: noop,
+      logout: noop,
+      me: noop,
+      accessibleTenants: noop,
+      switchTenant: noop,
+    } as never));
+    realApp.use(errorHandler);
+
+    const cashierToken = generateTestToken({ sub: 'cashier-1', role: 'cashier', permissions: ['orders:read'] });
+    const adminToken = generateTestToken({ sub: 'owner-1', role: 'owner', permissions: ['users:write'] });
+
+    it('DENY: cashier without users:write cannot register a user', async () => {
+      const res = await request(realApp)
+        .post('/api/auth/register')
+        .set('Authorization', `Bearer ${cashierToken}`)
+        .send({ email: 'new@test.com', password: 'pw123', displayName: 'New', roleId: 'role-owner' });
+
+      expect(res.status).toBe(403);
+    });
+
+    it('ALLOW: owner with users:write can register a user', async () => {
+      const res = await request(realApp)
+        .post('/api/auth/register')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ email: 'new@test.com', password: 'pw123', displayName: 'New', roleId: 'role-cashier' });
+
+      expect(res.status).toBe(201);
     });
   });
 });

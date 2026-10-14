@@ -351,6 +351,8 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
       throw new ValidationError('User with this email already exists');
     }
 
+    await this.assertRoleBelongsToTenant(input.roleId, input.tenantId);
+
     const passwordHash = await this.passwordService.hash(input.password);
     const user = User.create({
       tenantId: input.tenantId,
@@ -367,6 +369,25 @@ export class AuthService implements UseCase<LoginInput, LoginOutput> {
 
     await this.userRepository.save(user);
     return user;
+  }
+
+  /**
+   * `roleId` is client-supplied; reject a role that belongs to another tenant
+   * (privilege escalation: a cashier picking the Owner role id). No-op when the
+   * repository is not wired, matching the optional-deps pattern.
+   */
+  private async assertRoleBelongsToTenant(roleId: string, tenantId: string): Promise<void> {
+    if (!this.roleRepository) return;
+
+    const role = await this.roleRepository.findById(roleId);
+    if (!role) {
+      throw new ValidationError('Role tidak ditemukan');
+    }
+
+    const roleTenantId = role.serialize?.().tenantId;
+    if (roleTenantId && roleTenantId !== tenantId) {
+      throw new ValidationError('Role tidak valid untuk tenant ini');
+    }
   }
 
   async getCurrentUser(
