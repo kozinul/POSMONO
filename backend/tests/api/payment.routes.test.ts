@@ -141,7 +141,7 @@ describe('Payment Routes', () => {
       confirmTransfer: async (_req: any, res: any) => res.json({ success: true, data: { payment: { id: 'p1' } } }),
       cancelTransfer: async (_req: any, res: any) => res.json({ success: true, data: { payment: { id: 'p1' }, orderCancelled: true } }),
       qrisInitiate: noopController,
-      qrisConfirm: noopController,
+      qrisConfirm: async (_req: any, res: any) => res.json({ success: true, data: { via: 'qrisConfirm' } }),
       qrisStatus: noopController,
       qrisTestConfig: noopController,
       qrisCancel: noopController,
@@ -177,6 +177,15 @@ describe('Payment Routes', () => {
         .set('Authorization', `Bearer ${readOnlyToken}`)
         .send({ reason: 'test' });
       expect(res.status).toBe(403);
+    });
+
+    it('POST /qris/confirm reaches qrisConfirm, not the /:paymentId/confirm shadow', async () => {
+      const res = await request(realApp)
+        .post('/api/payments/qris/confirm')
+        .set('Authorization', `Bearer ${readOnlyToken}`)
+        .send({});
+      expect(res.status).toBe(200);
+      expect(res.body.data.via).toBe('qrisConfirm');
     });
 
     it('POST /:id/cancel is allowed with payments:write', async () => {

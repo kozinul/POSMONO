@@ -14,13 +14,15 @@ export function createPaymentRoutes(
   router.get('/', authenticate, asyncHandler(paymentController.list.bind(paymentController)));
   router.get('/refundable', authenticate, authorize('payments:read'), asyncHandler(paymentController.listRefundable.bind(paymentController)));
   router.get('/pending', authenticate, asyncHandler(paymentController.listPendingTransfers.bind(paymentController)));
-  router.post('/:paymentId/confirm', authenticate, outletMw, asyncHandler(paymentController.confirmTransfer.bind(paymentController)));
-  router.post('/:paymentId/cancel', authenticate, outletMw, authorize('payments:write'), asyncHandler(paymentController.cancelTransfer.bind(paymentController)));
+  // QRIS routes must be registered before '/:paymentId/confirm': otherwise Express
+  // matches '/qris/confirm' as paymentId='qris' and qrisConfirm never runs.
   router.post('/qris/initiate', authenticate, outletMw, asyncHandler(paymentController.qrisInitiate.bind(paymentController)));
   router.post('/qris/confirm', authenticate, outletMw, asyncHandler(paymentController.qrisConfirm.bind(paymentController)));
   router.get('/qris/status/:referenceNumber', authenticate, asyncHandler(paymentController.qrisStatus.bind(paymentController)));
   router.post('/qris/test-config', authenticate, asyncHandler(paymentController.qrisTestConfig.bind(paymentController)));
   router.post('/qris/:referenceNumber/cancel', authenticate, outletMw, asyncHandler(paymentController.qrisCancel.bind(paymentController)));
+  router.post('/:paymentId/confirm', authenticate, outletMw, asyncHandler(paymentController.confirmTransfer.bind(paymentController)));
+  router.post('/:paymentId/cancel', authenticate, outletMw, authorize('payments:write'), asyncHandler(paymentController.cancelTransfer.bind(paymentController)));
   router.get('/:orderId', authenticate, asyncHandler(paymentController.getByOrder.bind(paymentController)));
   router.post('/pay-cash', authenticate, outletMw, asyncHandler(paymentController.payCash.bind(paymentController)));
   router.post('/process', authenticate, outletMw, asyncHandler(paymentController.processPayment.bind(paymentController)));
