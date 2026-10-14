@@ -8,7 +8,7 @@ describe('Void Item Integration Test', () => {
 
   beforeAll(async () => {
     await setupTestDb();
-    ctx = await buildIntegrationApp();
+    ctx = await buildIntegrationApp({ permissions: ['orders:read', 'orders:write'] });
   });
 
   afterAll(async () => {

@@ -15,7 +15,7 @@ describe('Integration: Order-to-Payment Flow', () => {
 
   beforeAll(async () => {
     await setupTestDb();
-    ctx = await buildIntegrationApp();
+    ctx = await buildIntegrationApp({ permissions: ['orders:read'] });
   });
 
   afterAll(async () => {

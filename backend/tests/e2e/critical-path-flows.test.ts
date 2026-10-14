@@ -4,7 +4,7 @@ import { setupTestDb, teardownTestDb, clearCollections } from '../helpers/db';
 import { buildIntegrationApp, IntegrationTestContext } from '../helpers/integration';
 import { generateTestToken } from '../helpers/auth';
 
-const PERMS = ['products:write', 'products:read', 'inventory:write', 'inventory:read'];
+const PERMS = ['products:write', 'products:read', 'inventory:write', 'inventory:read', 'orders:read', 'orders:write'];
 
 function invoiceTemplateDoc(tenantId: string) {
   return {

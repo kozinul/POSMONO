@@ -35,7 +35,7 @@ describe('Integration: tenant status gate on POS mutations', () => {
 
   beforeAll(async () => {
     await setupTestDb();
-    ctx = await buildIntegrationApp({ statusGate: true });
+    ctx = await buildIntegrationApp({ statusGate: true, permissions: ['orders:read', 'orders:write'] });
   });
 
   afterAll(async () => {

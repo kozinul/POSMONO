@@ -8,7 +8,18 @@ const TENANT_A = 'tenant-a';
 const TENANT_B = 'tenant-b';
 const USER_A = 'user-a';
 const USER_B = 'user-b';
-const ISOLATION_PERMS = ['inventory:write', 'inventory:read', 'products:write', 'products:read'];
+const ISOLATION_PERMS = [
+  'inventory:write',
+  'inventory:read',
+  'products:write',
+  'products:read',
+  'orders:read',
+  'orders:write',
+  // Granted so cross-tenant mutation probes reach the tenant-scoping check
+  // instead of being stopped earlier by the route-level authorize guard.
+  'orders:cancel',
+  'payments:write',
+];
 
 describe('Integration: Tenant Isolation', () => {
   let ctx: IntegrationTestContext;
