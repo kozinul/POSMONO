@@ -251,4 +251,78 @@ describe('Integration: Tenant Isolation', () => {
       expect(lowStockRes.body.data).toHaveLength(0);
     });
   });
+
+  describe('Order mutation isolation', () => {
+    async function createOrderAsTenantA(): Promise<string> {
+      const res = await request(ctx.app)
+        .post('/api/orders')
+        .set('Authorization', `Bearer ${tokenA}`)
+        .send({
+          items: [{ productId: 'p1', productName: 'Item A', quantity: 2, unitPrice: 10000, totalPrice: 20000, modifiers: [], tax: { rate: 0, amount: 0 } }],
+          notes: '',
+          source: 'pos',
+        });
+      expect(res.status).toBe(201);
+      return res.body.data.id;
+    }
+
+    const mutationCases: Array<{ name: string; method: 'post' | 'put' | 'patch' | 'delete'; path: string; body?: unknown }> = [
+      { name: 'PUT items', method: 'put', path: '/items', body: { items: [{ productId: 'p1', productName: 'X', quantity: 1, unitPrice: 10000, totalPrice: 10000, modifiers: [], tax: { rate: 0, amount: 0 } }] } },
+      { name: 'POST pay', method: 'post', path: '/pay', body: { paymentBreakdown: [{ method: 'cash', code: 'C', amount: 20000, change: 0 }] } },
+      { name: 'POST void', method: 'post', path: '/void', body: { reason: 'x', voidedByName: 'B' } },
+      { name: 'POST close-bill', method: 'post', path: '/close-bill', body: {} },
+      { name: 'POST void-item', method: 'post', path: '/void-item', body: { itemIndex: 0, reason: 'x', voidedByName: 'B' } },
+      { name: 'POST void-payment', method: 'post', path: '/void-payment', body: { paymentIndex: 0, reason: 'x', voidedByName: 'B' } },
+      { name: 'POST void-rollback', method: 'post', path: '/void-rollback', body: { reason: 'x', voidedByName: 'B' } },
+      { name: 'POST topay', method: 'post', path: '/topay', body: { paymentBreakdown: [{ method: 'cash', code: 'C', amount: 20000, change: 0 }] } },
+      { name: 'POST refund', method: 'post', path: '/refund', body: { reason: 'x', refundedByName: 'B' } },
+      { name: 'POST apply-discount', method: 'post', path: '/apply-discount', body: { discountBreakdown: [] } },
+      { name: 'POST service-charge', method: 'post', path: '/service-charge', body: { rate: 0.1 } },
+      { name: 'PATCH reopen', method: 'patch', path: '/reopen' },
+      { name: 'POST hold', method: 'post', path: '/hold' },
+      { name: 'PATCH recall', method: 'patch', path: '/recall' },
+      { name: 'POST split-item', method: 'post', path: '/split-item', body: { itemIndex: 0, quantities: [1, 1] } },
+      { name: 'DELETE item', method: 'delete', path: '/item', body: { itemIndex: 0 } },
+      { name: 'PATCH item/quantity', method: 'patch', path: '/item/quantity', body: { itemIndex: 0, quantity: 2 } },
+    ];
+
+    it.each(mutationCases)('tenant B cannot mutate a tenant A order via $name', async ({ method, path, body }) => {
+      const orderId = await createOrderAsTenantA();
+
+      const res = await request(ctx.app)
+        [method](`/api/orders/${orderId}${path}`)
+        .set('Authorization', `Bearer ${tokenB}`)
+        .send(body ?? {});
+
+      expect(res.status).toBe(404);
+    });
+
+    it('tenant A can mutate its own order (ALLOW)', async () => {
+      const orderId = await createOrderAsTenantA();
+
+      const holdRes = await request(ctx.app)
+        .post(`/api/orders/${orderId}/hold`)
+        .set('Authorization', `Bearer ${tokenA}`)
+        .send({});
+
+      expect(holdRes.status).toBe(200);
+      expect(holdRes.body.data.status).toBe('held');
+    });
+
+    it('a denied mutation leaves the tenant A order untouched', async () => {
+      const orderId = await createOrderAsTenantA();
+
+      await request(ctx.app)
+        .post(`/api/orders/${orderId}/void`)
+        .set('Authorization', `Bearer ${tokenB}`)
+        .send({ reason: 'x', voidedByName: 'B' });
+
+      const getRes = await request(ctx.app)
+        .get(`/api/orders/${orderId}`)
+        .set('Authorization', `Bearer ${tokenA}`);
+
+      expect(getRes.status).toBe(200);
+      expect(getRes.body.data.status).toBe('draft');
+    });
+  });
 });

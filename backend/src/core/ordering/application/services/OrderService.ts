@@ -40,6 +40,24 @@ async function resolveCashierName(
   }
 }
 
+/**
+ * Loads an order only if it belongs to the caller's tenant. A cross-tenant id
+ * must be indistinguishable from a missing one, so both paths raise the same
+ * NotFound — leaking existence would turn order ids (exposed in reports/URLs)
+ * into an enumeration oracle.
+ */
+async function findOrderForTenant(
+  orderRepository: OrderRepositoryDep,
+  id: string,
+  tenantId: string,
+): Promise<Order> {
+  const order = await orderRepository.findById(id);
+  if (!order || order.serialize().tenantId !== tenantId) {
+    throw new NotFoundError('Order not found');
+  }
+  return order;
+}
+
 interface CreateOrderInput {
   tenantId: string;
   outletId?: string | null;
@@ -91,6 +109,7 @@ interface VoidItemInput {
 
 interface PayOrderInput {
   id: string;
+  tenantId: string;
   paymentBreakdown: IPaymentBreakdownEntry[];
   cashierId: string;
   cashierName: string;
@@ -108,22 +127,26 @@ interface VoidPaymentInput {
 
 interface ReopenOrderInput {
   id: string;
+  tenantId: string;
   reopenedBy: string;
 }
 
 interface SplitItemInput {
   orderId: string;
+  tenantId: string;
   itemIndex: number;
   quantities: number[];
 }
 
 interface RemoveItemInput {
   id: string;
+  tenantId: string;
   itemIndex: number;
 }
 
 interface UpdateItemQuantityInput {
   id: string;
+  tenantId: string;
   itemIndex: number;
   quantity: number;
 }
@@ -139,6 +162,7 @@ interface VoidAndRollbackInput {
 
 interface TopayInput {
   id: string;
+  tenantId: string;
   paymentBreakdown: IPaymentBreakdownEntry[];
   cashierId: string;
   cashierName: string;
@@ -146,6 +170,7 @@ interface TopayInput {
 
 interface RefundInput {
   id: string;
+  tenantId: string;
   refundedBy: string;
   refundedByName: string;
   reason: string;
@@ -153,24 +178,29 @@ interface RefundInput {
 
 interface ApplyDiscountInput {
   id: string;
+  tenantId: string;
   discountBreakdown: IDiscountBreakdown[];
 }
 
 interface SetServiceChargeInput {
   id: string;
+  tenantId: string;
   rate: number;
 }
 
 interface HoldOrderInput {
   id: string;
+  tenantId: string;
 }
 
 interface RecallOrderInput {
   id: string;
+  tenantId: string;
 }
 
 interface ReplaceOrderItemsInput {
   id: string;
+  tenantId: string;
   items: IOrderItem[];
   tableNumber?: string | null;
   customerName?: string | null;
@@ -386,8 +416,7 @@ export class UpdateOrderService implements UseCase<UpdateOrderInput, Order> {
   ) {}
 
   async execute(input: UpdateOrderInput): Promise<Order> {
-    const order = await this.orderRepository.findById(input.id);
-    if (!order) throw new Error('Order not found');
+    const order = await findOrderForTenant(this.orderRepository, input.id, input.tenantId);
 
     if (input.items) {
       for (const item of input.items) {
@@ -422,8 +451,7 @@ export class ReplaceOrderItemsService implements UseCase<ReplaceOrderItemsInput,
   ) {}
 
   async execute(input: ReplaceOrderItemsInput): Promise<Order> {
-    const order = await this.orderRepository.findById(input.id);
-    if (!order) throw new Error('Order not found');
+    const order = await findOrderForTenant(this.orderRepository, input.id, input.tenantId);
 
     order.replaceItems(input.items);
 
@@ -451,8 +479,7 @@ export class VoidOrderService implements UseCase<VoidOrderInput, Order> {
   ) {}
 
   async execute(input: VoidOrderInput): Promise<Order> {
-    const order = await this.orderRepository.findById(input.id);
-    if (!order) throw new Error('Order not found');
+    const order = await findOrderForTenant(this.orderRepository, input.id, input.tenantId);
 
     const orderData = order.serialize();
     const itemsToRestore = orderData.items;
@@ -489,8 +516,7 @@ export class VoidItemService implements UseCase<VoidItemInput, Order> {
   ) {}
 
   async execute(input: VoidItemInput): Promise<Order> {
-    const order = await this.orderRepository.findById(input.id);
-    if (!order) throw new Error('Order not found');
+    const order = await findOrderForTenant(this.orderRepository, input.id, input.tenantId);
 
     const orderData = order.serialize();
     const item = orderData.items[input.itemIndex];
@@ -524,8 +550,7 @@ export class PayOrderService implements UseCase<PayOrderInput, Order> {
   ) {}
 
   async execute(input: PayOrderInput): Promise<Order> {
-    const order = await this.orderRepository.findById(input.id);
-    if (!order) throw new Error('Order not found');
+    const order = await findOrderForTenant(this.orderRepository, input.id, input.tenantId);
 
     const orderData = order.serialize();
     const cashierName = await resolveCashierName(this.userRepository, input.cashierId, orderData.tenantId, input.cashierName);
@@ -549,8 +574,7 @@ export class VoidPaymentService implements UseCase<VoidPaymentInput, Order> {
   ) {}
 
   async execute(input: VoidPaymentInput): Promise<Order> {
-    const order = await this.orderRepository.findById(input.id);
-    if (!order) throw new Error('Order not found');
+    const order = await findOrderForTenant(this.orderRepository, input.id, input.tenantId);
 
     const approval = await resolveVoidApproval(this.voidApprovalService, input, VOID_PAYMENT_PERMISSION);
     order.voidPayment(input.paymentIndex, input.reason, input.voidedBy, input.voidedByName);
@@ -573,8 +597,7 @@ export class ReopenOrderService implements UseCase<ReopenOrderInput, Order> {
   ) {}
 
   async execute(input: ReopenOrderInput): Promise<Order> {
-    const order = await this.orderRepository.findById(input.id);
-    if (!order) throw new Error('Order not found');
+    const order = await findOrderForTenant(this.orderRepository, input.id, input.tenantId);
 
     order.reopen(input.reopenedBy);
 
@@ -596,8 +619,7 @@ export class SplitItemService implements UseCase<SplitItemInput, Order> {
   ) {}
 
   async execute(input: SplitItemInput): Promise<Order> {
-    const order = await this.orderRepository.findById(input.orderId);
-    if (!order) throw new Error('Order not found');
+    const order = await findOrderForTenant(this.orderRepository, input.orderId, input.tenantId);
 
     const item = order.serialize().items[input.itemIndex];
     if (!item) throw new Error('Item not found');
@@ -664,8 +686,7 @@ export class RemoveItemService implements UseCase<RemoveItemInput, Order> {
   ) {}
 
   async execute(input: RemoveItemInput): Promise<Order> {
-    const order = await this.orderRepository.findById(input.id);
-    if (!order) throw new Error('Order not found');
+    const order = await findOrderForTenant(this.orderRepository, input.id, input.tenantId);
 
     order.removeItem(input.itemIndex);
 
@@ -686,8 +707,7 @@ export class UpdateItemQuantityService implements UseCase<UpdateItemQuantityInpu
   ) {}
 
   async execute(input: UpdateItemQuantityInput): Promise<Order> {
-    const order = await this.orderRepository.findById(input.id);
-    if (!order) throw new Error('Order not found');
+    const order = await findOrderForTenant(this.orderRepository, input.id, input.tenantId);
 
     order.updateItemQuantity(input.itemIndex, input.quantity);
 
@@ -710,8 +730,7 @@ export class VoidAndRollbackService implements UseCase<VoidAndRollbackInput, Ord
   ) {}
 
   async execute(input: VoidAndRollbackInput): Promise<Order> {
-    const order = await this.orderRepository.findById(input.id);
-    if (!order) throw new Error('Order not found');
+    const order = await findOrderForTenant(this.orderRepository, input.id, input.tenantId);
 
     const orderData = order.serialize();
     const itemsToRestore = orderData.items;
@@ -747,8 +766,7 @@ export class TopayService implements UseCase<TopayInput, Order> {
   ) {}
 
   async execute(input: TopayInput): Promise<Order> {
-    const order = await this.orderRepository.findById(input.id);
-    if (!order) throw new Error('Order not found');
+    const order = await findOrderForTenant(this.orderRepository, input.id, input.tenantId);
 
     const orderData = order.serialize();
     const cashierName = await resolveCashierName(this.userRepository, input.cashierId, orderData.tenantId, input.cashierName);
@@ -771,8 +789,7 @@ export class RefundService implements UseCase<RefundInput, Order> {
   ) {}
 
   async execute(input: RefundInput): Promise<Order> {
-    const order = await this.orderRepository.findById(input.id);
-    if (!order) throw new Error('Order not found');
+    const order = await findOrderForTenant(this.orderRepository, input.id, input.tenantId);
 
     order.refund(input.refundedBy, input.refundedByName, input.reason);
 
@@ -793,8 +810,7 @@ export class ApplyDiscountService implements UseCase<ApplyDiscountInput, Order> 
   ) {}
 
   async execute(input: ApplyDiscountInput): Promise<Order> {
-    const order = await this.orderRepository.findById(input.id);
-    if (!order) throw new Error('Order not found');
+    const order = await findOrderForTenant(this.orderRepository, input.id, input.tenantId);
 
     order.applyDiscount(input.discountBreakdown);
 
@@ -815,8 +831,7 @@ export class SetServiceChargeService implements UseCase<SetServiceChargeInput, O
   ) {}
 
   async execute(input: SetServiceChargeInput): Promise<Order> {
-    const order = await this.orderRepository.findById(input.id);
-    if (!order) throw new Error('Order not found');
+    const order = await findOrderForTenant(this.orderRepository, input.id, input.tenantId);
 
     order.setServiceCharge(input.rate);
 
@@ -838,8 +853,7 @@ export class HoldOrderService implements UseCase<HoldOrderInput, Order> {
   ) {}
 
   async execute(input: HoldOrderInput): Promise<Order> {
-    const order = await this.orderRepository.findById(input.id);
-    if (!order) throw new Error('Order not found');
+    const order = await findOrderForTenant(this.orderRepository, input.id, input.tenantId);
 
     order.hold();
 
@@ -878,8 +892,7 @@ export class RecallOrderService implements UseCase<RecallOrderInput, Order> {
   ) {}
 
   async execute(input: RecallOrderInput): Promise<Order> {
-    const order = await this.orderRepository.findById(input.id);
-    if (!order) throw new Error('Order not found');
+    const order = await findOrderForTenant(this.orderRepository, input.id, input.tenantId);
 
     order.recall();
 
@@ -931,11 +944,9 @@ export class CloseBillService implements UseCase<CloseBillInput, Order> {
   ) {}
 
   async execute(input: CloseBillInput): Promise<Order> {
-    const order = await this.orderRepository.findById(input.id);
-    if (!order) throw new NotFoundError('Order not found');
+    const order = await findOrderForTenant(this.orderRepository, input.id, input.tenantId);
 
     const data = order.serialize();
-    if (data.tenantId !== input.tenantId) throw new NotFoundError('Order not found');
 
     if (
       data.paymentStatus === 'completed' ||

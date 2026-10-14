@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { CreateOrderService, ReplaceOrderItemsService, HoldOrderService, VoidOrderService, VoidItemService, VoidAndRollbackService, CloseBillService } from '../../src/core/ordering/application/services/OrderService';
+import { CreateOrderService, UpdateOrderService, ReplaceOrderItemsService, VoidOrderService, VoidItemService, VoidPaymentService, PayOrderService, ReopenOrderService, SplitItemService, RemoveItemService, UpdateItemQuantityService, VoidAndRollbackService, TopayService, RefundService, ApplyDiscountService, SetServiceChargeService, HoldOrderService, RecallOrderService, CloseBillService } from '../../src/core/ordering/application/services/OrderService';
 import { validOrderInput, validPaymentBreakdown } from '../fixtures/ordering.fixtures';
 
 function createMockRepo() {
@@ -109,12 +109,13 @@ describe('ReplaceOrderItemsService', () => {
     const created = await createOrderService.execute(validOrderInput);
 
     const holdService = new HoldOrderService(orderRepo, eventBus);
-    const held = await holdService.execute({ id: created.id.toValue() });
+    const held = await holdService.execute({ id: created.id.toValue(), tenantId: 'tenant-test-1' });
     expect(held.serialize().status).toBe('held');
 
     const replaceService = new ReplaceOrderItemsService(orderRepo, eventBus);
     const updated = await replaceService.execute({
       id: created.id.toValue(),
+      tenantId: 'tenant-test-1',
       items: [
         { productId: 'p9', variantId: null, productName: 'Mie Goreng', quantity: 1, unitPrice: 12000, totalPrice: 12000, modifiers: [], tax: { rate: 0, amount: 0 } },
         { productId: 'p10', variantId: null, productName: 'Es Teh', quantity: 2, unitPrice: 5000, totalPrice: 10000, modifiers: [], tax: { rate: 0, amount: 0 } },
@@ -142,6 +143,7 @@ describe('ReplaceOrderItemsService', () => {
     await expect(
       replaceService.execute({
         id: 'missing',
+        tenantId: 'tenant-test-1',
         items: [],
       }),
     ).rejects.toThrow('Order not found');
@@ -458,7 +460,7 @@ describe('CloseBillService', () => {
   it('cancels an unpaid held bill and releases the reserved stock', async () => {
     const { orderRepo, eventBus, inventoryService } = createService();
     const created = await new CreateOrderService(orderRepo, eventBus).execute(validOrderInput);
-    const held = await new HoldOrderService(orderRepo, eventBus, inventoryService).execute({ id: created.id.toValue() });
+    const held = await new HoldOrderService(orderRepo, eventBus, inventoryService).execute({ id: created.id.toValue(), tenantId: 'tenant-test-1' });
     expect(held.serialize().status).toBe('held');
 
     const closeService = new CloseBillService(orderRepo, eventBus, inventoryService);
@@ -564,6 +566,241 @@ describe('CloseBillService', () => {
     const closeService = new CloseBillService(orderRepo, eventBus, inventoryService);
     await expect(
       closeService.execute({ id: created.id.toValue(), tenantId: 'tenant-test-2' }),
+    ).rejects.toThrow('Order not found');
+  });
+});
+
+describe('tenant scoping (IDOR guard)', () => {
+  function createFixture() {
+    let saved: any = null;
+    const orderRepo = {
+      save: vi.fn((order: any) => {
+        saved = order;
+      }),
+      findById: vi.fn(() => saved),
+    };
+    const eventBus = { publish: vi.fn() };
+    const inventoryService = { restockForVoid: vi.fn(), releaseStock: vi.fn() };
+    return { orderRepo, eventBus, inventoryService };
+  }
+
+  const FOREIGN = 'tenant-test-2';
+
+  it('UpdateOrderService rejects a cross-tenant order (DENY) and accepts own tenant (ALLOW)', async () => {
+    const { orderRepo, eventBus } = createFixture();
+    const created = await new CreateOrderService(orderRepo, eventBus).execute(validOrderInput);
+    const service = new UpdateOrderService(orderRepo, eventBus);
+
+    await expect(
+      service.execute({ id: created.id.toValue(), tenantId: FOREIGN, notes: 'x' }),
+    ).rejects.toThrow('Order not found');
+    await expect(
+      service.execute({ id: created.id.toValue(), tenantId: 'tenant-test-1', notes: 'x' }),
+    ).resolves.toBe(created);
+  });
+
+  it('ReplaceOrderItemsService rejects a cross-tenant order (DENY)', async () => {
+    const { orderRepo, eventBus } = createFixture();
+    const created = await new CreateOrderService(orderRepo, eventBus).execute(validOrderInput);
+    const service = new ReplaceOrderItemsService(orderRepo, eventBus);
+
+    await expect(
+      service.execute({ id: created.id.toValue(), tenantId: FOREIGN, items: [] }),
+    ).rejects.toThrow('Order not found');
+  });
+
+  it('PayOrderService rejects a cross-tenant order (DENY) and pays own tenant (ALLOW)', async () => {
+    const { orderRepo, eventBus } = createFixture();
+    const created = await new CreateOrderService(orderRepo, eventBus).execute(validOrderInput);
+    const service = new PayOrderService(orderRepo, eventBus);
+    const input = {
+      paymentBreakdown: validPaymentBreakdown,
+      cashierId: 'cashier-1',
+      cashierName: 'Kasir 1',
+    };
+
+    await expect(
+      service.execute({ id: created.id.toValue(), tenantId: FOREIGN, ...input }),
+    ).rejects.toThrow('Order not found');
+
+    const paid = await service.execute({ id: created.id.toValue(), tenantId: 'tenant-test-1', ...input });
+    expect(paid.serialize().status).toBe('paid');
+  });
+
+  it('TopayService rejects a cross-tenant order (DENY) and pays own tenant (ALLOW)', async () => {
+    const { orderRepo, eventBus } = createFixture();
+    const created = await new CreateOrderService(orderRepo, eventBus).execute(validOrderInput);
+    const service = new TopayService(orderRepo, eventBus);
+    const input = {
+      paymentBreakdown: validPaymentBreakdown,
+      cashierId: 'cashier-1',
+      cashierName: 'Kasir 1',
+    };
+
+    await expect(
+      service.execute({ id: created.id.toValue(), tenantId: FOREIGN, ...input }),
+    ).rejects.toThrow('Order not found');
+
+    const paid = await service.execute({ id: created.id.toValue(), tenantId: 'tenant-test-1', ...input });
+    expect(paid.serialize().status).toBe('paid');
+  });
+
+  it('VoidPaymentService rejects a cross-tenant order (DENY)', async () => {
+    const { orderRepo, eventBus } = createFixture();
+    const created = await new CreateOrderService(orderRepo, eventBus).execute(validOrderInput);
+    created.pay(validPaymentBreakdown, 'cashier-1', 'Kasir 1');
+    const service = new VoidPaymentService(orderRepo, eventBus);
+
+    await expect(
+      service.execute({
+        id: created.id.toValue(),
+        tenantId: FOREIGN,
+        paymentIndex: 0,
+        reason: 'x',
+        voidedBy: 'user-1',
+        voidedByName: 'Admin',
+      }),
+    ).rejects.toThrow('Order not found');
+  });
+
+  it('ReopenOrderService rejects a cross-tenant order (DENY) and reopens own tenant (ALLOW)', async () => {
+    const { orderRepo, eventBus } = createFixture();
+    const created = await new CreateOrderService(orderRepo, eventBus).execute(validOrderInput);
+    created.cancel('dibatalkan');
+    const service = new ReopenOrderService(orderRepo, eventBus);
+
+    await expect(
+      service.execute({ id: created.id.toValue(), tenantId: FOREIGN, reopenedBy: 'user-1' }),
+    ).rejects.toThrow('Order not found');
+
+    const reopened = await service.execute({
+      id: created.id.toValue(),
+      tenantId: 'tenant-test-1',
+      reopenedBy: 'user-1',
+    });
+    expect(reopened.serialize().status).toBe('draft');
+  });
+
+  it('SplitItemService rejects a cross-tenant order (DENY) and splits own tenant (ALLOW)', async () => {
+    const { orderRepo, eventBus } = createFixture();
+    const created = await new CreateOrderService(orderRepo, eventBus).execute(validOrderInput);
+    const createOrderService = new CreateOrderService(orderRepo, eventBus);
+    const service = new SplitItemService(orderRepo, eventBus, createOrderService);
+
+    await expect(
+      service.execute({ orderId: created.id.toValue(), tenantId: FOREIGN, itemIndex: 0, quantities: [1] }),
+    ).rejects.toThrow('Order not found');
+
+    await expect(
+      service.execute({ orderId: created.id.toValue(), tenantId: 'tenant-test-1', itemIndex: 0, quantities: [1] }),
+    ).resolves.toBe(created);
+  });
+
+  it('RemoveItemService rejects a cross-tenant order (DENY) and removes own tenant item (ALLOW)', async () => {
+    const { orderRepo, eventBus } = createFixture();
+    const created = await new CreateOrderService(orderRepo, eventBus).execute(validOrderInput);
+    const service = new RemoveItemService(orderRepo, eventBus);
+
+    await expect(
+      service.execute({ id: created.id.toValue(), tenantId: FOREIGN, itemIndex: 0 }),
+    ).rejects.toThrow('Order not found');
+
+    const removed = await service.execute({
+      id: created.id.toValue(),
+      tenantId: 'tenant-test-1',
+      itemIndex: 0,
+    });
+    expect(removed.serialize().items).toHaveLength(0);
+  });
+
+  it('UpdateItemQuantityService rejects a cross-tenant order (DENY) and updates own tenant item (ALLOW)', async () => {
+    const { orderRepo, eventBus } = createFixture();
+    const created = await new CreateOrderService(orderRepo, eventBus).execute(validOrderInput);
+    const service = new UpdateItemQuantityService(orderRepo, eventBus);
+
+    await expect(
+      service.execute({ id: created.id.toValue(), tenantId: FOREIGN, itemIndex: 0, quantity: 3 }),
+    ).rejects.toThrow('Order not found');
+
+    const updated = await service.execute({
+      id: created.id.toValue(),
+      tenantId: 'tenant-test-1',
+      itemIndex: 0,
+      quantity: 3,
+    });
+    expect(updated.serialize().items[0].quantity).toBe(3);
+  });
+
+  it('RefundService rejects a cross-tenant order (DENY) and refunds own tenant (ALLOW)', async () => {
+    const { orderRepo, eventBus } = createFixture();
+    const created = await new CreateOrderService(orderRepo, eventBus).execute(validOrderInput);
+    created.pay(validPaymentBreakdown, 'cashier-1', 'Kasir 1');
+    const service = new RefundService(orderRepo, eventBus);
+    const input = { refundedBy: 'user-1', refundedByName: 'Admin', reason: 'x' };
+
+    await expect(
+      service.execute({ id: created.id.toValue(), tenantId: FOREIGN, ...input }),
+    ).rejects.toThrow('Order not found');
+
+    const refunded = await service.execute({ id: created.id.toValue(), tenantId: 'tenant-test-1', ...input });
+    expect(refunded.serialize().status).toBe('refunded');
+  });
+
+  it('ApplyDiscountService rejects a cross-tenant order (DENY) and applies own tenant (ALLOW)', async () => {
+    const { orderRepo, eventBus } = createFixture();
+    const created = await new CreateOrderService(orderRepo, eventBus).execute(validOrderInput);
+    const service = new ApplyDiscountService(orderRepo, eventBus);
+
+    await expect(
+      service.execute({ id: created.id.toValue(), tenantId: FOREIGN, discountBreakdown: [] }),
+    ).rejects.toThrow('Order not found');
+
+    await expect(
+      service.execute({ id: created.id.toValue(), tenantId: 'tenant-test-1', discountBreakdown: [] }),
+    ).resolves.toBe(created);
+  });
+
+  it('SetServiceChargeService rejects a cross-tenant order (DENY) and sets own tenant (ALLOW)', async () => {
+    const { orderRepo, eventBus } = createFixture();
+    const created = await new CreateOrderService(orderRepo, eventBus).execute(validOrderInput);
+    const service = new SetServiceChargeService(orderRepo, eventBus);
+
+    await expect(
+      service.execute({ id: created.id.toValue(), tenantId: FOREIGN, rate: 10 }),
+    ).rejects.toThrow('Order not found');
+
+    const charged = await service.execute({
+      id: created.id.toValue(),
+      tenantId: 'tenant-test-1',
+      rate: 10,
+    });
+    expect(charged.serialize().serviceChargeRate).toBe(10);
+  });
+
+  it('RecallOrderService rejects a cross-tenant order (DENY) and recalls own tenant (ALLOW)', async () => {
+    const { orderRepo, eventBus, inventoryService } = createFixture();
+    const created = await new CreateOrderService(orderRepo, eventBus).execute(validOrderInput);
+    await new HoldOrderService(orderRepo, eventBus, inventoryService).execute({
+      id: created.id.toValue(),
+      tenantId: 'tenant-test-1',
+    });
+    const service = new RecallOrderService(orderRepo, eventBus);
+
+    await expect(
+      service.execute({ id: created.id.toValue(), tenantId: FOREIGN }),
+    ).rejects.toThrow('Order not found');
+
+    const recalled = await service.execute({ id: created.id.toValue(), tenantId: 'tenant-test-1' });
+    expect(recalled.serialize().status).toBe('draft');
+  });
+
+  it('HoldOrderService rejects a cross-tenant order (DENY)', async () => {
+    const { orderRepo, eventBus, inventoryService } = createFixture();
+    const created = await new CreateOrderService(orderRepo, eventBus).execute(validOrderInput);
+    const service = new HoldOrderService(orderRepo, eventBus, inventoryService);
+
+    await expect(
+      service.execute({ id: created.id.toValue(), tenantId: FOREIGN }),
     ).rejects.toThrow('Order not found');
   });
 });

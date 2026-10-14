@@ -204,6 +204,7 @@ export class OrderController extends BaseController {
 
     const order = await this.deps.replaceOrderItemsService.execute({
       id: req.params.id,
+      tenantId: req.tenantId,
       items: parsed.data.items.map((item) => ({ ...item, variantId: item.variantId ?? null })),
       tableNumber: parsed.data.tableNumber ?? null,
       customerName: parsed.data.customerName ?? null,
@@ -324,6 +325,7 @@ export class OrderController extends BaseController {
 
     const order = await this.deps.payOrderService.execute({
       id: req.params.id,
+      tenantId: req.tenantId,
       paymentBreakdown: parsed.data.paymentBreakdown,
       cashierId: req.userId,
       cashierName: parsed.data.cashierName,
@@ -338,6 +340,7 @@ export class OrderController extends BaseController {
 
     const order = await this.deps.splitItemService.execute({
       orderId: req.params.id,
+      tenantId: req.tenantId,
       itemIndex: parsed.data.itemIndex,
       quantities: parsed.data.quantities,
     });
@@ -365,6 +368,7 @@ export class OrderController extends BaseController {
   async reopen(req: Request, res: Response): Promise<void> {
     const order = await this.deps.reopenOrderService.execute({
       id: req.params.id,
+      tenantId: req.tenantId,
       reopenedBy: req.userId,
     });
 
@@ -377,6 +381,7 @@ export class OrderController extends BaseController {
 
     const order = await this.deps.removeItemService.execute({
       id: req.params.id,
+      tenantId: req.tenantId,
       itemIndex: parsed.data.itemIndex,
     });
 
@@ -389,6 +394,7 @@ export class OrderController extends BaseController {
 
     const order = await this.deps.updateItemQuantityService.execute({
       id: req.params.id,
+      tenantId: req.tenantId,
       itemIndex: parsed.data.itemIndex,
       quantity: parsed.data.quantity,
     });
@@ -418,6 +424,7 @@ export class OrderController extends BaseController {
 
     const order = await this.deps.topayService.execute({
       id: req.params.id,
+      tenantId: req.tenantId,
       paymentBreakdown: parsed.data.paymentBreakdown,
       cashierId: req.userId,
       cashierName: parsed.data.cashierName,
@@ -432,6 +439,7 @@ export class OrderController extends BaseController {
 
     const order = await this.deps.refundService.execute({
       id: req.params.id,
+      tenantId: req.tenantId,
       refundedBy: req.userId,
       refundedByName: parsed.data.refundedByName,
       reason: parsed.data.reason,
@@ -446,6 +454,7 @@ export class OrderController extends BaseController {
 
     const order = await this.deps.applyDiscountService.execute({
       id: req.params.id,
+      tenantId: req.tenantId,
       discountBreakdown: parsed.data.discountBreakdown,
     });
 
@@ -458,6 +467,7 @@ export class OrderController extends BaseController {
 
     const order = await this.deps.setServiceChargeService.execute({
       id: req.params.id,
+      tenantId: req.tenantId,
       rate: parsed.data.rate,
     });
 
@@ -467,6 +477,7 @@ export class OrderController extends BaseController {
   async hold(req: Request, res: Response): Promise<void> {
     const order = await this.deps.holdOrderService.execute({
       id: req.params.id,
+      tenantId: req.tenantId,
     });
 
     this.ok(res, order.serialize());
@@ -475,6 +486,7 @@ export class OrderController extends BaseController {
   async recall(req: Request, res: Response): Promise<void> {
     const order = await this.deps.recallOrderService.execute({
       id: req.params.id,
+      tenantId: req.tenantId,
     });
 
     this.ok(res, order.serialize());
