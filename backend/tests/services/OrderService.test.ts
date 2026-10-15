@@ -880,3 +880,145 @@ describe('tenant scoping (IDOR guard)', () => {
     });
   });
 });
+
+describe('UpdateOrderService / ReplaceOrderItemsService server-authoritative pricing (C1b)', () => {
+  const TENANT = 'tenant-test-1';
+
+  function buildProduct(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'product-1',
+      tenantId: TENANT,
+      name: 'Nasi Goreng',
+      categoryId: 'cat-1',
+      basePrice: 25000,
+      modifierGroupIds: [],
+      isActive: true,
+      ...overrides,
+    };
+  }
+
+  function buildCatalog(product: Record<string, unknown> | null) {
+    const productRepository = {
+      findById: vi.fn(async () => (product ? { serialize: () => product } : null)),
+    };
+    const modifierRepository = {
+      findByIds: vi.fn(async () => []),
+      findByProduct: vi.fn(async () => []),
+      findByFamily: vi.fn(async () => []),
+    };
+    return { productRepository, modifierRepository };
+  }
+
+  function buildFixture() {
+    let saved: any = null;
+    const orderRepo = {
+      save: vi.fn(async (order: any) => {
+        saved = order;
+      }),
+      findById: vi.fn(async () => saved),
+    };
+    const eventBus = createMockEventBus();
+    return { orderRepo, eventBus };
+  }
+
+  async function heldOrder(orderRepo: any, eventBus: any) {
+    const created = await new CreateOrderService(orderRepo, eventBus).execute(validOrderInput);
+    const held = await new HoldOrderService(orderRepo, eventBus).execute({ id: created.id.toValue(), tenantId: TENANT });
+    return held.id.toValue();
+  }
+
+  const tamperedItem = {
+    productId: 'product-1',
+    variantId: null,
+    productName: 'Nasi Goreng',
+    quantity: 2,
+    unitPrice: 1,
+    totalPrice: 2,
+    modifiers: [],
+    tax: { rate: 0, amount: 0 },
+  };
+
+  it('ReplaceOrderItemsService ALLOW: re-prices items from the catalog, ignoring the client price', async () => {
+    const { orderRepo, eventBus } = buildFixture();
+    const orderId = await heldOrder(orderRepo, eventBus);
+    const { productRepository, modifierRepository } = buildCatalog(buildProduct());
+    const service = new ReplaceOrderItemsService(orderRepo, eventBus, productRepository as never, modifierRepository as never);
+
+    const updated = await service.execute({ id: orderId, tenantId: TENANT, items: [tamperedItem] });
+    const serialized = updated.serialize();
+
+    expect(serialized.items[0].unitPrice).toBe(25000);
+    expect(serialized.items[0].totalPrice).toBe(50000);
+    expect(serialized.subtotal).toBe(50000);
+    expect(serialized.total).toBe(50000);
+  });
+
+  it('ReplaceOrderItemsService DENY: rejects a product not in the catalog', async () => {
+    const { orderRepo, eventBus } = buildFixture();
+    const orderId = await heldOrder(orderRepo, eventBus);
+    const { productRepository, modifierRepository } = buildCatalog(null);
+    const service = new ReplaceOrderItemsService(orderRepo, eventBus, productRepository as never, modifierRepository as never);
+
+    await expect(
+      service.execute({ id: orderId, tenantId: TENANT, items: [tamperedItem] }),
+    ).rejects.toThrow('Produk tidak ditemukan');
+  });
+
+  it('ReplaceOrderItemsService DENY: rejects a product owned by another tenant', async () => {
+    const { orderRepo, eventBus } = buildFixture();
+    const orderId = await heldOrder(orderRepo, eventBus);
+    const { productRepository, modifierRepository } = buildCatalog(buildProduct({ tenantId: 'tenant-other' }));
+    const service = new ReplaceOrderItemsService(orderRepo, eventBus, productRepository as never, modifierRepository as never);
+
+    await expect(
+      service.execute({ id: orderId, tenantId: TENANT, items: [tamperedItem] }),
+    ).rejects.toThrow('Produk tidak ditemukan');
+  });
+
+  it('ReplaceOrderItemsService ALLOW: keeps the client price when no catalog deps are wired (legacy)', async () => {
+    const { orderRepo, eventBus } = buildFixture();
+    const orderId = await heldOrder(orderRepo, eventBus);
+    const service = new ReplaceOrderItemsService(orderRepo, eventBus);
+
+    const updated = await service.execute({ id: orderId, tenantId: TENANT, items: [tamperedItem] });
+
+    expect(updated.serialize().items[0].unitPrice).toBe(1);
+  });
+
+  it('UpdateOrderService ALLOW: re-prices added items from the catalog', async () => {
+    const { orderRepo, eventBus } = buildFixture();
+    const orderId = await heldOrder(orderRepo, eventBus);
+    const { productRepository, modifierRepository } = buildCatalog(buildProduct());
+    const service = new UpdateOrderService(orderRepo, eventBus, productRepository as never, modifierRepository as never);
+
+    const updated = await service.execute({ id: orderId, tenantId: TENANT, items: [tamperedItem] });
+    const items = updated.serialize().items;
+    const added = items[items.length - 1];
+
+    expect(items).toHaveLength(2);
+    expect(added.unitPrice).toBe(25000);
+    expect(added.totalPrice).toBe(50000);
+  });
+
+  it('UpdateOrderService DENY: rejects an unknown product', async () => {
+    const { orderRepo, eventBus } = buildFixture();
+    const orderId = await heldOrder(orderRepo, eventBus);
+    const { productRepository, modifierRepository } = buildCatalog(null);
+    const service = new UpdateOrderService(orderRepo, eventBus, productRepository as never, modifierRepository as never);
+
+    await expect(
+      service.execute({ id: orderId, tenantId: TENANT, items: [tamperedItem] }),
+    ).rejects.toThrow('Produk tidak ditemukan');
+  });
+
+  it('UpdateOrderService ALLOW: keeps the client price when no catalog deps are wired (legacy)', async () => {
+    const { orderRepo, eventBus } = buildFixture();
+    const orderId = await heldOrder(orderRepo, eventBus);
+    const service = new UpdateOrderService(orderRepo, eventBus);
+
+    const updated = await service.execute({ id: orderId, tenantId: TENANT, items: [tamperedItem] });
+    const items = updated.serialize().items;
+
+    expect(items[items.length - 1].unitPrice).toBe(1);
+  });
+});

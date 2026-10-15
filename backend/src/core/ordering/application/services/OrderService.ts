@@ -58,6 +58,22 @@ async function findOrderForTenant(
   return order;
 }
 
+/**
+ * Order writes must never trust the price the client sent. This is the single
+ * entry point for re-pricing items on create/update/replace so a tampered bill
+ * cannot be persisted (and later paid) below the catalog price.
+ */
+async function priceItemsFromCatalog(
+  productRepository: ProductRepositoryDep | undefined,
+  modifierRepository: ModifierRepositoryDep | undefined,
+  tenantId: string,
+  items: IOrderItem[],
+): Promise<IOrderItem[]> {
+  if (!productRepository || !modifierRepository) return items;
+  const resolver = new CatalogItemResolver(productRepository, modifierRepository);
+  return resolver.resolve(tenantId, items);
+}
+
 interface CreateOrderInput {
   tenantId: string;
   outletId?: string | null;
@@ -373,9 +389,12 @@ export class CreateOrderService implements UseCase<CreateOrderInput, Order> {
   }
 
   private async resolveItemsFromServer(input: CreateOrderInput, items: IOrderItem[]): Promise<IOrderItem[]> {
-    if (!this.modifierRepository || !this.productRepository) return items;
-    const resolver = new CatalogItemResolver(this.productRepository, this.modifierRepository);
-    return resolver.resolve(input.tenantId, items);
+    return priceItemsFromCatalog(
+      this.productRepository,
+      this.modifierRepository,
+      input.tenantId,
+      items,
+    );
   }
 }
 
@@ -383,13 +402,21 @@ export class UpdateOrderService implements UseCase<UpdateOrderInput, Order> {
   constructor(
     private readonly orderRepository: OrderRepositoryDep,
     private readonly eventBus: EventBusDep,
+    private readonly productRepository?: ProductRepositoryDep,
+    private readonly modifierRepository?: ModifierRepositoryDep,
   ) {}
 
   async execute(input: UpdateOrderInput): Promise<Order> {
     const order = await findOrderForTenant(this.orderRepository, input.id, input.tenantId);
 
     if (input.items) {
-      for (const item of input.items) {
+      const items = await priceItemsFromCatalog(
+        this.productRepository,
+        this.modifierRepository,
+        input.tenantId,
+        input.items,
+      );
+      for (const item of items) {
         order.addItem(item);
       }
     }
@@ -418,12 +445,20 @@ export class ReplaceOrderItemsService implements UseCase<ReplaceOrderItemsInput,
   constructor(
     private readonly orderRepository: OrderRepositoryDep,
     private readonly eventBus: EventBusDep,
+    private readonly productRepository?: ProductRepositoryDep,
+    private readonly modifierRepository?: ModifierRepositoryDep,
   ) {}
 
   async execute(input: ReplaceOrderItemsInput): Promise<Order> {
     const order = await findOrderForTenant(this.orderRepository, input.id, input.tenantId);
 
-    order.replaceItems(input.items);
+    const items = await priceItemsFromCatalog(
+      this.productRepository,
+      this.modifierRepository,
+      input.tenantId,
+      input.items,
+    );
+    order.replaceItems(items);
 
     if (input.tableNumber !== undefined) (order as any)['tableNumber'] = input.tableNumber;
     if (input.customerName !== undefined) (order as any)['customerName'] = input.customerName;

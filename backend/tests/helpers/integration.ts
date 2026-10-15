@@ -173,8 +173,8 @@ export async function buildIntegrationApp(options: IntegrationAppOptions = {}): 
   const createOrderService = new CreateOrderService(orderRepo, eventBus, userRepo, shiftRepoForEnforcement);
   const voidApprovalService: any = undefined;
   const makeOrderServices = () => ({
-    update: new UpdateOrderService(orderRepo, eventBus),
-    replaceItems: new ReplaceOrderItemsService(orderRepo, eventBus),
+    update: new UpdateOrderService(orderRepo, eventBus, productRepo, modifierRepo),
+    replaceItems: new ReplaceOrderItemsService(orderRepo, eventBus, productRepo, modifierRepo),
     voidOrder: new VoidOrderService(orderRepo, eventBus, voidApprovalService, inventoryService),
     voidItem: new VoidItemService(orderRepo, eventBus, voidApprovalService, inventoryService),
     payOrder: new PayOrderService(orderRepo, eventBus, userRepo),

@@ -67,6 +67,8 @@ export function registerOrderingWiring({ container, models }: WiringContext): vo
       injector: () => ({
         orderRepository: container.resolve('orderRepository'),
         eventBus: container.resolve('eventBus'),
+        productRepository: container.resolve('productRepository'),
+        modifierRepository: container.resolve('modifierRepository'),
       }),
     }),
     voidApprovalService: asClass(VoidApprovalService, {
@@ -199,6 +201,8 @@ export function registerOrderingWiring({ container, models }: WiringContext): vo
       injector: () => ({
         orderRepository: container.resolve('orderRepository'),
         eventBus: container.resolve('eventBus'),
+        productRepository: container.resolve('productRepository'),
+        modifierRepository: container.resolve('modifierRepository'),
       }),
     }),
     closeBillService: asClass(CloseBillService, {
