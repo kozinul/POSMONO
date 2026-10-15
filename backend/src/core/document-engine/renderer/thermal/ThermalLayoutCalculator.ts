@@ -5,7 +5,7 @@ import { DocumentNode, FieldNode, TextNode } from '../../types/template';
 import { ResolvedNode } from '../../engine/VariableResolver';
 import { justifyColumns } from './justifyColumns';
 
-export function thermalMaxChars(paper: PaperPreset): number {
+function thermalMaxChars(paper: PaperPreset): number {
   return paper.type === 'thermal58' ? 32 : 48;
 }
 

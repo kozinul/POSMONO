@@ -12,12 +12,12 @@ export interface LineItem {
   isFreeItem?: boolean;
 }
 
-export interface ItemModifier {
+interface ItemModifier {
   name: string;
   price: number;
 }
 
-export interface LineAdjustment {
+interface LineAdjustment {
   name: string;
   type: 'promotion' | 'discount' | 'charge';
   amount: number;
@@ -40,7 +40,7 @@ export interface PaymentInfo {
   referenceLine?: string;
 }
 
-export interface TaxLine {
+interface TaxLine {
   name: string;
   label: string;
   rate: number;

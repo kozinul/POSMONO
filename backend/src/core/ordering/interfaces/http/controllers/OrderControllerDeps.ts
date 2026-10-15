@@ -30,7 +30,7 @@ import type { InvoiceRenderService } from '../../../../template/application/serv
  * keep reading `this.deps.createOrderService.execute(...)` and no call site
  * gains an extra hop.
  */
-export interface OrderUseCases {
+interface OrderUseCases {
   createOrderService: Pick<CreateOrderService, 'execute'>;
   updateOrderService: Pick<UpdateOrderService, 'execute'>;
   replaceOrderItemsService: Pick<ReplaceOrderItemsService, 'execute'>;

@@ -46,7 +46,7 @@ export interface HubOverviewOutletRow {
 }
 
 /** Key that joins shift activity to an outlet; `null` outlet = the tenant default outlet. */
-export function outletKey(tenantId: string, outletId: string | null): string {
+function outletKey(tenantId: string, outletId: string | null): string {
   return `${tenantId}:${outletId ?? 'default'}`;
 }
 
@@ -131,7 +131,7 @@ export function buildOutletRows(input: {
   return rows;
 }
 
-export interface HubMemberCountSource {
+interface HubMemberCountSource {
   listMembers(hubId: string): Promise<unknown[]>;
   countMembers?(hubId: string): Promise<number>;
 }

@@ -1,7 +1,7 @@
 import { ValidationError } from '../infrastructure/error/AppError';
 
 /** Default reporting window when the caller sends no `dateFrom`. */
-export const DEFAULT_REPORT_RANGE_DAYS = 30;
+const DEFAULT_REPORT_RANGE_DAYS = 30;
 
 /**
  * Resolves a `?dateFrom=&dateTo=` query pair into day-bounded dates.

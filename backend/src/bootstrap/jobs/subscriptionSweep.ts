@@ -1,9 +1,9 @@
 import type { DIContainer } from '../container';
 
-export const SUBSCRIPTION_SWEEP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+const SUBSCRIPTION_SWEEP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
 /** First pass ran shortly after boot so provisioning/seed have settled. */
-export const SUBSCRIPTION_SWEEP_FIRST_DELAY_MS = 5_000;
+const SUBSCRIPTION_SWEEP_FIRST_DELAY_MS = 5_000;
 
 /**
  * Starts the auto-suspend sweep for expired active periods

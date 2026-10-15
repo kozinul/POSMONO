@@ -3,7 +3,7 @@ import { Identifier } from '../../../../@shared/domain/Identifier';
 
 class AuditLogId extends Identifier {}
 
-export const PLATFORM_AUDIT_ACTIONS = [
+const PLATFORM_AUDIT_ACTIONS = [
   'TENANT_CREATED',
   'TENANT_UPDATED',
   'TENANT_STATUS_CHANGED',

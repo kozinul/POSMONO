@@ -48,7 +48,7 @@ export interface AccessibleTenantRow {
   accessSource?: 'grant' | 'fallback';
 }
 
-export type AccessSource = 'grant' | 'fallback';
+type AccessSource = 'grant' | 'fallback';
 
 /** Fase 21 — a hub the signed-in person is an active member of. */
 export interface MyHubRow {

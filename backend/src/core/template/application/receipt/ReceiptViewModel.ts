@@ -1,4 +1,4 @@
-export interface VMItemModifier {
+interface VMItemModifier {
   name: string;
   qty: number;
   price: number;
@@ -14,7 +14,7 @@ export interface VMItem {
   modifierLines: string;
 }
 
-export interface VMPromotion {
+interface VMPromotion {
   name: string;
   code: string;
   discount: number;
@@ -27,7 +27,7 @@ export interface VMPayment {
   referenceLine?: string;
 }
 
-export interface VMTaxLine {
+interface VMTaxLine {
   name: string;
   label: string;
   rate: number;

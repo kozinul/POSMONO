@@ -7,9 +7,6 @@ export interface IPaymentBreakdownGroup {
   amount: number;
 }
 
-// Re-exported so the existing import sites keep resolving these row shapes.
-export type { PlatformSalesByTenantRow, PlatformSalesRange } from './PlatformSalesAggregation';
-
 export class ReportAggregation {
   /** Multi-tenant sales reads live here; this class stays the facade over both. */
   private readonly platformSales: PlatformSalesAggregation;

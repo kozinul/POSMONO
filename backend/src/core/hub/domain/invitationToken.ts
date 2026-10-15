@@ -12,7 +12,7 @@ import { createHash, randomBytes } from 'node:crypto';
  * KDF, while a salt would make "is this the same token?" impossible to answer
  * without a lookup per candidate.
  */
-export const HUB_INVITATION_TOKEN_BYTES = 32;
+const HUB_INVITATION_TOKEN_BYTES = 32;
 
 export function generateInvitationToken(): string {
   return randomBytes(HUB_INVITATION_TOKEN_BYTES).toString('base64url');

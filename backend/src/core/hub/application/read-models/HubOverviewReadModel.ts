@@ -16,12 +16,7 @@
  */
 
 /** Outlets with no open shift and no activity within `staleHours` need a look. */
-export { OVERVIEW_STALE_HOURS, buildOutletRows, countHubMembers } from './HubOverviewPrimitives';
-export type {
-  HubOverviewOutletRow,
-  HubOverviewActivityRow,
-  HubMemberCountSource,
-} from './HubOverviewPrimitives';
+export { OVERVIEW_STALE_HOURS } from './HubOverviewPrimitives';
 
 import {
   OVERVIEW_STALE_HOURS,
@@ -67,17 +62,17 @@ export interface HubOverviewReadModel {
 export interface OutletSource {
   listAllForPlatform(tenantIds: string[], activeOnly?: boolean): Promise<Array<{ serialize(): OutletDocument }>>;
 }
-export interface OutletDocument {
+interface OutletDocument {
   id: string;
   name: string;
   tenantId: string;
   isActive: boolean;
 }
-export interface OutletActivityRow extends HubOverviewActivityRow {}
+interface OutletActivityRow extends HubOverviewActivityRow {}
 export interface ActivitySource {
   getPlatformOutletActivity(tenantIds: string[]): Promise<{ generatedAt: string; outlets: OutletActivityRow[] }>;
 }
-export interface SalesTotals {
+interface SalesTotals {
   totalOrders: number;
   totalRevenue: number;
 }
@@ -87,7 +82,7 @@ export interface SalesSource {
     options?: { dateFrom?: Date; dateTo?: Date },
   ): Promise<{ totals: SalesTotals; byTenant: Array<{ tenantId: string; totalOrders: number; totalRevenue: number }> }>;
 }
-export interface SubscriptionRow {
+interface SubscriptionRow {
   tenantId: string;
   planName: string | null;
   status: string;

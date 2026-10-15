@@ -72,7 +72,7 @@ export interface FieldNode extends BaseNode {
   format?: string;
 }
 
-export interface TextColumn {
+interface TextColumn {
   text: string;
   align?: 'left' | 'right';
   format?: string;

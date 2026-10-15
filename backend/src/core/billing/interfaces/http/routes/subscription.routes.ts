@@ -34,5 +34,3 @@ export function createMerchantSubscriptionRoutes(subscriptionController: Subscri
 
   return router;
 }
-
-export const createMerchantEntitlementRoutes = createMerchantSubscriptionRoutes;
