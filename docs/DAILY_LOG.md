@@ -14,12 +14,13 @@
 * **D2** `af683e91` (`chore(ci)`) — knip dipasang: `knip.json` (tags `-internal`, `ignoreBinaries`, trim entry), script `knip`, devDep `knip ^6`, step `Dead code (knip)` di job lint CI; `HUB_SESSION_TENANT` di-tag `@internal`, `PlatformSalesByTenantRow` di-un-export.
 * **D1** `baa5bb7b` (`chore(frontend)`) — 14 `console.log` debug QRIS dihapus (5 `console.error` jalur gagal dipertahankan).
 * **D3** `97deb19b` (`refactor(frontend)`) — satukan helper: `apiError.ts` baru (satu `apiErrorMessage`, hapus duplikat `getApiErrorMessage`); `@shared/utils/format.ts` jadi satu modul uang (`formatCurrency` + `formatIDR` yang dipindah dari `core/pos/utils/money.ts` yang dihapus); buang `formatRupiah` + template inline `Rp {…toLocaleString('id-ID')}`. Output rendering **tidak berubah**.
+* **C1b** `97cbc83f` (`fix(orders)`) — tutup gap C1 yang tersisa: `UpdateOrderService` (`PUT /orders/:id`) & `ReplaceOrderItemsService` (`PUT /orders/:id/items`) kini memanggil `priceItemsFromCatalog()` (`OrderService.ts`) sebelum `addItem`/`replaceItems` → harga selalu dari `CatalogItemResolver`, `unitPrice` klien diabaikan; `productRepository`+`modifierRepository` di-wiring di `wiring/ordering.ts`. **Jebakan**: `processByOrderId` membayar `order.total` yang tersimpan (tidak resolve ulang) → tanpa C1b, `PUT` bill `unitPrice:1` lalu `POST /payments/process` settle 1 IDR; pertahanan ada di **write time**. `updateItemQuantity` aman karena recompute dari `unitPrice` tersimpan. Fallback legacy: deps tak di-wire → harga klien (alasan test unit builder tetap lolos).
 
 **Status verifikasi terakhir:**
-* Backend **132 file / 1725 test pass**; frontend **34 file / 243 test pass**; `tsc` backend & frontend bersih; `pnpm budget` hijau (`: any` 199/200); `npx knip` exit 0; `vite build` OK.
+* Backend **133 file / 1736 test pass**; frontend **34 file / 243 test pass**; `tsc` backend & frontend bersih; `pnpm budget` hijau (`: any` 199/200); `npx knip` exit 0; `vite build` OK.
 
 **Catatan / belum selesai:**
-* Gap C1 tersisa: `UpdateOrderService` (`PUT /orders/:id/items`) & `ReplaceOrderItemsService` masih menerima item+harga dari klien; `PricingService.calculate` (`/api/pricing/calculate`) sengaja tidak diubah (quote endpoint — limitation dicatat di commit C1).
+* `PricingService.calculate` (`/api/pricing/calculate`) sengaja tidak diubah (quote endpoint — limitation dicatat di commit C1); Layer-2 di `processByOrderId` (recompute total dari item saat bayar) ditolak sebagai keputusan produk — bill lama yang sah disimpan pada harga historisnya harus tetap valid.
 * `shared/src/utils/money.ts` `formatCurrency` (Intl/NBSP) dibiarkan — bagian public API `@posmono/shared`, tak dipakai in-repo; mengubahnya mengubah kontrak. Gaya kompak `Rp{...}` di deskripsi promo/diskon juga sengaja tidak disentuh (gaya berbeda).
 
 **Problems encountered:**
