@@ -15,7 +15,7 @@ import { ReceiptDisplay } from '../components/ReceiptDisplay';
 import { ModifierSelectionModal } from '../components/ModifierSelectionModal';
 import { useModifiers } from '../../modifiers/hooks/useModifiers';
 import { toast } from '../../../@shared/hooks/useToast';
-import { formatIDR } from '../utils/money';
+import { formatIDR } from '../../../@shared/utils/format';
 import { useHeldOrders } from '../hooks/useHeldOrders';
 import { useStockList } from '../../inventory/hooks/useInventory';
 import { useOpenShift } from '../../shifts/hooks/useShift';

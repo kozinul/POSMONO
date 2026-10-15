@@ -4,9 +4,10 @@ import { usePOSStore, type CartItem } from '../store/posStore';
 import { api } from '../../../@shared/services/api';
 import { useValidatePromoCode } from '../../../@shared/hooks/useDiscountConfiguration';
 import { useCalculatePricing } from '../../../@shared/hooks/usePricing';
-import { useQrisPayment, getApiErrorMessage, type QrisInvoice } from '../../../@shared/hooks/useQrisPayment';
+import { useQrisPayment, type QrisInvoice } from '../../../@shared/hooks/useQrisPayment';
+import { apiErrorMessage } from '../../../@shared/utils/apiError';
 import { useActivePaymentMethods, type PaymentMethod } from '../../payment-methods/hooks/usePaymentMethods';
-import { formatIDR } from '../utils/money';
+import { formatIDR } from '../../../@shared/utils/format';
 import { tryClientAutoPrint } from '../../printing/utils/autoPrint';
 
 const QUICK_AMOUNTS = [50000, 100000];
@@ -264,7 +265,7 @@ export function PaymentModal() {
       qris.reset();
       await applyPaymentResult(res.data.data, { paidAmount: rawTotal, changeAmount: 0 });
     } catch (err: any) {
-      qris.confirmFailed(getApiErrorMessage(err, 'Finalisasi pembayaran QRIS gagal.'));
+      qris.confirmFailed(apiErrorMessage(err, 'Finalisasi pembayaran QRIS gagal.'));
     }
   }
 

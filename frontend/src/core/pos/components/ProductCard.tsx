@@ -1,4 +1,5 @@
 import { usePOSStore } from '../store/posStore';
+import { formatCurrency } from '../../../@shared/utils/format';
 
 interface ProductCardProps {
   id: string;
@@ -77,11 +78,11 @@ export function ProductCard({ id, name, price, imageUrl, categoryId, pricingProf
         <div className="flex items-center gap-2 mt-1">
           {hasDiscount && (
             <span className="text-gray-400 line-through text-sm">
-              Rp {price.toLocaleString('id-ID')}
+              {formatCurrency(price)}
             </span>
           )}
           <p className={`font-semibold ${hasDiscount ? 'text-red-600' : 'text-gray-900'}`}>
-            Rp {hasDiscount ? Math.round(price * (1 - discountPercent / 100)).toLocaleString('id-ID') : price.toLocaleString('id-ID')}
+            {formatCurrency(hasDiscount ? Math.round(price * (1 - discountPercent / 100)) : price)}
           </p>
         </div>
         <div className="mt-auto pt-4 flex items-center justify-between">

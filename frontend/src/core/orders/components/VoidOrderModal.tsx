@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useVoidOrder } from '../hooks/useOrders';
 import { useAuthStore } from '../../../@shared/hooks/useAuth';
+import { formatCurrency } from '../../../@shared/utils/format';
 import type { Order } from '../hooks/useOrders';
 
 interface VoidOrderModalProps {
@@ -51,7 +52,7 @@ export function VoidOrderModal({ order, onClose }: VoidOrderModalProps) {
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">Total</span>
-              <span className="font-medium text-gray-800">Rp {order.total.toLocaleString('id-ID')}</span>
+              <span className="font-medium text-gray-800">{formatCurrency(order.total)}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">Items</span>

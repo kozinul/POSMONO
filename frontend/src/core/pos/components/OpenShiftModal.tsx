@@ -3,7 +3,7 @@ import { useOpenShiftMutation } from '../../shifts/hooks/useShift';
 import { useCarriedBills } from '../../shifts/hooks/useCarriedBills';
 import { useAuthStore } from '../../../@shared/hooks/useAuth';
 import { useActiveOutlet } from '../../../@shared/hooks/useOutlets';
-import { formatIDR } from '../utils/money';
+import { formatIDR } from '../../../@shared/utils/format';
 
 interface OpenShiftModalProps {
   onClose?: () => void;

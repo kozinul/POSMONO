@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { toast } from '../../../@shared/hooks/useToast';
 import { api } from '../../../@shared/services/api';
-import { formatIDR } from '../../pos/utils/money';
+import { formatIDR } from '../../../@shared/utils/format';
 import { paymentMethodLabel } from '../../pos/utils/paymentLabels';
 import { printReceipt as apiPrintReceipt } from '../../printing/hooks/usePrinters';
 import { printViaClient } from '../../printing/utils/PrintClient';

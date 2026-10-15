@@ -1,5 +1,6 @@
 import { CartItem, usePOSStore } from '../store/posStore';
 import type { PricingLineItem } from '../../../@shared/hooks/usePricing';
+import { formatCurrency } from '../../../@shared/utils/format';
 
 interface CartItemRowProps {
   item: CartItem;
@@ -55,7 +56,7 @@ export function CartItemRow({ item, lineItem }: CartItemRowProps) {
             </div>
           )}
           <p className="text-gray-500 text-sm mt-0.5">
-            Rp {item.price.toLocaleString('id-ID')} × {item.quantity}
+            {formatCurrency(item.price)} × {item.quantity}
           </p>
         </div>
         <div className="flex items-center gap-3 shrink-0 ml-4">
@@ -64,7 +65,7 @@ export function CartItemRow({ item, lineItem }: CartItemRowProps) {
           ) : (
             <div className="text-right">
               <span className="font-semibold text-gray-800">
-                Rp {origTotal.toLocaleString('id-ID')}
+                {formatCurrency(origTotal)}
               </span>
             </div>
           )}
@@ -104,7 +105,7 @@ export function CartItemRow({ item, lineItem }: CartItemRowProps) {
       {itemDiscount > 0 && (
         <div className="flex justify-between items-center pl-2 pt-1 text-xs">
           <span className="text-green-700 font-medium">🏷 Promo</span>
-          <span className="text-green-600 font-semibold">- Rp {itemDiscount.toLocaleString('id-ID')}</span>
+          <span className="text-green-600 font-semibold">- {formatCurrency(itemDiscount)}</span>
         </div>
       )}
 

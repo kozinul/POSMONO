@@ -3,6 +3,7 @@ import Swal from 'sweetalert2';
 import { usePromotions, useDeletePromotion } from '../hooks/usePromotions';
 import type { Promotion } from '../hooks/usePromotions';
 import PromotionForm from '../components/PromotionForm';
+import { formatCurrency } from '../../../@shared/utils/format';
 
 function formatDate(d: string | null) {
   if (!d) return '-';
@@ -99,7 +100,7 @@ export default function PromotionListPage() {
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600">
                     {p.effects[0]?.type === 'percentage' ? `${p.effects[0].value}%` :
-                     p.effects[0]?.type === 'nominal' ? `Rp ${p.effects[0].value.toLocaleString('id-ID')}` :
+                     p.effects[0]?.type === 'nominal' ? formatCurrency(p.effects[0].value) :
                      p.effects[0]?.type || '-'}
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-500">

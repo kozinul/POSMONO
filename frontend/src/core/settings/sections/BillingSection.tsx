@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { PERMISSIONS } from '@posmono/shared';
 import { api } from '../../../@shared/services/api';
+import { formatCurrency } from '../../../@shared/utils/format';
 import { useTenant } from '../../../@shared/hooks/useTenant';
 import { useAuthStore, hasPermission } from '../../../@shared/hooks/useAuth';
 import { toast } from '../../../@shared/hooks/useToast';
@@ -137,8 +138,6 @@ export default function BillingSection() {
     }
   };
 
-  const formatRupiah = (val: number) => `Rp ${val.toLocaleString('id-ID')}`;
-
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'paid':
@@ -213,7 +212,7 @@ export default function BillingSection() {
         <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
           <h3 className="font-bold text-slate-800">Daftar Tagihan (Invoices)</h3>
           <span className="text-xs text-slate-500">
-            Total Outstanding: <strong className="text-rose-600">{formatRupiah(invoicesData?.totals?.outstanding || 0)}</strong>
+            Total Outstanding: <strong className="text-rose-600">{formatCurrency(invoicesData?.totals?.outstanding || 0)}</strong>
           </span>
         </div>
 
@@ -239,7 +238,7 @@ export default function BillingSection() {
                     <td className="py-3 px-4 text-slate-600 text-xs">
                       {new Date(inv.periodStart).toLocaleDateString()} — {new Date(inv.periodEnd).toLocaleDateString()}
                     </td>
-                    <td className="py-3 px-4 font-bold text-slate-900">{formatRupiah(inv.amount)}</td>
+                    <td className="py-3 px-4 font-bold text-slate-900">{formatCurrency(inv.amount)}</td>
                     <td className="py-3 px-4">{getStatusBadge(inv.status)}</td>
                     <td className="py-3 px-4 text-slate-500 text-xs">{new Date(inv.createdAt).toLocaleDateString()}</td>
                     <td className="py-3 px-4 text-right space-x-2">
@@ -292,7 +291,7 @@ export default function BillingSection() {
                   <tr key={p.id} className="hover:bg-slate-50 transition">
                     <td className="py-3 px-4 font-mono text-xs text-slate-700">{p.referenceNumber || p.id}</td>
                     <td className="py-3 px-4 uppercase text-xs font-semibold text-indigo-700">{p.method}</td>
-                    <td className="py-3 px-4 font-bold text-emerald-600">{formatRupiah(p.amount)}</td>
+                    <td className="py-3 px-4 font-bold text-emerald-600">{formatCurrency(p.amount)}</td>
                     <td className="py-3 px-4 text-slate-500 text-xs">{new Date(p.createdAt).toLocaleString()}</td>
                     <td className="py-3 px-4">
                       <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-800">
@@ -329,7 +328,7 @@ export default function BillingSection() {
               </div>
               <div>
                 <span className="text-xs text-slate-500 block">Total Tagihan</span>
-                <span className="text-xl font-extrabold text-indigo-600">{formatRupiah(selectedInvoice.amount)}</span>
+                <span className="text-xl font-extrabold text-indigo-600">{formatCurrency(selectedInvoice.amount)}</span>
               </div>
 
               <div>

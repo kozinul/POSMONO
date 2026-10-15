@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ModifierGroup, ModifierOption } from '../../modifiers/hooks/useModifiers';
-import { formatIDR } from '../utils/money';
+import { formatIDR } from '../../../@shared/utils/format';
 
 interface ModifierSelectionModalProps {
   productName: string;

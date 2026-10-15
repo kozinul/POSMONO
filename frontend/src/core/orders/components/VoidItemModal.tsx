@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useVoidItem } from '../hooks/useOrders';
 import { useAuthStore } from '../../../@shared/hooks/useAuth';
+import { formatCurrency } from '../../../@shared/utils/format';
 import type { Order } from '../hooks/useOrders';
 
 interface VoidItemModalProps {
@@ -79,11 +80,11 @@ export function VoidItemModal({ order, onClose }: VoidItemModalProps) {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-800 truncate">{item.productName}</p>
                       <p className="text-xs text-gray-500">
-                        Qty: {item.quantity} x Rp {(item.unitPrice ?? 0).toLocaleString('id-ID')}
+                        Qty: {item.quantity} x {formatCurrency(item.unitPrice ?? 0)}
                       </p>
                     </div>
                     <p className="text-sm font-bold text-gray-800">
-                      Rp {(item.subtotal ?? item.totalPrice ?? ((item.unitPrice ?? 0) * (item.quantity ?? 1))).toLocaleString('id-ID')}
+                      {formatCurrency(item.subtotal ?? item.totalPrice ?? ((item.unitPrice ?? 0) * (item.quantity ?? 1)))}
                     </p>
                   </button>
                 );

@@ -36,18 +36,7 @@ export function Badge({ tone, children }: { tone: 'green' | 'gray' | 'red' | 'am
   );
 }
 
-export function apiErrorMessage(e: unknown, fallback: string): string {
-  const err = e as {
-    response?: { data?: { error?: { message?: string }; message?: string } };
-    message?: string;
-  };
-  return (
-    err?.response?.data?.error?.message ||
-    err?.response?.data?.message ||
-    err?.message ||
-    fallback
-  );
-}
+export { apiErrorMessage } from '../../../@shared/utils/apiError';
 
 type BadgeTone = 'green' | 'gray' | 'red' | 'amber' | 'blue';
 

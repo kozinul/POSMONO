@@ -9,7 +9,7 @@ import { useOpenShift,
 import { useCarriedBills } from '../../shifts/hooks/useCarriedBills';
 import { useAuthStore, hasPermission } from '../../../@shared/hooks/useAuth';
 import { VOID_ORDER_PERMISSION } from '../../../@shared/utils/permissions';
-import { formatIDR } from '../utils/money';
+import { formatIDR } from '../../../@shared/utils/format';
 import { toast } from '../../../@shared/hooks/useToast';
 import Swal from 'sweetalert2';
 import { ReportPrintModal } from './ReportPrintModal';

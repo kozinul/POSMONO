@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api } from '../../../@shared/services/api';
 import { useAuthStore } from '../../../@shared/hooks/useAuth';
+import { formatCurrency } from '../../../@shared/utils/format';
 import { useQueryClient } from '@tanstack/react-query';
 import type { Order, IPaymentBreakdownEntry } from '../hooks/useOrders';
 
@@ -95,7 +96,7 @@ export function VoidPayment({ order, onClose }: VoidPaymentProps) {
                     <p className="text-xs text-gray-500">{payment.code}</p>
                   </div>
                   <p className="text-sm font-bold text-gray-800">
-                    Rp {payment.amount.toLocaleString('id-ID')}
+                    {formatCurrency(payment.amount)}
                   </p>
                 </button>
               ))}

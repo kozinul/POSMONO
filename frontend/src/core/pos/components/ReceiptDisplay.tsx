@@ -1,5 +1,5 @@
 import { usePOSStore } from '../store/posStore';
-import { formatIDR } from '../utils/money';
+import { formatIDR } from '../../../@shared/utils/format';
 import { renderLayoutToHtml } from '../../templates/utils/renderLayoutToHtml';
 import { useQueryClient } from '@tanstack/react-query';
 import { reprintReceipt } from '../../printing/utils/autoPrint';

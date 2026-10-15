@@ -10,6 +10,7 @@ import {
   Product,
 } from '../hooks/useProducts';
 import { usePricingProfiles } from '../../../@shared/hooks/usePricingProfile';
+import { formatCurrency } from '../../../@shared/utils/format';
 import { useModifiers } from '../../modifiers/hooks/useModifiers';
 
 const PAGE_SIZE = 20;
@@ -357,7 +358,7 @@ export default function ProductListPage() {
                     {categoryMap[product.categoryId] || '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    Rp {product.basePrice.toLocaleString('id-ID')}
+                    {formatCurrency(product.basePrice)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 py-1 text-xs font-medium rounded-full ${

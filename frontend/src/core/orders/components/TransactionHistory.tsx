@@ -4,6 +4,7 @@ import { VoidOrderModal } from './VoidOrderModal';
 import { VoidItemModal } from './VoidItemModal';
 import { VoidPayment } from './VoidPayment';
 import type { Order } from '../hooks/useOrders';
+import { formatCurrency } from '../../../@shared/utils/format';
 
 type ModalState =
   | { type: null }
@@ -76,7 +77,7 @@ export function TransactionHistory() {
                         </span>
                       </div>
                       <span className="text-sm font-bold text-gray-800 ml-2 whitespace-nowrap">
-                        Rp {order.total.toLocaleString('id-ID')}
+                        {formatCurrency(order.total)}
                       </span>
                     </div>
                     <div className="flex items-center justify-between mt-1">
@@ -103,7 +104,7 @@ export function TransactionHistory() {
                               {item.productName} x{item.quantity}
                             </span>
                             <span className={`ml-2 whitespace-nowrap ${item.isVoided ? 'line-through text-gray-400' : 'text-gray-800'}`}>
-                              Rp {(item.subtotal ?? item.totalPrice ?? ((item.unitPrice ?? 0) * (item.quantity ?? 1))).toLocaleString('id-ID')}
+                              {formatCurrency(item.subtotal ?? item.totalPrice ?? ((item.unitPrice ?? 0) * (item.quantity ?? 1)))}
                             </span>
                           </div>
                         ))}

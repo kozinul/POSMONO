@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { api } from '../services/api';
+import { apiErrorMessage } from '../utils/apiError';
 
 export interface QrisInvoice {
   referenceNumber: string;
@@ -13,11 +14,6 @@ export interface QrisInvoice {
 export type QrisPhase = 'idle' | 'creating' | 'awaiting' | 'confirming' | 'expired' | 'cancelled' | 'error';
 
 const POLL_INTERVAL_MS = 3000;
-
-export function getApiErrorMessage(err: unknown, fallback: string): string {
-  const e = err as { response?: { data?: { error?: { message?: string }; message?: string } }; message?: string };
-  return e?.response?.data?.error?.message || e?.response?.data?.message || e?.message || fallback;
-}
 
 export function useQrisPayment(onPaid: (invoice: QrisInvoice) => void) {
   const [phase, setPhase] = useState<QrisPhase>('idle');
@@ -142,8 +138,8 @@ export function useQrisPayment(onPaid: (invoice: QrisInvoice) => void) {
       return inv;
     } catch (err) {
       if (stoppedRef.current) return null;
-      console.error(`[QRIS] create failed: ${getApiErrorMessage(err, 'unknown error')}`);
-      setError(getApiErrorMessage(err, 'Gagal membuat QRIS.'));
+      console.error(`[QRIS] create failed: ${apiErrorMessage(err, 'unknown error')}`);
+      setError(apiErrorMessage(err, 'Gagal membuat QRIS.'));
       setPhase('error');
       return null;
     }

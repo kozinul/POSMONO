@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import html2pdf from 'html2pdf.js';
-import { formatIDR } from '../utils/money';
+import { formatIDR } from '../../../@shared/utils/format';
 import {
   sortPaymentBreakdown,
   totalOf,
