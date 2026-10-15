@@ -4,6 +4,55 @@
 
 ---
 
+### DATE: 2026-10-15 (sesi keamanan — penutup: C1, C5, A1–A3, D)
+
+**Today I worked on:**
+* Menutup sisa daftar `session-ses_ec6f.md` sesuai urutan, tiap topik commit sendiri + verifikasi `pnpm test` / `pnpm lint` / `pnpm budget` (dan `npx knip`).
+* **C1** `f65dcac9` (`fix(orders)`) — **harga server-authoritative** (opsi A dipilih): `CatalogItemResolver` baru (`core/catalog/application/services/`) menghitung `unitPrice = basePrice + Σ priceAdjustment` dan menolak produk tak ada / beda tenant / nonaktif; dipakai `OrderService.resolveItemsFromServer` + `PaymentService.resolveModifierPrices`.
+* **C5** `ef2cbd69` (`fix(frontend)`) — escape untrusted data di sink HTML: `@shared/utils/html.ts` baru (`escapeHtml` + `safeImageSrc`), dipakai `renderLayoutToHtml.ts` & `ShiftPage.tsx`; test `renderLayoutToHtml.test.ts` (8).
+* **A1** `bd40f28b` + **A2** `53cdd45a` (`chore(dead-code)`) — buang/un-export export backend (15 file) & frontend (7 file) yang tak terpakai. **A3 kosong**: `shared` tidak punya temuan knip → tidak ada commit.
+* **D2** `af683e91` (`chore(ci)`) — knip dipasang: `knip.json` (tags `-internal`, `ignoreBinaries`, trim entry), script `knip`, devDep `knip ^6`, step `Dead code (knip)` di job lint CI; `HUB_SESSION_TENANT` di-tag `@internal`, `PlatformSalesByTenantRow` di-un-export.
+* **D1** `baa5bb7b` (`chore(frontend)`) — 14 `console.log` debug QRIS dihapus (5 `console.error` jalur gagal dipertahankan).
+* **D3** `97deb19b` (`refactor(frontend)`) — satukan helper: `apiError.ts` baru (satu `apiErrorMessage`, hapus duplikat `getApiErrorMessage`); `@shared/utils/format.ts` jadi satu modul uang (`formatCurrency` + `formatIDR` yang dipindah dari `core/pos/utils/money.ts` yang dihapus); buang `formatRupiah` + template inline `Rp {…toLocaleString('id-ID')}`. Output rendering **tidak berubah**.
+
+**Status verifikasi terakhir:**
+* Backend **132 file / 1725 test pass**; frontend **34 file / 243 test pass**; `tsc` backend & frontend bersih; `pnpm budget` hijau (`: any` 199/200); `npx knip` exit 0; `vite build` OK.
+
+**Catatan / belum selesai:**
+* Gap C1 tersisa: `UpdateOrderService` (`PUT /orders/:id/items`) & `ReplaceOrderItemsService` masih menerima item+harga dari klien; `PricingService.calculate` (`/api/pricing/calculate`) sengaja tidak diubah (quote endpoint — limitation dicatat di commit C1).
+* `shared/src/utils/money.ts` `formatCurrency` (Intl/NBSP) dibiarkan — bagian public API `@posmono/shared`, tak dipakai in-repo; mengubahnya mengubah kontrak. Gaya kompak `Rp{...}` di deskripsi promo/diskon juga sengaja tidak disentuh (gaya berbeda).
+
+**Problems encountered:**
+* Menyatukan uang ke `Intl.NumberFormat` tidak bisa: output-nya NBSP (`Rp\u00a05.000`) sedangkan UI & test memakai spasi biasa (`Rp 1.400.000`) → konsolidasi diarahkan ke helper frontend yang sudah ada agar output byte-identik.
+* `useQrisPayment.ts` memuat dua perubahan (D1 + D3) → dipisah dengan `git add -p` agar tetap satu commit satu topik.
+
+---
+
+### DATE: 2026-10-14 (sesi keamanan — eksekusi temuan `session-ses_ec6f.md`)
+
+**Today I worked on:**
+* Menjalankan daftar perbaikan keamanan dari `session-ses_ec6f.md` **sesuai urutan**, tiap topik commit sendiri + test DENY/ALLOW. Selesai & ter-commit: **B1, C3, C4, C2, C2b**.
+* **B1** `72dc946f` — route `/payments/qris/*` didaftarkan sebelum `/:paymentId/confirm` (QRIS confirm tadinya "dimakan" route param → mati).
+* **C3** `6d289cac` — `POST /auth/register` kini `authenticate + authorize('users:write')` dan memvalidasi `roleId ∈ tenant` (`assertRoleBelongsToTenant`).
+* **C4** `bf3bb8b3` — `authenticate` menolak token `type: 'refresh'` (di-verify di try terpisah, lalu cek di luar try); token lama tanpa `type` tetap diterima.
+* **C2a** `b99671f0` — semua mutasi order di-scope ke tenant pemanggil lewat helper `findOrderForTenant` (IDOR); 14 test unit DENY/ALLOW baru + 19 test integrasi HTTP.
+* **C2b** `0cbe545c` — `authorize` per route order (`orders:read` / `orders:write` / `orders:cancel` / `payments:write`); route `void*` sengaja **tidak** di-guard agar kasir tetap sampai ke `VoidApprovalService` (alur PIN manajer). File test RBAC baru `tests/api/order-routes-rbac.test.ts`.
+
+**Status verifikasi terakhir:**
+* Backend **131 file / 1711 test pass** (naik dari 130/1667); `pnpm lint` exit 0; `pnpm budget` exit 0 (`: any` 199/200).
+
+**Belum selesai (lanjut besok):**
+* **C1 — harga dikendalikan klien (CRITICAL).** `PaymentService.payCash` + `CreateOrderService.resolveItemsFromServer` memakai `unitPrice` dari body; `PricingService.calculate` juga. Fix yang benar = **server-authoritative pricing**: `unitPrice = product.basePrice + Σ priceAdjustment modifier ter-resolve`, tolak produk tak ada / bukan milik tenant / nonaktif. Fakta pendukung: tak ada variant pricing, tak ada fitur override harga; frontend mengirim `basePrice + modifier`. Blast radius: 5 file test integrasi/e2e menjual produk yang **tidak di-seed** (`order-payment-flow`, `void-item`, `tenant-status-transactions`, `tenant-isolation`, `critical-path-flows`) → harus di-seed produk. Builder unit test tidak me-wire `productRepository`/`modifierRepository`, jadi test unit aman.
+  * **Menunggu keputusan user:** opsi **A** (resolver ketat — rekomendasi), **B** (clamp hanya bila produk ada — masih bisa di-bypass, tidak disarankan), **C** (tunda C1, lanjut C5 dulu).
+* **C5** — escape HTML di `renderLayoutToHtml` (`content` / `col.text` / `src`), disuntik via `dangerouslySetInnerHTML` di `ReceiptDisplay.tsx` & `DesignerPage.tsx` (stored XSS → token di localStorage = account takeover).
+* **A1/A2/A3** — dead code (satu commit `chore(dead-code)` per paket).
+* **D** — hapus 14 `console.log` debug QRIS, pasang knip di CI, satukan helper uang/error.
+
+**Problems encountered:**
+* C2b memecah test integrasi: token harness default `permissions: []` → 403 sebelum tenant check. Diperbaiki dengan memberi permission eksplisit di 5 file; `ISOLATION_PERMS` juga diberi `orders:cancel` + `payments:write` supaya probe lintas-tenant mencapai cek tenant (404), bukan berhenti di `authorize` (403).
+
+---
+
 ### DATE: 2026-09-28 (sesi 2 — dokumen & pengelompokan docs)
 
 **Today I worked on:**
