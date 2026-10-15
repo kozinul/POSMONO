@@ -45,7 +45,6 @@ export function useQrisPayment(onPaid: (invoice: QrisInvoice) => void) {
     stoppedRef.current = true;
     clearTimers();
     if (nextPhase) {
-      console.log(`[QRIS] phase → ${nextPhase}`);
       setPhase(nextPhase);
     }
   }, [clearTimers]);
@@ -65,7 +64,6 @@ export function useQrisPayment(onPaid: (invoice: QrisInvoice) => void) {
       const left = Math.max(0, Math.floor((expiryMs - Date.now()) / 1000));
       setSecondsLeft(left);
       if (left <= 0) {
-        console.log('[QRIS] countdown reached 0 → expired');
         finish('expired');
       }
     };
@@ -74,22 +72,18 @@ export function useQrisPayment(onPaid: (invoice: QrisInvoice) => void) {
   }, [finish]);
 
   const startPolling = useCallback((referenceNumber: string) => {
-    console.log(`[QRIS] polling started for ${referenceNumber}`);
     pollTimerRef.current = setInterval(async () => {
       try {
         const res = await api.get(`/payments/qris/status/${referenceNumber}`);
         if (stoppedRef.current) return;
         const status = res.data?.data?.status;
         if (status === 'paid') {
-          console.log(`[QRIS] poll → paid for ${referenceNumber}`);
           stopPolling('confirming');
           const inv = invoiceRef.current;
           if (inv) onPaidRef.current(inv);
         } else if (status === 'expired') {
-          console.log(`[QRIS] poll → expired for ${referenceNumber}`);
           finish('expired');
         } else if (status === 'cancelled') {
-          console.log(`[QRIS] poll → cancelled for ${referenceNumber}`);
           finish('cancelled');
         }
       } catch {
@@ -107,7 +101,6 @@ export function useQrisPayment(onPaid: (invoice: QrisInvoice) => void) {
     setQrError('');
     setSecondsLeft(null);
     setPhase('creating');
-    console.log(`[QRIS] create request amount=${Math.round(amount)}`);
     try {
       const res = await api.post('/payments/qris/initiate', { amount: Math.round(amount) });
       const inv: QrisInvoice = res.data?.data;
@@ -121,10 +114,7 @@ export function useQrisPayment(onPaid: (invoice: QrisInvoice) => void) {
       setPhase('awaiting');
       setQrError('');
 
-      console.log(`[QRIS] invoice received: ref=${inv.referenceNumber} qrStringLength=${inv.qrString.length} hasQrImage=${!!inv.qrImage} expiresAt=${inv.expiresAt}`);
-
       if (inv.qrImage) {
-        console.log('[QRIS] using gateway-provided qrImage');
         setQrImage(inv.qrImage);
       } else if (!inv.qrString || typeof inv.qrString !== 'string' || inv.qrString.trim().length < 10) {
         console.error('[QRIS] qrString invalid:', { type: typeof inv.qrString, length: inv.qrString?.length, preview: inv.qrString?.slice(0, 100) });
@@ -133,14 +123,11 @@ export function useQrisPayment(onPaid: (invoice: QrisInvoice) => void) {
           const isDataUri = /^data:/i.test(inv.qrString);
           const isUrl = /^https?:\/\//i.test(inv.qrString);
           if (isDataUri || isUrl) {
-            console.log(`[QRIS] qrString is ${isDataUri ? 'data-uri' : 'url'}, using as image`);
             setQrImage(inv.qrString);
           } else {
-          console.log(`[QRIS] generating QR client-side: payloadLength=${inv.qrString.length} preview="${inv.qrString.slice(0, 200)}..."`);
           QRCode.toDataURL(inv.qrString, { width: 512, margin: 1, errorCorrectionLevel: 'L', version: 0 })
             .then((url) => {
               if (!stoppedRef.current) {
-                console.log(`[QRIS] client QR generation succeeded: imageLength=${url.length}`);
                 setQrImage(url);
               }
             })
@@ -164,7 +151,6 @@ export function useQrisPayment(onPaid: (invoice: QrisInvoice) => void) {
 
   const cancel = useCallback(async (): Promise<void> => {
     const ref = invoiceRef.current?.referenceNumber;
-    console.log(`[QRIS] cancel: ref=${ref ?? 'none'}`);
     stopPolling('idle');
     invoiceRef.current = null;
     setInvoice(null);
@@ -187,7 +173,6 @@ export function useQrisPayment(onPaid: (invoice: QrisInvoice) => void) {
 
   const retryConfirm = useCallback((): QrisInvoice | null => {
     if (!invoiceRef.current) return null;
-    console.log(`[QRIS] retry confirm: ref=${invoiceRef.current.referenceNumber}`);
     setError('');
     setPhase('confirming');
     return invoiceRef.current;
