@@ -77,16 +77,6 @@ export interface AccessibleTenant {
   accessSource?: 'grant' | 'fallback';
 }
 
-export interface MyHubMembership {
-  id: string;
-  hubId: string;
-  userId: string;
-  role: HubMemberRole;
-  hubName: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
 /* ------------------------------------------------------------------ *
  * Hub V2 Fase 17 — per-tenant access grants
  *
@@ -122,12 +112,7 @@ export const TENANT_ACCESS_ROLE_HINTS: Record<TenantAccessRole, string> = {
   viewer: 'Hanya baca data tenant ini',
 };
 
-export type HubAccessStatus = 'active' | 'suspended';
-
-export const HUB_ACCESS_STATUS_LABELS: Record<HubAccessStatus, string> = {
-  active: 'Aktif',
-  suspended: 'Ditangguhkan',
-};
+type HubAccessStatus = 'active' | 'suspended';
 
 export interface HubMemberAccessGrant {
   id: string;
@@ -239,18 +224,6 @@ export function useSetHubMembershipStatus() {
       queryClient.invalidateQueries({ queryKey: ['hub-context'] });
       queryClient.invalidateQueries({ queryKey: ['accessible-tenants'] });
     },
-  });
-}
-
-export function useMyHubMemberships() {
-  return useQuery({
-    queryKey: ['my-hub-memberships'],
-    queryFn: async () => {
-      const res = await api.get<{ success: boolean; data: MyHubMembership[] }>('/hub-memberships/me');
-      return res.data.data;
-    },
-    staleTime: 60_000,
-    retry: false,
   });
 }
 

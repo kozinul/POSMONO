@@ -14,9 +14,9 @@ const BASE = '/platform';
 
 export type PlatformInvoiceStatus = 'pending' | 'paid' | 'overdue' | 'cancelled';
 export type PlatformInvoiceReferenceType = 'plan_assigned' | 'plan_changed' | 'renewal' | 'extended';
-export type PlatformPaymentAttemptStatus = 'pending' | 'completed' | 'expired' | 'failed';
+type PlatformPaymentAttemptStatus = 'pending' | 'completed' | 'expired' | 'failed';
 
-export interface PlatformInvoiceLineItem {
+interface PlatformInvoiceLineItem {
   description: string;
   amount: number;
   quantity: number;

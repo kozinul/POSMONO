@@ -15,17 +15,6 @@ import type { HubStatus } from './usePlatform';
  * still answers 403, which is why each tab also gates its query with `enabled`.
  */
 
-/** `hub.read` and friends, spelled for display. */
-export const HUB_PERMISSION_LABELS: Record<string, string> = {
-  'hub.read': 'Lihat profil hub',
-  'hub.members.read': 'Lihat daftar anggota',
-  'hub.members.manage': 'Kelola anggota',
-  'hub.tenants.read': 'Lihat daftar tenant',
-  'hub.tenants.manage': 'Kelola tenant hub',
-  'hub.reports.read': 'Lihat laporan gabungan',
-  'hub.reports.export': 'Ekspor laporan gabungan',
-};
-
 export interface MyHubRow {
   id: string;
   code: string;
@@ -203,12 +192,6 @@ export interface HubInvitation {
   expiresAt: string;
   isExpired: boolean;
   createdAt: string;
-}
-
-/** The 201 payload: the raw token exists here and nowhere else. */
-export interface CreatedHubInvitation {
-  invitation: HubInvitation;
-  token: string;
 }
 
 export interface AddHubMemberInput {

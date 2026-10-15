@@ -842,7 +842,7 @@ export function usePlatformCancelSubscription() {
   });
 }
 
-export interface PlatformAuditEntry {
+interface PlatformAuditEntry {
   id: string;
   action: string;
   actorId: string;
@@ -927,7 +927,7 @@ export function usePlatformSubscriptionHistory(tenantId: string | null, limit = 
   });
 }
 
-export interface PlatformProvisioningStep {
+interface PlatformProvisioningStep {
   step: string;
   status: 'success' | 'failed' | 'skipped';
   detail: string | null;

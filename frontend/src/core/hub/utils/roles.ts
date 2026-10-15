@@ -4,7 +4,7 @@ import {
   type HubMemberRole,
 } from '../../../@shared/hooks/useHubMemberships';
 
-export const HUB_ROLES: HubMemberRole[] = ['owner', 'admin', 'manager', 'viewer'];
+const HUB_ROLES: HubMemberRole[] = ['owner', 'admin', 'manager', 'viewer'];
 
 /**
  * Strength per hub role, **higher is stronger**.

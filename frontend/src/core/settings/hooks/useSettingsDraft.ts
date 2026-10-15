@@ -8,7 +8,7 @@ import type { RoundingMode } from '../sections/RoundingSection';
 import type { QrisGatewayConfig } from '../utils/qris';
 import type { SettingsSaveInput } from './useSettingsSave';
 
-export interface SettingsDraft {
+interface SettingsDraft {
   profile: {
     name: string;
     setName: (value: string) => void;

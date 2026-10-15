@@ -8,7 +8,7 @@ export interface ModifierOption {
   isActive: boolean;
 }
 
-export type ModifierDisplayType = 'radio' | 'checkbox' | 'stepper';
+type ModifierDisplayType = 'radio' | 'checkbox' | 'stepper';
 
 export interface ModifierGroup {
   id: string;
