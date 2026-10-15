@@ -803,4 +803,80 @@ describe('tenant scoping (IDOR guard)', () => {
       service.execute({ id: created.id.toValue(), tenantId: FOREIGN }),
     ).rejects.toThrow('Order not found');
   });
+
+  describe('CreateOrderService server-authoritative pricing (C1)', () => {
+    function buildProduct(overrides: Record<string, unknown> = {}) {
+      return {
+        id: 'product-1',
+        tenantId: 'tenant-test-1',
+        name: 'Nasi Goreng',
+        categoryId: 'cat-1',
+        basePrice: 25000,
+        modifierGroupIds: [],
+        isActive: true,
+        ...overrides,
+      };
+    }
+
+    function buildService(products: Record<string, Record<string, unknown>>) {
+      const orderRepo = createMockRepo();
+      const eventBus = createMockEventBus();
+      const productRepository = {
+        findById: vi.fn(async (id: string) => {
+          const product = products[id];
+          return product ? { serialize: () => product } : null;
+        }),
+      };
+      const modifierRepository = {
+        findByIds: vi.fn(async () => []),
+        findByProduct: vi.fn(async () => []),
+        findByFamily: vi.fn(async () => []),
+      };
+      const service = new CreateOrderService(
+        orderRepo,
+        eventBus,
+        undefined,
+        undefined,
+        productRepository as never,
+        modifierRepository as never,
+      );
+      return service;
+    }
+
+    it('ALLOW: recomputes totals from the catalog, ignoring a tampered client price', async () => {
+      const service = buildService({ 'product-1': buildProduct() });
+      const input = {
+        ...validOrderInput,
+        items: [{
+          productId: 'product-1',
+          variantId: null,
+          productName: 'Nasi Goreng',
+          quantity: 2,
+          unitPrice: 1,
+          totalPrice: 2,
+          modifiers: [],
+          tax: { rate: 0, amount: 0 },
+        }],
+      };
+
+      const order = await service.execute(input);
+
+      const serialized = order.serialize();
+      expect(serialized.items[0].unitPrice).toBe(25000);
+      expect(serialized.items[0].totalPrice).toBe(50000);
+      expect(serialized.subtotal).toBe(50000);
+    });
+
+    it('DENY: rejects an unknown product', async () => {
+      const service = buildService({});
+
+      await expect(service.execute(validOrderInput)).rejects.toThrow('Produk tidak ditemukan');
+    });
+
+    it('DENY: rejects a product owned by another tenant', async () => {
+      const service = buildService({ 'product-1': buildProduct({ tenantId: 'tenant-other' }) });
+
+      await expect(service.execute(validOrderInput)).rejects.toThrow('Produk tidak ditemukan');
+    });
+  });
 });

@@ -27,6 +27,18 @@ describe('Integration: Order-to-Payment Flow', () => {
   });
 
   describe('Full flow: pay cash (creates order + payment)', () => {
+    beforeEach(async () => {
+      // Prices are resolved server-side from the catalog (C1), so the product must exist.
+      await ctx.productModel.create({
+        _id: 'prod-1',
+        tenantId: ctx.tenantId,
+        sku: 'SKU-1',
+        name: 'Produk A',
+        categoryId: 'cat-1',
+        basePrice: 25000,
+      });
+    });
+
     it('should create order and process payment', async () => {
       const payRes = await request(ctx.app)
         .post('/api/payments/pay-cash')
@@ -47,6 +59,17 @@ describe('Integration: Order-to-Payment Flow', () => {
 
       expect(getRes.status).toBe(200);
       expect(getRes.body.data.status).toBe('paid');
+    });
+
+    it('should ignore a tampered client unitPrice and charge the catalog price', async () => {
+      const payRes = await request(ctx.app)
+        .post('/api/payments/pay-cash')
+        .set('Authorization', `Bearer ${ctx.token}`)
+        .send({ items: [{ productId: 'prod-1', quantity: 2, unitPrice: 1 }], amountPaid: 60000 });
+
+      expect(payRes.status).toBe(200);
+      expect(payRes.body.data.order.subtotal).toBe(50000);
+      expect(payRes.body.data.order.total).toBe(55500);
     });
 
     it('should return change when payment exceeds total', async () => {

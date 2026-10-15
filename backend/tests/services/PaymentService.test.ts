@@ -527,4 +527,84 @@ describe('PaymentService', () => {
       expect(result[0].order.orderNumber).toBe('ORD-001');
     });
   });
+
+  describe('payCash server-authoritative pricing (C1)', () => {
+    function buildProduct(overrides: Record<string, unknown> = {}) {
+      return {
+        id: 'p1',
+        tenantId: TENANT_ID,
+        name: 'Nasi Goreng',
+        categoryId: 'cat-1',
+        basePrice: 25000,
+        modifierGroupIds: [],
+        isActive: true,
+        ...overrides,
+      };
+    }
+
+    function authoritativeService(products: Record<string, Record<string, unknown>>) {
+      const productRepository = {
+        findById: vi.fn(async (id: string) => {
+          const product = products[id];
+          return product ? { serialize: () => product } : null;
+        }),
+      };
+      const modifierRepository = {
+        findByIds: vi.fn(async () => []),
+        findByProduct: vi.fn(async () => []),
+        findByFamily: vi.fn(async () => []),
+      };
+      return new PaymentService({
+        paymentRepository: paymentRepo,
+        orderRepository: orderRepo,
+        taxService,
+        eventBus,
+        productRepository,
+        modifierRepository,
+      } as never);
+    }
+
+    it('ALLOW: charges the catalog price even when the client sends a tampered unitPrice', async () => {
+      const svc = authoritativeService({ p1: buildProduct() });
+
+      const result = await svc.payCash({
+        tenantId: TENANT_ID,
+        cashierId: 'cashier-1',
+        items: [{ productId: 'p1', quantity: 2, unitPrice: 1 }],
+        amountPaid: 100000,
+      });
+
+      const order = result.order.serialize();
+      expect(order.subtotal).toBe(50000);
+      expect(order.total).toBe(55500);
+    });
+
+    it('DENY: rejects an unknown product instead of trusting the client', async () => {
+      const svc = authoritativeService({});
+
+      await expect(
+        svc.payCash({
+          tenantId: TENANT_ID,
+          cashierId: 'cashier-1',
+          items: [{ productId: 'ghost', quantity: 1, unitPrice: 1 }],
+          amountPaid: 100000,
+        }),
+      ).rejects.toThrow(ValidationError);
+      expect(paymentRepo.save).not.toHaveBeenCalled();
+      expect(orderRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('DENY: rejects a product owned by another tenant', async () => {
+      const svc = authoritativeService({ p1: buildProduct({ tenantId: 'tenant-other' }) });
+
+      await expect(
+        svc.payCash({
+          tenantId: TENANT_ID,
+          cashierId: 'cashier-1',
+          items: [{ productId: 'p1', quantity: 1, unitPrice: 1 }],
+          amountPaid: 100000,
+        }),
+      ).rejects.toThrow(ValidationError);
+    });
+  });
 });

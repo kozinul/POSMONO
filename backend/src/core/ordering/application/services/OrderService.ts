@@ -14,7 +14,7 @@ import {
   VOID_ORDER_PERMISSION,
   VOID_PAYMENT_PERMISSION,
 } from './VoidApprovalService';
-import { ModifierValidationService } from '../../../catalog/application/services/ModifierValidationService';
+import { CatalogItemResolver } from '../../../catalog/application/services/CatalogItemResolver';
 import type {
   OrderRepositoryDep,
   EventBusDep,
@@ -374,38 +374,8 @@ export class CreateOrderService implements UseCase<CreateOrderInput, Order> {
 
   private async resolveItemsFromServer(input: CreateOrderInput, items: IOrderItem[]): Promise<IOrderItem[]> {
     if (!this.modifierRepository || !this.productRepository) return items;
-    const validator = new ModifierValidationService(this.modifierRepository);
-
-    const products = new Map<string, import('../../../catalog/domain/Product').IProduct>();
-    for (const item of items) {
-      if (products.has(item.productId)) continue;
-      const product = await this.productRepository.findById(item.productId);
-      if (!product) {
-        throw new ValidationError(`Produk tidak ditemukan: ${item.productId}`);
-      }
-      products.set(item.productId, product.serialize());
-    }
-
-    const resolvedItems: IOrderItem[] = [];
-    for (const item of items) {
-      const product = products.get(item.productId);
-      if (!product) continue;
-
-      const productModifierGroupIds: string[] = product.modifierGroupIds || [];
-      const { resolvedModifiers } = await validator.validateAndResolve(
-        input.tenantId,
-        productModifierGroupIds,
-        item.modifiers || [],
-      );
-
-      resolvedItems.push({
-        ...item,
-        totalPrice: Math.round(item.unitPrice * item.quantity * 100) / 100,
-        modifiers: resolvedModifiers,
-      });
-    }
-
-    return resolvedItems;
+    const resolver = new CatalogItemResolver(this.productRepository, this.modifierRepository);
+    return resolver.resolve(input.tenantId, items);
   }
 }
 

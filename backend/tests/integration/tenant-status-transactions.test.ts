@@ -44,6 +44,15 @@ describe('Integration: tenant status gate on POS mutations', () => {
 
   beforeEach(async () => {
     await clearCollections();
+    // Prices are resolved server-side from the catalog (C1), so the product must exist.
+    await ctx.productModel.create({
+      _id: 'prod-1',
+      tenantId: ctx.tenantId,
+      sku: 'SKU-1',
+      name: 'Produk A',
+      categoryId: 'cat-1',
+      basePrice: 25000,
+    });
   });
 
   async function seedTenant(status: string, overrides: Record<string, unknown> = {}) {

@@ -6,7 +6,8 @@ import { Refund } from '../../domain/Refund';
 import { Order, IOrderItem, IPromotionBreakdown, IDiscountBreakdown } from '../../../ordering/domain/Order';
 import { roundToDenomination, TotalRoundingMode } from '../../../tax/domain/RoundingEngine';
 import { ReceiptRenderResult } from '../../../template/application/services/ReceiptRenderService';
-import { ModifierValidationService, ModifierSelection } from '../../../catalog/application/services/ModifierValidationService';
+import { ModifierSelection } from '../../../catalog/application/services/ModifierValidationService';
+import { CatalogItemResolver } from '../../../catalog/application/services/CatalogItemResolver';
 import type { PaymentServiceDeps } from './PaymentServiceDeps';
 
 export interface PaymentItemInput {
@@ -79,70 +80,12 @@ export class PaymentService {
     items: PaymentItemInput[],
   ): Promise<PaymentItemInput[]> {
     if (!this.deps.productRepository || !this.deps.modifierRepository) return items;
-    const validator = new ModifierValidationService(this.deps.modifierRepository);
-    const productCache = new Map<string, any>();
-    const resolvedItems: PaymentItemInput[] = [];
-
-    const groupIdOf = (g: unknown): string => {
-      if (!g) return '';
-      const obj = g as Record<string, unknown>;
-      if (typeof obj.id === 'object' && obj.id && typeof (obj.id as { toValue?: () => string }).toValue === 'function') {
-        return (obj.id as { toValue: () => string }).toValue();
-      }
-      if (typeof obj.serialize === 'function') {
-        const d = (obj as { serialize: () => { id?: string } }).serialize();
-        return d.id || '';
-      }
-      return (obj.id as string) || (obj._id as string) || '';
-    };
-
-    for (const item of items) {
-      if (!item.modifiers || item.modifiers.length === 0) {
-        resolvedItems.push(item);
-        continue;
-      }
-      let product = productCache.get(item.productId);
-      if (!product) {
-        product = await this.deps.productRepository.findById(item.productId);
-        if (!product) {
-          resolvedItems.push(item);
-          continue;
-        }
-        productCache.set(item.productId, product);
-      }
-      const productData = product.serialize();
-      const applicableGroupIds = new Set<string>(productData.modifierGroupIds || []);
-      try {
-        const productGroups = await this.deps.modifierRepository.findByProduct(item.productId);
-        for (const g of productGroups) {
-          const gid = groupIdOf(g);
-          if (gid) applicableGroupIds.add(gid);
-        }
-      } catch { /* best-effort */ }
-      if (this.deps.categoryRepository && productData.categoryId) {
-        try {
-          const category = await this.deps.categoryRepository.findById(productData.categoryId);
-          const familyId = category?.serialize().familyId;
-          if (familyId) {
-            const familyGroups = await this.deps.modifierRepository.findByFamily(familyId);
-            for (const g of familyGroups) {
-              const gid = groupIdOf(g);
-              if (gid) applicableGroupIds.add(gid);
-            }
-          }
-        } catch { /* best-effort */ }
-      }
-      const { resolvedModifiers } = await validator.validateAndResolve(
-        tenantId,
-        Array.from(applicableGroupIds),
-        item.modifiers,
-      );
-      resolvedItems.push({
-        ...item,
-        modifiers: resolvedModifiers,
-      });
-    }
-    return resolvedItems;
+    const resolver = new CatalogItemResolver(
+      this.deps.productRepository,
+      this.deps.modifierRepository,
+      this.deps.categoryRepository,
+    );
+    return resolver.resolve(tenantId, items);
   }
 
   private async applyStockDeductions(order: Order, tenantId: string, userId: string): Promise<void> {

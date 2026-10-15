@@ -91,6 +91,18 @@ describe('Integration: Tenant Isolation', () => {
   });
 
   describe('Payment isolation', () => {
+    beforeEach(async () => {
+      // Prices are resolved server-side from the catalog (C1), so the product must exist.
+      await ctx.productModel.create({
+        _id: 'p1',
+        tenantId: TENANT_A,
+        sku: 'SKU-PAY-A',
+        name: 'Product A',
+        categoryId: 'cat-1',
+        basePrice: 10000,
+      });
+    });
+
     it('should create payment scoped to tenant A', async () => {
       const payRes = await request(ctx.app)
         .post('/api/payments/pay-cash')
