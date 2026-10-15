@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useShifts, useOpenShift, useOpenShiftMutation, useCloseShiftMutation, type Shift } from '../hooks/useShift';
 import { formatCurrency } from '../../../@shared/utils/format';
+import { escapeHtml } from '../../../@shared/utils/html';
 
 function formatDate(value: string | null): string {
   return value ? new Date(value).toLocaleString('id-ID') : '-';
@@ -107,13 +108,13 @@ function CloseoutSummaryModal({ shift, onClose }: { shift: Shift | null; onClose
 
   const handlePrint = () => {
     const rows = (shift.paymentBreakdown ?? [])
-      .map((p) => `<tr><td>${p.method.toUpperCase()}</td><td style="text-align:right">${formatCurrency(p.amount)}</td></tr>`)
+      .map((p) => `<tr><td>${escapeHtml(p.method.toUpperCase())}</td><td style="text-align:right">${formatCurrency(p.amount)}</td></tr>`)
       .join('');
     const pickups = (shift.cashPickups ?? [])
-      .map((p) => `<tr><td>${new Date(p.pickedAt).toLocaleString('id-ID')}</td><td>${p.reason}</td><td style="text-align:right">${formatCurrency(p.amount)}</td></tr>`)
+      .map((p) => `<tr><td>${new Date(p.pickedAt).toLocaleString('id-ID')}</td><td>${escapeHtml(p.reason)}</td><td style="text-align:right">${formatCurrency(p.amount)}</td></tr>`)
       .join('');
     const carried = (shift.carriedOverBills ?? [])
-      .map((b) => `<tr><td>${b.orderNumber}</td><td>${b.cashierName || 'Kasir'}</td><td style="text-align:right">${formatCurrency(b.total)}</td></tr>`)
+      .map((b) => `<tr><td>${escapeHtml(b.orderNumber)}</td><td>${escapeHtml(b.cashierName || 'Kasir')}</td><td style="text-align:right">${formatCurrency(b.total)}</td></tr>`)
       .join('');
 
     const win = window.open('', '_blank', 'width=520,height=760');

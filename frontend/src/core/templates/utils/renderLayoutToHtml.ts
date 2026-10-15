@@ -1,3 +1,5 @@
+import { escapeHtml, safeImageSrc } from '../../../@shared/utils/html';
+
 export function renderLayoutToHtml(layout: any): string {
   if (!layout?.pages?.[0]) return '<p>No preview layout</p>';
   const page = layout.pages[0];
@@ -12,13 +14,13 @@ export function renderLayoutToHtml(layout: any): string {
       return `<div style="border-top:1px dashed #999;margin:4px 0;width:100%;"></div>`;
     }
     if (c.type === 'image') {
-      const src = c.content || '';
+      const src = safeImageSrc(c.content);
       return `<div style="display:flex;justify-content:center;align-items:center;padding:4px 0;width:100%;">
-        ${src ? `<img src="${src}" style="max-width:180px;max-height:70px;object-fit:contain;" />` : '<span style="color:#bbb;">(logo kosong)</span>'}
+        ${src ? `<img src="${escapeHtml(src)}" style="max-width:180px;max-height:70px;object-fit:contain;" />` : '<span style="color:#bbb;">(logo kosong)</span>'}
       </div>`;
     }
     if (c.columns?.length) {
-      const toHtml = (t: string) => String(t ?? '').replace(/\n/g, '<br/>');
+      const toHtml = (t: string) => escapeHtml(t).replace(/\n/g, '<br/>');
       return `
         <div style="display:flex;justify-content:space-between;font-size:${font.size ?? 12}px;font-weight:${font.weight ?? 'normal'};color:${font.color ?? '#000'};">
           ${c.columns.map((col: any) =>
@@ -27,7 +29,7 @@ export function renderLayoutToHtml(layout: any): string {
         </div>
       `;
     }
-    const content = String(c.content ?? '').replace(/\n/g, '<br/>');
+    const content = escapeHtml(c.content).replace(/\n/g, '<br/>');
     return `
       <div style="text-align:${font.align ?? 'left'};font-size:${font.size ?? 12}px;font-weight:${font.weight ?? 'normal'};color:${font.color ?? '#000'};">
         ${content}
