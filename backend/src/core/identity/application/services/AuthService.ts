@@ -45,6 +45,8 @@ interface HubLoginOutput {
  * console's `tenant: 'platform'`: a reserved id that no real tenant can hold, so
  * tenant-scoped queries answered with this token come back empty instead of
  * leaking another tenant's data.
+ *
+ * @internal exported only so callers can compare literals; not part of the API.
  */
 export const HUB_SESSION_TENANT = 'hub';
 

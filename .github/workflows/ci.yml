@@ -77,6 +77,12 @@ jobs:
       - name: Complexity budget
         run: pnpm run budget
 
+      # Anti-regresi dead code / dependency tak terpakai (knip).
+      # Lihat `knip.json`; simbol yang sengaja diekspor meski tak pernah
+      # diimpor ditandai `@internal` di sumbernya (knip default: tags: ["-internal"]).
+      - name: Dead code (knip)
+        run: pnpm run knip
+
   docker:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest

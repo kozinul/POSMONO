@@ -16,7 +16,7 @@ import { Model } from 'mongoose';
  * never disagree.
  */
 
-export interface PlatformSalesByTenantRow {
+interface PlatformSalesByTenantRow {
   _id: string;
   totalOrders: number;
   totalRevenue: number;
