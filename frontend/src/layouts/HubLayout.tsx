@@ -16,7 +16,7 @@ export function HubLayout() {
     <div className="h-screen flex flex-col overflow-hidden">
       <header className="blue-primary text-white h-16 flex items-center justify-between px-6 shrink-0 shadow-md z-10">
         <Link to="/hub" className="text-xl font-semibold tracking-tight">
-          POSMono &middot; Hub Center
+          Kuire &middot; Hub Center
         </Link>
         <div className="flex items-center gap-4">
           {user && <span className="text-sm text-white/80">{user.displayName}</span>}

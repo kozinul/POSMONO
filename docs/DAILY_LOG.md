@@ -4,6 +4,54 @@
 
 ---
 
+### DATE: 2026-10-15 → 2026-10-16 (branding POSMono → Kuire T1 — rencana 15/10, eksekusi 16/10)
+
+> ✅ **EKSEKUSI T1 SELESAI 2026-10-16.** Semua target di bawah dikerjakan, verifikasi hijau, sudah di-commit (`chore(branding)`).
+> Commit branding terpisah dari commit deploy/CI (`fix(deploy)`).
+> `backend/src/bootstrap/app.ts:36` (`'POSMono server started'`) **ikut diganti** jadi `'Kuire server started'` setelah file itu ter-commit lewat commit deploy — jadi tidak ada sisa branding.
+
+**Konteks:**
+* User minta rebranding `POSMono` → `Kuire`. Survey menemukan jejak di 5 lapis: **T1** teks UI, **T2** package (`@posmono/*`, 102 import/51 file), **T3** infra/DB (nama DB, container, network, image), **T4** `localStorage` keys, **T5** docs/meta.
+* Root `package.json` **sudah** `kuire-platform` / `"Kuire — Modular SaaS Platform"` (ter-commit sejak `af683e91`) — jadi branding sudah setengah jalan, sisanya belum.
+
+**Keputusan yang sudah dikunci user:**
+* Scope = **T1 (teks UI) saja**. T2/T3/T4/T5 **tidak** dikerjakan sekarang.
+* **Nama DB/container `posmono` tidak diganti** (data dev persistent aman). `MONGO_URI …/posmono` tetap.
+* **Visual tidak diubah**: favicon (kotak `#2176D2`) & `theme-color` tetap; tanpa logo baru.
+* Wordmark = **campuran**: dashboard `Kuire POS`; konsol `Kuire · Terminal Center` / `Kuire · Hub Center`.
+
+**Rencana eksekusi (10 file, semua teks terlihat user):**
+* `frontend/index.html:11` — `<title>Kuire POS</title>`
+* `frontend/vite.config.ts:16-17` — PWA `name: 'Kuire POS'`, `short_name: 'Kuire'`
+* `frontend/src/layouts/DashboardLayout.tsx:118` — wordmark sidebar → `Kuire POS`
+* `frontend/src/layouts/DashboardLayout.tsx:77` — fallback tab title → `'Kuire POS'` (pola `POS - {tenant}` tetap)
+* `frontend/src/layouts/AuthLayout.tsx:4,5,18` — default `Kuire POS`; konsol `Kuire · Terminal Center` / `Kuire · Hub Center`
+* `frontend/src/layouts/TerminalLayout.tsx:12` — `Kuire · Terminal Center`
+* `frontend/src/layouts/HubLayout.tsx:19` — `Kuire · Hub Center`
+* `frontend/src/core/hub/pages/HubInvitationPage.tsx:148` — `Kuire · Hub`
+* `frontend/src/core/pos/components/ReportPrintModal.tsx:86` & `frontend/src/core/reports/components/RefundReceiptModal.tsx:20` — fallback `storeName ?? 'Kuire POS'`
+* `frontend/src/core/database/pages/DatabasePage.tsx:45` — `backup-kuire-${date}.json`
+* `backend/src/core/printing/application/services/PrintService.ts:13` — `'Kuire POS Test Print\n'` (kertas struk, user-visible)
+* `backend/src/dev.ts:309` — `'Kuire dev server started'`
+* Test ikut update: `frontend/tests/unit/DashboardLayout.test.tsx:132,138` — ekspektasi `'Kuire POS'`
+
+**Sengaja TIDAK diubah:** `@posmono/*` package names · `localStorage` `posmono.pairedPrinters` & `posmono.activeHubId` (biar user existing tak logout/kehilangan pairing printer) · nama DB/container/network/image · favicon & theme-color · docs (T5) · `.cursor/rules/posmono.mdc` & `.opencode/agent/posmono.md`.
+* `backend/src/bootstrap/app.ts:36` (`'POSMono server started'`) tadinya ditunda karena file itu kotor bareng kerjaan deploy; **akhirnya diganti** jadi `'Kuire server started'` di commit branding setelah file deploy ter-commit duluan.
+
+**Verifikasi yang dijalankan (2026-10-16):**
+* `cd frontend && pnpm test` · `cd backend && pnpm test` · `pnpm lint` · `pnpm budget` · `cd frontend && npx vite build`
+* Grep penutup: `grep -rni "posmono" frontend/src frontend/index.html frontend/vite.config.ts` → sisa hanya `@posmono/shared` + 2 localStorage key.
+
+**8 file CI/deploy sesi sebelumnya** (`.github/workflows/ci.yml`, `backend/.env.example`, `backend/src/bootstrap/app.ts`, `backend/src/bootstrap/routes.ts`, `backend/src/seed.ts`, `docker/Dockerfile`, `docker/docker-compose.prod.yml`, `docs/DEPLOYMENT.md`) **di-commit terpisah** lebih dulu sebagai `fix(deploy)` (A1–A10b), baru branding — jadi tidak tercampur.
+
+**Next:** tidak ada untuk T1 (rampung). Rebranding lapis lain (T2 package `@posmono/*`, T3 infra/DB, T4 localStorage key, T5 docs) tetap **di luar scope** sesuai keputusan user.
+
+**Status verifikasi (eksekusi 2026-10-16):** backend **133 file / 1736 test pass**, frontend **34 file / 243 test pass**, `pnpm lint` (tsc kedua sisi) bersih, `pnpm budget` hijau (`: any` 199/200, file >1000 = 0), `npx vite build` OK. Grep penutup bersih — sisa `posmono` = `@posmono/shared` imports + `posmono.pairedPrinters`/`posmono.activeHubId` + nama DB/container saja.
+
+**Problems encountered:** tidak ada — eksekusi mekanis sesuai rencana. Bukti grep penutup + 5 gate verifikasi dijalankan nyata (bukan klaim).
+
+---
+
 ### DATE: 2026-10-15 (sesi keamanan — penutup: C1, C5, A1–A3, D)
 
 **Today I worked on:**

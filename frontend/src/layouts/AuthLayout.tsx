@@ -1,8 +1,8 @@
 import { Outlet, useLocation } from 'react-router-dom';
 
 const CONSOLE_TITLES: Record<string, { title: string; subtitle: string }> = {
-  '/terminal/login': { title: 'POSMono · Terminal Center', subtitle: 'Platform Super Admin' },
-  '/hub/login': { title: 'POSMono · Hub Center', subtitle: 'Anggota hub' },
+  '/terminal/login': { title: 'Kuire · Terminal Center', subtitle: 'Platform Super Admin' },
+  '/hub/login': { title: 'Kuire · Hub Center', subtitle: 'Anggota hub' },
 };
 
 export function AuthLayout() {
@@ -15,7 +15,7 @@ export function AuthLayout() {
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
           <h1 className="text-3xl font-bold text-gray-900">
-            {title ? title.title : 'POSMono'}
+            {title ? title.title : 'Kuire POS'}
           </h1>
           <p className="mt-2 text-sm text-gray-600">
             {title ? title.subtitle : 'Business Operating System'}

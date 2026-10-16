@@ -145,7 +145,7 @@ function Shell({ title, children }: { title: string; children: React.ReactNode }
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-12">
       <div className="w-full max-w-lg">
         <div className="text-center mb-6">
-          <p className="text-sm font-medium text-gray-500">POSMono · Hub</p>
+          <p className="text-sm font-medium text-gray-500">Kuire · Hub</p>
           <h1 className="mt-1 text-2xl font-bold text-gray-900">{title}</h1>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-4">{children}</div>

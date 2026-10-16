@@ -129,12 +129,12 @@ describe('DashboardLayout outlet switcher', () => {
     await waitFor(() => expect(document.title).toBe('POS - Toko Alpha'));
   });
 
-  it('falls back to POSMono while the tenant name is unknown', async () => {
+  it('falls back to Kuire POS while the tenant name is unknown', async () => {
     mockApi([]); // accessible-tenants resolves to []
     setUser([], null);
 
     renderLayout();
 
-    await waitFor(() => expect(document.title).toBe('POSMono'));
+    await waitFor(() => expect(document.title).toBe('Kuire POS'));
   });
 });

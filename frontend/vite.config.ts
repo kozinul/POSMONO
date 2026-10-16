@@ -13,8 +13,8 @@ export default defineConfig(({ mode }) => {
         registerType: 'autoUpdate',
         includeAssets: [],
         manifest: {
-          name: 'POSMono',
-          short_name: 'POSMono',
+          name: 'Kuire POS',
+          short_name: 'Kuire',
           description: 'Modular Business Operating System',
           theme_color: '#2176D2',
           background_color: '#ffffff',

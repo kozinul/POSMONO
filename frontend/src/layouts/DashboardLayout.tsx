@@ -74,7 +74,7 @@ export function DashboardLayout() {
   // Browser tab title follows the tenant ("POS - <nama toko>"); the name only
   // arrives with the accessible-tenants query, so re-run when it does.
   useEffect(() => {
-    document.title = currentTenantName ? `POS - ${currentTenantName}` : 'POSMono';
+    document.title = currentTenantName ? `POS - ${currentTenantName}` : 'Kuire POS';
   }, [currentTenantName]);
 
   const visibleNavigation = navigation.filter(
@@ -115,7 +115,7 @@ export function DashboardLayout() {
     <div className="h-screen flex flex-col overflow-hidden">
       <header className="blue-primary text-white h-16 flex items-center justify-between px-6 shrink-0 shadow-md z-10">
         <Link to="/dashboard" className="text-xl font-semibold tracking-tight">
-          POSMono
+          Kuire POS
         </Link>
         <div className="flex items-center gap-4">
           {showTenantSwitcher && (

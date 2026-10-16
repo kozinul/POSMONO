@@ -17,7 +17,7 @@ export function RefundReceiptModal({ open, refund, storeName, onClose }: RefundR
 
   if (!open || !refund) return null;
 
-  const name = storeName ?? 'POSMono';
+  const name = storeName ?? 'Kuire POS';
   const now = new Date(refund.refundedAt);
 
   const handlePrint = () => window.print();

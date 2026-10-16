@@ -10,7 +10,7 @@ function encodeTestBuffer(printerName: string): Buffer {
   chunks.push(Buffer.from([ESC, 0x40]));
   chunks.push(Buffer.from([ESC, 0x61, 0x01]));
   chunks.push(Buffer.from([ESC, 0x45, 0x01]));
-  chunks.push(Buffer.from('POSMono Test Print\n', 'ascii'));
+  chunks.push(Buffer.from('Kuire POS Test Print\n', 'ascii'));
   chunks.push(Buffer.from([ESC, 0x45, 0x00]));
   chunks.push(Buffer.from(`Printer: ${printerName}\n`, 'ascii'));
   chunks.push(Buffer.from('Jaringan siap dipakai.\n', 'ascii'));

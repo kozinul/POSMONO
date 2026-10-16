@@ -83,7 +83,7 @@ export function ReportPrintModal(props: ReportPrintModalProps) {
 
   if (!open) return null;
 
-  const storeName = props.storeName ?? 'POSMono';
+  const storeName = props.storeName ?? 'Kuire POS';
   const now = new Date();
   const dateLabel = now.toLocaleDateString('id-ID', {
     day: 'numeric',

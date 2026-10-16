@@ -306,7 +306,7 @@ async function main() {
   httpServer.listen(env.PORT, () => {
     logger.info(
       { port: env.PORT, env: env.NODE_ENV, db: dbMode },
-      'POSMono dev server started',
+      'Kuire dev server started',
     );
     logger.info('Default credentials:');
     logger.info('  admin@demo.com / admin123  (Owner)');

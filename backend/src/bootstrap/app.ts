@@ -33,7 +33,7 @@ async function main() {
   httpServer.listen(env.PORT, () => {
     logger.info(
       { port: env.PORT, env: env.NODE_ENV },
-      'POSMono server started',
+      'Kuire server started',
     );
   });
 }

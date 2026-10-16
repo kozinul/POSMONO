@@ -9,7 +9,7 @@ export function TerminalLayout() {
     <div className="h-screen flex flex-col overflow-hidden">
       <header className="blue-primary text-white h-16 flex items-center justify-between px-6 shrink-0 shadow-md z-10">
         <Link to="/terminal-center" className="text-xl font-semibold tracking-tight">
-          POSMono &middot; Terminal Center
+          Kuire &middot; Terminal Center
         </Link>
         <div className="flex items-center gap-4">
           {user && (

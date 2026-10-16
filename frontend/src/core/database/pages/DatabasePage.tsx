@@ -42,7 +42,7 @@ export default function DatabasePage() {
         });
         return;
       }
-      downloadJson(backup, `backup-posmono-${new Date().toISOString().split('T')[0]}.json`);
+      downloadJson(backup, `backup-kuire-${new Date().toISOString().split('T')[0]}.json`);
       toast({ title: `Backup berhasil (${total} record)` });
     } catch (err: any) {
       const msg = err?.response?.data?.error?.message || err?.response?.data?.message || err?.message || 'Backup gagal';
