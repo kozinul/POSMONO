@@ -1,4 +1,5 @@
 import http from 'http';
+import mongoose from 'mongoose';
 import { createServer } from './server';
 import { buildContainer } from './container';
 import { registerEventHandlers } from './eventBus';
@@ -11,6 +12,12 @@ import { validateEnv } from '../@shared/config/validateEnv';
 validateEnv();
 
 async function main() {
+  // `buildContainer()` binds every model to the default mongoose connection, so the
+  // prod entry must connect it — without this the server starts and then buffers
+  // every query forever. (dev.ts connects before booting an in-memory/real Mongo.)
+  await mongoose.connect(env.MONGO_URI);
+  logger.info('Connected to MongoDB');
+
   const container = buildContainer();
   const eventBus = container.resolve('eventBus');
 

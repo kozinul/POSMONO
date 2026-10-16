@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import mongoose from 'mongoose';
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
@@ -9,7 +10,7 @@ import { CategorySchema } from './core/catalog/infrastructure/persistence/schema
 import { StockSchema } from './core/inventory/infrastructure/persistence/schemas/StockSchema';
 import { PaymentMethodSchema } from './core/payment/infrastructure/persistence/schemas/PaymentMethodSchema';
 import { TemplateSchema } from './core/template/infrastructure/persistence/schemas/TemplateSchema';
-import { DEFAULT_ROLES, DEFAULT_TEMPLATES, DEFAULT_PAYMENT_METHODS, DEFAULT_PLATFORM_ROLE, PLATFORM_TENANT_ID } from './core/platform/defaults';
+import { DEFAULT_ROLES, DEFAULT_TEMPLATES, DEFAULT_PAYMENT_METHODS, DEFAULT_PLATFORM_ROLE, PLATFORM_ROLE_PERMS, PLATFORM_TENANT_ID } from './core/platform/defaults';
 import { PlanSchema } from './core/billing/infrastructure/persistence/schemas/PlanSchema';
 import { upsertDefaultPlans } from './core/billing/defaults/seedPlans';
 
@@ -20,8 +21,248 @@ function id(prefix: string): string {
   return `${prefix}_${uuidv4().replace(/-/g, '').substring(0, 20)}`;
 }
 
-async function seed() {
-  const systemConn = mongoose.createConnection(`${MONGO_URI}/${SYSTEM_DB}`);
+/**
+ * Appends a database name to a Mongo URI, dropping one that is already there.
+ * `MONGO_URI` may or may not carry a database (`mongodb://host:27017` vs
+ * `.../posmono`), and the legacy demo seed — unlike the app — still needs its own
+ * database. Without the strip, a URI that already has a name becomes invalid
+ * (`.../posmono/posmono_system`).
+ */
+function withDatabase(uri: string, database: string): string {
+  const queryIndex = uri.indexOf('?');
+  const base = queryIndex === -1 ? uri : uri.slice(0, queryIndex);
+  const query = queryIndex === -1 ? '' : uri.slice(queryIndex);
+  const authorityEnd = base.indexOf('//') + 2;
+  const lastSlash = base.lastIndexOf('/');
+  const withoutDb = lastSlash > authorityEnd ? base.slice(0, lastSlash) : base;
+  return `${withoutDb}/${database}${query}`;
+}
+
+interface ProdSeedConfig {
+  mongoUri: string;
+  tenantName: string;
+  tenantSlug: string;
+  adminEmail: string;
+  adminName: string;
+  adminPassword: string;
+  platformEmail?: string;
+  platformPassword?: string;
+}
+
+/**
+ * Reads the prod seed env contract documented in `docs/DEPLOYMENT.md` §6.
+ * Everything credential-shaped is required (no default password): a prod seed that
+ * silently ships `admin123` is worse than one that refuses to run.
+ */
+function readProdConfig(): ProdSeedConfig {
+  const mongoUri = process.env.MONGO_URI?.trim();
+  const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+  const adminPassword = process.env.ADMIN_PASSWORD;
+
+  const missing: string[] = [];
+  if (!mongoUri) missing.push('MONGO_URI');
+  if (!adminEmail) missing.push('ADMIN_EMAIL');
+  if (!adminPassword) missing.push('ADMIN_PASSWORD');
+  if (missing.length > 0) {
+    console.error(`[seed --prod] env wajib belum di-set: ${missing.join(', ')}`);
+    console.error(
+      '[seed --prod] contoh: MONGO_URI=mongodb://mongodb:27017/posmono ADMIN_EMAIL=owner@domain.id ADMIN_PASSWORD=<kuat> pnpm seed -- --prod',
+    );
+    process.exit(1);
+  }
+  if (adminPassword!.length < 8) {
+    console.error('[seed --prod] ADMIN_PASSWORD minimal 8 karakter.');
+    process.exit(1);
+  }
+
+  return {
+    mongoUri: mongoUri!,
+    tenantName: process.env.TENANT_NAME?.trim() || 'Tenant Utama',
+    tenantSlug: (process.env.TENANT_SLUG?.trim() || 'utama').toLowerCase(),
+    adminEmail: adminEmail!,
+    adminName: process.env.ADMIN_NAME?.trim() || 'Owner',
+    adminPassword: adminPassword!,
+    platformEmail: process.env.PLATFORM_ADMIN_EMAIL?.trim().toLowerCase(),
+    platformPassword: process.env.PLATFORM_ADMIN_PASSWORD,
+  };
+}
+
+/**
+ * Production bootstrap: first tenant + roles + owner (+ platform admin, plans,
+ * payment methods and print templates), idempotent and non-destructive.
+ *
+ * Deliberately writes to the *app* database (`MONGO_URI` as-is): the app runs a
+ * single Mongo database scoped by `tenantId`, so seeding anywhere else leaves a
+ * tenant nobody can log into. No demo catalog / demo staff, and no `dropDatabase`.
+ */
+async function seedProd(): Promise<void> {
+  const cfg = readProdConfig();
+
+  await mongoose.connect(cfg.mongoUri);
+
+  const Tenant = mongoose.model('Tenant', TenantSchema);
+  const User = mongoose.model('User', UserSchema);
+  const Role = mongoose.model('Role', RoleSchema);
+  const PaymentMethodModel = mongoose.model('PaymentMethod', PaymentMethodSchema);
+  const Template = mongoose.model('Template', TemplateSchema);
+  const Plan = mongoose.model('Plan', PlanSchema);
+
+  const adminUserId = id('usr');
+
+  const existingTenant = await Tenant.findOne({ slug: cfg.tenantSlug });
+  let tenantId: string;
+  if (existingTenant) {
+    tenantId = String(existingTenant._id);
+    console.log(`[seed --prod] tenant '${cfg.tenantSlug}' sudah ada (${tenantId}) — profil dibiarkan`);
+  } else {
+    tenantId = id('ten');
+    await Tenant.create({
+      _id: tenantId,
+      name: cfg.tenantName,
+      slug: cfg.tenantSlug,
+      domain: null,
+      ownerId: adminUserId,
+      status: 'active',
+      businessType: 'retail',
+      modules: ['core', 'retail'],
+      databaseName: `posmono_${tenantId}`,
+      config: { timezone: 'Asia/Jakarta', currency: 'IDR', locale: 'id' },
+      billingEmail: cfg.adminEmail,
+    });
+    console.log(`[seed --prod] tenant dibuat: ${cfg.tenantName} (${tenantId})`);
+  }
+
+  // Roles are synced (not just inserted) so a re-run after an upgrade refreshes
+  // permissions that were added since the tenant was created.
+  for (const role of DEFAULT_ROLES) {
+    await Role.updateOne(
+      { tenantId, name: role.name },
+      {
+        $set: { description: role.description, permissions: role.permissions, isSystem: role.isSystem },
+        $setOnInsert: { _id: id('rol'), tenantId, name: role.name },
+      },
+      { upsert: true },
+    );
+  }
+  const ownerRole = await Role.findOne({ tenantId, name: 'Owner' }).lean();
+  if (!ownerRole) {
+    throw new Error('role Owner gagal dibuat');
+  }
+
+  // Password only on insert: re-running the seed must not reset a rotated password.
+  const adminPasswordHash = await bcrypt.hash(cfg.adminPassword, 12);
+  await User.updateOne(
+    { tenantId, email: cfg.adminEmail },
+    {
+      $setOnInsert: {
+        _id: adminUserId,
+        tenantId,
+        email: cfg.adminEmail,
+        passwordHash: adminPasswordHash,
+        displayName: cfg.adminName,
+        lastLoginAt: null,
+        preferences: {},
+      },
+      $set: { roleId: ownerRole._id, isActive: true },
+    },
+    { upsert: true },
+  );
+
+  if (cfg.platformEmail && cfg.platformPassword) {
+    const platformRole = await Role.findOneAndUpdate(
+      { tenantId: PLATFORM_TENANT_ID, name: DEFAULT_PLATFORM_ROLE.name },
+      {
+        $set: { description: DEFAULT_PLATFORM_ROLE.description, permissions: PLATFORM_ROLE_PERMS, isSystem: true },
+        $setOnInsert: { _id: id('rol'), tenantId: PLATFORM_TENANT_ID, name: DEFAULT_PLATFORM_ROLE.name },
+      },
+      { upsert: true, new: true },
+    );
+    const platformPasswordHash = await bcrypt.hash(cfg.platformPassword, 12);
+    await User.updateOne(
+      { tenantId: PLATFORM_TENANT_ID, email: cfg.platformEmail },
+      {
+        $setOnInsert: {
+          _id: id('usr'),
+          tenantId: PLATFORM_TENANT_ID,
+          email: cfg.platformEmail,
+          passwordHash: platformPasswordHash,
+          displayName: 'Platform Super Admin',
+          lastLoginAt: null,
+          preferences: {},
+        },
+        $set: { roleId: platformRole!._id, isActive: true },
+      },
+      { upsert: true },
+    );
+    console.log(`[seed --prod] platform admin: ${cfg.platformEmail} (header X-Tenant-Id: platform)`);
+  } else {
+    console.warn('[seed --prod] PLATFORM_ADMIN_EMAIL/PASSWORD tidak di-set — Terminal Center tidak bisa diakses');
+  }
+
+  for (const method of DEFAULT_PAYMENT_METHODS) {
+    await PaymentMethodModel.updateOne(
+      { tenantId, code: method.code },
+      {
+        $setOnInsert: {
+          _id: id('pmt'),
+          tenantId,
+          name: method.name,
+          code: method.code,
+          description: method.description,
+          icon: method.icon,
+          color: method.color,
+          sortOrder: method.sortOrder,
+          isActive: true,
+          requiresReference: method.requiresReference,
+          config: method.config,
+        },
+      },
+      { upsert: true },
+    );
+  }
+
+  const now = new Date().toISOString();
+  for (const template of DEFAULT_TEMPLATES) {
+    await Template.updateOne(
+      { tenantId, name: template.name },
+      {
+        $setOnInsert: {
+          _id: id('tpl'),
+          tenantId,
+          name: template.name,
+          description: template.description,
+          schemaVersion: 1,
+          documentType: template.documentType,
+          paper: template.paper,
+          sections: template.sections ?? [],
+          metadata: { createdAt: now, updatedAt: now, version: 1, createdBy: 'seed' },
+          isActive: true,
+          isDefault: template.isDefault ?? false,
+        },
+      },
+      { upsert: true },
+    );
+  }
+
+  await upsertDefaultPlans(Plan);
+
+  console.log('\n✅ Prod seed selesai (idempotent — aman dijalankan ulang).');
+  console.log(`   Tenant : ${cfg.tenantName} (slug: ${cfg.tenantSlug})`);
+  console.log(`   Owner  : ${cfg.adminEmail}`);
+  console.log('   Login  : /login');
+  console.log('   Catatan: Outlet & Warehouse default dibuat otomatis saat server boot.');
+
+  await mongoose.disconnect();
+  process.exit(0);
+}
+
+async function seedDemo() {
+  console.warn(
+    `[seed] Mode demo legacy: menulis ke database '${SYSTEM_DB}' (bukan database aplikasi) dan MENGHAPUS isinya. ` +
+      'Untuk produksi pakai: pnpm seed -- --prod',
+  );
+
+  const systemConn = mongoose.createConnection(withDatabase(MONGO_URI, SYSTEM_DB));
 
   await systemConn.dropDatabase();
 
@@ -224,7 +465,9 @@ async function seed() {
   process.exit(0);
 }
 
-seed().catch((err) => {
+const runSeed = process.argv.includes('--prod') ? seedProd : seedDemo;
+
+runSeed().catch((err) => {
   console.error('Seed failed:', err);
   process.exit(1);
 });

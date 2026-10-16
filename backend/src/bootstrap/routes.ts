@@ -1,4 +1,5 @@
-import { Express } from 'express';
+import { Express, RequestHandler } from 'express';
+import mongoose from 'mongoose';
 import type { DIContainer } from './container';
 import { createResolveOutlet } from '../@shared/interfaces/middleware/resolveOutlet';
 import { createTenantStatusGate } from '../core/tenant/interfaces/http/middleware/tenantTransactionGate';
@@ -41,10 +42,27 @@ import { createPlatformRoutes } from '../core/platform/interfaces/http/routes/pl
 import { createPlanRoutes } from '../core/billing/interfaces/http/routes/plan.routes';
 import { createPlatformSubscriptionRoutes, createMerchantSubscriptionRoutes } from '../core/billing/interfaces/http/routes/subscription.routes';
 
+/**
+ * Liveness + Mongo readiness, consumed by the compose healthcheck and UptimeRobot.
+ *
+ * `/health` is the legacy path; both paths share this handler so they can never
+ * disagree. Ops docs (`docs/OPS_RUNBOOK.md`) use `/api/health`.
+ */
+function healthHandler(): RequestHandler {
+  return (_req, res) => {
+    const mongoOk = mongoose.connection.readyState === 1;
+    res.status(mongoOk ? 200 : 503).json({
+      status: mongoOk ? 'ok' : 'error',
+      mongo: mongoOk ? 'ok' : 'error',
+      uptime: Math.round(process.uptime()),
+    });
+  };
+}
+
 export function registerRoutes(app: Express, container: DIContainer): void {
-  app.get('/health', (_req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
-  });
+  const health = healthHandler();
+  app.get('/health', health);
+  app.get('/api/health', health);
 
   const authController = container.resolve('authController');
   app.use('/api/auth', createAuthRoutes(authController));
