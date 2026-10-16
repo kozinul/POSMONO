@@ -90,7 +90,11 @@ docker exec posmono-mongodb mongodump \
 
 # 2. Uploads + env (saldo safety)
 mkdir -p "${BACKUP_DIR}/${NAME}-files"
-docker cp posmono-app:/app/backend/uploads "${BACKUP_DIR}/${NAME}-files/uploads" || true
+# Path WAJIB sama dengan mount `uploads_data` di docker-compose.prod.yml
+# (/app/backend/dist/uploads, bukan /app/backend/uploads — UPLOAD_DIR resolve
+# relatif ke file terkompilasi). Path salah = backup kosong tanpa error.
+docker cp posmono-app:/app/backend/dist/uploads "${BACKUP_DIR}/${NAME}-files/uploads"
+test -d "${BACKUP_DIR}/${NAME}-files/uploads" || { echo "FATAL: uploads tidak ter-backup"; exit 1; }
 cp /home/deploy/kuire/backend/.env "${BACKUP_DIR}/${NAME}-files/.env"
 tar -czf "${BACKUP_DIR}/${NAME}-files.tar.gz" -C "${BACKUP_DIR}" "${NAME}-files"
 rm -rf "${BACKUP_DIR}/${NAME}-files"
@@ -138,7 +142,7 @@ docker exec -i posmono-mongodb mongorestore --gzip --archive < /home/deploy/back
 
 # 3. Restore uploads (bila hilang)
 docker cp /home/deploy/backups/posmono-<STAMP>-files.tar.gz posmono-app:/tmp/
-docker exec posmono-app sh -c 'tar -xzf /tmp/posmono-<STAMP>-files.tar.gz -C /tmp && cp -r /tmp/posmono-<STAMP>-files/uploads /app/backend/'
+docker exec posmono-app sh -c 'tar -xzf /tmp/posmono-<STAMP>-files.tar.gz -C /tmp && cp -r /tmp/posmono-<STAMP>-files/uploads/. /app/backend/dist/uploads/'
 
 # 4. Nyalakan lagi
 docker start posmono-app
