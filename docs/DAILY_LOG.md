@@ -4,6 +4,63 @@
 
 ---
 
+### DATE: 2026-10-16 (sesi 2) — Hardening produksi P0 + Mongo auth (`--auth`)
+
+> ⚠️ **BELUM DI-COMMIT** — semua perubahan sudah diverifikasi hijau, menunggu izin commit (rencana: 5 commit per topik).
+
+**Konteks:**
+* User minta kesiapan produksi: kerjakan **P0 item 1–4** dulu, **Redis JANGAN dihapus**, lalu **Mongo auth**.
+* Redis dipertahankan (belum dipakai kode, tapi tidak dicabut dari compose).
+
+**Keputusan yang dikunci:**
+
+* **Rate limit hanya endpoint kredensial** (`/api/auth/login`, `/hub-login`, `/refresh`) — 30 request / 15 menit per IP. Limiter global `/api` **sengaja tidak dipasang**: POS melakukan polling 3–10 detik dan satu toko di belakang NAT berbagi satu IP, jadi limiter global bisa mengunci kasir yang sah.
+* **`app.set('trust proxy', 1)` hanya saat `NODE_ENV=production`** — Caddy satu-satunya hop di produksi; di luar produksi proses diakses langsung sehingga mempercayai header hanya membuka spoofing IP.
+* **404 JSON untuk `/api/*`** dipasang **sebelum** SPA fallback — sebelumnya path API yang typo dijawab `200 text/html` (typo tidak pernah terlihat sebagai error).
+* **Graceful shutdown** SIGTERM/SIGINT: `io.close()` → `closeIdleConnections()` → `httpServer.close()` → `mongoose.connection.close()` → exit 0; deadline 10s → exit 1. Tanpa ini `docker stop`/redeploy memotong pembayaran yang sedang berjalan.
+* **`validateEnv` production** menolak `JWT_SECRET` contoh (daftar placeholder) dan panjang < 32 karakter; semua pelanggaran dilaporkan sekaligus. Dev tetap permisif.
+* **Mongo auth** — menyetel **kedua** `MONGO_INITDB_ROOT_USERNAME`+`PASSWORD` membuat image `mongo` otomatis menambahkan `--auth` dan membuat user root saat boot pertama **volume kosong**. Healthcheck wajib ber-kredensial (ping tanpa auth gagal → container tak pernah `healthy` → `app` tak pernah start).
+* **Satu sumber password DB = `docker/.env`**; service `app` menimpa `MONGO_URI` dari `backend/.env` lewat `environment` (menang atas `env_file`) dengan URI ber-`authSource=admin`. Compose gagal start (`${VAR:?…}`) bila kredensial kosong. Password harus aman-URL (`-`, `_`) karena dirangkai ke URI.
+* Hanya **root credential** (tanpa scoped user) supaya moving parts minimal — opsi scoped user dicatat sebagai follow-up (belum diuji: docker tidak tersedia di env ini).
+
+**Jebakan yang tercatat:**
+
+* `express-rate-limit@7` **melempar** `ValidationError ERR_ERL_UNEXPECTED_X_FORWARDED_FOR` bila header XFF ada & `trust proxy === false`; opsi limit bernama **`limit`** (bukan `max`); `standardHeaders: 'draft-7'` menghasilkan `ratelimit-policy` + `ratelimit` (bukan `ratelimit-limit`). Vite dev proxy (`changeOrigin: true`) tidak mengirim XFF, jadi dev tidak terkena.
+* Healthcheck mongo tanpa `--username/--password` = container tidak pernah sehat (gejala tidak jelas: app restart-loop).
+* Volume `mongodb_data` yang dibuat **sebelum** auth aktif tidak punya user → app gagal autentikasi. Prosedur: `docs/OPS_RUNBOOK.md` §6b (dump → hapus volume → up → restore).
+* `mongodump` dibatasi `--db` supaya arsip tidak membawa user `admin` (kalau ikut, restore ke volume baru bentrok duplicate key).
+* Port Mongo **tidak** dipublish ke host → seed/backup/restore selalu lewat container. DEPLOYMENT §6 sebelumnya menyuruh menulis `MONGO_URI` di container `app` padahal env itu sudah ada dan `MONGO_INITDB_*` tidak tersedia di container app — sudah dikoreksi.
+* `pnpm add express-rate-limit` menimbulkan **drift transitive** tak diminta (`yaml@2.9.0→2.9.1`, `picomatch@4.0.5→4.0.7`) di lockfile; lock dikembalikan lalu entri `express-rate-limit` ditambahkan manual → diff lock hanya **13 baris** (`pnpm install --frozen-lockfile` lolos).
+* `knip` menolak exported type tak terpakai (`ShutdownLogger`); **jangan** un-export karena `declaration: true` (build `tsc` emit akan gagal) — test diarahkan memakai tipe itu.
+
+**Changes:**
+
+* `backend/src/@shared/config/validateEnv.ts` — UPDATED (`EnvLike`, `MIN_JWT_SECRET_LENGTH`, `PLACEHOLDER_JWT_SECRETS`)
+* `backend/src/@shared/interfaces/middleware/notFoundApi.ts` — NEW
+* `backend/src/@shared/interfaces/middleware/rateLimit.ts` — NEW (`createAuthRateLimiter`)
+* `backend/src/bootstrap/shutdown.ts` — NEW (`registerShutdownHandlers`, `SHUTDOWN_TIMEOUT_MS`)
+* `backend/src/bootstrap/server.ts` — UPDATED (`trust proxy`, 404 JSON `/api/*`)
+* `backend/src/bootstrap/routes.ts` — UPDATED (limiter di 3 endpoint auth)
+* `backend/src/bootstrap/app.ts` — UPDATED (registrasi shutdown handler)
+* `backend/package.json` + `pnpm-lock.yaml` — `express-rate-limit@^7` (7.5.1)
+* `docker/docker-compose.prod.yml` — UPDATED (`MONGO_INITDB_*`, healthcheck ber-kredensial, `app.environment.MONGO_URI`)
+* `docker/.env.example` — UPDATED (kredensial Mongo wajib)
+* `backend/.env.example` — UPDATED (catatan override MONGO_URI + JWT placeholder ditolak)
+* `docs/DEPLOYMENT.md`, `docs/OPS_RUNBOOK.md` — UPDATED (auth, backup/restore ber-kredensial, §6b volume lama, troubleshooting)
+* Tests: `tests/config/validateEnv.test.ts` (9), `tests/api/not-found-api.test.ts` (6), `tests/bootstrap/shutdown.test.ts` (8), `tests/api/rate-limit.test.ts` (7)
+
+**Verifikasi:**
+
+* Backend **1766/1766 (137 files)** (dari 1736/133) · frontend **243/243 (34 files)**
+* `pnpm lint` bersih · `pnpm budget` hijau (`: any` 199/200, file >1000 = 0) · `knip` exit 0
+* `tsc` build emit (declaration) bersih · probe YAML: 20 assert (auth aktif, `$$` escaping, URI ber-`authSource=admin` ter-parse `new URL`)
+
+**Sisa / next:** P1 Dockerfile (`USER node`, HEALTHCHECK) dan item P1 lain; scoped Mongo user (follow-up).
+
+**Productivity score:** 9
+
+---
+
 ### DATE: 2026-10-15 → 2026-10-16 (branding POSMono → Kuire T1 — rencana 15/10, eksekusi 16/10)
 
 > ✅ **EKSEKUSI T1 SELESAI 2026-10-16.** Semua target di bawah dikerjakan, verifikasi hijau, sudah di-commit (`chore(branding)`).

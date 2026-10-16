@@ -5,6 +5,16 @@ services:
     image: mongo:7
     container_name: posmono-mongodb
     restart: unless-stopped
+    environment:
+      # Setting BOTH variables makes the official image add `--auth` to mongod and create
+      # this user on the first boot with an empty volume. Without them the database is
+      # reachable by anything on the `kuire` network. Values come from docker/.env.
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:?belum diset di docker/.env}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:?belum diset di docker/.env}
+      # Not read by mongod itself: initdb scripts default to it, and OPS_RUNBOOK §3.2
+      # reads it inside the container to scope `mongodump --db`. The app's database is
+      # whatever docker/.env writes into MONGO_URI below.
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-posmono}
     volumes:
       - mongodb_data:/data/db
     # Semua service di network `kuire` agar Caddy dan tools maintenance
@@ -13,7 +23,17 @@ services:
     networks:
       - kuire
     healthcheck:
-      test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
+      # Must authenticate: an unauthenticated ping fails once `--auth` is on, so the
+      # container would never become healthy and `app` would never start. `$$` escapes
+      # the dollar so the container shell expands it, not compose.
+      test:
+        - CMD-SHELL
+        - >-
+          mongosh --quiet --host 127.0.0.1
+          --username "$$MONGO_INITDB_ROOT_USERNAME"
+          --password "$$MONGO_INITDB_ROOT_PASSWORD"
+          --authenticationDatabase admin
+          --eval "quit(db.adminCommand({ping:1}).ok ? 0 : 1)"
       interval: 10s
       timeout: 5s
       retries: 5
@@ -44,6 +64,10 @@ services:
       # Hanya loopback VPS; akses publik lewat Caddy (port 80/443).
       - '127.0.0.1:3000:3000'
     env_file: ../backend/.env
+    environment:
+      # Overrides the (unauthenticated) MONGO_URI in backend/.env so the database password
+      # lives in exactly one file: docker/.env. `environment` wins over `env_file`.
+      MONGO_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongodb:27017/${MONGO_DATABASE:-posmono}?authSource=admin
     networks:
       # `kuire` dipakai Caddy untuk resolve app:3000 (reverse proxy + TLS).
       - kuire

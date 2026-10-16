@@ -28,7 +28,7 @@
 
 Fakta dari kode saat ini:
 - Backend Express melayani `frontend/dist` (static + `GET *` SPA fallback) → satu container cukup. (`backend/src/bootstrap/server.ts`)
-- `docker/docker-compose.prod.yml`: `mongodb` (volume `mongodb_data`), `redis` (volume `redis_data`), `app` (bind `127.0.0.1:3000`, `env_file: backend/.env`), semua di network eksternal `kuire`.
+- `docker/docker-compose.prod.yml`: `mongodb` (volume `mongodb_data`, **`--auth` aktif** dari `MONGO_INITDB_ROOT_*` di `docker/.env`), `redis` (volume `redis_data`), `app` (bind `127.0.0.1:3000`, `env_file: backend/.env` + `environment.MONGO_URI` ber-auth), semua di network eksternal `kuire`.
 - `docker/Dockerfile`: multi-stage `base → deps → builder → runner`, `CMD node backend/dist/bootstrap/app.js`, `EXPOSE 3000`.
 - TLS: `docker/docker-compose.caddy.yml` + `docker/Caddyfile` (Caddy, auto-TLS Let's Encrypt) — front-end publik 80/443.
 - CI: `.github/workflows/ci.yml` (push/PR `master`, publish image multi-arch di `master` + tag `v*`).
@@ -133,7 +133,23 @@ cp docker/.env.example docker/.env
 # edit docker/.env:
 #   DOMAIN=pos.domain.id
 #   ACME_EMAIL=ops@domain.id
+#   MONGO_INITDB_ROOT_USERNAME=posmono
+#   MONGO_INITDB_ROOT_PASSWORD=<password panjang, aman-URL>
+#   MONGO_DATABASE=posmono
 ```
+
+> `docker/.env` **wajib** ada: selain `DOMAIN`/`ACME_EMAIL`, `docker-compose.prod.yml`
+> membaca kredensial Mongo dari file ini dan sengaja **gagal start** bila kosong
+> (`${MONGO_INITDB_ROOT_USERNAME:?…}`). Ini yang membuat container `mongodb` jalan dengan
+> `--auth` sejak boot pertama — tanpa auth, database terbuka bagi apa pun yang bisa
+> menjangkau network `kuire`.
+>
+> Password ikut dirangkai ke `MONGO_URI`, jadi pakai karakter aman-URL (`-`, `_`); hindari
+> `@ : / # ? & %`.
+>
+> User root dibuat **hanya saat volume `mongodb_data` masih kosong**. Bila VPS ini pernah
+> menjalankan stack sebelum auth aktif, volume lama tidak punya user dan app akan gagal
+> autentikasi — ikuti `docs/OPS_RUNBOOK.md` §6b (dump → hapus volume → up → restore).
 
 > Caddy otomatis meminta & memperpanjang sertifikat Let's Encrypt. Tidak ada config TLS manual.
 > Service aplikasi (mongodb/redis/app) terhubung ke network eksternal `kuire` di
@@ -154,9 +170,11 @@ cd kuire/backend
 openssl rand -hex 32   # → JWT_SECRET (simpan!)
 cp .env.example .env   # bagian Fase A: .env.example dilengkapi
 
-# pastikan MONGO_URI/REDIS_URL menunjuk service compose:
-#   MONGO_URI=mongodb://mongodb:27017/posmono
-#   REDIS_URL=redis://redis:6379
+# Isi JWT_SECRET (hasil openssl di atas) + var runtime lain di backend/.env.
+# CATATAN: MONGO_URI di backend/.env DIABAIKAN oleh compose produksi — service `app`
+# menimpanya dengan URI ber-auth yang dirangkai dari docker/.env, supaya password DB
+# hanya tersimpan di satu file. Jalur non-Docker (dev/seed di host) tetap memakai nilai ini.
+#   REDIS_URL=redis://redis:6379   (redis belum dipakai kode; aman dikosongkan)
 ```
 
 Jalankan stack:
@@ -164,6 +182,7 @@ Jalankan stack:
 ```bash
 cd /home/deploy/kuire
 docker network create kuire                      # sekali; dipakai app + Caddy (+ mongorestore OPS)
+# docker/.env wajib sudah ada & terisi (DOMAIN, ACME_EMAIL, MONGO_INITDB_* — lihat §4)
 docker compose -f docker/docker-compose.prod.yml up -d --pull always
 docker compose --env-file docker/.env -f docker/docker-compose.caddy.yml up -d
 ```
@@ -194,13 +213,20 @@ Setelah app up, provisi tenant pertama (bagian Fase A A7 — `seed --prod`):
 
 ```bash
   docker exec -it posmono-app sh
-  # (di dalam container)
-  MONGO_URI=mongodb://mongodb:27017/posmono \
+  # (di dalam container) MONGO_URI sudah ber-auth — compose menimpanya dari docker/.env:
   ADMIN_EMAIL=owner@domain.id \
   ADMIN_PASSWORD='<password-kuat>' \
   NODE_ENV=production node backend/dist/seed.js --prod
 
 ```
+
+> Tidak perlu menulis `MONGO_URI` lagi: service `app` sudah membawanya. Sebaliknya
+> `MONGO_INITDB_ROOT_*` hanya ada di container `mongodb` — jangan dipakai di dalam
+> container `app`.
+>
+> Port Mongo **tidak** dipublish ke host, jadi seed/backup/restore selalu dijalankan dari
+> dalam container (`docker exec`) atau helper container di network `kuire`. Perintah
+> `mongodump`/`mongorestore` ber-kredensial ada di `docs/OPS_RUNBOOK.md` §3–§4.
 
 Atau melalui UI: app punya flow register + auto-create tenant (`admin@domain.id` login).
 
