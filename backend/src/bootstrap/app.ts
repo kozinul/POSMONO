@@ -5,6 +5,7 @@ import { buildContainer } from './container';
 import { registerEventHandlers } from './eventBus';
 import { provisionDefaults } from './provisioning';
 import { initSocketServer } from './socket';
+import { registerShutdownHandlers } from './shutdown';
 import { logger } from '../@shared/infrastructure/logger/Logger';
 import { env } from '../@shared/config/env';
 import { validateEnv } from '../@shared/config/validateEnv';
@@ -28,7 +29,14 @@ async function main() {
   const app = createServer(container);
   const httpServer = http.createServer(app);
 
-  initSocketServer(httpServer);
+  const io = initSocketServer(httpServer);
+
+  registerShutdownHandlers({
+    httpServer,
+    logger,
+    closeSocketServer: () => io.close(),
+    closeDb: () => mongoose.connection.close(),
+  });
 
   httpServer.listen(env.PORT, () => {
     logger.info(
