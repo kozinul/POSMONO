@@ -1,0 +1,46 @@
+# Caddy — reverse proxy + TLS otomatis (Let's Encrypt/ZeroSSL) untuk Kuire POS.
+#
+# Prasyarat: network `kuire` sudah ada atau akan dibuat oleh
+# `docker/docker-compose.prod.yml` (deploy pertama, jalankan stack app dulu). Semua
+# service aplikasi (mongodb/redis/app) wajib terhubung ke network `kuire` sehingga
+# Caddy bisa resolve `app:3000`.
+#
+# Jalankan dari root repo:
+#   DOMAIN=pos.domain.id ACME_EMAIL=ops@domain.id \
+#     docker compose -f docker/docker-compose.caddy.yml up -d
+#
+# Atau buat docker/.env terlebih dahulu (cp docker/.env.example docker/.env), lalu:
+#   docker compose --env-file docker/.env -f docker/docker-compose.caddy.yml up -d
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp' # HTTP/3
+    environment:
+      DOMAIN: ${DOMAIN:-pos.example.com}
+      ACME_EMAIL: ${ACME_EMAIL:-admin@example.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - kuire
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '5'
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  kuire:
+    external: true
+    name: kuire

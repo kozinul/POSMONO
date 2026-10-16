@@ -1,7 +1,7 @@
 # Deployment Guide — Kuire POS (POSMono)
 
-> Dokumen rencana & panduan deploy ke produksi. Status: **draf** — menunggu eksekusi Fase A (perbaikan repo) dan VPS.
-> Diterapkan pada: repo `kozinul/POSMONO` (branch `master`) · image `posmono` di Docker Hub · stack `docker/docker-compose.prod.yml`.
+> Dokumen rencana & panduan deploy ke produksi. Status: **Fase A selesai (A1–A10b)** — sisa operator/VPS di Fase B+.
+> Diterapkan pada: repo `kozinul/POSMONO` (branch `master`) · image `posmono` di Docker Hub · stack `docker/docker-compose.prod.yml` + `docker/docker-compose.caddy.yml`.
 
 ---
 
@@ -28,9 +28,10 @@
 
 Fakta dari kode saat ini:
 - Backend Express melayani `frontend/dist` (static + `GET *` SPA fallback) → satu container cukup. (`backend/src/bootstrap/server.ts`)
-- `docker/docker-compose.prod.yml`: `mongodb` (volume `mongodb_data`), `redis` (volume `redis_data`), `app` (:3000, `env_file: backend/.env`).
+- `docker/docker-compose.prod.yml`: `mongodb` (volume `mongodb_data`), `redis` (volume `redis_data`), `app` (bind `127.0.0.1:3000`, `env_file: backend/.env`), semua di network eksternal `kuire`.
 - `docker/Dockerfile`: multi-stage `base → deps → builder → runner`, `CMD node backend/dist/bootstrap/app.js`, `EXPOSE 3000`.
-- CI: `.github/workflows/ci.yml` (trigger saat ini salah: `main`, repo pakai `master` — **lihat Fase A**).
+- TLS: `docker/docker-compose.caddy.yml` + `docker/Caddyfile` (Caddy, auto-TLS Let's Encrypt) — front-end publik 80/443.
+- CI: `.github/workflows/ci.yml` (push/PR `master`, publish image multi-arch di `master` + tag `v*`).
 
 ---
 
@@ -116,41 +117,29 @@ echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 
 Set DNS A record: `pos.<domain>` dan `stage.pos.<domain>` → IP VPS.
 
-Caddy sebagai service Docker (`/home/deploy/Caddyfile`):
+Konfigurasi TLS **sudah ada di repo** — tidak perlu menulis file manual di VPS:
 
-```
-pos.domain {
-    reverse_proxy app:3000
-}
-```
+| File | Fungsi |
+|------|--------|
+| `docker/Caddyfile` | site block domain + `reverse_proxy app:3000` + `encode zstd gzip` + header keamanan (HSTS/nosniff/referrer) |
+| `docker/docker-compose.caddy.yml` | service `caddy` (`80`, `443`, `443/udp` untuk HTTP/3), volume `caddy_data`/`caddy_config`, network `kuire` |
+| `docker/.env.example` | template `DOMAIN` & `ACME_EMAIL` (salin ke `docker/.env`, gitignored) |
 
-`/home/deploy/docker-compose.caddy.yml`:
+Isi domain & email kontak ACME (di VPS):
 
-```yaml
-services:
-  caddy:
-    image: caddy:2-alpine
-    container_name: caddy
-    restart: unless-stopped
-    ports:
-      - '80:80'
-      - '443:443'
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    networks:
-      - kuire
-volumes:
-  caddy_data:
-  caddy_config:
-networks:
-  kuire:
-    external: true
+```bash
+cd /home/deploy/kuire
+cp docker/.env.example docker/.env
+# edit docker/.env:
+#   DOMAIN=pos.domain.id
+#   ACME_EMAIL=ops@domain.id
 ```
 
 > Caddy otomatis meminta & memperpanjang sertifikat Let's Encrypt. Tidak ada config TLS manual.
-> App container harus join network eksternal `kuire` (tambahkan `networks: [kuire]` di `docker-compose.prod.yml`) agar Caddy bisa resolve `app:3000`.
+> Service aplikasi (mongodb/redis/app) terhubung ke network eksternal `kuire` di
+> `docker-compose.prod.yml`, sehingga Caddy bisa resolve `app:3000`; port app
+> di-bind ke `127.0.0.1` saja (tidak diekspos publik — lihat `docs/OPS_RUNBOOK.md` §6).
+> Domain staging: hidupkan blok komentar di `docker/Caddyfile` dan arahkan A record-nya.
 
 ---
 
@@ -173,9 +162,10 @@ cp .env.example .env   # bagian Fase A: .env.example dilengkapi
 Jalankan stack:
 
 ```bash
-docker network create kuire
+cd /home/deploy/kuire
+docker network create kuire                      # sekali; dipakai app + Caddy (+ mongorestore OPS)
 docker compose -f docker/docker-compose.prod.yml up -d --pull always
-docker compose -f docker/docker-compose.caddy.yml up -d
+docker compose --env-file docker/.env -f docker/docker-compose.caddy.yml up -d
 ```
 
 Verifikasi:
@@ -183,6 +173,7 @@ Verifikasi:
 ```bash
 curl -fsS https://pos.domain/api/health        # → {"status":"ok",...}
 docker compose -f docker/docker-compose.prod.yml ps
+docker logs caddy 2>&1 | tail -20              # pastikan sertifikat terbit tanpa error
 ```
 
 > A5 (health endpoint + healthcheck) wajib selesai sebelum langkah ini; tanpa `wget` di image app, healthcheck gagal — pakai `wget -qO- https://pos.domain/api/health` dari VPS host sebagai alternatif.
@@ -226,17 +217,20 @@ Checklist verifikasi tenant pertama:
 
 ```
 docker/
-  Dockerfile                 # multi-stage image app
-  docker-compose.prod.yml    # mongo + redis + app (+ healthcheck, volume uploads — Fase A)
+  Dockerfile                     # multi-stage image app
+  docker-compose.prod.yml        # mongo + redis + app (healthcheck, volume uploads, network kuire — Fase A)
+  docker-compose.caddy.yml       # reverse proxy + TLS otomatis
+  Caddyfile                      # site block domain + reverse_proxy app:3000
+  .env.example                   # template DOMAIN/ACME_EMAIL untuk Caddy
   docker-compose.dev.yml
   docker-compose.yml
-.github/workflows/ci.yml     # trigger master + jobs (Fase A)
+.github/workflows/ci.yml         # trigger master + tag v* + jobs (Fase A)
 backend/
-  .env.example               # template env produksi (Fase A)
-  src/seed.ts                # seed --prod (Fase A)
+  .env.example                   # template env runtime + seed --prod (Fase A)
+  src/seed.ts                    # seed --prod (Fase A)
 docs/
-  DEPLOYMENT.md              # dokumen ini
-  OPS_RUNBOOK.md             # monitoring, backup, restore, update, troubleshooting
+  DEPLOYMENT.md                  # dokumen ini
+  OPS_RUNBOOK.md                 # monitoring, backup, restore, update, troubleshooting
 ```
 
 ---
@@ -252,5 +246,5 @@ docs/
 
 - [ ] `JWT_SECRET` random di `backend/.env` (bukan default)
 - [ ] Firewall: hanya 80/443/SSH terbuka
-- [ ] Domain `pos.domain` + TLS aktif via Caddy
+- [ ] Domain `pos.domain` + TLS aktif via Caddy (`docker/.env` terisi, `docker compose --env-file docker/.env -f docker/docker-compose.caddy.yml up -d`)
 - [ ] Tenant pertama provisi (`seed --prod`) + checklist §6

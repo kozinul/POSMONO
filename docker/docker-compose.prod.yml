@@ -7,6 +7,11 @@ services:
     restart: unless-stopped
     volumes:
       - mongodb_data:/data/db
+    # Semua service di network `kuire` agar Caddy dan tools maintenance
+    # (mongorestore via `--network kuire`, lihat docs/OPS_RUNBOOK.md) bisa
+    # resolve `mongodb`. Network ini dibuat manual sekali: `docker network create kuire`.
+    networks:
+      - kuire
     healthcheck:
       test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
       interval: 10s
@@ -20,6 +25,8 @@ services:
     restart: unless-stopped
     volumes:
       - redis_data:/data
+    networks:
+      - kuire
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
       interval: 10s
@@ -34,8 +41,12 @@ services:
     container_name: posmono-app
     restart: unless-stopped
     ports:
-      - '3000:3000'
+      # Hanya loopback VPS; akses publik lewat Caddy (port 80/443).
+      - '127.0.0.1:3000:3000'
     env_file: ../backend/.env
+    networks:
+      # `kuire` dipakai Caddy untuk resolve app:3000 (reverse proxy + TLS).
+      - kuire
     volumes:
       # UPLOAD_DIR resolves relative to the compiled file, so uploads live under
       # backend/dist in the image — mount the volume there or product images are
@@ -65,3 +76,10 @@ volumes:
   redis_data:
   uploads_data:
   logs_data:
+
+networks:
+  # Network operator: dibuat sekali di host (`docker network create kuire`) lalu
+  # dipakai juga oleh docker/docker-compose.caddy.yml.
+  kuire:
+    external: true
+    name: kuire

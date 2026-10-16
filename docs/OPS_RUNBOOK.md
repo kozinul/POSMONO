@@ -162,6 +162,9 @@ docker compose -f docker/docker-compose.prod.yml build   # bila build lokal
 # ATAU (deploy via image): docker compose -f docker/docker-compose.prod.yml pull
 docker compose -f docker/docker-compose.prod.yml up -d
 curl -fsS https://pos.domain/api/health   # cek sehat
+
+# Caddy tidak ikut ter-update bersama app; cukup recreate bila docker/Caddyfile berubah:
+docker compose --env-file docker/.env -f docker/docker-compose.caddy.yml up -d --force-recreate
 ```
 
 ### Rollback
@@ -188,7 +191,8 @@ docker compose -f docker/docker-compose.prod.yml up -d
 | tenant "User not found" | data sesi vs DB | biasanya token dari DB lama setelah restore point-in-time — login ulang |
 | `heap limit` / lambat | `free -h`, `docker stats` | tambah swap (DEPLOY §3); naikkan RAM bila mongo aktif |
 | disk penuh | `df -h`, `docker system df` | jalankan `docker system prune -af` (hati-hati: hapus image lama), bersih backup lama |
-| SSL/tidak bisa HTTPS | `docker logs caddy` | pastikan DNS A record sudah mengarah ke IP; Caddy renew otomatis |
+| SSL/tidak bisa HTTPS | `docker logs caddy` | DNS A record harus sudah mengarah ke IP **dan** port 80 terbuka (ACME HTTP-01); cek `DOMAIN`/`ACME_EMAIL` di `docker/.env`; Caddy renew otomatis |
+| Caddy `name resolution` / `502` | `docker exec caddy wget -qO- http://app:3000/api/health` | `app` belum di network `kuire` — pastikan `docker network create kuire` + service app/mongo/redis punya `networks: [kuire]` |
 | QRIS invoice tak jalan | config tenant > QRIS Gateway | sengaja menunjuk simulator `http://host.docker.internal:3334`; integrasi asli ditunda |
 
 Healthcheck manual:

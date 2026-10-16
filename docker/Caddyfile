@@ -1,0 +1,34 @@
+# Kuire POS — reverse proxy + TLS otomatis (Let's Encrypt/ZeroSSL).
+#
+# Dipakai oleh docker/docker-compose.caddy.yml. Caddy menerbitkan & memperpanjang
+# sertifikat sendiri tanpa config TLS manual; jangan expose port 3000 app ke publik.
+#
+# Nilai diambil dari environment container (di-set compose, lihat docker/.env.example):
+#   DOMAIN      domain publik, tanpa protokol (mis. pos.domain.id)
+#   ACME_EMAIL  email kontak ACME untuk notifikasi kadaluarsa sertifikat
+
+{
+	email {$ACME_EMAIL:admin@example.com}
+}
+
+{$DOMAIN:pos.example.com} {
+	encode zstd gzip
+
+	# API + static SPA + WebSocket (socket.io) semuanya lewat app; upgrade WS
+	# ditangani otomatis oleh reverse_proxy.
+	reverse_proxy app:3000
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+}
+
+# Staging: arahkan A record stage.pos.<domain> ke VPS yang sama lalu hidupkan blok
+# ini (stack `app` yang sama dapat melayani domain kedua).
+#
+# stage.pos.example.com {
+# 	encode zstd gzip
+# 	reverse_proxy app:3000
+# }
