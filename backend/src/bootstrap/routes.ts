@@ -2,6 +2,7 @@ import { Express, RequestHandler } from 'express';
 import mongoose from 'mongoose';
 import type { DIContainer } from './container';
 import { createResolveOutlet } from '../@shared/interfaces/middleware/resolveOutlet';
+import { createAuthRateLimiter } from '../@shared/interfaces/middleware/rateLimit';
 import { createTenantStatusGate } from '../core/tenant/interfaces/http/middleware/tenantTransactionGate';
 import { createAuthRoutes } from '../core/identity/interfaces/http/routes/auth.routes';
 import { createTenantRoutes } from '../core/tenant/interfaces/http/routes/tenant.routes';
@@ -65,6 +66,11 @@ export function registerRoutes(app: Express, container: DIContainer): void {
   app.get('/api/health', health);
 
   const authController = container.resolve('authController');
+  // Credential endpoints only — see `createAuthRateLimiter` for why `/api` is not limited globally.
+  const authLimiter = createAuthRateLimiter();
+  app.use('/api/auth/login', authLimiter);
+  app.use('/api/auth/hub-login', authLimiter);
+  app.use('/api/auth/refresh', authLimiter);
   app.use('/api/auth', createAuthRoutes(authController));
 
   const tenantController = container.resolve('tenantController');

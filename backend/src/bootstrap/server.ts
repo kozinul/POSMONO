@@ -8,9 +8,18 @@ import { errorHandler } from '../@shared/interfaces/middleware/errorHandler';
 import { registerRoutes } from './routes';
 import type { DIContainer } from './container';
 import { UPLOAD_DIR } from '../core/upload/application/services/UploadService';
+import { env } from '../@shared/config/env';
 
 export function createServer(container: DIContainer): Express {
   const app = express();
+
+  // Caddy is the only hop in front of the app in production (docker/docker-compose.caddy.yml),
+  // so trusting exactly one hop makes `req.ip` the real client — which both the rate limiter
+  // and the audit log depend on. Outside production the process is reached directly, so
+  // trusting a forwarded header there would only let callers spoof their own address.
+  if (env.NODE_ENV === 'production') {
+    app.set('trust proxy', 1);
+  }
 
   app.use(helmet({ contentSecurityPolicy: false }));
   app.use(cors({ origin: true, credentials: true }));
