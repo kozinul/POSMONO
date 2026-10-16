@@ -4,6 +4,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { tenantContext } from '../@shared/interfaces/middleware/tenantContext';
+import { notFoundApiHandler } from '../@shared/interfaces/middleware/notFoundApi';
 import { errorHandler } from '../@shared/interfaces/middleware/errorHandler';
 import { registerRoutes } from './routes';
 import type { DIContainer } from './container';
@@ -36,6 +37,10 @@ export function createServer(container: DIContainer): Express {
   app.use(tenantContext);
 
   registerRoutes(app, container);
+
+  // Unmatched `/api/*` must answer as JSON; the SPA fallback below would otherwise
+  // reply `200 text/html` for an endpoint that does not exist.
+  app.use('/api', notFoundApiHandler());
 
   app.get('*', (_req, res) => {
     res.sendFile(path.join(frontendDist, 'index.html'));
