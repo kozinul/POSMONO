@@ -133,4 +133,71 @@ describe('FreeItemEffect', () => {
     expect(result.freeItems).toBeUndefined();
     expect(result.generatedLineItems).toBeUndefined();
   });
+
+  describe('target cheapest_item', () => {
+    const cart: EffectContext = {
+      subtotal: 70000,
+      items: [
+        { productId: 'kopi', categoryId: 'minuman', quantity: 3, unitPrice: 15000, lineTotal: 45000 },
+        { productId: 'teh', categoryId: 'minuman', quantity: 1, unitPrice: 25000, lineTotal: 25000 },
+      ],
+      appliedDiscounts: 0,
+    };
+
+    it('gives the cheapest line away once', () => {
+      const eff: IDiscountEffect = {
+        type: 'free_item',
+        config: { target: 'cheapest_item', quantity: 1 },
+      };
+      const result = sut.apply(eff, cart);
+      expect(result.freeItems).toEqual([{ productId: 'kopi', quantity: 1 }]);
+      expect(result.generatedLineItems).toBeUndefined();
+    });
+
+    it('is not scaled by the qualifying count — three coffees in the cart still free one', () => {
+      const eff: IDiscountEffect = {
+        type: 'free_item',
+        config: { target: 'cheapest_item', quantity: 1 },
+      };
+      const result = sut.apply(eff, {
+        ...cart,
+        conditions: [{ type: 'product_match', config: { productIds: ['kopi'] } }],
+      });
+      expect(result.freeItems).toEqual([{ productId: 'kopi', quantity: 1 }]);
+    });
+
+    it('resolves inside the promotion scope, not the whole cart', () => {
+      const eff: IDiscountEffect = {
+        type: 'free_item',
+        config: { target: 'cheapest_item', quantity: 1 },
+      };
+      const result = sut.apply(eff, {
+        ...cart,
+        conditions: [{ type: 'product_match', config: { productIds: ['teh'] } }],
+      });
+      expect(result.freeItems).toEqual([{ productId: 'teh', quantity: 1 }]);
+    });
+
+    it('caps the free quantity at the quantity of the resolved line', () => {
+      const eff: IDiscountEffect = {
+        type: 'free_item',
+        config: { target: 'cheapest_item', quantity: 5 },
+      };
+      const result = sut.apply(eff, {
+        subtotal: 15000,
+        items: [{ productId: 'kopi', categoryId: 'minuman', quantity: 1, unitPrice: 15000, lineTotal: 15000 }],
+        appliedDiscounts: 0,
+      });
+      expect(result.freeItems).toEqual([{ productId: 'kopi', quantity: 1 }]);
+    });
+
+    it('gives the most expensive line away for most_expensive_item', () => {
+      const eff: IDiscountEffect = {
+        type: 'free_item',
+        config: { target: 'most_expensive_item', quantity: 1 },
+      };
+      const result = sut.apply(eff, cart);
+      expect(result.freeItems).toEqual([{ productId: 'teh', quantity: 1 }]);
+    });
+  });
 });

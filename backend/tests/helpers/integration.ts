@@ -29,6 +29,8 @@ import { MongoWarehouseRepository } from '../../src/core/inventory/infrastructur
 import { MongoTenantRepository } from '../../src/core/tenant/infrastructure/persistence/MongoTenantRepository';
 import { MongoUserRepository } from '../../src/core/identity/infrastructure/persistence/MongoUserRepository';
 import { MongoTemplateRepository } from '../../src/core/template/infrastructure/persistence/MongoTemplateRepository';
+import { MongoDiscountConfigurationRepository } from '../../src/core/discount/infrastructure/persistence/MongoDiscountConfigurationRepository';
+import { DiscountServiceAdapter } from '../../src/core/discount/application/services/DiscountServiceAdapter';
 import {
   CreateOrderService,
   UpdateOrderService,
@@ -79,6 +81,7 @@ export interface IntegrationTestContext {
   warehouseRepo: MongoWarehouseRepository;
   tenantRepo: MongoTenantRepository;
   templateRepo: MongoTemplateRepository;
+  discountConfigRepo: MongoDiscountConfigurationRepository;
   orderModel: Model<any>;
   paymentModel: Model<any>;
   shiftModel: Model<any>;
@@ -94,6 +97,7 @@ export interface IntegrationTestContext {
   paymentService: PaymentService;
   shiftService: ShiftService;
   inventoryService: InventoryService;
+  discountService: DiscountServiceAdapter;
   token: string;
   tenantId: string;
   userId: string;
@@ -169,6 +173,10 @@ export async function buildIntegrationApp(options: IntegrationAppOptions = {}): 
   const shiftService = new ShiftService(shiftRepo, undefined, orderRepo, userRepo);
   const taxService = buildTaxServiceMock();
   const shiftRepoForEnforcement = options.enforceShift ? shiftRepo : undefined;
+  // Discounts are wired like in production: without a discount configuration
+  // the adapter returns zero discounts, so existing tests keep their behavior.
+  const discountConfigRepo = new MongoDiscountConfigurationRepository();
+  const discountService = new DiscountServiceAdapter(discountConfigRepo);
 
   const createOrderService = new CreateOrderService(orderRepo, eventBus, userRepo, shiftRepoForEnforcement);
   const voidApprovalService: any = undefined;
@@ -198,6 +206,7 @@ export async function buildIntegrationApp(options: IntegrationAppOptions = {}): 
     orderRepository: orderRepo,
     tenantRepository: tenantRepo,
     taxService,
+    discountService,
     eventBus,
     inventoryService,
     userRepository: userRepo,
@@ -255,12 +264,13 @@ export async function buildIntegrationApp(options: IntegrationAppOptions = {}): 
 
   return {
     app,
-    orderRepo, paymentRepo, shiftRepo, productRepo, modifierRepo, categoryRepo, stockRepo, stockMovementRepo, warehouseRepo, tenantRepo, templateRepo,
+    orderRepo, paymentRepo, shiftRepo, productRepo, modifierRepo, categoryRepo, stockRepo, stockMovementRepo, warehouseRepo, tenantRepo, templateRepo, discountConfigRepo,
     orderModel, paymentModel, shiftModel, productModel, modifierModel, categoryModel, stockModel, stockMovementModel, warehouseModel, tenantModel, templateModel,
     orderService: createOrderService,
     paymentService,
     shiftService,
     inventoryService,
+    discountService,
     token,
     tenantId,
     userId,

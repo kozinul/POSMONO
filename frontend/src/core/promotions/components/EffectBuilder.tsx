@@ -6,6 +6,7 @@ import type { EffectInput } from './PromotionForm';
 interface EffectBuilderProps {
   effects: EffectInput[];
   onChange: (effects: EffectInput[]) => void;
+  errors?: Record<string, string>;
 }
 
 let nextEffectId = 1;
@@ -21,7 +22,7 @@ function createEffect(): EffectInput {
   };
 }
 
-export default function EffectBuilder({ effects, onChange }: EffectBuilderProps) {
+export default function EffectBuilder({ effects, onChange, errors = {} }: EffectBuilderProps) {
   const updateEffect = (id: string, updates: Partial<EffectInput>) => {
     onChange(effects.map((e) => e.id === id ? { ...e, ...updates } : e));
   };
@@ -35,15 +36,26 @@ export default function EffectBuilder({ effects, onChange }: EffectBuilderProps)
       <h3 className="text-sm font-medium text-gray-700">Diskon (Effects)</h3>
 
       <div className="space-y-3">
-        {effects.map((effect, i) => (
-          <EffectCard
-            key={effect.id}
-            effect={effect}
-            index={i}
-            onUpdate={updateEffect}
-            onRemove={removeEffect}
-          />
-        ))}
+        {effects.map((effect, i) => {
+          const errKey =
+            errors[`effect_${i}_minQty`] ||
+            errors[`effect_${i}_payQty`] ||
+            errors[`effect_${i}_invalid`] ||
+            errors[`effect_${i}_value`] ||
+            errors[`effect_${i}_buyQty`] ||
+            errors[`effect_${i}_getQty`] ||
+            errors[`effect_${i}`];
+          return (
+            <EffectCard
+              key={effect.id}
+              effect={effect}
+              index={i}
+              onUpdate={updateEffect}
+              onRemove={removeEffect}
+              error={errKey}
+            />
+          );
+        })}
       </div>
 
       <button

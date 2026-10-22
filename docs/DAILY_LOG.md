@@ -4,9 +4,54 @@
 
 ---
 
+### DATE: 2026-10-16 (sesi 3) — P1 container hardening: non-root app + user Mongo ter-scope
+
+**Konteks:**
+* Lanjutan `Sisa / next` sesi 2, opsi 1 yang dipilih user: **P1 Dockerfile (`USER node`, `HEALTHCHECK`) + scoped Mongo user**.
+* Docker tidak tersedia di environment ini → verifikasi lewat test statis + parse YAML, bukan `docker build`.
+
+**Keputusan yang dikunci:**
+
+* **App non-root, direktori tulis di-chown eksplisit** — `UploadService` menulis `backend/dist/uploads` dan pino menulis `cwd/logs`; keduanya dibuat + `chown node:node` **sebelum** `USER node`. Tanpa ini container langsung `EACCES`.
+* **`HEALTHCHECK` image-level** (bukan hanya compose) supaya status container tetap jujur bila healthcheck compose hilang; `wget` tersedia di `node:20-alpine` (busybox).
+* **User DB aplikasi `readWrite` pada `MONGO_DATABASE`, dibuat di DB `admin`** — app tidak butuh admin command. Root tetap untuk healthcheck mongo, dump/restore, dan admin.
+* **Initdb hanya jalan saat volume kosong** → volume lama dimigrasikan non-destruktif (§6c), bukan reset volume; user dibuat dengan menjalankan ulang script yang sama (idempotent) via `mongosh` sebagai root.
+* **`MONGO_APP_*` wajib & beda dari root**, password aman-URL karena dirangkai ke `MONGO_URI`.
+* **`knip` di-ignore untuk `docker/mongo-init/**`** — script initdb bukan bagian workspace, jadi dilaporkan unused file.
+
+**Jebakan yang tercatat:**
+
+* `docker-entrypoint.sh` mongo:7 menjalankan file `.js` di `/docker-entrypoint-initdb.d` saat mongod **belum** `--auth`; itu sebabnya `createUser` aman. Script membaca `process.env` (compose meneruskan `MONGO_APP_*`), dan `MONGO_INITDB_*` di-unset **setelah** init.
+* `docker exec` mewarisi env container: setelah `docker compose up -d mongodb` (recreate), script yang ter-mount bisa dijalankan manual dan membaca `MONGO_APP_*` tanpa menyalin password ke command line.
+* Volume `uploads_data`/`logs_data` yang dibuat saat image masih root tetap milik root → `chown` lewat `compose run --rm --no-deps -u 0 --entrypoint sh app`, jadi tidak perlu container app sehat.
+* `knip` memindai root repo (bukan hanya workspace) → file baru di `docker/` memicu exit 1; perbaikannya `ignoreFiles`, bukan memindahkan script.
+
+**Changes:**
+
+* `docker/Dockerfile` — UPDATED (`mkdir`+`chown`, `USER node`, `HEALTHCHECK`)
+* `docker/mongo-init/10-app-user.js` — NEW (user `readWrite`, idempotent)
+* `docker/docker-compose.prod.yml` — UPDATED (mount initdb, `MONGO_APP_*` fail-fast, `MONGO_URI` non-root)
+* `docker/.env.example`, `backend/.env.example` — UPDATED (`MONGO_APP_*`, catatan URI)
+* `knip.json` — UPDATED (`ignoreFiles`)
+* `docs/DEPLOYMENT.md`, `docs/OPS_RUNBOOK.md` (termasuk §6c) — UPDATED
+* `backend/tests/config/deploymentAssets.test.ts` — NEW (9)
+
+**Verifikasi:**
+
+* Backend **1775/1775 (138 files)** (dari 1766/137) · frontend **243/243 (34 files)**
+* `pnpm lint` bersih · `pnpm budget` hijau (`: any` 199/200) · `knip` exit 0
+* YAML `docker-compose.prod.yml` ter-parse (services mongodb/redis/app; `MONGO_URI` = user aplikasi + `authSource=admin`)
+* **Belum**: `docker build`, boot pertama, dan §6c pada VPS nyata (docker tidak tersedia di env ini)
+
+**Sisa / next:** P1 lain (monitoring/error tracking, backup strategy) dan Phase H (VPS/SSL/monitoring) — butuh akses VPS.
+
+**Productivity score:** 8
+
+---
+
 ### DATE: 2026-10-16 (sesi 2) — Hardening produksi P0 + Mongo auth (`--auth`)
 
-> ⚠️ **BELUM DI-COMMIT** — semua perubahan sudah diverifikasi hijau, menunggu izin commit (rencana: 5 commit per topik).
+> ✅ **SUDAH DI-COMMIT** (`e50e36a7`) — catatan "belum di-commit" di bawah sudah tidak berlaku.
 
 **Konteks:**
 * User minta kesiapan produksi: kerjakan **P0 item 1–4** dulu, **Redis JANGAN dihapus**, lalu **Mongo auth**.
@@ -55,7 +100,7 @@
 * `pnpm lint` bersih · `pnpm budget` hijau (`: any` 199/200, file >1000 = 0) · `knip` exit 0
 * `tsc` build emit (declaration) bersih · probe YAML: 20 assert (auth aktif, `$$` escaping, URI ber-`authSource=admin` ter-parse `new URL`)
 
-**Sisa / next:** P1 Dockerfile (`USER node`, HEALTHCHECK) dan item P1 lain; scoped Mongo user (follow-up).
+**Sisa / next:** ~~P1 Dockerfile (`USER node`, HEALTHCHECK); scoped Mongo user~~ → **selesai di sesi 3** (lihat entri di atas).
 
 **Productivity score:** 9
 

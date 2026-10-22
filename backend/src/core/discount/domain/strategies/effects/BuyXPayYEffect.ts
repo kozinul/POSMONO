@@ -10,7 +10,14 @@ export class BuyXPayYEffect implements EffectStrategy {
     const strategy = (effect.config.allocationStrategy as AllocationType) ?? 'cheapest';
     const matchItems = context.matchingItems ?? context.items;
 
-    if (minQty <= payQty) return { discountAmount: 0, description: 'Buy X Pay Y: invalid config' };
+    // "Bayar 0" is not a promotion, it is a misconfiguration: an empty "Bayar"
+    // field in the promotion form arrives as 0 (Number('') === 0) and means
+    // "pay nothing" — the whole cart would be handed over for free. A
+    // configuration that pays for less than one unit therefore gives nothing
+    // away at all.
+    if (minQty < 1 || payQty < 1 || minQty <= payQty) {
+      return { discountAmount: 0, description: 'Buy X Pay Y: invalid config' };
+    }
 
     const freeCount = minQty - payQty;
     const totalQty = matchItems.reduce((s, i) => s + i.quantity, 0);

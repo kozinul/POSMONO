@@ -421,34 +421,8 @@ export const usePOSStore = create<POSState>((set, get) => ({
         }
       }
 
-      const newItems: CartItem[] = [];
+      const paidItems: CartItem[] = state.items.filter((i) => !i.isFreeItem);
       const freeItems: CartItem[] = [];
-      for (const [, agg] of cartAgg) {
-        const totalQty = agg.quantity;
-        const freeInfo = freeByProduct.get(agg.productId);
-        const freeQty = Math.min(freeInfo ? freeInfo.quantity : 0, totalQty);
-        const paidQty = totalQty - freeQty;
-
-        if (paidQty > 0 && agg.paidItem) {
-          newItems.push({ ...agg.paidItem, quantity: paidQty });
-        }
-        if (freeQty > 0) {
-          freeItems.push({
-            productId: agg.productId,
-            name: agg.productName,
-            price: 0,
-            quantity: freeQty,
-            categoryId: agg.categoryId,
-            pricingMode: agg.pricingMode,
-            isFreeItem: true,
-            freeByRuleId: freeInfo?.freeByRuleId,
-            notes: agg.paidItem?.notes,
-          });
-          freeByProduct.delete(agg.productId);
-        }
-      }
-
-      // Remaining entries are free gifts not present as paid lines in the cart.
       for (const [productId, info] of freeByProduct) {
         freeItems.push({
           productId,
@@ -461,7 +435,7 @@ export const usePOSStore = create<POSState>((set, get) => ({
         });
       }
 
-      set({ pricing: data, items: [...newItems, ...freeItems], pricingLoading: false });
+      set({ pricing: data, items: [...paidItems, ...freeItems], pricingLoading: false });
     } catch {
       if (token === recalcToken) set({ pricingLoading: false });
     }

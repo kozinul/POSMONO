@@ -17,6 +17,34 @@ function mapEffectType(type: string): IDiscountEffect['type'] {
   }
 }
 
+/**
+ * Normalises a date boundary coming from a promotion rule.
+ *
+ * The promotion form sends plain dates ("2026-10-01") while the discount
+ * engine compares timestamps. A date-only value is therefore expanded to the
+ * local start/end of that day — otherwise "to" would mean midnight and the
+ * whole promotion day would be excluded.
+ */
+function toIsoBoundary(value: unknown, boundary: 'start' | 'end'): string | undefined {
+  if (value === null || value === undefined || value === '') return undefined;
+
+  if (value instanceof Date) {
+    if (isNaN(value.getTime())) return undefined;
+    const d = new Date(value);
+    if (boundary === 'end') d.setHours(23, 59, 59, 999);
+    return d.toISOString();
+  }
+
+  const str = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    const d = new Date(`${str}T${boundary === 'start' ? '00:00:00.000' : '23:59:59.999'}`);
+    return isNaN(d.getTime()) ? undefined : d.toISOString();
+  }
+
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? undefined : d.toISOString();
+}
+
 function mapEffects(promoEffects: IPromotionEffect[]): IDiscountEffect[] {
   return promoEffects.map((e) => {
     if (e.type === 'buy_x_pay_y') {
@@ -24,6 +52,8 @@ function mapEffects(promoEffects: IPromotionEffect[]): IDiscountEffect[] {
         type: 'buy_x_pay_y' as IDiscountEffect['type'],
         config: {
           minQty: (e.params?.buyQuantity as number) ?? 1,
+          // 0 means "not configured" — the engine treats a promotion that pays
+          // for less than one unit as invalid instead of giving the cart away.
           payQty: (e.params?.payQuantity as number) ?? 0,
           allocationStrategy: (e.params?.allocationStrategy as string) ?? 'cheapest',
         },
@@ -58,9 +88,11 @@ function mapEffects(promoEffects: IPromotionEffect[]): IDiscountEffect[] {
         amount: e.type === 'nominal' ? e.value : undefined,
         fixedPrice: e.type === 'fixed_price' ? e.value : undefined,
         bundlePrice: e.type === 'bundle_price' ? e.value : undefined,
-        target: e.target,
-        productId: e.targetProductId,
-        productName: e.targetProductName,
+        // The target and the product may arrive either flat or inside the
+        // effect parameters — the promotion form writes both.
+        target: e.target ?? (e.params?.target as string),
+        productId: e.targetProductId ?? (e.params?.targetProductId as string),
+        productName: e.targetProductName ?? (e.params?.targetProductName as string),
         quantity: e.params?.quantity ?? (e.type === 'free_item' ? 1 : undefined),
         maxCap: e.maxDiscount,
       },
@@ -115,8 +147,14 @@ function mapRules(promo: IPromotion): IDiscountCondition[] {
         conditions.push({
           type: 'date_range',
           config: {
-            startDate: rule.params.startDate ?? promo.validFrom,
-            endDate: rule.params.endDate ?? promo.validUntil,
+            startDate:
+              toIsoBoundary(rule.params.from, 'start') ??
+              toIsoBoundary(rule.params.startDate, 'start') ??
+              toIsoBoundary(promo.validFrom, 'start'),
+            endDate:
+              toIsoBoundary(rule.params.to, 'end') ??
+              toIsoBoundary(rule.params.endDate, 'end') ??
+              toIsoBoundary(promo.validUntil, 'end'),
           },
         });
         break;
@@ -187,6 +225,12 @@ function determineScope(promo: IPromotion): { type: DiscountScopeType; entityId:
       }
     }
   }
+  // An effect that targets one product must not discount the whole order.
+  for (const effect of promo.effects) {
+    if (effect.target === 'specific_product' && effect.targetProductId) {
+      return { type: 'product', entityId: effect.targetProductId, entityName: effect.targetProductName ?? '' };
+    }
+  }
   return { type: 'all', entityId: '', entityName: 'Semua' };
 }
 
@@ -206,6 +250,7 @@ export function promotionToDiscountRule(promo: IPromotion): IDiscountRule {
     stackable: promo.stackable,
     active: promo.isActive,
     scope: determineScope(promo),
+    logic: promo.ruleLogic === 'OR' ? 'OR' : 'AND',
     policy: {
       type: discountType,
       value: discountValue,

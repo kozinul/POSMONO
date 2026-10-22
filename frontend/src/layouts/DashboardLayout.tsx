@@ -15,28 +15,63 @@ interface NavItem {
   permission?: string;
 }
 
-const navigation: NavItem[] = [
+// Dashboard & POS stay ungrouped at the top — they are the pages people open
+// every shift; everything else is grouped so the rail stays scannable.
+const pinnedNavigation: NavItem[] = [
   { name: 'Dashboard', href: '/dashboard' },
   { name: 'POS', href: '/pos' },
-  { name: 'Orders', href: '/orders' },
-  { name: 'Refunds', href: '/refunds' },
-  { name: 'Products', href: '/products' },
-  { name: 'Families', href: '/families' },
-  { name: 'Categories', href: '/categories' },
-  { name: 'Modifiers', href: '/modifiers', permission: 'products:write' },
-  { name: 'Members', href: '/members' },
-  { name: 'Promotions', href: '/promotions' },
-  { name: 'Payment', href: '/payment-methods' },
-  { name: 'Inventory', href: '/inventory' },
-  { name: 'Gudang', href: '/inventory/warehouses' },
-  { name: 'Outlet', href: '/outlets', permission: 'outlet:manage' },
-  { name: 'Templates', href: '/templates' },
-  { name: 'Reports', href: '/reports' },
-  { name: 'Shifts', href: '/shifts' },
-  { name: 'Users', href: '/users' },
-  { name: 'Settings', href: '/settings' },
-  { name: 'Printer', href: '/settings/printers' },
-  { name: 'Database', href: '/database' },
+];
+
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+const navigationGroups: NavGroup[] = [
+  {
+    label: 'Transaksi',
+    items: [
+      { name: 'Orders', href: '/orders' },
+      { name: 'Refunds', href: '/refunds' },
+      { name: 'Shifts', href: '/shifts' },
+    ],
+  },
+  {
+    label: 'Katalog',
+    items: [
+      { name: 'Products', href: '/products' },
+      { name: 'Families', href: '/families' },
+      { name: 'Categories', href: '/categories' },
+      { name: 'Modifiers', href: '/modifiers', permission: 'products:write' },
+      { name: 'Promotions', href: '/promotions' },
+      { name: 'Members', href: '/members' },
+    ],
+  },
+  {
+    label: 'Inventaris',
+    items: [
+      { name: 'Inventory', href: '/inventory' },
+      { name: 'Gudang', href: '/inventory/warehouses' },
+    ],
+  },
+  {
+    label: 'Operasional',
+    items: [
+      { name: 'Reports', href: '/reports' },
+      { name: 'Payment', href: '/payment-methods' },
+      { name: 'Outlet', href: '/outlets', permission: 'outlet:manage' },
+      { name: 'Templates', href: '/templates' },
+    ],
+  },
+  {
+    label: 'Sistem',
+    items: [
+      { name: 'Users', href: '/users' },
+      { name: 'Settings', href: '/settings' },
+      { name: 'Printer', href: '/settings/printers' },
+      { name: 'Database', href: '/database' },
+    ],
+  },
 ];
 
 const OUTLET_SCOPE_KEYS: ReadonlyArray<readonly string[]> = [
@@ -77,10 +112,15 @@ export function DashboardLayout() {
     document.title = currentTenantName ? `POS - ${currentTenantName}` : 'Kuire POS';
   }, [currentTenantName]);
 
-  const visibleNavigation = navigation.filter(
-    (item) =>
-      (user?.roleName === 'Cashier' ? item.href === '/pos' : !item.permission || hasPermission(user, item.permission)),
-  );
+  const isVisible = (item: NavItem) =>
+    user?.roleName === 'Cashier' ? item.href === '/pos' : !item.permission || hasPermission(user, item.permission);
+
+  const visiblePinned = pinnedNavigation.filter(isVisible);
+  // A group whose items are all filtered out disappears entirely (cashiers only
+  // ever see the POS shortcut).
+  const visibleGroups = navigationGroups
+    .map((group) => ({ ...group, items: group.items.filter(isVisible) }))
+    .filter((group) => group.items.length > 0);
 
   // Inactive outlets are not offered — picking one would only produce 403s on
   // every POS mutation. The *currently active* outlet stays in the list even if
@@ -110,6 +150,34 @@ export function DashboardLayout() {
       alert('Gagal beralih tenant');
     }
   };
+
+  const renderNavItem = (item: NavItem) => {
+    const active = location.pathname === item.href || location.pathname.startsWith(`${item.href}/`);
+    const classes = clsx(
+      'flex items-center rounded-xl px-4 py-2.5 text-sm font-medium transition-colors',
+      active
+        ? 'bg-primary-50 text-primary-700'
+        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
+    );
+    // POS always opens in a new tab so the cashier never loses the dashboard.
+    return item.href === '/pos' ? (
+      <a key={item.href} href={item.href} target="_blank" rel="noopener noreferrer" className={classes}>
+        {item.name}
+      </a>
+    ) : (
+      <Link key={item.href} to={item.href} className={classes}>
+        {item.name}
+      </Link>
+    );
+  };
+
+  if (isPOSPage) {
+    return (
+      <div className="h-screen w-screen flex overflow-hidden bg-gray-50">
+        <Outlet />
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
@@ -176,34 +244,15 @@ export function DashboardLayout() {
         {!isPOSPage && (
           <aside className="w-60 shrink-0 border-r border-gray-200 bg-white shadow-sm overflow-y-auto">
             <nav className="p-4 space-y-1">
-              {visibleNavigation.map((item) => {
-                const active = location.pathname === item.href || location.pathname.startsWith(`${item.href}/`);
-                const classes = clsx(
-                  'flex items-center rounded-xl px-4 py-2.5 text-sm font-medium transition-colors',
-                  active
-                    ? 'bg-primary-50 text-primary-700'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
-                );
-                return item.href === '/pos' ? (
-                  <a
-                    key={item.href}
-                    href={item.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={classes}
-                  >
-                    {item.name}
-                  </a>
-                ) : (
-                  <Link
-                    key={item.href}
-                    to={item.href}
-                    className={classes}
-                  >
-                    {item.name}
-                  </Link>
-                );
-              })}
+              {visiblePinned.map(renderNavItem)}
+              {visibleGroups.map((group) => (
+                <div key={group.label} className="pt-4 first:pt-0">
+                  <p className="px-4 pb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                    {group.label}
+                  </p>
+                  <div className="space-y-1">{group.items.map(renderNavItem)}</div>
+                </div>
+              ))}
             </nav>
           </aside>
         )}

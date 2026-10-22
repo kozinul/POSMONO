@@ -12,6 +12,7 @@ export interface DiscountContext {
   items: Array<{ productId: string; categoryId: string; quantity: number; unitPrice: number; lineTotal: number }>;
   promoCode?: string;
   customerGroupId?: string;
+  customerTags?: string[];
   currentDate?: Date;
 }
 
@@ -76,7 +77,12 @@ export class DiscountEngine {
     items: DiscountContext['items'],
     subtotal: number,
     rules: IDiscountRule[],
-    contextOverrides?: { promoCode?: string; customerGroupId?: string; currentDate?: Date },
+    contextOverrides?: {
+      promoCode?: string;
+      customerGroupId?: string;
+      customerTags?: string[];
+      currentDate?: Date;
+    },
   ): DiscountResult {
     const sorted = [...rules]
       .filter((r) => r.active)
@@ -86,7 +92,22 @@ export class DiscountEngine {
     const freeItems: Array<{ productId: string; quantity: number }> = [];
     const generatedLineItems: Array<{ productId: string; productName: string; categoryId: string; quantity: number; unitPrice: number }> = [];
     let totalDiscount = 0;
+    let totalFreeItemValue = 0;
     const itemDiscounts = new Map<string, number>();
+
+    // Free units are taken from the cheapest line of their product: a product
+    // can sit in the cart more than once (same product, different modifiers →
+    // different unit prices) and a giveaway has to name a unit. The pricing
+    // service splits the receipt lines with the same rule, so the quoted
+    // amount and the receipt can never disagree about which unit was free.
+    const remainingLineQty = items.map((i) => i.quantity);
+    const referencePriceByProduct = new Map<string, number>();
+    for (const i of items) {
+      const current = referencePriceByProduct.get(i.productId);
+      if (current === undefined || i.unitPrice < current) {
+        referencePriceByProduct.set(i.productId, i.unitPrice);
+      }
+    }
 
     for (const ruleData of sorted) {
       const rule = DiscountRule.create(ruleData);
@@ -97,7 +118,8 @@ export class DiscountEngine {
       }
 
       const promoCode = contextOverrides?.promoCode;
-      if (rule.getPromoCodeId() && rule.getPromoCodeId() !== promoCode) {
+      const rulePromoCode = rule.getPromoCodeId();
+      if (rulePromoCode && rulePromoCode.trim().toUpperCase() !== (promoCode ?? '').trim().toUpperCase()) {
         logger.debug({ ruleId: rule.getId(), ruleName: rule.getName() }, 'Discount rule skipped: promo code mismatch');
         continue;
       }
@@ -107,10 +129,11 @@ export class DiscountEngine {
         items,
         currentDate: contextOverrides?.currentDate,
         customerGroupId: contextOverrides?.customerGroupId,
+        customerTags: contextOverrides?.customerTags,
         promoCode,
       };
 
-      if (!this.conditionEvaluator.evaluate(rule.getConditions(), conditionContext)) {
+      if (!this.conditionEvaluator.evaluate(rule.getConditions(), conditionContext, rule.getLogic())) {
         logger.debug({ ruleId: rule.getId(), ruleName: rule.getName() }, 'Discount rule skipped: conditions not met');
         continue;
       }
@@ -132,7 +155,15 @@ export class DiscountEngine {
 
       const effectResult = this.effectApplier.apply(rule.getEffects(), effectContext);
 
-      logger.info({ ruleId: rule.getId(), ruleName: rule.getName(), discountAmount: effectResult.discountAmount }, 'Discount rule applied');
+      // A free-item effect does not produce a cash discount — the value it takes
+      // off is carried by the free line. It is reported per rule so the receipt
+      // and the order breakdown can show what the promotion actually gave away.
+      const ruleFreeItemValue = effectResult.freeItems
+        ? this.valueFreeUnits(effectResult.freeItems, items, remainingLineQty, referencePriceByProduct)
+        : 0;
+      totalFreeItemValue += ruleFreeItemValue;
+
+      logger.info({ ruleId: rule.getId(), ruleName: rule.getName(), discountAmount: effectResult.discountAmount, freeItemValue: ruleFreeItemValue }, 'Discount rule applied');
 
       if (effectResult.freeItems) {
         freeItems.push(...effectResult.freeItems);
@@ -154,6 +185,7 @@ export class DiscountEngine {
         ruleId: rule.getId(),
         ruleName: rule.getName(),
         discountAmount: effectResult.discountAmount,
+        freeItemValue: ruleFreeItemValue,
         description: effectResult.description,
       };
 
@@ -161,18 +193,6 @@ export class DiscountEngine {
       totalDiscount += effectResult.discountAmount;
 
       if (!rule.isStackable()) break;
-    }
-
-    // Value of free items (price × quantity). Uses the unit price of the
-    // matching cart line for that product. Free *gifts* (generatedLineItems)
-    // have unitPrice 0 and contribute nothing here.
-    const unitPriceByProduct = new Map<string, number>();
-    for (const i of items) {
-      if (!unitPriceByProduct.has(i.productId)) unitPriceByProduct.set(i.productId, i.unitPrice);
-    }
-    let freeItemValue = 0;
-    for (const fi of freeItems) {
-      freeItemValue += (unitPriceByProduct.get(fi.productId) ?? 0) * fi.quantity;
     }
 
     totalDiscount = Math.min(totalDiscount, subtotal);
@@ -183,7 +203,7 @@ export class DiscountEngine {
       appliedRules,
       freeItems,
       generatedLineItems,
-      freeItemValue,
+      freeItemValue: totalFreeItemValue,
       finalSubtotal: subtotal - totalDiscount,
       breakdown: appliedRules,
       itemDiscounts: Array.from(itemDiscounts.entries()).map(([productId, discountAmount]) => ({
@@ -191,5 +211,42 @@ export class DiscountEngine {
         discountAmount,
       })),
     };
+  }
+
+  /**
+   * Value of the free units a promotion hands out: the units actually taken
+   * from the cart (cheapest line of the product first) plus the surplus that is
+   * handed over as a gift, worth the product's cheapest price — nothing when
+   * the product is not in the cart at all.
+   */
+  private valueFreeUnits(
+    freeItems: Array<{ productId: string; quantity: number }>,
+    items: DiscountContext['items'],
+    remainingLineQty: number[],
+    referencePriceByProduct: Map<string, number>,
+  ): number {
+    let value = 0;
+
+    for (const fi of freeItems) {
+      let left = fi.quantity;
+      const candidates = items
+        .map((item, index) => ({ item, index }))
+        .filter(({ item, index }) => item.productId === fi.productId && remainingLineQty[index] > 0)
+        .sort((a, b) => a.item.unitPrice - b.item.unitPrice);
+
+      for (const { item, index } of candidates) {
+        if (left <= 0) break;
+        const take = Math.min(left, remainingLineQty[index]);
+        remainingLineQty[index] -= take;
+        left -= take;
+        value += take * item.unitPrice;
+      }
+
+      if (left > 0) {
+        value += left * (referencePriceByProduct.get(fi.productId) ?? 0);
+      }
+    }
+
+    return value;
   }
 }

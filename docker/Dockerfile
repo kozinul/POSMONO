@@ -34,5 +34,18 @@ COPY --from=builder /app/backend/package.json ./backend/
 # compiled output (the source tree is not even copied into this stage).
 RUN node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('shared/package.json','utf8'));p.main='dist/index.js';p.types='dist/index.d.ts';fs.writeFileSync('shared/package.json',JSON.stringify(p,null,2))"
 
+# The app writes product images (UPLOAD_DIR = backend/dist/uploads) and pino logs
+# (cwd/logs) at runtime. Create and hand both to `node` *before* dropping privileges;
+# named volumes mounted over these paths inherit this ownership on first use.
+RUN mkdir -p /app/backend/dist/uploads /app/logs \
+ && chown -R node:node /app/backend/dist/uploads /app/logs
+
+# Never run the HTTP server as root. Compose `app` has a healthcheck too; repeating it
+# here keeps plain `docker run` deployments observable.
+USER node
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:3000/api/health || exit 1
+
 EXPOSE 3000
 CMD ["node", "backend/dist/bootstrap/app.js"]

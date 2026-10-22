@@ -21,6 +21,46 @@ export type PromotionRuleType =
 
 export type PromotionLogic = 'AND' | 'OR';
 
+/**
+ * Rule parameters arrive from the promotion form, where a rule can carry
+ * either a list ("productIds") or a single value ("productId"). Both forms
+ * must resolve to the same list so the rule matches either way.
+ */
+function ruleParamList(
+  params: Record<string, unknown>,
+  listKey: string,
+  singleKey: string,
+): string[] {
+  const list = params[listKey];
+  if (Array.isArray(list)) return list.map((v) => String(v));
+  const single = params[singleKey];
+  return single ? [String(single)] : [];
+}
+
+/**
+ * Date boundary of a rule. A plain date ("2026-10-01") means the whole day, so
+ * the end boundary is expanded to the end of that day.
+ */
+function ruleParamDate(
+  params: Record<string, unknown>,
+  primaryKey: string,
+  aliasKey: string,
+  boundary: 'start' | 'end',
+): Date | null {
+  const raw = params[primaryKey] ?? params[aliasKey];
+  if (raw === null || raw === undefined || raw === '') return null;
+  if (raw instanceof Date) return isNaN(raw.getTime()) ? null : raw;
+
+  const str = String(raw).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    const d = new Date(`${str}T${boundary === 'start' ? '00:00:00.000' : '23:59:59.999'}`);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 export type DiscountEffectType = 'percentage' | 'nominal' | 'fixed_price' | 'free_item' | 'bundle_price' | 'buy_x_pay_y' | 'buy_x_get_y';
 
 export interface IPromotionRule {
@@ -164,16 +204,23 @@ export class Promotion extends AggregateRoot<PromotionId> {
         return context.subtotal >= (rule.params.amount as number);
       case 'min_items':
         return context.itemCount >= (rule.params.count as number);
-      case 'product_match':
-        return context.productIds.includes(rule.params.productId as string);
-      case 'category_match':
-        return context.categoryIds.includes(rule.params.categoryId as string);
+      case 'product_match': {
+        const ids = ruleParamList(rule.params, 'productIds', 'productId');
+        return context.productIds.some((id) => ids.includes(id));
+      }
+      case 'category_match': {
+        const ids = ruleParamList(rule.params, 'categoryIds', 'categoryId');
+        return context.categoryIds.some((id) => ids.includes(id));
+      }
       case 'day_of_week':
         return (rule.params.days as number[]).includes(context.dayOfWeek);
       case 'date_range': {
-        const from = new Date(rule.params.from as string);
-        const to = new Date(rule.params.to as string);
-        return context.currentTime >= from && context.currentTime <= to;
+        const from = ruleParamDate(rule.params, 'from', 'startDate', 'start');
+        const to = ruleParamDate(rule.params, 'to', 'endDate', 'end');
+        if (!from && !to) return true;
+        if (from && context.currentTime < from) return false;
+        if (to && context.currentTime > to) return false;
+        return true;
       }
       case 'time_range': {
         const hours = context.currentTime.getHours();

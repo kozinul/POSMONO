@@ -1,4 +1,5 @@
 import { DiscountServiceAdapter } from '../../../discount/application/services/DiscountServiceAdapter';
+import { allocateFreeUnits } from '../../../discount/domain/freeItemAllocation';
 import { PricingEngine, PricingInput, PricingResult as TaxPricingResult } from '../../../tax/domain/PricingEngine';
 import { roundToDenomination, TotalRoundingMode } from '../../../tax/domain/RoundingEngine';
 import { TaxConfiguration } from '../../../tax/domain/TaxConfiguration';
@@ -79,36 +80,37 @@ export class PricingService {
       customerGroupId: input.customerGroupId,
     });
 
-    const freeItemMap = new Map<string, { quantity: number; ruleId: string }>();
+    const freeQtyByProduct = new Map<string, number>();
     for (const fi of discountResult.freeItems) {
-      const existing = freeItemMap.get(fi.productId);
-      if (existing) {
-        existing.quantity += fi.quantity;
-      } else {
-        freeItemMap.set(fi.productId, { quantity: fi.quantity, ruleId: '' });
-      }
+      freeQtyByProduct.set(fi.productId, (freeQtyByProduct.get(fi.productId) ?? 0) + fi.quantity);
+    }
+
+    // The free units come from the cheapest line of their product — the same
+    // rule the discount engine priced them with, so the receipt lines add up
+    // to the quoted amount even when a product sits in the cart twice (same
+    // product, different modifiers → different unit prices).
+    const freeQtyByLine = new Map<number, number>();
+    const allocations = allocateFreeUnits(input.items, freeQtyByProduct);
+    for (const allocation of allocations) {
+      freeQtyByLine.set(allocation.lineIndex, (freeQtyByLine.get(allocation.lineIndex) ?? 0) + allocation.quantity);
     }
 
     const lineItems: PricingLineItem[] = [];
-    for (const item of input.items) {
-      const freeInfo = freeItemMap.get(item.productId);
-      if (freeInfo && freeInfo.quantity > 0) {
-        const freeQty = Math.min(freeInfo.quantity, item.quantity);
-        if (freeQty > 0) {
-          lineItems.push({
-            productId: item.productId,
-            productName: item.productName,
-            categoryId: item.categoryId,
-            quantity: freeQty,
-            unitPrice: 0,
-            originalUnitPrice: item.unitPrice,
-            discount: item.unitPrice * freeQty,
-            lineTotal: 0,
-            isFreeItem: true,
-            freeByRuleId: freeInfo.ruleId,
-          });
-          freeInfo.quantity -= freeQty;
-        }
+    input.items.forEach((item, index) => {
+      const freeQty = freeQtyByLine.get(index) ?? 0;
+      if (freeQty > 0) {
+        lineItems.push({
+          productId: item.productId,
+          productName: item.productName,
+          categoryId: item.categoryId,
+          quantity: freeQty,
+          unitPrice: 0,
+          originalUnitPrice: item.unitPrice,
+          discount: item.unitPrice * freeQty,
+          lineTotal: 0,
+          isFreeItem: true,
+          freeByRuleId: '',
+        });
         const paidQty = item.quantity - freeQty;
         if (paidQty > 0) {
           lineItems.push({
@@ -136,7 +138,7 @@ export class PricingService {
           isFreeItem: false,
         });
       }
-    }
+    });
 
     for (const gli of discountResult.generatedLineItems) {
       if (!lineItems.some((li) => li.productId === gli.productId)) {
@@ -154,27 +156,38 @@ export class PricingService {
       }
     }
 
-    for (const [productId, info] of freeItemMap) {
-      if (info.quantity <= 0) continue;
+    // Units the promotion gives away that are not in the cart are handed over
+    // as a gift, worth the product's cheapest price — the same figure the
+    // discount engine counted, so the two cannot drift apart.
+    for (const [productId, requested] of freeQtyByProduct) {
+      const allocated = allocations
+        .filter((a) => a.productId === productId)
+        .reduce((sum, a) => sum + a.quantity, 0);
+      const surplus = requested - allocated;
+      if (surplus <= 0) continue;
       const source = input.items.find((i) => i.productId === productId);
+      const referencePrice = source
+        ? Math.min(...input.items.filter((i) => i.productId === productId).map((i) => i.unitPrice))
+        : 0;
       lineItems.push({
         productId,
         productName: source?.productName ?? '',
         categoryId: source?.categoryId ?? '',
-        quantity: info.quantity,
+        quantity: surplus,
         unitPrice: 0,
-        originalUnitPrice: source?.unitPrice ?? 0,
-        discount: (source?.unitPrice ?? 0) * info.quantity,
+        originalUnitPrice: referencePrice,
+        discount: referencePrice * surplus,
         lineTotal: 0,
         isFreeItem: true,
-        freeByRuleId: info.ruleId,
+        freeByRuleId: '',
       });
     }
 
-    // Value taken off by free-item effects (price × quantity). This must be
-    // subtracted from the order subtotal so totals match the line items —
-    // otherwise "beli 3 bayar 2" would charge for the free unit(s).
-    const totalFreeItemValue = lineItems.filter((li) => li.isFreeItem).reduce((s, li) => s + li.discount, 0);
+    // Value taken off by free-item effects (price × quantity). The engine owns
+    // this number — the payment path uses the same source, so the quoted
+    // amount and the amount taken at the till cannot drift apart. Without it
+    // "beli 3 bayar 2" would charge for the free unit(s).
+    const freeItemValue = discountResult.freeItemValue;
 
     let manualDiscountAmount = 0;
     if (input.manualDiscount && input.manualDiscount > 0) {
@@ -185,7 +198,7 @@ export class PricingService {
       }
     }
 
-    const totalDiscount = discountResult.totalDiscount + totalFreeItemValue + manualDiscountAmount;
+    const totalDiscount = discountResult.totalDiscount + freeItemValue + manualDiscountAmount;
     const netSubtotal = originalSubtotal - totalDiscount;
 
     const itemDiscountMap = new Map(discountResult.itemDiscounts.map((d) => [d.productId, d.discountAmount]));
@@ -266,11 +279,11 @@ export class PricingService {
     }
     const roundedPayable = grandTotal + rounding;
 
-    logger.info({ originalSubtotal, promotionDiscount: discountResult.totalDiscount, tax, taxRate, serviceCharge, grandTotal, rounding }, 'Pricing calculated');
+    logger.info({ originalSubtotal, promotionDiscount: discountResult.totalDiscount + freeItemValue, tax, taxRate, serviceCharge, grandTotal, rounding }, 'Pricing calculated');
 
     return {
       originalSubtotal,
-      promotionDiscount: discountResult.totalDiscount,
+      promotionDiscount: discountResult.totalDiscount + freeItemValue,
       netSubtotal,
       serviceCharge,
       serviceChargeName,

@@ -12,7 +12,14 @@ interface PromotionDoc extends Document<string> {
   stackable: boolean;
   ruleLogic: string;
   rules: Array<{ type: string; params: Record<string, unknown> }>;
-  effects: Array<{ type: string; value: number; target: string; targetProductId?: string; maxDiscount?: number }>;
+  effects: Array<{
+    type: string;
+    value: number;
+    target: string;
+    targetProductId?: string;
+    maxDiscount?: number;
+    params?: Record<string, unknown>;
+  }>;
   usageLimit: number | null;
   usedCount: number;
   minPurchase: number;
@@ -98,7 +105,10 @@ export class MongoPromotionRepository {
 
   async findByCode(tenantId: string, code: string): Promise<Promotion | null> {
     if (!code) return null;
-    const doc = await this.model.findOne({ tenantId, code }).exec();
+    // Promo codes are case-insensitive: a cashier typing "promo10" must hit the
+    // same promotion as "PROMO10".
+    const escaped = code.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const doc = await this.model.findOne({ tenantId, code: { $regex: `^${escaped}$`, $options: 'i' } }).exec();
     if (!doc) return null;
     return this.toDomain(doc);
   }

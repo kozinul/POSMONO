@@ -88,6 +88,31 @@ describe('PaymentModal', () => {
     expect(screen.getAllByText('Rp 50.000')).toHaveLength(2);
   });
 
+  it('keeps the two columns side by side on a narrow screen and pins the pay button', async () => {
+    render(
+      <TestQueryProvider>
+        <PaymentModal />
+      </TestQueryProvider>,
+    );
+
+    await screen.findByText('Tunai');
+
+    // The body scrolls horizontally instead of squeezing the payment panel.
+    expect(document.querySelector('.overflow-x-auto')).toBeTruthy();
+
+    const columns = document.querySelectorAll('.md\\:w-1\\/2');
+    expect(columns).toHaveLength(2);
+    columns.forEach((col) => {
+      expect(col.className).toContain('shrink-0');
+      expect(col.className).toContain('md:min-w-[420px]');
+    });
+
+    const payBtn = screen.getByRole('button', { name: /^Bayar/ });
+    const sticky = payBtn.closest('.sticky');
+    expect(sticky).toBeTruthy();
+    expect(sticky?.className).toContain('bottom-0');
+  });
+
   it('handles cash payment flow and invokes auto-print on success', async () => {
     vi.mocked(api.post).mockResolvedValueOnce({
       data: {

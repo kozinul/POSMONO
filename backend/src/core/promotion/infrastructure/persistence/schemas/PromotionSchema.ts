@@ -20,7 +20,10 @@ const PromotionEffectSchema = new Schema(
   {
     type: {
       type: String,
-      enum: ['percentage', 'nominal', 'fixed_price', 'free_item', 'bundle_price'],
+      enum: [
+        'percentage', 'nominal', 'fixed_price', 'free_item', 'bundle_price',
+        'buy_x_pay_y', 'buy_x_get_y',
+      ],
       required: true,
     },
     value: { type: Number, required: true },
@@ -32,6 +35,11 @@ const PromotionEffectSchema = new Schema(
     targetProductId: { type: String },
     targetProductName: { type: String },
     maxDiscount: { type: Number },
+    // Effect-specific parameters (buyQuantity, payQuantity, allocationStrategy,
+    // targetType, ...). Without this field Mongoose strict mode silently drops
+    // them on write, so the effect reaches the discount engine without its
+    // configuration.
+    params: { type: Schema.Types.Mixed, default: {} },
   },
   { _id: false },
 );

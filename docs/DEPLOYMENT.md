@@ -1,6 +1,6 @@
 # Deployment Guide — Kuire POS (POSMono)
 
-> Dokumen rencana & panduan deploy ke produksi. Status: **Fase A selesai (A1–A10b)** — sisa operator/VPS di Fase B+.
+> Dokumen rencana & panduan deploy ke produksi. Status: **Fase A selesai (A1–A10b) + P1 container hardening** — sisa operator/VPS di Fase B+.
 > Diterapkan pada: repo `kozinul/POSMONO` (branch `master`) · image `posmono` di Docker Hub · stack `docker/docker-compose.prod.yml` + `docker/docker-compose.caddy.yml`.
 
 ---
@@ -28,8 +28,8 @@
 
 Fakta dari kode saat ini:
 - Backend Express melayani `frontend/dist` (static + `GET *` SPA fallback) → satu container cukup. (`backend/src/bootstrap/server.ts`)
-- `docker/docker-compose.prod.yml`: `mongodb` (volume `mongodb_data`, **`--auth` aktif** dari `MONGO_INITDB_ROOT_*` di `docker/.env`), `redis` (volume `redis_data`), `app` (bind `127.0.0.1:3000`, `env_file: backend/.env` + `environment.MONGO_URI` ber-auth), semua di network eksternal `kuire`.
-- `docker/Dockerfile`: multi-stage `base → deps → builder → runner`, `CMD node backend/dist/bootstrap/app.js`, `EXPOSE 3000`.
+- `docker/docker-compose.prod.yml`: `mongodb` (volume `mongodb_data`, **`--auth` aktif** dari `MONGO_INITDB_ROOT_*` di `docker/.env`; initdb `docker/mongo-init/` membuat **user aplikasi least-privilege** `readWrite` pada `MONGO_DATABASE`), `redis` (volume `redis_data`), `app` (bind `127.0.0.1:3000`, `env_file: backend/.env` + `environment.MONGO_URI` memakai **user aplikasi**, bukan root), semua di network eksternal `kuire`.
+- `docker/Dockerfile`: multi-stage `base → deps → builder → runner`, stage `runner` berjalan sebagai **`USER node`** (bukan root), punya `HEALTHCHECK` image-level ke `/api/health`, lalu `CMD node backend/dist/bootstrap/app.js` + `EXPOSE 3000`.
 - TLS: `docker/docker-compose.caddy.yml` + `docker/Caddyfile` (Caddy, auto-TLS Let's Encrypt) — front-end publik 80/443.
 - CI: `.github/workflows/ci.yml` (push/PR `master`, publish image multi-arch di `master` + tag `v*`).
 
@@ -136,6 +136,8 @@ cp docker/.env.example docker/.env
 #   MONGO_INITDB_ROOT_USERNAME=posmono
 #   MONGO_INITDB_ROOT_PASSWORD=<password panjang, aman-URL>
 #   MONGO_DATABASE=posmono
+#   MONGO_APP_USERNAME=posmono_app
+#   MONGO_APP_PASSWORD=<password lain, panjang, aman-URL>
 ```
 
 > `docker/.env` **wajib** ada: selain `DOMAIN`/`ACME_EMAIL`, `docker-compose.prod.yml`
@@ -150,6 +152,11 @@ cp docker/.env.example docker/.env
 > User root dibuat **hanya saat volume `mongodb_data` masih kosong**. Bila VPS ini pernah
 > menjalankan stack sebelum auth aktif, volume lama tidak punya user dan app akan gagal
 > autentikasi — ikuti `docs/OPS_RUNBOOK.md` §6b (dump → hapus volume → up → restore).
+>
+> **User aplikasi (`MONGO_APP_*`) juga hanya dibuat saat volume kosong** oleh
+> `docker/mongo-init/10-app-user.js` (role `readWrite` pada `MONGO_DATABASE`, bukan root).
+> Service `app` memakai kredensial ini. Bila volume sudah terisi dari versi yang masih
+> memakai root, tambahkan user-nya manual — `docs/OPS_RUNBOOK.md` §6c.
 
 > Caddy otomatis meminta & memperpanjang sertifikat Let's Encrypt. Tidak ada config TLS manual.
 > Service aplikasi (mongodb/redis/app) terhubung ke network eksternal `kuire` di
@@ -243,7 +250,8 @@ Checklist verifikasi tenant pertama:
 
 ```
 docker/
-  Dockerfile                     # multi-stage image app
+  Dockerfile                     # multi-stage image app (runner: USER node + HEALTHCHECK)
+  mongo-init/10-app-user.js      # initdb sekali: user aplikasi readWrite (bukan root)
   docker-compose.prod.yml        # mongo + redis + app (healthcheck, volume uploads, network kuire — Fase A)
   docker-compose.caddy.yml       # reverse proxy + TLS otomatis
   Caddyfile                      # site block domain + reverse_proxy app:3000
@@ -271,6 +279,8 @@ docs/
 - [ ] UptimeRobot monitor `/api/health` aktif (500/503 dianggap DOWN)
 
 - [ ] `JWT_SECRET` random di `backend/.env` (bukan default)
+- [ ] `MONGO_APP_USERNAME`/`MONGO_APP_PASSWORD` terisi dan **berbeda** dari kredensial root
+- [ ] Container `app` berjalan sebagai `node` (`docker exec posmono-app id -u` → `1000`)
 - [ ] Firewall: hanya 80/443/SSH terbuka
 - [ ] Domain `pos.domain` + TLS aktif via Caddy (`docker/.env` terisi, `docker compose --env-file docker/.env -f docker/docker-compose.caddy.yml up -d`)
 - [ ] Tenant pertama provisi (`seed --prod`) + checklist §6

@@ -13,15 +13,68 @@ const ruleSchema = z.object({
   params: z.record(z.unknown()),
 });
 
-const effectSchema = z.object({
-  type: z.enum(['percentage', 'nominal', 'fixed_price', 'free_item', 'bundle_price', 'buy_x_pay_y', 'buy_x_get_y']),
-  value: z.number(),
-  target: z.enum(['order', 'item', 'cheapest_item', 'specific_product']).default('order'),
-  targetProductId: z.string().optional(),
-  targetProductName: z.string().optional(),
-  maxDiscount: z.number().optional(),
-  params: z.record(z.unknown()).optional(),
-});
+/**
+ * Effect parameters that decide how much is given away. They are validated
+ * here because a misconfiguration is a money bug: "Beli 3 Bayar 0" (an empty
+ * "Bayar" field arrives as 0) hands over the whole cart for free.
+ */
+const effectSchema = z
+  .object({
+    type: z.enum(['percentage', 'nominal', 'fixed_price', 'free_item', 'bundle_price', 'buy_x_pay_y', 'buy_x_get_y']),
+    value: z.number(),
+    target: z.enum(['order', 'item', 'cheapest_item', 'specific_product']).default('order'),
+    targetProductId: z.string().optional(),
+    targetProductName: z.string().optional(),
+    maxDiscount: z.number().optional(),
+    params: z.record(z.unknown()).optional(),
+  })
+  .superRefine((effect, ctx) => {
+    const params = (effect.params ?? {}) as Record<string, unknown>;
+
+    if (effect.type === 'buy_x_pay_y') {
+      const buyQuantity = Number(params.buyQuantity);
+      const payQuantity = Number(params.payQuantity);
+      if (!Number.isFinite(buyQuantity) || buyQuantity < 2) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Min. Beli minimal 2',
+          path: ['params', 'buyQuantity'],
+        });
+      }
+      if (!Number.isFinite(payQuantity) || payQuantity < 1) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Jumlah yang dibayar minimal 1 (0 berarti seluruh pesanan gratis)',
+          path: ['params', 'payQuantity'],
+        });
+      } else if (Number.isFinite(buyQuantity) && payQuantity >= buyQuantity) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Jumlah yang dibayar harus lebih kecil dari Min. Beli',
+          path: ['params', 'payQuantity'],
+        });
+      }
+    }
+
+    if (effect.type === 'buy_x_get_y') {
+      const buyQuantity = Number(params.buyQuantity);
+      const getQuantity = Number(params.getQuantity);
+      if (!Number.isFinite(buyQuantity) || buyQuantity < 1) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Beli Qty minimal 1',
+          path: ['params', 'buyQuantity'],
+        });
+      }
+      if (!Number.isFinite(getQuantity) || getQuantity < 1) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Dapat Qty minimal 1',
+          path: ['params', 'getQuantity'],
+        });
+      }
+    }
+  });
 
 const createPromotionSchema = z.object({
   name: z.string().min(1),

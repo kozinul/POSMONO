@@ -7,9 +7,10 @@ interface EffectCardProps {
   index: number;
   onUpdate: (id: string, updates: Partial<EffectInput>) => void;
   onRemove: (id: string) => void;
+  error?: string;
 }
 
-export default function EffectCard({ effect, index, onUpdate, onRemove }: EffectCardProps) {
+export default function EffectCard({ effect, index, onUpdate, onRemove, error }: EffectCardProps) {
   const config = EFFECT_REGISTRY[effect.type];
   const ParamEditor = config?.component;
 
@@ -49,10 +50,13 @@ export default function EffectCard({ effect, index, onUpdate, onRemove }: Effect
           </div>
 
           {ParamEditor && (
-            <ParamEditor
-              params={effect.params}
-              onChange={(params) => onUpdate(effect.id, { params })}
-            />
+            <div>
+              <ParamEditor
+                params={effect.params}
+                onChange={(params) => onUpdate(effect.id, { params })}
+              />
+              {error && <p className="text-xs text-red-600 mt-1 font-medium">{error}</p>}
+            </div>
           )}
         </div>
 

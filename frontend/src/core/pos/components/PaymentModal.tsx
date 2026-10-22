@@ -359,10 +359,10 @@ export function PaymentModal() {
 
   return (
     <div className="fixed inset-0 z-50 flex bg-black/50">
-      <div className="flex flex-col w-full h-full">
+      <div className="flex flex-col w-full h-full overflow-hidden">
         {/* Header Bar */}
-        <div className="px-6 py-3 bg-white border-b border-gray-200 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-6">
+        <div className="px-6 py-3 bg-white border-b border-gray-200 flex items-center justify-between gap-2 shrink-0">
+          <div className="flex items-center gap-6 flex-wrap">
             <h2 className="text-lg font-bold text-gray-800">Pembayaran</h2>
             <div className="blue-primary rounded-lg px-4 py-1.5 text-white">
               <span className="text-xs font-medium text-white/80">Total</span>
@@ -379,10 +379,12 @@ export function PaymentModal() {
           </button>
         </div>
 
-        {/* Two Column Body */}
-        <div className="flex-1 flex min-h-0">
+        {/* Two Column Body — on a narrow screen the columns stay side by side
+            and the body scrolls horizontally, so the payment panel is never
+            squeezed into an unreadable column. */}
+        <div className="flex-1 flex min-h-0 overflow-x-auto">
           {/* Left: Items + Promo */}
-          <div className={`flex-1 flex flex-col bg-white border-r border-gray-200 p-5 transition-opacity ${
+          <div className={`w-full md:w-1/2 md:min-w-[420px] shrink-0 flex flex-col bg-white border-r border-gray-200 p-5 transition-opacity ${
             qris.phase !== 'idle' ? 'opacity-50 pointer-events-none' : ''
           }`}>
             {/* Split Bill Toggle */}
@@ -555,7 +557,7 @@ export function PaymentModal() {
           </div>
 
           {/* Right: Payment Methods / QRIS Panel */}
-          <div className="flex-1 flex flex-col bg-gray-50 p-5">
+          <div className="w-full md:w-1/2 md:min-w-[420px] shrink-0 flex flex-col bg-gray-50 p-5">
             {qris.phase !== 'idle' ? (
               <>
                 {qris.phase === 'creating' && (
@@ -684,7 +686,7 @@ export function PaymentModal() {
                 </div>
               </>
             ) : (
-              <>
+              <div className="flex-1 flex flex-col overflow-y-auto">
             <h3 className="text-sm font-bold text-gray-700 mb-4">Metode Pembayaran</h3>
 
             <div className="grid grid-cols-2 gap-2">
@@ -773,7 +775,7 @@ export function PaymentModal() {
               </div>
             )}
 
-            <div className="mt-auto pt-4">
+            <div className="mt-auto pt-4 sticky bottom-0 bg-gray-50 border-t border-gray-200">
               {splitMode && (
                 <p className="text-xs text-amber-600 font-medium text-center mb-2">
                   Bayar {selectedUnits} dari {totalUnits} unit · Rp {formatIDR(rawTotal)}
@@ -793,7 +795,7 @@ export function PaymentModal() {
                     : `Bayar Rp ${formatIDR(payable)}`}
               </button>
             </div>
-              </>
+              </div>
             )}
           </div>
         </div>

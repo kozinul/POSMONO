@@ -28,12 +28,17 @@ export class ConditionEvaluator {
     this.strategies.set(strategy.type, strategy);
   }
 
-  evaluate(conditions: IDiscountCondition[], context: ConditionContext): boolean {
+  evaluate(
+    conditions: IDiscountCondition[],
+    context: ConditionContext,
+    logic: 'AND' | 'OR' = 'AND',
+  ): boolean {
     if (conditions.length === 0) return true;
-    return conditions.every((condition) => {
+    const results = conditions.map((condition) => {
       const strategy = this.strategies.get(condition.type);
       if (!strategy) return false;
       return strategy.evaluate(condition, context);
     });
+    return logic === 'OR' ? results.some(Boolean) : results.every(Boolean);
   }
 }

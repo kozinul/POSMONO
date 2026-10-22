@@ -233,6 +233,8 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 
 > Status per 2026-10-10: **backend 1622/1622 (129 files)** · **frontend 233/233 (33 files)** · `pnpm lint` bersih · `pnpm budget` hijau (`: any` 199/200). Tambahan terbaru: **Outlet Filter di `/reports` UI** — dropdown outlet di tab Harian/Penjualan/Keuangan (`outletId` masuk query + export), menutup sisa Fase 23; dan **fix "Plan tidak ditemukan."** — default plans kini pakai `_id` string stabil + migrasi boot menulis ulang ObjectId `_id` lama. Detail: `AGENTS.md` entri 2026-10-10.
 
+> Status per 2026-10-16: **backend 1775/1775 (138 files)** · **frontend 243/243 (34 files)** · `pnpm lint` bersih · `pnpm budget` hijau (`: any` 199/200) · `knip` exit 0. **P0 + P1 container hardening selesai**: rate limit auth, 404 JSON `/api/*`, graceful shutdown, `validateEnv` produksi, Mongo `--auth`, Dockerfile `USER node` + `HEALTHCHECK`, dan user Mongo aplikasi `readWrite` via initdb (`docker/mongo-init/`). Detail: `AGENTS.md` / `docs/DAILY_LOG.md` entri 2026-10-16.
+
 ---
 
 ### PHASE H — MVP Deployment `[~]`
@@ -247,7 +249,7 @@ MVP (UMKM) ──→ Restaurant Module ──→ Villa Module ──→ AI/Platf
 | Monitoring (logs, errors) | `[ ]` |
 | Backup strategy | `[ ]` |
 
-**Completion:** ~30% (menunggu akses VPS dari user)
+**Completion:** ~35% (container production-ready: non-root + healthcheck + DB least-privilege; sisa VPS/SSL/monitoring/backup — menunggu akses VPS dari user)
 
 ---
 

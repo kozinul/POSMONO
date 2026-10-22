@@ -18,6 +18,7 @@ export class DiscountServiceAdapter {
     items: Array<{ productId: string; categoryId: string; quantity: number; unitPrice: number }>;
     promoCode?: string;
     customerGroupId?: string;
+    customerTags?: string[];
   }): Promise<DiscountResult> {
     const config = await this.configRepo.findByTenantId(input.tenantId);
     if (!config || !config.enabled) {
@@ -40,6 +41,7 @@ export class DiscountServiceAdapter {
     return this.engine.applyDiscounts(items, subtotal, config.rules, {
       promoCode: input.promoCode,
       customerGroupId: input.customerGroupId,
+      customerTags: input.customerTags ?? (input.customerGroupId ? [input.customerGroupId] : []),
     });
   }
 

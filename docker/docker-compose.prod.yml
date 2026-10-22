@@ -15,8 +15,15 @@ services:
       # reads it inside the container to scope `mongodump --db`. The app's database is
       # whatever docker/.env writes into MONGO_URI below.
       MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-posmono}
+      # Least-privilege credentials for the app (created by docker/mongo-init on the
+      # first boot). Root is kept for admin/backup; the app never uses it.
+      MONGO_APP_USERNAME: ${MONGO_APP_USERNAME:?belum diset di docker/.env}
+      MONGO_APP_PASSWORD: ${MONGO_APP_PASSWORD:?belum diset di docker/.env}
     volumes:
       - mongodb_data:/data/db
+      # Initdb runs only while the volume is empty — see OPS_RUNBOOK §6c when the
+      # volume already existed before the scoped user was introduced.
+      - ./mongo-init:/docker-entrypoint-initdb.d:ro
     # Semua service di network `kuire` agar Caddy dan tools maintenance
     # (mongorestore via `--network kuire`, lihat docs/OPS_RUNBOOK.md) bisa
     # resolve `mongodb`. Network ini dibuat manual sekali: `docker network create kuire`.
@@ -67,7 +74,8 @@ services:
     environment:
       # Overrides the (unauthenticated) MONGO_URI in backend/.env so the database password
       # lives in exactly one file: docker/.env. `environment` wins over `env_file`.
-      MONGO_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongodb:27017/${MONGO_DATABASE:-posmono}?authSource=admin
+      # Uses the scoped app user (readWrite on MONGO_DATABASE), not the root account.
+      MONGO_URI: mongodb://${MONGO_APP_USERNAME}:${MONGO_APP_PASSWORD}@mongodb:27017/${MONGO_DATABASE:-posmono}?authSource=admin
     networks:
       # `kuire` dipakai Caddy untuk resolve app:3000 (reverse proxy + TLS).
       - kuire

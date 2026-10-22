@@ -161,20 +161,25 @@ export class PaymentService {
         promoCode: input.promoCode,
       });
 
-      if (discountResult.totalDiscount > 0) {
-        promoDiscount = discountResult.totalDiscount;
+      if (discountResult.totalDiscount > 0 || discountResult.freeItemValue > 0) {
+        // A free-item promotion returns no cash discount — the value it takes
+        // off lives in freeItemValue. It has to be part of the order total,
+        // otherwise the customer is charged for the "gratis" unit and the
+        // amount taken at the till no longer matches the quoted amount.
+        const freeItemValue = discountResult.freeItemValue;
+        promoDiscount = discountResult.totalDiscount + freeItemValue;
         promotionBreakdown = discountResult.appliedRules.map((rule) => ({
           id: rule.ruleId,
           name: rule.ruleName,
           code: input.promoCode ?? '',
-          totalDiscount: rule.discountAmount,
+          totalDiscount: rule.discountAmount + (rule.freeItemValue ?? 0),
           description: rule.description,
         }));
         discountBreakdownList = discountResult.appliedRules.map((rule) => ({
           id: rule.ruleId,
           name: rule.ruleName,
-          type: 'percentage' as const,
-          amount: rule.discountAmount,
+          type: 'nominal' as const,
+          amount: rule.discountAmount + (rule.freeItemValue ?? 0),
           appliedTo: 'order',
         }));
       }

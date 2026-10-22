@@ -12,6 +12,11 @@ export interface IDiscountRule {
   stackable: boolean;
   active: boolean;
   scope: IDiscountScope;
+  /**
+   * How the conditions combine: every condition must pass (AND) or at least
+   * one (OR). Defaults to AND when omitted.
+   */
+  logic?: 'AND' | 'OR';
   policy: IDiscountPolicy;
   conditions: IDiscountCondition[];
   effects: IDiscountEffect[];
@@ -27,6 +32,12 @@ export interface DiscountRuleResult {
   ruleId: string;
   ruleName: string;
   discountAmount: number;
+  /**
+   * Value taken off by free items produced by this rule (price × quantity).
+   * A free-item promotion returns 0 as cash discount — this is the money it
+   * actually gave away.
+   */
+  freeItemValue?: number;
   description: string;
 }
 
@@ -68,6 +79,7 @@ export class DiscountRule {
   isActive(): boolean { return this.data.active; }
   getPolicy(): DiscountPolicy { return DiscountPolicy.create(this.data.policy); }
   getScope(): DiscountScope { return DiscountScope.create(this.data.scope); }
+  getLogic(): 'AND' | 'OR' { return this.data.logic === 'OR' ? 'OR' : 'AND'; }
   getPromoCodeId(): string | undefined { return this.data.promoCodeId; }
   getConditions(): IDiscountCondition[] { return [...this.data.conditions]; }
   getEffects(): IDiscountEffect[] { return [...this.data.effects]; }

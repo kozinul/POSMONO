@@ -9,13 +9,13 @@
 
 | Hal | Nilai |
 |-----|-------|
-| App | container `posmono-app`, port internal :3000 |
-| DB | container `posmono-mongodb`, volume `mongodb_data`, **`--auth` aktif** (user root di `admin`) |
+| App | container `posmono-app`, port internal :3000, berjalan sebagai **user `node`** (UID 1000) — bukan root |
+| DB | container `posmono-mongodb`, volume `mongodb_data`, **`--auth` aktif** — user root (`admin`) untuk admin/backup + user aplikasi `readWrite` pada `MONGO_DATABASE` |
 | Cache | container `posmono-redis`, volume `redis_data` |
 | Reverse proxy | kontainer `caddy` (TLS otomatis) |
 | Compose file | `/home/deploy/kuire/docker/docker-compose.prod.yml` |
 | Env (app) | `/home/deploy/kuire/backend/.env` (JWT_SECRET dkk — **bukan** kredensial DB) |
-| Env (compose) | `/home/deploy/kuire/docker/.env` (DOMAIN, ACME_EMAIL, `MONGO_INITDB_ROOT_*`, `MONGO_DATABASE`) — satu-satunya sumber kredensial Mongo |
+| Env (compose) | `/home/deploy/kuire/docker/.env` (DOMAIN, ACME_EMAIL, `MONGO_INITDB_ROOT_*`, `MONGO_APP_*`, `MONGO_DATABASE`) — satu-satunya sumber kredensial Mongo |
 
 ---
 
@@ -86,6 +86,8 @@ mkdir -p "${BACKUP_DIR}"
 
 # 1. Dump database. Sejak Mongo ber-`--auth`, dump WAJIB memakai kredensial.
 #    `docker exec` mewarisi env container, jadi MONGO_INITDB_ROOT_* terbaca di dalamnya.
+#    Sengaja memakai ROOT: dump/restore adalah operasi admin, user aplikasi hanya
+#    `readWrite` pada database-nya sendiri.
 #    `--db` membatasi dump ke database aplikasi saja: dump seluruh instance ikut membawa
 #    user `admin` dan akan bentrok (duplicate key) saat restore ke volume baru.
 docker exec posmono-mongodb sh -c 'mongodump \
@@ -211,6 +213,8 @@ docker compose -f docker/docker-compose.prod.yml up -d
 | `posmono-app` restart-loop | `docker logs posmono-app` | paling sering: `MONGO_URI` salah / mongo belum sehat → pastikan A5 (healthcheck + `depends_on`); di produksi URI dirangkai dari `docker/.env` (wajib `?authSource=admin`) |
 | `ECONNREFUSED mongodb` | `docker exec posmono-mongodb mongosh -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --eval "db.runCommand({ping:1})"` | service mongo restart / volume rusak |
 | `Authentication failed` (log app / mongosh) | `docker exec posmono-mongodb env \| grep MONGO_INITDB` lalu bandingkan dengan `docker/.env` | password `docker/.env` berbeda dari yang dipakai membuat user (volume sudah ter-init) → samakan nilainya, atau reset volume (§6b di bawah) |
+| App gagal connect dengan pesan `Authentication failed` **untuk user aplikasi** | `docker exec posmono-mongodb mongosh -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --eval 'db.getSiblingDB("admin").getUser(process.env.MONGO_APP_USERNAME)'` | user aplikasi belum ada (volume dibuat sebelum `MONGO_APP_*` diperkenalkan) → §6c |
+| `EACCES: permission denied, mkdir '/app/logs'` / upload produk gagal | `docker exec -u 0 posmono-app ls -ld /app/logs /app/backend/dist/uploads` | volume lama masih milik root, sedangkan container kini `USER node` → §6c langkah 4 |
 | `mongodb` tidak pernah `healthy` | `docker inspect --format '{{json .State.Health}}' posmono-mongodb` | healthcheck WAJIB ber-kredensial sejak `--auth` aktif — jangan hapus `--username/--password` di compose |
 | container `mongodb` gagal start: `belum diset di docker/.env` | `ls docker/.env` | compose sengaja fail-fast bila kredensial kosong → `cp docker/.env.example docker/.env` lalu isi (§DEPLOYMENT §4) |
 | `Environment validation failed` saat boot | `docker logs posmono-app \| tail -50` | `JWT_SECRET` masih memakai nilai contoh `.env.example` / < 32 karakter / `NODE_ENV` tidak valid → `openssl rand -hex 32` lalu isi `backend/.env` (checklist §8) |
@@ -260,6 +264,53 @@ docker compose -f docker/docker-compose.prod.yml up -d
 > via `docker exec -it posmono-mongodb mongosh admin`. Hapus volume tetap lebih
 > deterministik dan sudah teruji.
 
+### 6c. Volume lama: menambah user aplikasi + ownership volume non-root
+
+`docker/mongo-init/10-app-user.js` hanya dijalankan saat volume `mongodb_data` **kosong**,
+dan ownership `uploads_data`/`logs_data` hanya diwarisi saat volume pertama kali dibuat.
+Deployment yang sudah berjalan sebelum perubahan ini butuh dua langkah tambahan **tanpa
+menghapus data**:
+
+```bash
+cd /home/deploy/kuire
+
+# 0. Isi MONGO_APP_USERNAME & MONGO_APP_PASSWORD di docker/.env lebih dulu (berbeda
+#    dari kredensial root), lalu recreate mongodb agar env + mount initdb terpasang.
+docker compose -f docker/docker-compose.prod.yml up -d mongodb
+
+# 1. Buat user aplikasi. Init script-nya idempotent (getUser → skip bila sudah ada) dan
+#    membaca MONGO_APP_*/MONGO_DATABASE dari env container. Autentikasi sebagai root.
+docker exec -it posmono-mongodb sh -c 'mongosh --quiet \
+  --username "$MONGO_INITDB_ROOT_USERNAME" \
+  --password "$MONGO_INITDB_ROOT_PASSWORD" \
+  --authenticationDatabase admin \
+  "$MONGO_INITDB_DATABASE" \
+  /docker-entrypoint-initdb.d/10-app-user.js'
+
+# 2. Perbaiki ownership volume tulis (container app kini USER node/UID 1000).
+#    `run --rm` memakai volume service tanpa menyalakan app; `-u 0` override USER.
+docker compose -f docker/docker-compose.prod.yml run --rm --no-deps -u 0 \
+  --entrypoint sh app -c 'chown -R node:node /app/backend/dist/uploads /app/logs'
+
+# 3. Recreate app dengan MONGO_URI user aplikasi.
+docker compose -f docker/docker-compose.prod.yml up -d --force-recreate app
+```
+
+Verifikasi:
+
+```bash
+docker exec posmono-app id -u                 # → 1000 (node)
+docker exec posmono-app test -w /app/logs && echo logs-ok
+docker exec posmono-app test -w /app/backend/dist/uploads && echo uploads-ok
+curl -fsS https://pos.domain/api/health      # → {"status":"ok",...}
+# upload satu gambar produk dari UI, lalu cek file muncul:
+docker exec posmono-app ls /app/backend/dist/uploads
+```
+
+> Bila `mongodb` di-recreate, port tidak berubah (tidak dipublish) dan data aman di
+> volume. Jangan menjalankan langkah 1 pada volume kosong — initdb akan melakukannya
+> otomatis saat `up` pertama.
+
 ---
 
 ## 7. Smoke test checklist (staging, sebelum cutover)
@@ -285,7 +336,9 @@ Jalankan berurutan di `stage.pos.domain` (kasir + owner):
 
 - [ ] `JWT_SECRET` = nilai random (`openssl rand -hex 32`), bukan default
 - [ ] `docker/.env` terisi: `MONGO_INITDB_ROOT_PASSWORD` panjang & aman-URL (password DB tidak pernah masuk repo)
-- [ ] `MONGO_INITDB_ROOT_PASSWORD` hanya ada di `docker/.env` (bukan disalin ke `backend/.env`, chat, atau tiket)
+- [ ] `docker/.env` juga berisi `MONGO_APP_USERNAME`/`MONGO_APP_PASSWORD` yang **berbeda** dari root; app memakai user `readWrite` ini, bukan root
+- [ ] `MONGO_INITDB_ROOT_PASSWORD` & `MONGO_APP_PASSWORD` hanya ada di `docker/.env` (bukan disalin ke `backend/.env`, chat, atau tiket)
+- [ ] Container `app` berjalan sebagai `node` (UID 1000) dan healthcheck Dockerfile/compose hijau
 - [ ] Password seeding `--prod` kuat; user demo (`admin@demo.com/admin123`) **tidak** di-seed ke produksi
 - [ ] Firewall VPS hanya 80/443/SSH; port 3000 tidak diekspos publik
 - [ ] `helmet` aktif (sudah di `server.ts`) — CSP dimatikan karena SPA, disengaja

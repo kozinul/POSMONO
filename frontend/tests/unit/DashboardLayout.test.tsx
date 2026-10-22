@@ -67,6 +67,55 @@ function setUser(outletIds: string[], activeOutletId: string | null) {
   } as never);
 }
 
+describe('DashboardLayout sidebar grouping', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    localStorage.clear();
+    mockApi([]);
+    setUser([], null);
+  });
+
+  it('renders Dashboard and POS outside the groups, with group labels below', async () => {
+    renderLayout();
+
+    const nav = await screen.findByRole('navigation');
+    expect(within(nav).getByText('Dashboard')).toBeInTheDocument();
+    expect(within(nav).getByText('POS')).toBeInTheDocument();
+    for (const label of ['Transaksi', 'Katalog', 'Inventaris', 'Operasional', 'Sistem']) {
+      expect(within(nav).getByText(label)).toBeInTheDocument();
+    }
+    // Grouped items still resolve to their routes.
+    expect(within(nav).getByRole('link', { name: 'Orders' })).toHaveAttribute('href', '/orders');
+    expect(within(nav).getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings');
+  });
+
+  it('hides permission-gated items and drops groups left empty for cashiers', async () => {
+    // Owner-equivalent without outlet:manage → Outlet hidden, but the group
+    // still has other items. A cashier only ever sees the POS shortcut.
+    useAuthStore.setState({
+      user: {
+        id: 'u2',
+        email: 'kasir@alpha.test',
+        displayName: 'Kasir',
+        role: 'cashier',
+        roleName: 'Cashier',
+        outletIds: [],
+        tenantId: 't1',
+      },
+      isAuthenticated: true,
+      activeOutletId: null,
+    } as never);
+
+    renderLayout();
+
+    const nav = await screen.findByRole('navigation');
+    expect(within(nav).getByText('POS')).toBeInTheDocument();
+    expect(within(nav).queryByText('Transaksi')).not.toBeInTheDocument();
+    expect(within(nav).queryByText('Orders')).not.toBeInTheDocument();
+    expect(within(nav).queryByText('Dashboard')).not.toBeInTheDocument();
+  });
+});
+
 describe('DashboardLayout outlet switcher', () => {
   beforeEach(() => {
     vi.resetAllMocks();

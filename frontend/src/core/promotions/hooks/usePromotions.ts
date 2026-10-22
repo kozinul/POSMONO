@@ -13,6 +13,8 @@ interface PromotionEffect {
   targetProductId?: string;
   targetProductName?: string;
   maxDiscount?: number;
+  /** Effect details (buy quantity, free quantity, allocation, …). */
+  params?: Record<string, unknown>;
 }
 
 export interface Promotion {

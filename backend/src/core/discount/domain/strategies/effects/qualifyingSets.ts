@@ -8,6 +8,17 @@ export interface QualifyingItem {
   lineTotal: number;
 }
 
+/**
+ * The items a promotion targets: the qualifying items when a scope condition
+ * (product / category match) narrows the cart, otherwise the whole cart.
+ *
+ * Effects that resolve a line from the cart ("the cheapest item") look the
+ * line up in this pool, so the giveaway can never land on an item the
+ * promotion does not cover. When a scope condition exists but nothing
+ * qualifies, the pool stays empty on purpose: handing out an item the
+ * promotion does not cover would discount the cart, while handing out nothing
+ * only leaves the promotion unapplied.
+ */
 export function getQualifyingItems(
   conditions: IDiscountCondition[] | undefined,
   items: QualifyingItem[],

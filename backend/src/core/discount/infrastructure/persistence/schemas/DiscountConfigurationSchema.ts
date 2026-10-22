@@ -22,6 +22,7 @@ const DiscountRuleSchema = new Schema({
     entityId: { type: String, default: '' },
     entityName: { type: String, default: '' },
   },
+  logic: { type: String, enum: ['AND', 'OR'], default: 'AND' },
   policy: {
     type: { type: String, required: true },
     value: { type: Number, required: true },

@@ -6,109 +6,15 @@ import EffectBuilder from './EffectBuilder';
 import PreviewSummary from './PreviewSummary';
 import { RULE_REGISTRY } from './rules/registry';
 import { EFFECT_REGISTRY, EFFECT_TYPE_OPTIONS } from './effects/registry';
+import {
+  promoToFormState,
+  formStateToPayload,
+  type FormState,
+} from '../utils/promotionFormState';
+import { validatePromotionForm } from '../utils/promotionFormValidation';
 
-export interface RuleInput {
-  id: string;
-  enabled: boolean;
-  label: string;
-  type: string;
-  params: Record<string, unknown>;
-  position: number;
-}
+export type { RuleInput, EffectInput } from '../utils/promotionFormState';
 
-export interface EffectInput {
-  id: string;
-  enabled: boolean;
-  type: string;
-  params: Record<string, unknown>;
-  position: number;
-}
-
-function promoToFormState(promo: Promotion): { rules: RuleInput[]; effects: EffectInput[] } {
-  const rules: RuleInput[] = promo.rules.map((r, i) => ({
-    id: `rule_${i}`,
-    enabled: true,
-    label: '',
-    type: r.type,
-    params: { ...r.params },
-    position: i,
-  }));
-  const effects: EffectInput[] = promo.effects.map((e, i) => ({
-    id: `effect_${i}`,
-    enabled: true,
-    type: e.type,
-    params: {
-      value: e.value,
-      target: e.target,
-      ...(e.targetProductId ? { targetProductId: e.targetProductId } : {}),
-      ...(e.targetProductName ? { targetProductName: e.targetProductName } : {}),
-      ...(e.maxDiscount ? { maxDiscount: e.maxDiscount } : {}),
-    },
-    position: i,
-  }));
-  return { rules, effects };
-}
-
-function formStateToPayload(state: FormState) {
-  const rules = state.rules
-    .filter((r) => r.enabled)
-    .map((r) => ({ type: r.type, params: r.params }));
-
-  const effects = state.effects
-    .filter((e) => e.enabled)
-    .map((e) => {
-      const p = e.params;
-      if (e.type === 'buy_x_pay_y' || e.type === 'buy_x_get_y') {
-        return {
-          type: e.type,
-          value: 0,
-          target: 'order' as const,
-          params: p as Record<string, unknown>,
-        };
-      }
-      return {
-        type: e.type,
-        value: (p.value as number) ?? 0,
-        target: (p.target as string) ?? 'order',
-        ...(p.targetProductId ? { targetProductId: p.targetProductId as string } : {}),
-        ...(p.targetProductName ? { targetProductName: p.targetProductName as string } : {}),
-        ...(p.maxDiscount ? { maxDiscount: p.maxDiscount as number } : {}),
-      };
-    });
-
-  return {
-    name: state.name,
-    code: state.code || undefined,
-    description: state.description,
-    priority: state.priority,
-    exclusive: state.exclusive,
-    stackable: state.stackable,
-    ruleLogic: state.ruleLogic,
-    rules,
-    effects,
-    usageLimit: state.usageLimit,
-    minPurchase: 0,
-    isActive: state.isActive,
-    validFrom: state.validFrom ? new Date(state.validFrom).toISOString() : null,
-    validUntil: state.validUntil ? new Date(state.validUntil).toISOString() : null,
-  };
-}
-
-interface FormState {
-  name: string;
-  code: string;
-  description: string;
-  priority: number;
-  exclusive: boolean;
-  stackable: boolean;
-  ruleLogic: 'AND' | 'OR';
-  usageLimit: number | null;
-  isActive: boolean;
-  validFrom: string;
-  validUntil: string;
-  rules: RuleInput[];
-  effects: EffectInput[];
-}
 
 function toDatetimeLocal(iso: string | null): string {
   if (!iso) return '';
@@ -173,38 +79,7 @@ export default function PromotionForm({ editing, onClose }: PromotionFormProps) 
   };
 
   const validate = (): boolean => {
-    const errs: Record<string, string> = {};
-    if (!state.name.trim()) errs.name = 'Nama wajib diisi';
-
-    const enabledRules = state.rules.filter((r) => r.enabled);
-    const enabledEffects = state.effects.filter((e) => e.enabled);
-
-    enabledRules.forEach((r, i) => {
-      const config = RULE_REGISTRY[r.type];
-      if (!config) errs[`rule_${i}`] = `Rule type "${r.type}" tidak dikenal`;
-    });
-
-    enabledEffects.forEach((e, i) => {
-      const config = EFFECT_REGISTRY[e.type];
-      if (!config) errs[`effect_${i}`] = `Effect type "${e.type}" tidak dikenal`;
-      if (e.type === 'percentage' && !(e.params.value as number > 0)) errs[`effect_${i}_value`] = 'Persentase harus > 0';
-      if (e.type === 'buy_x_pay_y') {
-        const minQty = e.params.buyQuantity as number;
-        const payQty = e.params.payQuantity as number;
-        if (!minQty || minQty < 1) errs[`effect_${i}_minQty`] = 'Min. Beli harus diisi';
-        if (payQty === undefined || payQty < 0) errs[`effect_${i}_payQty`] = 'Bayar harus diisi';
-        if (minQty <= payQty) errs[`effect_${i}_invalid`] = 'Min. Beli harus > Bayar';
-      }
-      if (e.type === 'buy_x_get_y') {
-        const buyQty = e.params.buyQuantity as number;
-        const getQty = e.params.getQuantity as number;
-        if (!buyQty || buyQty < 1) errs[`effect_${i}_buyQty`] = 'Beli Qty harus diisi';
-        if (!getQty || getQty < 1) errs[`effect_${i}_getQty`] = 'Dapat Qty harus diisi';
-      }
-    });
-
-    if (enabledEffects.length === 0) errs.effects = 'Minimal 1 effect aktif';
-
+    const errs = validatePromotionForm(state);
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -300,6 +175,7 @@ export default function PromotionForm({ editing, onClose }: PromotionFormProps) 
               <EffectBuilder
                 effects={state.effects}
                 onChange={(effects) => update('effects', effects)}
+                errors={errors}
               />
               {errors.effects && <p className="text-xs text-red-500 mt-1">{errors.effects}</p>}
             </div>

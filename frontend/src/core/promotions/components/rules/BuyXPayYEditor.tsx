@@ -26,7 +26,7 @@ export default function BuyXPayYEditor({ params, onChange }: EffectEditorProps) 
           <input
             type="number"
             value={buyQuantity}
-            onChange={(e) => onChange({ ...params, buyQuantity: Number(e.target.value) })}
+            onChange={(e) => onChange({ ...params, buyQuantity: e.target.value === '' ? undefined : Number(e.target.value) })}
             placeholder="3"
             min={1}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
@@ -37,9 +37,9 @@ export default function BuyXPayYEditor({ params, onChange }: EffectEditorProps) 
           <input
             type="number"
             value={payQuantity}
-            onChange={(e) => onChange({ ...params, payQuantity: Number(e.target.value) })}
+            onChange={(e) => onChange({ ...params, payQuantity: e.target.value === '' ? undefined : Number(e.target.value) })}
             placeholder="2"
-            min={0}
+            min={1}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
