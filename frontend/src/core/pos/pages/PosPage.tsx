@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePOSStore } from '../store/posStore';
 import { useProducts, useCategories, useBarcodeLookup } from '../hooks/useProducts';
@@ -65,6 +66,7 @@ export default function PosPage() {
   } = usePOSStore();
 
   const currentUser = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
   const canVoidSelf = hasPermission(currentUser, VOID_ORDER_PERMISSION);
   const [actionDrawerOpen, setActionDrawerOpen] = useState(false);
 
@@ -293,7 +295,7 @@ export default function PosPage() {
   const queryClient = useQueryClient();
 
   return (
-    <div className="flex-1 min-h-0 w-full flex overflow-hidden">
+    <div className="h-screen w-screen flex overflow-hidden bg-gray-50">
       {/* Above every POS layer: a refused tenant must not reach the cashier UI. */}
       <TenantStatusGate />
       {shiftGateVisible && (
@@ -308,8 +310,42 @@ export default function PosPage() {
           />
         </div>
       )}
-      {/* Left: Product Catalog */}
-      <section className="flex-1 flex flex-col p-6 overflow-y-auto">
+
+      {/* Left Area: Top Bar + Product Catalog */}
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        {/* Slim POS Top Bar */}
+        <header className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-6 shrink-0 shadow-sm z-10">
+          <div className="flex items-center gap-4">
+            <Link
+              to="/dashboard"
+              className="text-sm font-medium text-gray-600 hover:text-gray-900 flex items-center gap-1.5 transition"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Dashboard
+            </Link>
+            <span className="text-gray-300">|</span>
+            <span className="font-bold text-gray-800 text-base">POS Terminal</span>
+          </div>
+
+          <div className="flex items-center gap-4 text-sm text-gray-600">
+            {currentUser && (
+              <span className="font-medium bg-gray-100 px-3 py-1 rounded-full text-gray-700">
+                Kasir: {currentUser.displayName}
+              </span>
+            )}
+            <button
+              onClick={logout}
+              className="text-red-600 hover:text-red-700 font-medium transition"
+            >
+              Logout
+            </button>
+          </div>
+        </header>
+
+        {/* Product Catalog Section */}
+        <section className="flex-1 flex flex-col p-6 overflow-y-auto">
         <div className="flex items-center gap-3 mb-6">
           {/* Menu button — toggles action drawer */}
           <button
@@ -493,10 +529,11 @@ export default function PosPage() {
             )}
           </>
         )}
-      </section>
+        </section>
+      </div>
 
       {/* Right: Cart Sidebar */}
-      <aside className="w-[400px] min-h-0 bg-white border-l border-gray-200 flex flex-col shadow-xl z-20">
+      <aside className="w-[420px] h-full bg-white border-l border-gray-200 flex flex-col shadow-xl z-20 shrink-0">
         <div className="p-4 border-b border-gray-100 shrink-0 space-y-3">
           {viewTransaction ? (
             <div className="flex items-center justify-between">
