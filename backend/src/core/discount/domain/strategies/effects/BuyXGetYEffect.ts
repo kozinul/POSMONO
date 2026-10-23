@@ -20,7 +20,7 @@ export class BuyXGetYEffect implements EffectStrategy {
     const target = (effect.config.target as BuyXGetYTarget) ?? { type: 'cart_item', allocationStrategy: 'cheapest' };
     const matchItems = context.matchingItems ?? context.items;
 
-    if (buyQuantity < 1 || getQuantity < 1) {
+    if (buyQuantity < 2 || getQuantity < 1) {
       return { discountAmount: 0, description: 'Buy X Get Y: invalid config' };
     }
 
