@@ -93,7 +93,7 @@ describe('POS Store (free-item cart flow)', () => {
     expect(items[0].isFreeItem).toBe(undefined);
   });
 
-  it('beli 3 dapat 1: 3 adds -> 3 paid + 1 free', async () => {
+  it('beli 3 dapat 1: 3 adds -> 2 paid + 1 free', async () => {
     mockPricing.mockImplementation((_url: string, body: { items: Array<{ productId: string; productName: string; categoryId: string; quantity: number; unitPrice: number }> }) => {
       if (body && body.items) return Promise.resolve(pricingForBuy3Get1(body.items));
       return Promise.resolve({ data: {} });
@@ -114,13 +114,13 @@ describe('POS Store (free-item cart flow)', () => {
     const paid = items.filter((i) => !i.isFreeItem);
     const free = items.filter((i) => i.isFreeItem);
     expect(paid).toHaveLength(1);
-    expect(paid[0].quantity).toBe(3);
+    expect(paid[0].quantity).toBe(2);
     expect(free).toHaveLength(1);
     expect(free[0].quantity).toBe(1);
     expect(free[0].price).toBe(0);
   });
 
-  it('beli 3 dapat 1: 6 adds -> 6 paid + 2 free (order GROWS, not stuck at 1)', async () => {
+  it('beli 3 dapat 1: 6 adds -> 4 paid + 2 free (order GROWS, not stuck at 1)', async () => {
     mockPricing.mockImplementation((_url: string, body: { items: Array<{ productId: string; productName: string; categoryId: string; quantity: number; unitPrice: number }> }) => {
       if (body && body.items) return Promise.resolve(pricingForBuy3Get1(body.items));
       return Promise.resolve({ data: {} });
@@ -136,7 +136,7 @@ describe('POS Store (free-item cart flow)', () => {
     const items = usePOSStore.getState().items;
     const paid = items.filter((i) => !i.isFreeItem);
     const free = items.filter((i) => i.isFreeItem);
-    expect(paid[0].quantity).toBe(6);
+    expect(paid[0].quantity).toBe(4);
     expect(free[0].quantity).toBe(2);
   });
 

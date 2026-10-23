@@ -31,6 +31,24 @@ export class FreeItemEffect implements EffectStrategy {
       }
     }
 
+    // Defensive gate for "Gratis Item + rule Minimal Item = 2" (cheapest_item):
+    // The condition evaluator must already block this, but we enforce it here
+    // as well so the first item can never be given away before the minimum
+    // quantity is met. Only applies when resolving from the cart (no explicit
+    // productId).
+    if (resolvedFromCart && !productId && conditions.length) {
+      const minItemsCond = conditions.find((c) => c.type === 'min_items');
+      if (minItemsCond) {
+        const minItems = Number(minItemsCond.config.minItems) || 0;
+        if (minItems > 0) {
+          const totalQty = context.items.reduce((sum, i) => sum + (i.quantity || 0), 0);
+          if (totalQty < minItems) {
+            return { discountAmount: 0, description: `${productName || 'Item'} gratis` };
+          }
+        }
+      }
+    }
+
     // How many sets the promotion grants. A resolved line is given away once:
     // the promotion names one line, so scaling it by the qualifying count would
     // hand over the whole qualifying product (three coffees in the cart would
