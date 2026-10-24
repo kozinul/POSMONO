@@ -136,7 +136,9 @@ describe('POS Store (free-item cart flow)', () => {
     const items = usePOSStore.getState().items;
     const paid = items.filter((i) => !i.isFreeItem);
     const free = items.filter((i) => i.isFreeItem);
+    expect(paid).toHaveLength(1);
     expect(paid[0].quantity).toBe(4);
+    expect(free).toHaveLength(1);
     expect(free[0].quantity).toBe(2);
   });
 
