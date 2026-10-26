@@ -1,10 +1,11 @@
-import { Subscription } from '../../domain/Subscription';
+import { Subscription, ISubscription } from '../../domain/Subscription';
+import { IPlan } from '../../domain/Plan';
 import { SubscriptionHistory, SubscriptionHistoryAction } from '../../domain/SubscriptionHistory';
 import { MongoSubscriptionRepository } from '../../infrastructure/persistence/MongoSubscriptionRepository';
 import { MongoSubscriptionHistoryRepository } from '../../infrastructure/persistence/MongoSubscriptionHistoryRepository';
 import { MongoPlanRepository } from '../../infrastructure/persistence/MongoPlanRepository';
 import { MongoTenantRepository } from '../../../tenant/infrastructure/persistence/MongoTenantRepository';
-import { NotFoundError } from '../../../../@shared/infrastructure/error/AppError';
+import { NotFoundError, ValidationError } from '../../../../@shared/infrastructure/error/AppError';
 
 export interface SubscriptionActionContext {
   actorEmail?: string | null;
@@ -213,6 +214,70 @@ export class SubscriptionService {
       context,
     });
     return null;
+  }
+
+  /**
+   * Enables the add-ons selected by the platform for this tenant's current plan.
+   *
+   * `Tenant.modules` is kept in sync because entitlement consumers that read the
+   * tenant document directly (session/UI badges) must not disagree with
+   * `EntitlementService`. Only `type: 'module'` add-ons contribute a module key;
+   * limit add-ons stay purely billing metadata for now.
+   */
+  async setAddOns(
+    tenantId: string,
+    addOnIds: string[],
+    context?: SubscriptionActionContext,
+  ): Promise<{ subscription: ISubscription; plan: IPlan; modules: string[] }> {
+    const sub = await this.subscriptionRepository.findByTenantId(tenantId);
+    if (!sub) {
+      throw new NotFoundError('Langganan tenant tidak ditemukan.');
+    }
+
+    const plan = await this.planRepository.findById(sub.serialize().planId);
+    if (!plan) {
+      throw new NotFoundError('Plan tidak ditemukan.');
+    }
+
+    const planProps = plan.serialize();
+    const allowed = new Set(planProps.addOns.map((addOn) => addOn.id));
+    const unknown = addOnIds.filter((id) => !allowed.has(id));
+    if (unknown.length > 0) {
+      throw new ValidationError(`Add-on tidak tersedia pada plan ini: ${unknown.join(', ')}`);
+    }
+
+    const tenant = await this.tenantRepository.findById(tenantId);
+    if (!tenant) {
+      throw new NotFoundError('Tenant tidak ditemukan.');
+    }
+
+    const moduleAddOns = planProps.addOns
+      .filter((addOn) => addOn.type === 'module' && addOnIds.includes(addOn.id))
+      .map((addOn) => String(addOn.value))
+      .filter(Boolean);
+
+    sub.setAddOns(addOnIds);
+    await this.subscriptionRepository.save(sub);
+
+    tenant.syncModules([...planProps.modules, ...moduleAddOns]);
+    await this.tenantRepository.save(tenant);
+
+    await this.recordHistory('addons_changed', tenantId, sub, {
+      planAfter: planProps.id,
+      planNameAfter: planProps.name,
+      statusBefore: sub.serialize().status,
+      statusAfter: sub.serialize().status,
+      context: {
+        ...context,
+        reason: context?.reason ?? `Add-on: ${addOnIds.length > 0 ? addOnIds.join(', ') : '(tidak ada)'}`,
+      },
+    });
+
+    return {
+      subscription: sub.serialize(),
+      plan: planProps,
+      modules: tenant.serialize().modules,
+    };
   }
 
   async getTenantSubscriptionHistory(tenantId: string, limit: number = 100): Promise<any[]> {

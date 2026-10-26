@@ -44,6 +44,7 @@ async function seedData() {
   const adminRoleId = id('rol');
   const cashierRoleId = id('rol');
   const managerRoleId = id('rol');
+  const kdsRoleId = id('rol');
 
   await Tenant.updateOne(
     { _id: 'dev-tenant' },
@@ -67,7 +68,11 @@ async function seedData() {
   );
 
   const roleDocs = DEFAULT_ROLES.map((r) => ({
-    _id: r.name === 'Owner' ? adminRoleId : r.name === 'Manager' ? managerRoleId : cashierRoleId,
+    _id:
+      r.name === 'Owner' ? adminRoleId
+      : r.name === 'Manager' ? managerRoleId
+      : r.name === 'KDS' ? kdsRoleId
+      : cashierRoleId,
     name: r.name,
     description: r.description,
     permissions: r.permissions,

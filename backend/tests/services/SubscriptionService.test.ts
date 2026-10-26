@@ -330,3 +330,65 @@ describe('SubscriptionService.sweepExpired (masa aktif)', () => {
     expect(tenantRepo.findActiveExpired).toHaveBeenCalledWith(NOW);
   });
 });
+
+describe('SubscriptionService add-ons', () => {
+  function build() {
+    const subStore = new Map([['t1', makeBaseSub()]]);
+    const subRepo = makeSubscriptionRepo(subStore);
+    const planRepo = {
+      findById: vi.fn(async (id: string) =>
+        id === 'plan-1'
+          ? {
+              serialize: () => ({
+                id: 'plan-1',
+                name: 'Pro',
+                billingCycle: 'monthly',
+                modules: ['products'],
+                addOns: [
+                  { id: 'addon-kds', name: 'KDS', description: '', price: 99000, type: 'module', value: 'kds' },
+                ],
+              }),
+            }
+          : null,
+      ),
+    };
+    const tenant = {
+      serialize: () => ({ id: 't1', modules: ['products', 'kds'] }),
+      syncModules: vi.fn(),
+    };
+    const tenantRepo = {
+      findById: vi.fn(async () => tenant),
+      save: vi.fn(async () => undefined),
+    };
+    const historyRepo = makeHistoryRepo();
+    const service = new SubscriptionService(
+      subRepo as never,
+      planRepo as never,
+      tenantRepo as never,
+      historyRepo as never,
+    );
+    return { service, subRepo, tenantRepo, tenant, historyRepo, subStore };
+  }
+
+  it('enables the add-on, syncs tenant modules and writes a ledger row', async () => {
+    const { service, tenant, subStore, historyRepo } = build();
+
+    const result = await service.setAddOns('t1', ['addon-kds'], { actorEmail: 'admin@kuire.id' });
+
+    expect(subStore.get('t1').enabledAddOns).toEqual(['addon-kds']);
+    expect(tenant.syncModules).toHaveBeenCalledWith(['products', 'kds']);
+    expect(result.modules).toEqual(['products', 'kds']);
+    expect(historyRepo.save).toHaveBeenCalledTimes(1);
+    expect(historyRepo.save.mock.calls[0][0].serialize().action).toBe('addons_changed');
+  });
+
+  it('rejects an add-on that is not offered by the assigned plan', async () => {
+    const { service, subStore, tenantRepo } = build();
+
+    await expect(service.setAddOns('t1', ['addon-unknown'])).rejects.toThrow(
+      'Add-on tidak tersedia pada plan ini: addon-unknown',
+    );
+    expect(subStore.get('t1').enabledAddOns ?? []).toEqual([]);
+    expect(tenantRepo.save).not.toHaveBeenCalled();
+  });
+});

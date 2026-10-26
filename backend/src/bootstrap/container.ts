@@ -21,6 +21,7 @@ import { registerHubWiring } from './wiring/hub';
 import { registerOutletWiring } from './wiring/outlet';
 import { registerPlatformWiring } from './wiring/platform';
 import { registerBillingWiring } from './wiring/billing';
+import { registerKdsWiring } from './wiring/kds';
 import { registerOrderingWiring } from './wiring/ordering';
 import { registerPaymentWiring } from './wiring/payment';
 import { EventBus } from '../@shared/infrastructure/eventBus/EventBus';
@@ -74,6 +75,7 @@ export function buildContainer() {
   registerOutletWiring({ container, models, eventBus });
   registerPlatformWiring({ container, models, eventBus, systemConnection });
   registerBillingWiring({ container, models, eventBus });
+  registerKdsWiring({ container, models, eventBus });
   registerOrderingWiring({ container, models, eventBus });
   registerPaymentWiring({ container, models, eventBus });
 

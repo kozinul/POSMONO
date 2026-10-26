@@ -18,6 +18,7 @@ export const SubscriptionSchema = new Schema(
     startedAt: { type: Date, default: null },
     trialEndsAt: { type: Date, default: null },
     autoRenew: { type: Boolean, default: false },
+    enabledAddOns: { type: [String], default: [] },
     assignedAt: { type: Date, default: null },
     cancelledAt: { type: Date, default: null },
     cancellationReason: { type: String, default: null },

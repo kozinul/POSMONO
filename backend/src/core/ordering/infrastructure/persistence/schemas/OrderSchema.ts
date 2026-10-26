@@ -3,6 +3,7 @@ import { Schema } from 'mongoose';
 const OrderItemSchema = new Schema(
   {
     productId: { type: String, required: true },
+    categoryId: { type: String, default: null },
     variantId: { type: String, default: null },
     productName: { type: String, required: true },
     quantity: { type: Number, required: true },

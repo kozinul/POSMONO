@@ -246,6 +246,11 @@ export class Tenant extends AggregateRoot<TenantId> {
     this.updatedAt = new Date();
   }
 
+  syncModules(modules: string[]): void {
+    this.modules = [...new Set(modules)];
+    this.updatedAt = new Date();
+  }
+
   enableModule(moduleName: string): void {
     if (!this.modules.includes(moduleName)) {
       this.modules.push(moduleName);

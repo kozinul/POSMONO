@@ -44,6 +44,7 @@ export const DEFAULT_PLANS = [
     addOns: [
       { id: 'addon-outlet', name: 'Extra Outlet', description: 'Tambah 1 outlet tambahan', price: 75000, type: 'limit', value: 1 },
       { id: 'addon-api', name: 'API Access', description: 'Akses REST API eksternal', price: 100000, type: 'module', value: 'api-access' },
+      { id: 'addon-kds', name: 'Kitchen Display (KDS)', description: 'Layar dapur/bar untuk tiket pesanan', price: 99000, type: 'module', value: 'kds' },
     ],
   },
   {
@@ -56,7 +57,7 @@ export const DEFAULT_PLANS = [
     isPublic: true,
     isDefault: false,
     sortOrder: 2,
-    modules: ['products', 'categories', 'modifiers', 'inventory', 'warehouses', 'orders', 'payments', 'shifts', 'customers', 'reports', 'promotions', 'multi-outlet', 'qr-printing', 'auto-print', 'reports-advanced', 'api-access', 'restaurant'],
+    modules: ['products', 'categories', 'modifiers', 'inventory', 'warehouses', 'orders', 'payments', 'shifts', 'customers', 'reports', 'promotions', 'multi-outlet', 'qr-printing', 'auto-print', 'reports-advanced', 'api-access', 'restaurant', 'kds'],
     limits: {
       maxUsers: 25,
       maxProducts: 1000,
@@ -80,7 +81,7 @@ export const DEFAULT_PLANS = [
     isPublic: true,
     isDefault: false,
     sortOrder: 3,
-    modules: ['products', 'categories', 'modifiers', 'inventory', 'warehouses', 'orders', 'payments', 'shifts', 'customers', 'reports', 'promotions', 'multi-outlet', 'hub-management', 'qr-printing', 'auto-print', 'reports-advanced', 'api-access', 'restaurant', 'hospitality'],
+    modules: ['products', 'categories', 'modifiers', 'inventory', 'warehouses', 'orders', 'payments', 'shifts', 'customers', 'reports', 'promotions', 'multi-outlet', 'hub-management', 'qr-printing', 'auto-print', 'reports-advanced', 'api-access', 'restaurant', 'hospitality', 'kds'],
     limits: {
       maxUsers: -1,
       maxProducts: -1,

@@ -10,6 +10,7 @@ export type TransactionType = 'dine_in' | 'takeaway' | 'delivery' | 'online';
 
 export interface IOrderItem {
   productId: string;
+  categoryId?: string;
   variantId: string | null;
   productName: string;
   quantity: number;

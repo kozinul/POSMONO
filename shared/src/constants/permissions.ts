@@ -83,6 +83,10 @@ export const PERMISSIONS = {
   RESTAURANT_SPLIT_BILL_PROCESS: 'restaurant.split_bill.process',
   RESTAURANT_PRINTER_MANAGE: 'restaurant.printer.manage',
 
+  // KDS (Kitchen/Bar Display)
+  KDS_READ: 'kds:read',
+  KDS_WRITE: 'kds:write',
+
   // Outlet
   OUTLET_MANAGE: 'outlet:manage',
 

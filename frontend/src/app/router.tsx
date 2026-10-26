@@ -18,6 +18,7 @@ const HubLoginPage = lazy(() => import('../core/hub/pages/HubLoginPage'));
 const HubCenterPage = lazy(() => import('../core/hub/pages/HubCenterPage'));
 const DashboardPage = lazy(() => import('../core/dashboard/pages/DashboardPage'));
 const PosPage = lazy(() => import('../core/pos/pages/PosPage'));
+const KdsPage = lazy(() => import('../core/kds/pages/KdsPage'));
 const OrderListPage = lazy(() => import('../core/orders/pages/OrderListPage'));
 const ProductListPage = lazy(() => import('../core/products/pages/ProductListPage'));
 const FamilyListPage = lazy(() => import('../core/families/pages/FamilyListPage'));
@@ -66,6 +67,7 @@ export function AppRouter() {
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/pos" element={<PosPage />} />
+              <Route path="/kds" element={<KdsPage />} />
               <Route path="/orders" element={<OrderListPage />} />
               <Route path="/refunds" element={<RefundPage />} />
               <Route path="/products" element={<ProductListPage />} />

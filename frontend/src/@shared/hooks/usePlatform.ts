@@ -151,7 +151,7 @@ export interface PlatformPlanLimits {
   maxWarehouses: number;
 }
 
-interface PlatformPlanAddOn {
+export interface PlatformPlanAddOn {
   id: string;
   name: string;
   description: string;
@@ -219,6 +219,7 @@ export const PLAN_MODULE_LABELS: Record<string, string> = {
   'auto-print': 'Cetak Struk & KOT Otomatis',
   'api-access': 'API Access',
   restaurant: 'Restoran (Meja & Dapur)',
+  kds: 'Kitchen Display (KDS)',
   hospitality: 'Hospitality (Kamar & Booking)',
 };
 
@@ -898,7 +899,7 @@ export interface PlatformSubscriptionHistoryEntry {
   id: string;
   tenantId: string;
   subscriptionId: string | null;
-  action: 'assigned' | 'changed' | 'extended' | 'cancelled';
+  action: 'assigned' | 'changed' | 'extended' | 'cancelled' | 'expired' | 'addons_changed';
   planId: string | null;
   planName: string | null;
   statusBefore: string | null;

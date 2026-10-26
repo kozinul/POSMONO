@@ -67,6 +67,37 @@ export class SubscriptionController extends BaseController {
     this.ok(res, sub.serialize());
   }
 
+  async setAddOns(req: Request, res: Response): Promise<void> {
+    const tenantId = req.params.tenantId;
+    const { addOnIds, reason } = req.body as { addOnIds?: unknown; reason?: string };
+    if (!Array.isArray(addOnIds) || addOnIds.some((id) => typeof id !== 'string')) {
+      throw new ValidationError('addOnIds harus berupa array string.');
+    }
+
+    const before = await this.subscriptionService.getTenantSubscription(tenantId);
+    const result = await this.subscriptionService.setAddOns(tenantId, addOnIds as string[], {
+      actorEmail: (req as Request & { platformUserEmail?: string }).platformUserEmail || 'system',
+      reason,
+    });
+
+    await this.audit(req, {
+      action: 'SUBSCRIPTION_ADDONS_CHANGED',
+      tenantId,
+      description: 'Add-on langganan tenant diperbarui',
+      before: {
+        enabledAddOns: before.subscription?.enabledAddOns ?? [],
+        modules: before.plan?.modules ?? [],
+      },
+      after: {
+        enabledAddOns: result.subscription.enabledAddOns ?? [],
+        modules: result.modules,
+      },
+      reason,
+    });
+
+    this.ok(res, result);
+  }
+
   async cancelSubscription(req: Request, res: Response): Promise<void> {
     const tenantId = req.params.tenantId;
     const reason = req.body?.reason;

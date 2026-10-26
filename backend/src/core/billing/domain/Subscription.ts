@@ -14,6 +14,7 @@ export interface ISubscription {
   startedAt: Date | null;
   trialEndsAt: Date | null;
   autoRenew: boolean;
+  enabledAddOns: string[];
   assignedAt: Date | null;
   cancelledAt: Date | null;
   cancellationReason: string | null;
@@ -31,6 +32,7 @@ export class Subscription extends AggregateRoot<SubscriptionId> {
   private startedAt: Date | null;
   private trialEndsAt: Date | null;
   private autoRenew: boolean;
+  private enabledAddOns: string[];
   private assignedAt: Date | null;
   private cancelledAt: Date | null;
   private cancellationReason: string | null;
@@ -48,6 +50,7 @@ export class Subscription extends AggregateRoot<SubscriptionId> {
     this.startedAt = props.startedAt;
     this.trialEndsAt = props.trialEndsAt;
     this.autoRenew = props.autoRenew;
+    this.enabledAddOns = [...(props.enabledAddOns ?? [])];
     this.assignedAt = props.assignedAt;
     this.cancelledAt = props.cancelledAt;
     this.cancellationReason = props.cancellationReason;
@@ -56,7 +59,7 @@ export class Subscription extends AggregateRoot<SubscriptionId> {
   }
 
   static create(
-    props: Omit<ISubscription, 'id' | 'createdAt' | 'updatedAt' | 'cancelledAt' | 'startedAt' | 'trialEndsAt' | 'autoRenew' | 'assignedAt' | 'cancellationReason'>,
+    props: Omit<ISubscription, 'id' | 'createdAt' | 'updatedAt' | 'cancelledAt' | 'startedAt' | 'trialEndsAt' | 'autoRenew' | 'assignedAt' | 'cancellationReason' | 'enabledAddOns'>,
   ): Subscription {
     const now = new Date();
     return new Subscription({
@@ -65,6 +68,7 @@ export class Subscription extends AggregateRoot<SubscriptionId> {
       startedAt: now,
       trialEndsAt: null,
       autoRenew: false,
+      enabledAddOns: [],
       assignedAt: now,
       cancelledAt: null,
       cancellationReason: null,
@@ -89,6 +93,7 @@ export class Subscription extends AggregateRoot<SubscriptionId> {
       startedAt: this.startedAt,
       trialEndsAt: this.trialEndsAt,
       autoRenew: this.autoRenew,
+      enabledAddOns: [...this.enabledAddOns],
       assignedAt: this.assignedAt,
       cancelledAt: this.cancelledAt,
       cancellationReason: this.cancellationReason,
@@ -99,6 +104,11 @@ export class Subscription extends AggregateRoot<SubscriptionId> {
 
   isActive(): boolean {
     return (this.status === 'active' || this.status === 'trial') && this.currentPeriodEnd > new Date();
+  }
+
+  setAddOns(addOnIds: string[]): void {
+    this.enabledAddOns = [...new Set(addOnIds)];
+    this.updatedAt = new Date();
   }
 
   renew(newPeriodEnd: Date): void {

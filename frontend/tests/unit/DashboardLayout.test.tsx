@@ -37,13 +37,14 @@ function mockApi(outlets: Outlet[]) {
   });
 }
 
-function renderLayout() {
+function renderLayout(path = '/dashboard') {
   return render(
-    <MemoryRouter initialEntries={['/dashboard']}>
+    <MemoryRouter initialEntries={[path]}>
       <TestQueryProvider>
         <Routes>
           <Route element={<DashboardLayout />}>
             <Route path="/dashboard" element={<div>DASHBOARD CONTENT</div>} />
+            <Route path="/kds" element={<div>KDS CONTENT</div>} />
           </Route>
         </Routes>
       </TestQueryProvider>
@@ -113,6 +114,46 @@ describe('DashboardLayout sidebar grouping', () => {
     expect(within(nav).queryByText('Transaksi')).not.toBeInTheDocument();
     expect(within(nav).queryByText('Orders')).not.toBeInTheDocument();
     expect(within(nav).queryByText('Dashboard')).not.toBeInTheDocument();
+  });
+});
+
+describe('DashboardLayout KDS-only role', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    localStorage.clear();
+    mockApi([]);
+    vi.mocked(api.get).mockImplementation((url: string) => {
+      if (url === '/outlets') return Promise.resolve({ data: { success: true, data: [] } } as never);
+      if (url === '/auth/accessible-tenants')
+        return Promise.resolve({ data: { success: true, data: [] } } as never);
+      if (url === '/kds/access')
+        return Promise.resolve({ data: { success: true, data: { enabled: true } } } as never);
+      return Promise.resolve({ data: { success: true, data: [] } } as never);
+    });
+    useAuthStore.setState({
+      user: {
+        id: 'kds-1',
+        email: 'kds@alpha.test',
+        displayName: 'Dapur',
+        role: 'kds',
+        roleName: 'KDS',
+        outletIds: [],
+        tenantId: 't1',
+      },
+      isAuthenticated: true,
+      activeOutletId: null,
+    } as never);
+  });
+
+  it('shows only the KDS menu and links the brand back to /kds', async () => {
+    renderLayout('/kds');
+
+    const nav = await screen.findByRole('navigation');
+    expect(within(nav).getByRole('link', { name: 'KDS' })).toHaveAttribute('href', '/kds');
+    expect(within(nav).queryByText('Dashboard')).not.toBeInTheDocument();
+    expect(within(nav).queryByText('POS')).not.toBeInTheDocument();
+    expect(within(nav).queryByText('Transaksi')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Kuire POS' })).toHaveAttribute('href', '/kds');
   });
 });
 

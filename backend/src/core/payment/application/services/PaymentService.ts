@@ -229,6 +229,7 @@ export class PaymentService {
         : 0;
       return {
         productId: item.productId,
+        categoryId: item.categoryId ?? '',
         variantId: item.variantId ?? null,
         productName: item.productName || '',
         quantity: item.quantity,

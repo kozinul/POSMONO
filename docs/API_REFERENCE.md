@@ -965,6 +965,59 @@ Cetak Kitchen Order Ticket (KOT). Auth required.
 
 ---
 
+## KDS (`/api/kds`)
+
+> **Kitchen/Bar Display — bukan POS.** Tiket tidak memuat harga, diskon, pajak, total, pembayaran, atau data pelanggan. Modifier menyimpan nama/opsi saja (tanpa `priceAdjustment`).
+> Semua route kecuali `GET /access` memakai `authenticate` + `requireModule('kds')` + `resolveOutlet` (header `X-Outlet-Id` opsional; station/tiket difilter outlet aktif). Module dibaca per request, jadi perubahan add-on berlaku tanpa re-login.
+> Permission: board baca `kds:read`; ubah status tiket `kds:write`; CRUD station `printers:write`. Role **KDS** hanya punya `kds:read` + `kds:write` (tanpa billing/printers/orders).
+
+### `GET /api/kds/access`
+
+Probe ringan untuk role KDS-only (cukup `authenticate`). Dipakai frontend untuk menampilkan menu `/kds` tanpa memanggil `/tenants/current/entitlement` yang butuh izin billing.
+
+**Response 200:** `{ "success": true, "data": { "enabled": true } }` (`false` bila module `kds` tidak aktif di plan/add-on).
+
+### `GET /api/kds/stations`
+
+List station aktif/nonaktif untuk outlet aktif (di-scope `outletId`). Permission: `kds:read`.
+
+**Response 200:** array `{ id, tenantId, outletId, name, kind: "kitchen"|"bar", printerId, autoPrint, timerWarnMinutes, categoryIds[], isActive, createdAt, updatedAt }`.
+
+### `POST /api/kds/stations`
+
+Buat station. Permission: `printers:write`.
+
+**Body:**
+```json
+{ "name": "Dapur Utama", "kind": "kitchen", "printerId": "uuid?", "autoPrint": false, "timerWarnMinutes": 10, "categoryIds": ["cat-food"], "isActive": true, "outletId": "uuid?" }
+```
+
+`outletId` opsional (default outlet aktif/`X-Outlet-Id`; tanpa itu `Outlet Utama`, lalu outlet aktif pertama). Unik per `{tenantId, outletId, name}`.
+
+**Response 201:** station object.
+
+### `PUT /api/kds/stations/:id` · `DELETE /api/kds/stations/:id`
+
+Update/hapus station (tenant + outlet scope). Permission: `printers:write`. Delete → `204 No Content`.
+
+### `GET /api/kds/tickets`
+
+List tiket station. Permission: `kds:read`.
+
+**Query:** `stationId?`, `includeReady=true` (default hanya `pending` + `in_progress`).
+
+**Response 200:** array `{ id, tenantId, outletId, stationId, orderId, orderNumber, tableNumber, source, items[{ orderItemIndex, productId, productName, quantity, notes, modifiers[{ groupId, groupName, optionId, optionName }] }], status, startedAt, completedAt, preparedBy, createdAt, updatedAt }`.
+
+### `PATCH /api/kds/tickets/:id/status`
+
+**Body:** `{ "status": "in_progress" | "ready" | "pending" }` (Recall `ready → in_progress`). Transisi lain ditolak. Permission: `kds:write`.
+
+Tiket dibuat idempoten saat event `ORDER_CONFIRMED` untuk item yang kategorinya cocok dengan station; item tanpa kategori/station di-skip (tidak ditebak). Realtime: `kds.ticket.created` / `kds.ticket.updated`.
+
+**Response 200:** ticket object.
+
+---
+
 ## Pricing (`/api/pricing`)
 
 ### `POST /api/pricing/calculate`
@@ -1584,6 +1637,13 @@ id, tenantId, email, displayName, roleId, isActive, lastLoginAt, createdAt, upda
 | 86 | POST | `/api/printers/:id/test` | ✓ |
 | 87 | POST | `/api/print/receipt` | ✓ |
 | 88 | POST | `/api/print/kot/:orderId` | ✓ |
+| 88a | GET | `/api/kds/access` | ✓ `authenticate` saja (probe module) |
+| 88b | GET | `/api/kds/stations` | ✓ `kds:read` + module |
+| 88c | POST | `/api/kds/stations` | ✓ `printers:write` + module |
+| 88d | PUT | `/api/kds/stations/:id` | ✓ `printers:write` + module |
+| 88e | DELETE | `/api/kds/stations/:id` | ✓ `printers:write` + module |
+| 88f | GET | `/api/kds/tickets` | ✓ `kds:read` + module |
+| 88g | PATCH | `/api/kds/tickets/:id/status` | ✓ `kds:write` + module |
 | 89 | GET | `/api/outlets` | ✓ |
 | 90 | GET | `/api/outlets/:id` | ✓ outlet scope |
 | 91 | PUT | `/api/outlets/:id` | ✓ `outlet:manage` (update info; create/delete platform-only) |

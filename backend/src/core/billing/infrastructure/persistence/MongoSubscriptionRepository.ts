@@ -12,6 +12,7 @@ interface SubscriptionDoc extends Document<string> {
   startedAt: Date | null;
   trialEndsAt: Date | null;
   autoRenew: boolean;
+  enabledAddOns: string[];
   assignedAt: Date | null;
   cancelledAt: Date | null;
   cancellationReason: string | null;
@@ -34,6 +35,7 @@ export class MongoSubscriptionRepository {
       startedAt: doc.startedAt ?? null,
       trialEndsAt: doc.trialEndsAt ?? null,
       autoRenew: doc.autoRenew ?? false,
+      enabledAddOns: doc.enabledAddOns ?? [],
       assignedAt: doc.assignedAt ?? null,
       cancelledAt: doc.cancelledAt || null,
       cancellationReason: doc.cancellationReason ?? null,
@@ -55,6 +57,7 @@ export class MongoSubscriptionRepository {
       startedAt: data.startedAt,
       trialEndsAt: data.trialEndsAt,
       autoRenew: data.autoRenew,
+      enabledAddOns: data.enabledAddOns,
       assignedAt: data.assignedAt,
       cancelledAt: data.cancelledAt,
       cancellationReason: data.cancellationReason,

@@ -1,7 +1,7 @@
 # PLAN — Role-Based Access & Outlet Scoping (RBAC)
 
 > **Status: TERVERIFIKASI 2026-09-12.** Bagian §2 (recon) & §3 (desain) = WHAT-WAS dan rencana; bagian §5 (fase) ditandai `[x]` per item yang sudah diimplementasikan.
-> Diimplementasikan: RBAC JWT permission (`authenticate` isi `req.userPermissions` dari token, `authorize()` aktif), redirect kasir → `/pos` + filter sidebar, guard route per permission, modul Outlet + `User.outletIds` + `resolveOutlet` (`X-Outlet-Id`), frontend outlet switcher/`activeOutletId`, laporan per-outlet. **Keterbatasan aktif**: 9-role template belum (baru `Owner`/`Manager`/`Cashier` + `Platform Super Admin`), KDS/drink-queue tidak ada, device/integration permission belum dibuat, limit nominal (approval by amount) deferred.
+> Diimplementasikan: RBAC JWT permission (`authenticate` isi `req.userPermissions` dari token, `authorize()` aktif), redirect kasir → `/pos` + filter sidebar, guard route per permission, modul Outlet + `User.outletIds` + `resolveOutlet` (`X-Outlet-Id`), frontend outlet switcher/`activeOutletId`, laporan per-outlet. **Keterbatasan aktif**: 9-role template belum (baru `Owner`/`Manager`/`Cashier`/`KDS` + `Platform Super Admin`), drink-queue belum ada, device/integration permission belum dibuat, limit nominal (approval by amount) deferred.
 > Dokumen dibuat 2026-08-05, direvisi 2026-08-06; impl. bertahap 2026-08-08 s/d 2026-09-12. Detail terkini: `docs/HUB_ARCHITECTURE.md`.
 > Melengkapi `docs/archive/VOID_APPROVAL_PLAN.md` (void approval) — keputusan "fix `authorize()`/JWT roleName" di dokumen itu menjadi fondasi dokumen ini.
 
@@ -134,7 +134,7 @@ STOCK      stock:in, stock:out, stock:count, stock:transfer, stock:adjust,
 REPORT     report:view, shift:closeout, analytics:view
 SHIFT      shift:open, shift:close, shift:reopen, cash:count, cash-diff:approve
 TABLE      table:open, table:transfer, table:force-close
-KDS        kds:view, kds:status, drink-queue:view, drink-queue:status
+KDS        kds:read, kds:write (drink-queue:* belum ada)
 DEVICE     device:pair, device:manage
 PRINT      printer:manage, print:receipt, print:kot
 SYSTEM     system:settings, smtp:manage, gateway:manage, api-key:manage, integration:manage
@@ -256,7 +256,7 @@ Rincian (hanya permission; aturan approval mengikuti policy terpisah):
 - [x] User/Role management: `users:read`/`users:write`, `roles:read`/`roles:write`.
 - [ ] Device/Integrasi (baru): `device:manage`/`integration:manage` — **belum dibuat** (tidak ada modul device/integration).
 - [x] Product/Family/Category/Inventory/Payment-method/Template/Member: guard mutasi (`products:write`/`inventory:write`) + scoping GET (tetap tenant-wide, bukan per-outlet).
-- [ ] KDS/drink-queue: `kds:view`/`kds:status`, `drink-queue:view`/`drink-queue:status` — **belum ada** (KDS bukan MVP).
+- [x] KDS: `kds:read` (board) / `kds:write` (PATCH status) + `requireModule('kds')`; role **KDS** hanya boleh `/kds` (redirect frontend), station CRUD tetap `printers:write`. `drink-queue:*` belum ada.
 - [x] Reports & Shifts: `reports:read` di route report; `GET /reports/shift`, `GET /reports/best-sellers` tetap terbuka untuk kasir; laporan per-outlet (filter `outletId`).
 
 ### Fase 3 — Frontend
@@ -283,4 +283,4 @@ Rincian (hanya permission; aturan approval mengikuti policy terpisah):
 - **Perf**: load role per request = +1 query; bisa dimitigasi dengan cache role (TTL) atau klaim permission di JWT (trade-off: perubahan permission butuh re-login).
 - **Keamanan**: enforce di backend adalah keharusan; frontend hanya penyembunyian UX.
 - **Approval ≠ Role**: perubahan policy approval tidak mengubah role/permission; jangan tambahkan aturan bypass ke dokumen ini.
-- **Status eksekusi**: sebagian besar Fase 0–3 telah diimplementasikan (2026-08-08 s/d 2026-09-12). Yang tersisa: 9-role template lengkap (`administrator`/`supervisor`/`waiter`/`kitchen`/`barista`/`inventory-staff`), KDS/drink-queue (non-MVP), device/integration permission, UI 403 khusus, dan permission-matrix test.
+- **Status eksekusi**: sebagian besar Fase 0–3 telah diimplementasikan (2026-08-08 s/d 2026-09-12). Yang tersisa: 9-role template lengkap (`administrator`/`supervisor`/`waiter`/`kitchen`/`barista`/`inventory-staff`), drink-queue, device/integration permission, UI 403 khusus, dan permission-matrix test.

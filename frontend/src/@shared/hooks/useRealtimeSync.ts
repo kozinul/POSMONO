@@ -22,6 +22,9 @@ const EVENT_TO_QUERY: Record<string, Array<Array<string>>> = {
   'ordering.order.updated': [['held-orders']],
   'ordering.order.voided': [['held-orders'], ['orders'], ['shift-report']],
   'ordering.order.cancelled': [['held-orders'], ['orders'], ['shift-report']],
+  // KDS
+  'kds.ticket.created': [['kds-tickets']],
+  'kds.ticket.updated': [['kds-tickets']],
   // Payment & POS
   'ordering.order.paid': [['inventory'], ['orders'], ['shift-report']],
   'payment.transaction.completed': [['inventory'], ['orders'], ['shift-report']],

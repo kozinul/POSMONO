@@ -36,9 +36,11 @@ export default function LoginPage() {
       const roleName = data.data.user?.roleName ?? '';
       const dest = tenantId === 'platform'
         ? '/terminal-center'
-        : roleName === 'Cashier'
-          ? '/pos'
-          : '/dashboard';
+        : roleName === 'KDS'
+          ? '/kds'
+          : roleName === 'Cashier'
+            ? '/pos'
+            : '/dashboard';
       navigate(dest);
     } catch (err: any) {
       setError(err?.response?.data?.error?.message || 'Invalid credentials');

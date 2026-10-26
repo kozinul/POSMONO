@@ -3,6 +3,8 @@ import Swal from 'sweetalert2';
 import type { Printer, PrinterConnectionType, PrinterPaperSize, PrinterPurpose } from '@posmono/shared';
 import { usePrinters, useCreatePrinter, useUpdatePrinter, useDeletePrinter, useTestPrinter } from '../hooks/usePrinters';
 import { printViaClient } from '../utils/PrintClient';
+import KdsStationsSection from '../../kds/components/KdsStationsSection';
+import { hasPermission, useAuthStore } from '../../../@shared/hooks/useAuth';
 
 interface FormState {
   name: string;
@@ -51,6 +53,7 @@ function purposeLabel(purpose: PrinterPurpose): string {
 }
 
 export default function PrinterSettingsPage() {
+  const user = useAuthStore((state) => state.user);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Printer | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
@@ -413,6 +416,7 @@ export default function PrinterSettingsPage() {
           </div>
         </div>
       )}
+      <KdsStationsSection canWrite={hasPermission(user, 'printers:write')} />
     </div>
   );
 }

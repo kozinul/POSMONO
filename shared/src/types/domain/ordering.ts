@@ -29,6 +29,7 @@ export interface OrderItem {
   id: string;
   orderId: string;
   productId: string;
+  categoryId?: string | null;
   variantId: string | null;
   productName: string;
   quantity: number;
@@ -62,6 +63,7 @@ export interface Cart {
 
 export interface CartItem {
   productId: string;
+  categoryId?: string | null;
   variantId: string | null;
   quantity: number;
   modifiers: OrderItemModifier[];

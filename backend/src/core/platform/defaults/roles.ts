@@ -1,6 +1,8 @@
 import { PERMISSIONS } from '@posmono/shared';
 
 const {
+  KDS_READ,
+  KDS_WRITE,
   PLATFORM_HUBS_MANAGE,
   HUB_READ,
   HUB_MEMBERS_READ,
@@ -34,6 +36,7 @@ export const OWNER_PERMS = [
   'settings.billing.update',
   'shifts:read', 'shifts:write',
   'printers:read', 'printers:write',
+  KDS_READ, KDS_WRITE,
 ];
 
 export const MANAGER_PERMS = [
@@ -48,6 +51,7 @@ export const MANAGER_PERMS = [
   'settings.billing.read',
   'shifts:read', 'shifts:write',
   'printers:read', 'printers:write',
+  KDS_READ, KDS_WRITE,
 ];
 
 export const CASHIER_PERMS = [
@@ -57,6 +61,15 @@ export const CASHIER_PERMS = [
   'customers:read', 'customers:write',
   'shifts:read', 'shifts:write',
 ];
+
+/**
+ * Display-only station role. It carries no catalog/order/payment/report
+ * permission: `/kds` is the only screen it may open (enforced in the frontend
+ * guard), and the server additionally gates on the tenant's KDS entitlement.
+ */
+export const KDS_PERMS = [KDS_READ, KDS_WRITE];
+
+export const KDS_ROLE_NAME = 'KDS';
 
 /**
  * Platform / Terminal Center super-admin (tenantId 'platform').
@@ -228,6 +241,12 @@ export const DEFAULT_ROLES: DefaultRoleDef[] = [
     name: 'Cashier',
     description: 'Can process POS transactions',
     permissions: CASHIER_PERMS,
+    isSystem: true,
+  },
+  {
+    name: KDS_ROLE_NAME,
+    description: 'Kitchen/Bar Display only — no dashboard or POS access',
+    permissions: KDS_PERMS,
     isSystem: true,
   },
 ];

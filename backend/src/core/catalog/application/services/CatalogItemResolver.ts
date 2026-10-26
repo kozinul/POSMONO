@@ -13,6 +13,7 @@ export interface CatalogPriceItem {
 }
 
 export type ResolvedCatalogItem<T extends CatalogPriceItem> = T & {
+  categoryId: string;
   unitPrice: number;
   totalPrice: number;
   modifiers: ModifierSelection[];
@@ -86,6 +87,7 @@ export class CatalogItemResolver {
       const unitPrice = round2(product.basePrice + totalAdjustment);
       resolvedItems.push({
         ...item,
+        categoryId: product.categoryId ?? '',
         unitPrice,
         totalPrice: round2(unitPrice * item.quantity),
         modifiers: resolvedModifiers,

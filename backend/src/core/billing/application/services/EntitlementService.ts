@@ -2,6 +2,13 @@ import { MongoSubscriptionRepository } from '../../infrastructure/persistence/Mo
 import { MongoPlanRepository } from '../../infrastructure/persistence/MongoPlanRepository';
 import { MongoTenantRepository } from '../../../tenant/infrastructure/persistence/MongoTenantRepository';
 
+export interface PlanAddOnView {
+  id: string;
+  name?: string;
+  type: 'module' | 'limit';
+  value: string | number;
+}
+
 export class EntitlementService {
   constructor(
     private readonly subscriptionRepository: MongoSubscriptionRepository,
@@ -14,8 +21,11 @@ export class EntitlementService {
     subscription: any;
     modules: string[];
     limits: any;
+    addOns: PlanAddOnView[];
+    enabledAddOns: string[];
   }> {
     const sub = await this.subscriptionRepository.findByTenantId(tenantId);
+    const subscription = sub ? sub.serialize() : null;
     let plan: any = null;
 
     if (sub) {
@@ -42,11 +52,25 @@ export class EntitlementService {
       maxWarehouses: 1,
     };
 
+    // Add-on modules extend the plan, but only while the subscription itself is
+    // live. The platform may keep add-on ids on a cancelled subscription; they
+    // must not grant access after expiry.
+    const addOns: PlanAddOnView[] = plan?.addOns ?? [];
+    const enabledAddOns: string[] = sub && sub.isActive() ? subscription?.enabledAddOns ?? [] : [];
+    const addOnModules = addOns
+      .filter((addOn) => addOn.type === 'module' && enabledAddOns.includes(addOn.id))
+      .map((addOn) => String(addOn.value))
+      .filter(Boolean);
+
+    const baseModules: string[] = plan?.modules ?? ['products', 'orders', 'payments', 'shifts'];
+
     return {
       plan: plan || { name: 'Trial', basePrice: 0 },
-      subscription: sub ? sub.serialize() : null,
-      modules: plan ? plan.modules : ['products', 'orders', 'payments', 'shifts'],
+      subscription,
+      modules: [...new Set([...baseModules, ...addOnModules])],
       limits: plan ? plan.limits : defaultLimits,
+      addOns,
+      enabledAddOns,
     };
   }
 

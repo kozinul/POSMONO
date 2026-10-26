@@ -42,6 +42,7 @@ import { createOutletRoutes } from '../core/outlet/interfaces/http/routes/outlet
 import { createPlatformRoutes } from '../core/platform/interfaces/http/routes/platform.routes';
 import { createPlanRoutes } from '../core/billing/interfaces/http/routes/plan.routes';
 import { createPlatformSubscriptionRoutes, createMerchantSubscriptionRoutes } from '../core/billing/interfaces/http/routes/subscription.routes';
+import { createKdsRoutes } from '../core/kds/interfaces/http/routes/kds.routes';
 
 /**
  * Liveness + Mongo readiness, consumed by the compose healthcheck and UptimeRobot.
@@ -157,6 +158,12 @@ export function registerRoutes(app: Express, container: DIContainer): void {
 
   const databaseController = container.resolve('databaseController');
   app.use('/api/database', createDatabaseRoutes(databaseController));
+
+  const kdsController = container.resolve('kdsController');
+  app.use(
+    '/api/kds',
+    createKdsRoutes(kdsController, container.resolve('entitlementService'), outletMw),
+  );
 
   const printerController = container.resolve('printerController');
   app.use('/api/printers', createPrinterRoutes(printerController));

@@ -52,6 +52,21 @@ async function onOrderConfirmedAutoKot(event: DomainEvent, container: DIContaine
   }
 }
 
+async function onOrderConfirmedCreateKdsTickets(event: DomainEvent, container: DIContainer): Promise<void> {
+  try {
+    const entitlementService = container.resolve('entitlementService');
+    const enabled = await entitlementService.hasModule(event.tenantId, 'kds');
+    if (!enabled) return;
+    await container.resolve('kdsService').createTicketsForOrder(event.tenantId, event.aggregateId);
+  } catch {
+    // A KDS outage must never break the order/payment that produced the ticket.
+  }
+}
+
+async function onKdsTicketChanged(event: DomainEvent): Promise<void> {
+  getIO()?.to(event.tenantId).emit('domain-event', event);
+}
+
 async function onPaymentCompleted(event: DomainEvent): Promise<void> {
   getIO()?.to(event.tenantId).emit('domain-event', event);
 }
@@ -104,6 +119,7 @@ export function registerEventHandlers(eventBus: EventBus, container: DIContainer
   eventBus.subscribe(DOMAIN_EVENTS.ORDER_CREATED, onOrderCreated);
   eventBus.subscribe(DOMAIN_EVENTS.ORDER_CONFIRMED, onOrderConfirmed);
   eventBus.subscribe(DOMAIN_EVENTS.ORDER_CONFIRMED, (event) => onOrderConfirmedAutoKot(event, container));
+  eventBus.subscribe(DOMAIN_EVENTS.ORDER_CONFIRMED, (event) => onOrderConfirmedCreateKdsTickets(event, container));
   eventBus.subscribe(DOMAIN_EVENTS.ORDER_CANCELLED, onOrderCancelled);
   eventBus.subscribe('ordering.order.paid', onOrderPaid);
   eventBus.subscribe('ordering.order.held', onOrderHeld);
@@ -119,5 +135,7 @@ export function registerEventHandlers(eventBus: EventBus, container: DIContainer
   eventBus.subscribe(DOMAIN_EVENTS.TAX_CONFIG_UPDATED, onTaxConfigUpdated);
   eventBus.subscribe('inventory.stock.adjusted', onStockAdjusted);
   eventBus.subscribe('inventory.stock.low_alert', onStockLowAlert);
+  eventBus.subscribe('kds.ticket.created', onKdsTicketChanged);
+  eventBus.subscribe('kds.ticket.updated', onKdsTicketChanged);
   eventBus.subscribe('platform.tenant.created', (event) => onTenantCreatedProvision(event, container));
 }

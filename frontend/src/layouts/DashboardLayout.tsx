@@ -5,6 +5,7 @@ import { useAuthStore, hasPermission } from '../@shared/hooks/useAuth';
 import { useAccessibleTenants } from '../@shared/hooks/useHubMemberships';
 import { useOutlets } from '../@shared/hooks/useOutlets';
 import { useRealtimeSync } from '../@shared/hooks/useRealtimeSync';
+import { useKdsAccess } from '../core/kds/hooks/useKds';
 import { ErrorBoundary } from '../@shared/components/ErrorBoundary';
 import { SubscriptionBanner } from '../@shared/components/SubscriptionBanner';
 import clsx from 'clsx';
@@ -13,6 +14,7 @@ interface NavItem {
   name: string;
   href: string;
   permission?: string;
+  module?: string;
 }
 
 // Dashboard & POS stay ungrouped at the top — they are the pages people open
@@ -58,6 +60,7 @@ const navigationGroups: NavGroup[] = [
     label: 'Operasional',
     items: [
       { name: 'Reports', href: '/reports' },
+      { name: 'KDS', href: '/kds', module: 'kds' },
       { name: 'Payment', href: '/payment-methods' },
       { name: 'Outlet', href: '/outlets', permission: 'outlet:manage' },
       { name: 'Templates', href: '/templates' },
@@ -90,6 +93,10 @@ export function DashboardLayout() {
   const location = useLocation();
   const { user, logout, activeOutletId, setActiveOutletId, switchTenant } = useAuthStore();
   const isPOSPage = location.pathname === '/pos';
+  const isKdsRole = user?.roleName === 'KDS';
+  // The KDS-only role has no billing permission, so it cannot call the merchant
+  // entitlement endpoint. The board gate is a module flag with an auth-only probe.
+  const { data: kdsAccess } = useKdsAccess(Boolean(user) && user?.tenantId !== 'platform');
 
   // Redirect platform super admin to Terminal Center
   if (user?.tenantId === 'platform') {
@@ -112,8 +119,13 @@ export function DashboardLayout() {
     document.title = currentTenantName ? `POS - ${currentTenantName}` : 'Kuire POS';
   }, [currentTenantName]);
 
-  const isVisible = (item: NavItem) =>
-    user?.roleName === 'Cashier' ? item.href === '/pos' : !item.permission || hasPermission(user, item.permission);
+  const isVisible = (item: NavItem) => {
+    if (isKdsRole) return item.href === '/kds';
+    if (user?.roleName === 'Cashier') return item.href === '/pos';
+    if (item.permission && !hasPermission(user, item.permission)) return false;
+    if (item.module) return kdsAccess?.enabled ?? false;
+    return true;
+  };
 
   const visiblePinned = pinnedNavigation.filter(isVisible);
   // A group whose items are all filtered out disappears entirely (cashiers only
@@ -182,7 +194,7 @@ export function DashboardLayout() {
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       <header className="blue-primary text-white h-16 flex items-center justify-between px-6 shrink-0 shadow-md z-10">
-        <Link to="/dashboard" className="text-xl font-semibold tracking-tight">
+        <Link to={isKdsRole ? '/kds' : '/dashboard'} className="text-xl font-semibold tracking-tight">
           Kuire POS
         </Link>
         <div className="flex items-center gap-4">

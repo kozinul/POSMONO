@@ -3,8 +3,10 @@ import type { Connection } from 'mongoose';
 import { migratePlatformHubPermissions } from '../../core/platform/infrastructure/persistence/migratePlatformHubPermissions';
 import { migrateTenantBillingRead } from '../../core/platform/infrastructure/persistence/migrateTenantBillingRead';
 import { migrateTenantBillingUpdate } from '../../core/platform/infrastructure/persistence/migrateTenantBillingUpdate';
+import { migrateKdsRole } from '../../core/platform/infrastructure/persistence/migrateKdsRole';
 import { migrateHubIdentity } from '../../core/hub/infrastructure/persistence/migrateHubIdentity';
 import { migratePlanStringIds } from '../../core/billing/infrastructure/persistence/migratePlanStringIds';
+import { migratePlanKds } from '../../core/billing/infrastructure/persistence/migratePlanKds';
 import { CategorySchema } from '../../core/catalog/infrastructure/persistence/schemas/CategorySchema';
 import { CustomerSchema } from '../../core/customer/infrastructure/persistence/schemas/CustomerSchema';
 import { DailyMetricSchema } from '../../core/reporting/infrastructure/persistence/schemas/DailyMetricSchema';
@@ -18,6 +20,8 @@ import { MenuTypeSchema } from '../../core/catalog/infrastructure/persistence/sc
 import { ModifierSchema } from '../../core/catalog/infrastructure/persistence/schemas/ModifierSchema';
 import { OrderSchema } from '../../core/ordering/infrastructure/persistence/schemas/OrderSchema';
 import { OutletSchema } from '../../core/outlet/infrastructure/persistence/schemas/OutletSchema';
+import { StationSchema } from '../../core/kds/infrastructure/persistence/schemas/StationSchema';
+import { StationTicketSchema } from '../../core/kds/infrastructure/persistence/schemas/StationTicketSchema';
 import { PaymentMethodSchema } from '../../core/payment/infrastructure/persistence/schemas/PaymentMethodSchema';
 import { PaymentSchema } from '../../core/payment/infrastructure/persistence/schemas/PaymentSchema';
 import { PlanSchema } from '../../core/billing/infrastructure/persistence/schemas/PlanSchema';
@@ -70,6 +74,8 @@ export function buildModels(connection: Connection) {
   migrateTenantBillingUpdate(RoleModel).catch(() => {});
   const SessionModel = connection.model('Session', SessionSchema);
   const TenantModel = connection.model('Tenant', TenantSchema);
+  // KDS station role for tenants provisioned before the role existed.
+  migrateKdsRole(RoleModel, TenantModel).catch(() => {});
   const ProductModel = connection.model('Product', ProductSchema);
   const CategoryModel = connection.model('Category', CategorySchema);
   const FamilyModel = connection.model('Family', FamilySchema);
@@ -118,6 +124,10 @@ export function buildModels(connection: Connection) {
   HubInvitationModel.syncIndexes().catch(() => {});
   const OutletModel = connection.model('Outlet', OutletSchema);
   OutletModel.syncIndexes().catch(() => {});
+  const StationModel = connection.model('Station', StationSchema);
+  const StationTicketModel = connection.model('StationTicket', StationTicketSchema);
+  StationModel.syncIndexes().catch(() => {});
+  StationTicketModel.syncIndexes().catch(() => {});
   const PlanModel = connection.model('Plan', PlanSchema);
   PlanModel.syncIndexes().catch(() => {});
   const SubscriptionModel = connection.model('Subscription', SubscriptionSchema);
@@ -139,6 +149,7 @@ export function buildModels(connection: Connection) {
     tenantModel: TenantModel,
     subscriptionHistoryModel: SubscriptionHistoryModel,
   }).catch(() => {});
+  migratePlanKds(PlanModel).catch(() => {});
 
   return {
     UserModel,
@@ -175,6 +186,8 @@ export function buildModels(connection: Connection) {
     HubMemberTenantAccessModel,
     HubInvitationModel,
     OutletModel,
+    StationModel,
+    StationTicketModel,
     PlanModel,
     SubscriptionModel,
     PlatformAuditLogModel,

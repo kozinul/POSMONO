@@ -50,7 +50,7 @@
 
 | Item | Priority | Notes |
 |------|----------|-------|
-| `[~]` Kitchen display / printer | 🔴 | KOT printing selesai; Kitchen Display System (KDS) belum |
+| `[x]` Kitchen display / printer | ✅ | KOT printing + KDS (`/kds`, station routing, tiket, role KDS-only); sisa: auto-print per station & endpoint batal tiket |
 | `[ ]` Table management | 🔴 | Table mapping + floor plan |
 | `[ ]` Online ordering | 🔴 | Customer-facing ordering portal |
 | `[ ]` Menu management (variants) | 🔴 | Complicated by modifiers/groups |
